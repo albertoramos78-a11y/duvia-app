@@ -1,0 +1,23 @@
+# dépendances
+node_modules/
+
+# build
+dist/
+build/
+
+# fichiers env (IMPORTANT pour tes clés Supabase)
+.env
+.env.local
+
+# logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vite
+.vite/
+
+# cache
+.cache/
