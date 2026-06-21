@@ -7231,6 +7231,7 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
   const [inlineDs,setInlineDs]=useState(null);
   const [fullDs,setFullDs]=useState(null);
   const [showLegend,setShowLegend]=useState(false);
+  const [calView,setCalView]=useLocalStorage("duvia_cal_view","list");
   const editRef=useRef(null);
   const y=cur.getFullYear(),m=cur.getMonth();
   const dc=dInMonth(y,m);
@@ -7572,23 +7573,45 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
         </div>
         <button onClick={()=>setCur(d=>new Date(d.getFullYear(),d.getMonth()+1,1))} style={{padding:"7px 13px",background:C.sur,color:C.txt,border:`1.5px solid ${C.bor}`}}>→</button>
       </div>
-      <div style={{marginBottom:12}}>
-        <button onClick={()=>setShowLegend(v=>!v)} style={{padding:"1px 10px",height:24,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:20,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
-          <span>🏷️ {t.calLegend||"Légende"}</span>
-          <span style={{fontSize:9,transition:"transform .2s",display:"inline-block",transform:showLegend?"rotate(180deg)":"rotate(0deg)"}}>▼</span>
-        </button>
-        {showLegend&&(
-          <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap",padding:"8px 12px",background:C.sur,borderRadius:8,border:`1.5px solid ${C.bor}`}}>
-            <span className="chip" style={{fontSize:11}}><span style={{width:8,height:8,borderRadius:2,background:C.red,display:"inline-block",marginRight:4}} />{t.holiday}</span>
-            <span className="chip" style={{fontSize:11}}><span style={{width:8,height:8,borderRadius:2,background:C.grn,display:"inline-block",marginRight:4}} />{t.vacation}</span>
-            <span className="chip" style={{fontSize:11}}><span style={{width:8,height:8,borderRadius:2,background:"#ff6bb5",display:"inline-block",marginRight:4}} />🌸 {t.motherDay?.replace(/^🌸\s*/,"")||"Fête des Mères"}</span>
-            <span className="chip" style={{fontSize:11}}><span style={{width:8,height:8,borderRadius:2,background:"#4a9eff",display:"inline-block",marginRight:4}} />🎩 {t.fatherDay?.replace(/^🎩\s*/,"")||"Fête des Pères"}</span>
-            <span className="chip" style={{fontSize:11}}><span style={{width:8,height:8,borderRadius:2,background:"#f5a623",display:"inline-block",marginRight:4}} />👴 {t.calGrandparents||"Grands-Parents"}</span>
-            {cfg.parents.map((p,i)=>p.name&&<span key={i} className="chip" style={{fontSize:11,borderColor:p.color}}><span style={{width:8,height:8,borderRadius:"50%",background:p.color,display:"inline-block",marginRight:4}} />{p.name}</span>)}
-            {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=><span key={o.id} className="chip" style={{fontSize:11,borderColor:"#f59e0b"}}><span style={{width:8,height:8,borderRadius:"50%",background:"#f59e0b",display:"inline-block",marginRight:4}} />🏠 {o.name||(o.email||"").split("@")[0]}</span>)}
-          </div>
-        )}
+      <div style={{marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
+        <div>
+          <button onClick={()=>setShowLegend(v=>!v)} style={{padding:"1px 10px",height:24,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:20,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
+            <span>🏷️ {t.calLegend||"Légende"}</span>
+            <span style={{fontSize:9,transition:"transform .2s",display:"inline-block",transform:showLegend?"rotate(180deg)":"rotate(0deg)"}}>▼</span>
+          </button>
+          {showLegend&&(
+            <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap",padding:"8px 12px",background:C.sur,borderRadius:8,border:`1.5px solid ${C.bor}`}}>
+              <span className="chip" style={{fontSize:11}}><span style={{width:8,height:8,borderRadius:2,background:C.red,display:"inline-block",marginRight:4}} />{t.holiday}</span>
+              <span className="chip" style={{fontSize:11}}><span style={{width:8,height:8,borderRadius:2,background:C.grn,display:"inline-block",marginRight:4}} />{t.vacation}</span>
+              <span className="chip" style={{fontSize:11}}><span style={{width:8,height:8,borderRadius:2,background:"#ff6bb5",display:"inline-block",marginRight:4}} />🌸 {t.motherDay?.replace(/^🌸\s*/,"")||"Fête des Mères"}</span>
+              <span className="chip" style={{fontSize:11}}><span style={{width:8,height:8,borderRadius:2,background:"#4a9eff",display:"inline-block",marginRight:4}} />🎩 {t.fatherDay?.replace(/^🎩\s*/,"")||"Fête des Pères"}</span>
+              <span className="chip" style={{fontSize:11}}><span style={{width:8,height:8,borderRadius:2,background:"#f5a623",display:"inline-block",marginRight:4}} />👴 {t.calGrandparents||"Grands-Parents"}</span>
+              {cfg.parents.map((p,i)=>p.name&&<span key={i} className="chip" style={{fontSize:11,borderColor:p.color}}><span style={{width:8,height:8,borderRadius:"50%",background:p.color,display:"inline-block",marginRight:4}} />{p.name}</span>)}
+              {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=><span key={o.id} className="chip" style={{fontSize:11,borderColor:"#f59e0b"}}><span style={{width:8,height:8,borderRadius:"50%",background:"#f59e0b",display:"inline-block",marginRight:4}} />🏠 {o.name||(o.email||"").split("@")[0]}</span>)}
+            </div>
+          )}
+        </div>
+        <div style={{display:"flex",gap:2,background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:20,padding:2,flexShrink:0}}>
+          <button onClick={()=>setCalView("list")}
+            style={{padding:"0 12px",height:26,background:calView==="list"?C.vio:"transparent",color:calView==="list"?"#fff":C.mut,border:"none",borderRadius:18,fontSize:11,fontWeight:800,display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}>
+            ☰ {t.calViewList||"Détaillée"}
+          </button>
+          <button onClick={()=>setCalView("grid")}
+            style={{padding:"0 12px",height:26,background:calView==="grid"?C.vio:"transparent",color:calView==="grid"?"#fff":C.mut,border:"none",borderRadius:18,fontSize:11,fontWeight:800,display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}>
+            ▦ {t.calViewGrid||"Mois"}
+          </button>
+        </div>
       </div>
+      {calView==="grid" && (
+        <MonthGridCalendar
+          y={y} m={m} dc={dc} cfg={cfg} t={t} C={C} apiData={apiData}
+          multiChild={multiChild} activeChildId={activeChildId}
+          readOnly={readOnly} editBlocked={editBlocked}
+          inlineDs={inlineDs} setInlineDs={setInlineDs}
+          setFullDs={setFullDs}
+        />
+      )}
+      {calView==="list" && (
       <div className="card" style={{padding:0,overflow:"hidden"}}>
         <div style={{display:"grid",gridTemplateColumns:"32px 96px 1fr 1fr",background:C.sur,padding:"8px 12px",fontSize:10,color:C.mut,fontWeight:800,letterSpacing:".1em",textTransform:"uppercase",borderBottom:`1.5px solid ${C.bor}`}}>
           <span>{t.wk}</span><span>{t.day}</span><span>{t.info}</span>
@@ -7628,7 +7651,130 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
           );
         })}
       </div>
+      )}
       {fullDs&&!readOnly&&!editBlocked&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setFullDs(null)}><div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto",borderRadius:18}}><EditDay ds={fullDs} onClose={()=>setFullDs(null)} editRef={editRef} /></div></div>)}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VUE GRILLE MENSUELLE (calendrier "façon papier" — cases colorées par parent)
+// ═══════════════════════════════════════════════════════════════════════════════
+function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,readOnly,editBlocked,inlineDs,setInlineDs,setFullDs}) {
+  const activeCountry = (multiChild && activeChildId && cfg.childrenCountry?.[activeChildId]) || cfg.country || "FR";
+  const activeZoneData = (multiChild && activeChildId && cfg.childrenZones?.[activeChildId]) || {subdivisionCode:cfg.subdivisionCode||"",zone:cfg.zone||""};
+  const scoZone = activeZoneData.subdivisionCode || activeZoneData.zone;
+  const todayStr = toStr(new Date());
+
+  // Lundi=0 ... Dimanche=6 — nombre de cases vides avant le 1er du mois
+  const firstDow = dow(y,m,1);
+
+  // Pré-calcule la garde + infos de chaque jour du mois
+  const days = Array.from({length:dc},(_,i)=>{
+    const day=i+1, date=new Date(y,m,day), ds=toStr(date), dw=dow(y,m,day);
+    const ferName=getPublicHolName(ds,activeCountry,apiData), fer=!!ferName;
+    const scoName=getHolName(ds,scoZone,activeCountry,apiData), sco=!!scoName;
+    const specials=getSpecialEvents(date,cfg);
+    const guard=resolveGuard(ds,cfg,activeChildId);
+    return {day,ds,dw,fer,ferName,sco,scoName,specials,guard,isToday:ds===todayStr,isWE:dw>=5};
+  });
+
+  // Le badge rond résume "qui garde cette semaine" : on l'affiche le dimanche (fin de semaine,
+  // comme dans le calendrier papier de référence), ou sur le dernier jour du mois si celui-ci
+  // tombe avant un dimanche. On l'affiche aussi sur tout jour où la garde change réellement par
+  // rapport à la veille (utile pour les alternances non hebdomadaires : garde alternée par jour, etc.).
+  function parentKey(g){ if(!g) return null; if(g.allParents) return "all"; if(g.obsId) return `obs:${g.obsId}`; if(g.parentIdx>=0) return `p:${g.parentIdx}`; return null; }
+  days.forEach((d,i)=>{
+    const prevKey = i>0 ? parentKey(days[i-1].guard) : null;
+    const isRealChange = parentKey(d.guard) !== prevKey;
+    const isWeekEnd = d.dw===6 || i===days.length-1;
+    d.isChangeDay = isWeekEnd || isRealChange;
+  });
+
+  function cellBg(g){
+    if(!g) return C.sur;
+    if(g.allParents) return "#a855f722";
+    if(g.obsId) return "#f59e0b22";
+    if(g.parentIdx>=0){ const p=cfg.parents[g.parentIdx]; return p?.color ? p.color+"22" : C.sur; }
+    return C.sur;
+  }
+  function badgeColor(g){
+    if(!g) return C.mut;
+    if(g.allParents) return "#a855f7";
+    if(g.obsId) return "#f59e0b";
+    if(g.parentIdx>=0){ const p=cfg.parents[g.parentIdx]; return p?.color || C.vio; }
+    return C.mut;
+  }
+  function badgeLabel(g){
+    if(!g) return "";
+    if(g.allParents) return "★";
+    if(g.obsId){ return "🏠"; }
+    if(g.parentIdx>=0){
+      const p=cfg.parents[g.parentIdx];
+      if(p?.name?.trim()) return p.name.trim().charAt(0).toUpperCase();
+      return String.fromCharCode(65+g.parentIdx); // A, B, C... si pas de prénom renseigné
+    }
+    return "";
+  }
+
+  const dayLetters = (t.dayNames||["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"])
+    .map(n=>(n.slice(0,3)+".").toUpperCase());
+
+  function openDay(ds){
+    if(readOnly) return;
+    setInlineDs(inlineDs===ds?null:ds);
+  }
+
+  return (
+    <div className="card" style={{padding:14,overflow:"hidden"}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5,marginBottom:6}}>
+        {dayLetters.map((lbl,i)=>(
+          <div key={i} style={{textAlign:"center",fontSize:10,fontWeight:800,letterSpacing:".04em",color:C.mut,padding:"2px 0"}}>{lbl}</div>
+        ))}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5}}>
+        {Array.from({length:firstDow}).map((_,i)=>(
+          <div key={`pad-${i}`} style={{aspectRatio:"1",borderRadius:10,background:`${C.sur}66`}} />
+        ))}
+        {days.map(d=>{
+          const bg = d.isToday ? `${C.vio}22` : cellBg(d.guard);
+          const hasBadge = d.isChangeDay && d.guard;
+          const dotColor = d.fer ? C.red : d.sco ? C.grn : d.specials[0]?.color;
+          return (
+            <div key={d.ds} onClick={()=>openDay(d.ds)}
+              title={d.ferName||d.scoName||d.specials[0]?.label||undefined}
+              style={{
+                aspectRatio:"1",borderRadius:10,background:bg,padding:"6px 6px",
+                display:"flex",flexDirection:"column",justifyContent:"space-between",
+                cursor:readOnly?"default":"pointer",position:"relative",
+                border:d.isToday?`1.5px solid ${C.vio}`:inlineDs===d.ds?`1.5px solid ${C.vio}`:"1.5px solid transparent",
+                transition:"transform .12s, box-shadow .12s",
+              }}>
+              <span style={{fontSize:13,fontWeight:d.isToday?900:700,color:d.isToday?C.vio:d.isWE?C.yel:C.txt}}>{d.day}</span>
+              {dotColor && (
+                <span style={{position:"absolute",top:7,right:7,width:6,height:6,borderRadius:"50%",background:dotColor}} />
+              )}
+              {hasBadge && (
+                <span style={{
+                  alignSelf:"flex-end",width:20,height:20,borderRadius:"50%",
+                  background:badgeColor(d.guard),color:"#fff",fontSize:10,fontWeight:800,
+                  display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,
+                }}>{badgeLabel(d.guard)}</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {inlineDs && !readOnly && (() => {
+        const d = days.find(d=>d.ds===inlineDs);
+        if(!d) return null;
+        return (
+          <div style={{marginTop:10}}>
+            <InlinePicker ds={inlineDs} guard={d.guard} onClose={()=>setInlineDs(null)}
+              onFull={!editBlocked?()=>{setFullDs(inlineDs);setInlineDs(null);}:null} />
+          </div>
+        );
+      })()}
     </div>
   );
 }
