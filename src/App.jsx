@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, createContext, useContext } from "react";
 import { supabase } from "./supabaseClient";
+import { initDiagnostics, retryPendingReport, submitBugReport } from "./services/diagnostics";
 import { useVault } from "./hooks/useVault";
 import { useMessages } from "./hooks/useMessages";
 import { useIdLinks } from "./hooks/useIdLinks";
@@ -2306,6 +2307,55 @@ function StepAccessInfoButton({C,t}) {
 // ROOT
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── Modale "Installer l'application" (réutilisable) ─────────────────────────
+function BugReportModal({ C, t, open, onClose, getContext }) {
+  const [comment, setComment] = useState("");
+  const [withShot, setWithShot] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [status, setStatus]   = useState(null); // "ok" | "err" | null
+  if (!open) return null;
+  const close = () => { if (sending) return; setComment(""); setWithShot(false); setStatus(null); onClose(); };
+  const send = async () => {
+    if (sending || !comment.trim()) return;
+    setSending(true); setStatus(null);
+    try {
+      await submitBugReport({ comment, withScreenshot: withShot, context: getContext ? getContext() : {} });
+      setStatus("ok");
+    } catch { setStatus("err"); }
+    finally { setSending(false); }
+  };
+  return (
+    <div onClick={close} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:18,maxWidth:420,width:"100%",padding:22,boxShadow:"0 12px 40px rgba(0,0,0,.25)",maxHeight:"90vh",overflowY:"auto"}}>
+        <div style={{fontSize:16,fontWeight:900,color:C.txt,textAlign:"center",marginBottom:4}}>🐛 {t.bugReportTitle}</div>
+        {status==="ok" ? (
+          <>
+            <div style={{fontSize:38,textAlign:"center",margin:"10px 0"}}>✅</div>
+            <div style={{fontSize:13,color:C.mut,textAlign:"center",lineHeight:1.5,marginBottom:16}}>{t.bugReportThanks}</div>
+            <button onClick={close} style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13}}>{t.doneBtn}</button>
+          </>
+        ) : (
+          <>
+            <div style={{fontSize:12.5,color:C.mut,textAlign:"center",lineHeight:1.5,margin:"4px 0 14px"}}>{t.bugReportDesc}</div>
+            <textarea value={comment} onChange={e=>setComment(e.target.value)} placeholder={t.bugReportPlaceholder} rows={4} maxLength={4000}
+              style={{width:"100%",boxSizing:"border-box",padding:12,borderRadius:12,border:`1.5px solid ${C.bor}`,fontSize:13,fontFamily:"inherit",resize:"vertical",marginBottom:12,background:C.sur,color:C.txt}} />
+            <label style={{display:"flex",alignItems:"flex-start",gap:8,cursor:"pointer",marginBottom:6,fontSize:12.5,color:C.txt}}>
+              <input type="checkbox" checked={withShot} onChange={e=>setWithShot(e.target.checked)} style={{width:16,height:16,marginTop:2,accentColor:C.vio,cursor:"pointer"}} />
+              <span>{t.bugReportScreenshot}</span>
+            </label>
+            {withShot && <div style={{fontSize:11,color:C.ora,lineHeight:1.4,marginBottom:12}}>⚠️ {t.bugReportScreenshotWarn}</div>}
+            {status==="err" && <div style={{fontSize:12,color:C.red,lineHeight:1.4,marginBottom:10}}>{t.bugReportError}</div>}
+            <button disabled={sending || !comment.trim()} onClick={send}
+              style={{width:"100%",height:46,background:(sending||!comment.trim())?C.bor:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:14,marginBottom:8,cursor:(sending||!comment.trim())?"not-allowed":"pointer"}}>
+              {sending ? t.bugReportSending : t.bugReportSend}
+            </button>
+            <button onClick={close} disabled={sending} style={{width:"100%",height:40,background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13}}>{t.cancel}</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function InstallAppModal({C,t,onClose}) {
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
@@ -2438,6 +2488,12 @@ export default function App() {
     })();
   }, [familySync.familyId, user?.id]);
 
+  // ── Diagnostic : capture d'erreurs globales + réessai d'un rapport en attente ─
+  useEffect(() => {
+    initDiagnostics();
+    retryPendingReport();
+  }, []);
+
   // ── Vérification Supabase Auth au démarrage ───────────────────────────────
   // Si la session Supabase a expiré ou le compte a été supprimé → déconnexion forcée.
   // (L'admin est maintenant un vrai compte Supabase, plus d'exemption nécessaire.)
@@ -2521,6 +2577,7 @@ export default function App() {
   const [tab,setTab]   = useState(0);
   const [bell,setBell] = useState(false);
   const [showMenu,setShowMenu] = useState(false);
+  const [showBugModal,setShowBugModal] = useState(false);
   const [showInstallModal,setShowInstallModal] = useState(false);
   const [showLicenseModal,setShowLicenseModal] = useState(false);
   const [showPrizesMenu,setShowPrizesMenu] = useState(false);
@@ -3383,6 +3440,9 @@ export default function App() {
                 </button>
               )}
 
+              <button onClick={()=>{setShowBugModal(true);setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🐛</span><span style={{flex:1,textAlign:"left"}}>{t.bugReportMenu}</span>
+              </button>
               <button onClick={()=>{setShowInstallModal(true);setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
                 <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>📱</span><span style={{flex:1,textAlign:"left"}}>{t.installAppMenu}</span>
               </button>
@@ -3403,6 +3463,23 @@ export default function App() {
 
       {/* Modale "Installer l'application" */}
       {showInstallModal && <InstallAppModal C={C} t={t} onClose={()=>setShowInstallModal(false)} />}
+
+      {/* Modale "Signaler un problème" (diagnostic) */}
+      <BugReportModal C={C} t={t} open={showBugModal} onClose={()=>setShowBugModal(false)}
+        getContext={()=>({
+          userId: myUid || null,
+          familyId: familySync?.familyId || null,
+          screen: menuTab,
+          appState: {
+            role: user?.role || null,
+            parentIdx: user?.parentIdx,
+            lang,
+            plan: sub?.plan || null,
+            nbParents: cfg?.parents?.length,
+            nbChildren: cfg?.children?.length,
+            syncStatus: familySync?.syncStatus,
+          },
+        })} />
 
       {/* Modale "Licence" */}
       {showLicenseModal && (

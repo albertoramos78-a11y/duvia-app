@@ -2,6 +2,10 @@
 
 export const APP_URL = "https://app.duvia.fr";
 
+// Version de l'application (incrémente à chaque release). Utilisée notamment
+// par le service de diagnostic pour horodater les rapports de bug.
+export const APP_VERSION = "0.1.0";
+
 // ── Liens légaux ─────────────────────────────────────────────────────────────
 // ⚠️ PROVISOIRE : en attendant les vraies pages (à générer via iubenda), les
 // deux liens pointent vers le site principal pour ne pas créer de lien cassé.
