@@ -7690,6 +7690,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
     const isRealChange = parentKey(d.guard) !== prevKey;
     const isWeekEnd = d.dw===6 || i===days.length-1;
     d.isChangeDay = isWeekEnd || isRealChange;
+    d.isRealChange = isRealChange; // changement effectif de gardien (pas juste dimanche)
   });
 
   function cellBg(g){
@@ -7739,7 +7740,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
         ))}
         {days.map(d=>{
           const bg = d.isToday ? `${C.vio}22` : cellBg(d.guard);
-          const hasBadge = d.isChangeDay && d.guard;
+          const hasBadge = d.isRealChange && d.guard && !d.isBirthday;
           // Priorité couleur du numéro : férié (rouge gras) > week-end (gris foncé gras) > normal
           const numColor = d.fer ? C.red : d.isWE ? "#52525b" : (d.isToday ? C.vio : C.txt);
           const numWeight = (d.fer || d.isWE || d.isToday) ? 900 : 700;
@@ -7780,10 +7781,9 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
               )}
               {hasBadge && (
                 <span style={{
-                  alignSelf:"flex-end",width:20,height:20,borderRadius:"50%",
-                  background:badgeColor(d.guard),color:"#fff",fontSize:10,fontWeight:800,
-                  display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,
-                }}>{badgeLabel(d.guard)}</span>
+                  position:"absolute",bottom:5,right:5,
+                  fontSize:11,lineHeight:1,opacity:0.75,
+                }}>🔄</span>
               )}
             </div>
           );
