@@ -438,5 +438,11 @@ const en = {
     configIncompleteDesc:"— Please fill in all names to continue.",
     dayPlaceholder:"DD",
     linkedAccount:"🔗 Linked to account",
+    invErrExpired:"⚠️ This invitation link has expired. Ask for a new one.",
+    invErrUsed:"⚠️ This link is no longer valid (already used). Ask for a new one.",
+    invErrInvalid:"⚠️ Invalid invitation link or error. Please try again.",
+    invErrUsedObs:"⚠️ This invitation link has already been used. Ask the parents for a new one.",
+    invErrExpiredWait:"This invitation link has expired (valid for 24h). Ask the parents for a new one.",
+    rememberMe:"Stay signed in for 24h on this device",
   };
 export default en;

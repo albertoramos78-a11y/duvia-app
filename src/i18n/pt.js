@@ -436,5 +436,11 @@ const pt = {
     configIncompleteDesc:"— Preencha todos os nomes para continuar.",
     dayPlaceholder:"DD",
     linkedAccount:"🔗 Associado à conta",
+    invErrExpired:"⚠️ Este link de convite expirou. Peça um novo link.",
+    invErrUsed:"⚠️ O link já não é válido (já utilizado). Peça um novo link.",
+    invErrInvalid:"⚠️ Link de convite inválido ou erro. Tente novamente.",
+    invErrUsedObs:"⚠️ Este link de convite já foi utilizado. Peça um novo link aos pais.",
+    invErrExpiredWait:"Este link de convite expirou (válido 24 h). Peça um novo link aos pais.",
+    rememberMe:"Manter sessão iniciada 24h neste dispositivo",
   };
 export default pt;

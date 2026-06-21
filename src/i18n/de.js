@@ -436,5 +436,11 @@ const de = {
     configIncompleteDesc:"— Bitte alle Namen ausfüllen, um fortzufahren.",
     dayPlaceholder:"TT",
     linkedAccount:"🔗 Mit Konto verknüpft",
+    invErrExpired:"⚠️ Dieser Einladungslink ist abgelaufen. Fordere einen neuen Link an.",
+    invErrUsed:"⚠️ Dieser Link ist nicht mehr gültig (bereits verwendet). Fordere einen neuen Link an.",
+    invErrInvalid:"⚠️ Ungültiger Einladungslink oder Fehler. Bitte erneut versuchen.",
+    invErrUsedObs:"⚠️ Dieser Einladungslink wurde bereits verwendet. Bitte die Eltern um einen neuen Link.",
+    invErrExpiredWait:"Dieser Einladungslink ist abgelaufen (24 Std. gültig). Bitte die Eltern um einen neuen Link.",
+    rememberMe:"24 Std. auf diesem Gerät angemeldet bleiben",
   };
 export default de;

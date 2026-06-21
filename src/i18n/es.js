@@ -436,5 +436,11 @@ const es = {
     configIncompleteDesc:"— Completa todos los nombres para continuar.",
     dayPlaceholder:"DD",
     linkedAccount:"🔗 Vinculado a la cuenta",
+    invErrExpired:"⚠️ Este enlace de invitación ha caducado. Pide uno nuevo.",
+    invErrUsed:"⚠️ El enlace ya no es válido (ya utilizado). Pide uno nuevo.",
+    invErrInvalid:"⚠️ Enlace de invitación no válido o error. Inténtalo de nuevo.",
+    invErrUsedObs:"⚠️ Este enlace de invitación ya se ha utilizado. Pide un nuevo enlace a los padres.",
+    invErrExpiredWait:"Este enlace de invitación ha caducado (válido 24 h). Pide un nuevo enlace a los padres.",
+    rememberMe:"Permanecer conectado 24 h en este dispositivo",
   };
 export default es;

@@ -488,5 +488,11 @@ const fr = {
     configIncompleteDesc:"— Renseignez tous les noms pour continuer.",
     dayPlaceholder:"JJ",
     linkedAccount:"🔗 Lié au compte",
+    invErrExpired:"⚠️ Ce lien d'invitation a expiré. Demande un nouveau lien.",
+    invErrUsed:"⚠️ Le lien n'est plus valable (déjà utilisé). Demande un nouveau lien.",
+    invErrInvalid:"⚠️ Lien d'invitation invalide ou erreur. Réessaie.",
+    invErrUsedObs:"⚠️ Ce lien d'invitation a déjà été utilisé. Demandez un nouveau lien aux parents.",
+    invErrExpiredWait:"Ce lien d'invitation a expiré (validité 24h). Demandez un nouveau lien aux parents.",
+    rememberMe:"Rester connecté 24h sur cet appareil",
   };
 export default fr;
