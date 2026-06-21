@@ -1041,7 +1041,7 @@ ${brandExtras}
 
 /* ── Reset & Base ── */
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:${C.bg};color:${C.txt};font-family:'Nunito',sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;}
+body{background:${C.bg};color:${C.txt};font-family:'Nunito',sans-serif;min-height:100dvh;-webkit-font-smoothing:antialiased;}
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar{width:4px;height:4px;}
@@ -3049,8 +3049,23 @@ export default function App() {
   }
 
   // Called by LoginScreen — intercept parent role for consent
+  // Consent shown only if: (a) version changed, or (b) more than 7 days since last consent
+  const CONSENT_VERSION_KEY = "duvia_consent_version";
+  const CONSENT_DATE_KEY    = "duvia_consent_date";
+  function needsConsent() {
+    const savedVersion = localStorage.getItem(CONSENT_VERSION_KEY);
+    const savedDate    = localStorage.getItem(CONSENT_DATE_KEY);
+    if(savedVersion !== APP_VERSION) return true;
+    if(!savedDate) return true;
+    const daysSince = (Date.now() - Number(savedDate)) / 86400000;
+    return daysSince >= 7;
+  }
+  function recordConsent() {
+    localStorage.setItem(CONSENT_VERSION_KEY, APP_VERSION);
+    localStorage.setItem(CONSENT_DATE_KEY, String(Date.now()));
+  }
   function handleLogin(u) {
-    if(u.role==="parent") { setPendingUser(u); }
+    if(u.role==="parent" && needsConsent()) { setPendingUser(u); }
     else { handleSetUser(u); }
   }
 
@@ -3072,7 +3087,7 @@ export default function App() {
         <RgpdConsentScreen C={C} t={t} lang={lang} setLang={setLang} onAccept={acceptRgpd} />
       ) : pendingUser ? (
         <ConsentScreen C={C} t={t} user={pendingUser}
-          onAccept={()=>{ handleSetUser(pendingUser); setPendingUser(null); }}
+          onAccept={()=>{ recordConsent(); handleSetUser(pendingUser); setPendingUser(null); }}
           onDecline={()=>setPendingUser(null)} />
       ) : (
         <LoginScreen C={C} t={t} lang={lang} setLang={setLang} themeMode={themeMode} cycleTheme={cycleTheme} users={users} setUsers={setUsers} onLogin={handleLogin} onObsJoin={handleObsJoin} familySync={familySync} cfg={cfg} setCfg={setCfg} />
@@ -3142,7 +3157,7 @@ export default function App() {
 
   return (
     <AppContext.Provider value={ctxValue}>
-    <div style={{display:"flex",flexDirection:"column",height:"100vh",maxWidth:940,margin:"0 auto",overflow:"hidden",width:"100%"}}>
+    <div style={{display:"flex",flexDirection:"column",position:"fixed",inset:0,maxWidth:940,left:"50%",transform:"translateX(-50%)",overflow:"hidden",width:"100%"}}>
       <style>{cssString}</style>
 
       {inviteLeftNotice && (
@@ -3924,7 +3939,7 @@ function ConsentScreen({C,t,user,onAccept,onDecline}) {
           </button>
         </div>
         <div style={{fontSize:10,color:C.mut,textAlign:"center",lineHeight:1.5,padding:"0 10px"}}>
-          {t.consentFooter||"Ces engagements sont demandés à chaque nouvelle connexion pour garantir une utilisation bienveillante de l'application."}
+          {t.consentFooter||"Ces engagements sont demandés toutes les semaines ou lors des mises à jour pour garantir une utilisation bienveillante de l'application."}
         </div>
       </div>
     </div>
