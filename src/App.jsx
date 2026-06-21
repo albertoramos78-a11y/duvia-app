@@ -7772,6 +7772,19 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
           // Encadrement vert si vacances scolaires (priorité sur bordure today/inline)
           const scoBorder = d.sco ? `2px solid ${C.grn}` : null;
           const activeBorder = d.isToday ? `1.5px solid ${C.vio}` : inlineDs===d.ds ? `1.5px solid ${C.vio}` : "1.5px solid transparent";
+          // Heure de prise/fin de garde et lieu
+          const g = d.guard;
+          const hasTime = g && g.timeType && g.timeType !== "full";
+          const cellTimeStr = hasTime ? (() => {
+            const st = g.startTime; const et = g.endTime;
+            if(g.timeType==="start" && st) return st;
+            if(g.timeType==="end" && et) return et;
+            if(g.timeType==="split" && st && et) return `${st}→${et}`;
+            if(g.timeType==="split" && st) return st;
+            if(g.timeType==="split" && et) return et;
+            return null;
+          })() : null;
+          const cellLoc = hasTime && g.location ? g.location : null;
           return (
             <div key={d.ds} onClick={()=>openDay(d.ds)}
               title={d.ferName||d.scoName||d.specials[0]?.label||undefined}
@@ -7793,7 +7806,21 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
               {dotColor && (
                 <span style={{position:"absolute",top:7,right:7,width:6,height:6,borderRadius:"50%",background:dotColor}} />
               )}
-              {hasBadge && (
+              {cellTimeStr && (
+                <span style={{
+                  position:"absolute",bottom:cellLoc?14:4,left:3,right:3,
+                  fontSize:8,fontWeight:700,color:C.vio,lineHeight:1,
+                  textAlign:"center",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",
+                }}>{cellTimeStr}</span>
+              )}
+              {cellLoc && (
+                <span style={{
+                  position:"absolute",bottom:4,left:3,right:3,
+                  fontSize:7,color:C.mut,lineHeight:1,
+                  textAlign:"center",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",
+                }}>📍{cellLoc}</span>
+              )}
+              {hasBadge && !cellTimeStr && (
                 <span style={{
                   position:"absolute",bottom:5,right:5,
                   fontSize:11,lineHeight:1,opacity:0.75,
