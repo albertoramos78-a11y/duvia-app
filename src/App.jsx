@@ -3250,30 +3250,30 @@ export default function App() {
       <div style={{flexShrink:0,background:headerBG,borderBottom:`1.5px solid ${C.bor}`,boxShadow:"0 1px 6px rgba(0,0,0,.06)"}}>
       <div style={{padding:"0 14px",display:"flex",alignItems:"center",gap:12,height:58}}>
         <img src="/logo-nav.png" alt="Duvia" style={{width:42,height:42,borderRadius:0,objectFit:"contain",flexShrink:0}} />
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:10,color:C.mut,fontStyle:"italic",lineHeight:1.35}}>
-            <div>Two homes</div>
-            <div>One family</div>
-            {C._wc && <span style={{fontSize:14,display:"inline-block",animation:"wcBall 3s ease-in-out infinite",transformOrigin:"center"}}>⚽</span>}
+        {/* Left block: tagline + family selector */}
+        <div style={{display:"flex",flexDirection:"column",justifyContent:"center",gap:3,minWidth:0,flex:1}}>
+          <div style={{fontSize:10,color:C.mut,fontStyle:"italic",lineHeight:1.2}}>
+            <span>Two homes · One family</span>
+            {C._wc && <span style={{fontSize:14,display:"inline-block",animation:"wcBall 3s ease-in-out infinite",transformOrigin:"center",marginLeft:4}}>⚽</span>}
           </div>
+          {familySync.families.length > 1 && (
+            <div style={{display:"flex",alignItems:"center",gap:5}}>
+              <span style={{fontSize:13}}>👨‍👩‍👧</span>
+              <select
+                value={familySync.familyId || ""}
+                onChange={e => familySync.switchFamily(e.target.value)}
+                style={{height:26,maxWidth:120,fontSize:11,fontWeight:800,color:C.vio,background:`${C.vio}12`,border:`2px solid ${C.vio}`,borderRadius:8,cursor:"pointer",padding:"0 4px"}}
+              >
+                {familySync.families.map(f => (
+                  <option key={f.id} value={f.id} style={{color:C.txt}}>{f.label}</option>
+                ))}
+              </select>
+              <InfoBubble C={C} tipKey={`duvia_famtip_${user?.id||"x"}`} title={t.multiFamilyTitle||"Plusieurs familles"}>
+                {t.multiFamilyInfo||"Vous appartenez à plusieurs familles. Utilisez ce menu pour basculer de l'une à l'autre."}
+              </InfoBubble>
+            </div>
+          )}
         </div>
-        {familySync.families.length > 1 && (
-          <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-            <span style={{fontSize:15}}>👨‍👩‍👧</span>
-            <select
-              value={familySync.familyId || ""}
-              onChange={e => familySync.switchFamily(e.target.value)}
-              style={{height:32,maxWidth:130,fontSize:11,fontWeight:800,color:C.vio,background:`${C.vio}12`,border:`2px solid ${C.vio}`,borderRadius:8,flexShrink:0,cursor:"pointer"}}
-            >
-              {familySync.families.map(f => (
-                <option key={f.id} value={f.id} style={{color:C.txt}}>{f.label}</option>
-              ))}
-            </select>
-            <InfoBubble C={C} tipKey={`duvia_famtip_${user?.id||"x"}`} title={t.multiFamilyTitle||"Plusieurs familles"}>
-              {t.multiFamilyInfo||"Vous appartenez à plusieurs familles. Utilisez ce menu pour basculer de l'une à l'autre."}
-            </InfoBubble>
-          </div>
-        )}
         {/* Right controls: palette → 🏆 lots → ☰ */}
         <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
           <button onClick={()=>{cycleTheme();setSummerActive(false);setRgActive(false);setWcActive(false);setVideoActive(false);}} title={themeMode==="palette"?"→ Clair":themeMode==="clair"?"→ Sombre":"→ Palette"} style={{height:36,padding:"0 14px",background:themeMode==="palette"&&!summerActive&&!rgActive&&!wcActive?`${C.vio}18`:C.card,border:`1.5px solid ${themeMode==="palette"&&!summerActive&&!rgActive&&!wcActive?C.vio:C.bor}`,color:themeMode==="palette"&&!summerActive&&!rgActive&&!wcActive?C.vio:C.txt,fontSize:15,fontWeight:700,flexShrink:0,borderRadius:20,display:"flex",alignItems:"center",cursor:"pointer"}}>
@@ -5485,6 +5485,7 @@ function StepId({setParent,setChild,addParent,removeParent,addChild,removeChild,
 
 // ─── PARENT INVITE SHARE BUTTONS ─────────────────────────────────────────────
 function ParentInviteShareBtns({ C, parent, familyName }) {
+  const { t } = useApp();
   function cleanPhoneWA(phone) {
     if (!phone) return null;
     let p = phone.replace(/[\s.\-()+]/g, "");
@@ -7586,7 +7587,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
               <span className="chip" style={{fontSize:11}}>🌸 {t.motherDay?.replace(/^🌸\s*/,"")||"Fête des Mères"}</span>
               <span className="chip" style={{fontSize:11}}>🎩 {t.fatherDay?.replace(/^🎩\s*/,"")||"Fête des Pères"}</span>
               <span className="chip" style={{fontSize:11}}>👴 {t.calGrandparents||"Grands-Parents"}</span>
-              {cfg.parents.map((p,i)=>p.name&&<span key={i} className="chip" style={{fontSize:11,borderColor:p.color}}><span style={{width:8,height:8,borderRadius:"50%",background:p.color,display:"inline-block",marginRight:4}} />{p.name}</span>)}
+              {cfg.parents.map((p,i)=>p.name&&<span key={i} className="chip" style={{fontSize:11,borderColor:p.color,background:`${p.color}20`,color:p.color,fontWeight:700}}><span style={{width:8,height:8,borderRadius:"50%",background:p.color,display:"inline-block",marginRight:4,flexShrink:0}} />{p.name}</span>)}
               {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=><span key={o.id} className="chip" style={{fontSize:11,borderColor:"#f59e0b"}}><span style={{width:8,height:8,borderRadius:"50%",background:"#f59e0b",display:"inline-block",marginRight:4}} />🏠 {o.name||(o.email||"").split("@")[0]}</span>)}
             </div>
           )}
