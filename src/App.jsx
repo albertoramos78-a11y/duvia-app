@@ -1041,7 +1041,7 @@ ${brandExtras}
 
 /* ── Reset & Base ── */
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:${C.bg};color:${C.txt};font-family:'Nunito',sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;}
+body{background:${C.bg};color:${C.txt};font-family:'Nunito',sans-serif;min-height:100dvh;-webkit-font-smoothing:antialiased;}
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar{width:4px;height:4px;}
@@ -3049,8 +3049,23 @@ export default function App() {
   }
 
   // Called by LoginScreen — intercept parent role for consent
+  // Consent shown only if: (a) version changed, or (b) more than 7 days since last consent
+  const CONSENT_VERSION_KEY = "duvia_consent_version";
+  const CONSENT_DATE_KEY    = "duvia_consent_date";
+  function needsConsent() {
+    const savedVersion = localStorage.getItem(CONSENT_VERSION_KEY);
+    const savedDate    = localStorage.getItem(CONSENT_DATE_KEY);
+    if(savedVersion !== APP_VERSION) return true;
+    if(!savedDate) return true;
+    const daysSince = (Date.now() - Number(savedDate)) / 86400000;
+    return daysSince >= 7;
+  }
+  function recordConsent() {
+    localStorage.setItem(CONSENT_VERSION_KEY, APP_VERSION);
+    localStorage.setItem(CONSENT_DATE_KEY, String(Date.now()));
+  }
   function handleLogin(u) {
-    if(u.role==="parent") { setPendingUser(u); }
+    if(u.role==="parent" && needsConsent()) { setPendingUser(u); }
     else { handleSetUser(u); }
   }
 
@@ -3058,19 +3073,21 @@ export default function App() {
     <div>
       <style>{cssString}</style>
       {updateAvailable && (
-        <div style={{position:"fixed",top:14,left:"50%",transform:"translateX(-50%)",zIndex:9999,
-          background:C.card,border:`1.5px solid ${C.vio}`,borderRadius:14,padding:"10px 14px",
-          display:"flex",alignItems:"center",gap:10,boxShadow:"0 8px 30px rgba(0,0,0,.22)",maxWidth:"90vw"}}>
-          <span style={{fontSize:18}}>🔄</span>
-          <span style={{fontSize:12,fontWeight:700,color:C.txt}}>Nouvelle version disponible</span>
-          <button onClick={()=>duviaReload()} style={{padding:"6px 12px",background:C.vio,color:"#fff",fontSize:11,fontWeight:800,borderRadius:8}}>Rafraîchir</button>
+        <div style={{position:"fixed",inset:0,zIndex:10001,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.card,borderRadius:22,padding:"28px 24px",maxWidth:360,width:"100%",boxShadow:"0 16px 48px rgba(0,0,0,.3)",textAlign:"center",animation:"popIn .35s cubic-bezier(.34,1.56,.64,1)"}}>
+            <div style={{fontSize:44,marginBottom:12}}>🚀</div>
+            <div style={{fontSize:17,fontWeight:900,color:C.txt,marginBottom:8}}>Nouvelle version disponible</div>
+            <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:22}}>Une mise à jour de l'application est prête. Rechargez pour profiter des dernières améliorations.</div>
+            <button onClick={()=>duviaReload()} style={{width:"100%",padding:"13px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:15,fontWeight:800,borderRadius:12,marginBottom:10}}>Mettre à jour</button>
+            <button onClick={()=>setUpdateAvailable(false)} style={{width:"100%",padding:"10px",background:"transparent",color:C.mut,fontSize:13,border:`1.5px solid ${C.bor}`,borderRadius:12}}>Plus tard</button>
+          </div>
         </div>
       )}
       {!rgpdOk ? (
         <RgpdConsentScreen C={C} t={t} lang={lang} setLang={setLang} onAccept={acceptRgpd} />
       ) : pendingUser ? (
         <ConsentScreen C={C} t={t} user={pendingUser}
-          onAccept={()=>{ handleSetUser(pendingUser); setPendingUser(null); }}
+          onAccept={()=>{ recordConsent(); handleSetUser(pendingUser); setPendingUser(null); }}
           onDecline={()=>setPendingUser(null)} />
       ) : (
         <LoginScreen C={C} t={t} lang={lang} setLang={setLang} themeMode={themeMode} cycleTheme={cycleTheme} users={users} setUsers={setUsers} onLogin={handleLogin} onObsJoin={handleObsJoin} familySync={familySync} cfg={cfg} setCfg={setCfg} />
@@ -3140,7 +3157,7 @@ export default function App() {
 
   return (
     <AppContext.Provider value={ctxValue}>
-    <div style={{display:"flex",flexDirection:"column",height:"100vh",maxWidth:940,margin:"0 auto",overflow:"hidden",width:"100%"}}>
+    <div style={{display:"flex",flexDirection:"column",position:"fixed",inset:0,maxWidth:940,left:"50%",transform:"translateX(-50%)",overflow:"hidden",width:"100%"}}>
       <style>{cssString}</style>
 
       {inviteLeftNotice && (
@@ -3163,12 +3180,14 @@ export default function App() {
       )}
 
       {updateAvailable && (
-        <div style={{position:"fixed",top:14,left:"50%",transform:"translateX(-50%)",zIndex:9999,
-          background:C.card,border:`1.5px solid ${C.vio}`,borderRadius:14,padding:"10px 14px",
-          display:"flex",alignItems:"center",gap:10,boxShadow:"0 8px 30px rgba(0,0,0,.22)",maxWidth:"90vw"}}>
-          <span style={{fontSize:18}}>🔄</span>
-          <span style={{fontSize:12,fontWeight:700,color:C.txt}}>Nouvelle version disponible</span>
-          <button onClick={()=>duviaReload()} style={{padding:"6px 12px",background:C.vio,color:"#fff",fontSize:11,fontWeight:800,borderRadius:8}}>Rafraîchir</button>
+        <div style={{position:"fixed",inset:0,zIndex:10001,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.card,borderRadius:22,padding:"28px 24px",maxWidth:360,width:"100%",boxShadow:"0 16px 48px rgba(0,0,0,.3)",textAlign:"center",animation:"popIn .35s cubic-bezier(.34,1.56,.64,1)"}}>
+            <div style={{fontSize:44,marginBottom:12}}>🚀</div>
+            <div style={{fontSize:17,fontWeight:900,color:C.txt,marginBottom:8}}>Nouvelle version disponible</div>
+            <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:22}}>Une mise à jour de l'application est prête. Rechargez pour profiter des dernières améliorations.</div>
+            <button onClick={()=>duviaReload()} style={{width:"100%",padding:"13px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:15,fontWeight:800,borderRadius:12,marginBottom:10}}>Mettre à jour</button>
+            <button onClick={()=>setUpdateAvailable(false)} style={{width:"100%",padding:"10px",background:"transparent",color:C.mut,fontSize:13,border:`1.5px solid ${C.bor}`,borderRadius:12}}>Plus tard</button>
+          </div>
         </div>
       )}
 
@@ -3920,7 +3939,7 @@ function ConsentScreen({C,t,user,onAccept,onDecline}) {
           </button>
         </div>
         <div style={{fontSize:10,color:C.mut,textAlign:"center",lineHeight:1.5,padding:"0 10px"}}>
-          {t.consentFooter||"Ces engagements sont demandés à chaque nouvelle connexion pour garantir une utilisation bienveillante de l'application."}
+          {t.consentFooter||"Ces engagements sont demandés toutes les semaines ou lors des mises à jour pour garantir une utilisation bienveillante de l'application."}
         </div>
       </div>
     </div>
@@ -7772,6 +7791,19 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
           // Encadrement vert si vacances scolaires (priorité sur bordure today/inline)
           const scoBorder = d.sco ? `2px solid ${C.grn}` : null;
           const activeBorder = d.isToday ? `1.5px solid ${C.vio}` : inlineDs===d.ds ? `1.5px solid ${C.vio}` : "1.5px solid transparent";
+          // Heure de prise/fin de garde et lieu
+          const g = d.guard;
+          const hasTime = g && g.timeType && g.timeType !== "full";
+          const cellTimeStr = hasTime ? (() => {
+            const st = g.startTime; const et = g.endTime;
+            if(g.timeType==="start" && st) return st;
+            if(g.timeType==="end" && et) return et;
+            if(g.timeType==="split" && st && et) return `${st}→${et}`;
+            if(g.timeType==="split" && st) return st;
+            if(g.timeType==="split" && et) return et;
+            return null;
+          })() : null;
+          const cellLoc = hasTime && g.location ? g.location : null;
           return (
             <div key={d.ds} onClick={()=>openDay(d.ds)}
               title={d.ferName||d.scoName||d.specials[0]?.label||undefined}
@@ -7793,7 +7825,21 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
               {dotColor && (
                 <span style={{position:"absolute",top:7,right:7,width:6,height:6,borderRadius:"50%",background:dotColor}} />
               )}
-              {hasBadge && (
+              {cellTimeStr && (
+                <span style={{
+                  position:"absolute",bottom:cellLoc?14:4,left:3,right:3,
+                  fontSize:8,fontWeight:700,color:C.vio,lineHeight:1,
+                  textAlign:"center",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",
+                }}>{cellTimeStr}</span>
+              )}
+              {cellLoc && (
+                <span style={{
+                  position:"absolute",bottom:4,left:3,right:3,
+                  fontSize:7,color:C.mut,lineHeight:1,
+                  textAlign:"center",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",
+                }}>📍{cellLoc}</span>
+              )}
+              {hasBadge && !cellTimeStr && (
                 <span style={{
                   position:"absolute",bottom:5,right:5,
                   fontSize:11,lineHeight:1,opacity:0.75,
@@ -7896,6 +7942,22 @@ function InlinePicker({ds,guard,onClose,onFull,dayInfo}) {
           ))}
         </div>
       )}
+      {guard && guard.timeType && guard.timeType !== "full" && (() => {
+        const st = guard.startTime; const et = guard.endTime;
+        let timeStr = "";
+        if(guard.timeType==="start" && st) timeStr = `▶ ${st}`;
+        else if(guard.timeType==="end" && et) timeStr = `⏹ ${et}`;
+        else if(guard.timeType==="split" && st && et) timeStr = `${st} → ${et}`;
+        else if(guard.timeType==="split" && st) timeStr = `▶ ${st}`;
+        else if(guard.timeType==="split" && et) timeStr = `⏹ ${et}`;
+        if(!timeStr && !guard.location) return null;
+        return (
+          <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:10,background:`${C.vio}12`,border:`1px solid ${C.vio}33`}}>
+            {timeStr && <span style={{fontSize:13,fontWeight:800,color:C.vio}}>⏰ {timeStr}</span>}
+            {guard.location && <span style={{fontSize:12,color:C.mut,fontWeight:600}}>📍 {guard.location}</span>}
+          </div>
+        );
+      })()}
       <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
         {cfg.parents.map((p,pi)=>(
           <button key={pi} onClick={()=>{updateCal(ds,{parentIdx:pi,obsId:undefined,timeType:"full",startTime:"",endTime:"",location:"",note:""});onClose();}}
