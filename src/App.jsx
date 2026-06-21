@@ -7581,11 +7581,11 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
           </button>
           {showLegend&&(
             <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap",padding:"8px 12px",background:C.sur,borderRadius:8,border:`1.5px solid ${C.bor}`}}>
-              <span className="chip" style={{fontSize:11}}><span style={{width:8,height:8,borderRadius:2,background:C.red,display:"inline-block",marginRight:4}} />{t.holiday}</span>
-              <span className="chip" style={{fontSize:11}}><span style={{width:8,height:8,borderRadius:2,background:C.grn,display:"inline-block",marginRight:4}} />{t.vacation}</span>
-              <span className="chip" style={{fontSize:11}}><span style={{width:8,height:8,borderRadius:2,background:"#ff6bb5",display:"inline-block",marginRight:4}} />🌸 {t.motherDay?.replace(/^🌸\s*/,"")||"Fête des Mères"}</span>
-              <span className="chip" style={{fontSize:11}}><span style={{width:8,height:8,borderRadius:2,background:"#4a9eff",display:"inline-block",marginRight:4}} />🎩 {t.fatherDay?.replace(/^🎩\s*/,"")||"Fête des Pères"}</span>
-              <span className="chip" style={{fontSize:11}}><span style={{width:8,height:8,borderRadius:2,background:"#f5a623",display:"inline-block",marginRight:4}} />👴 {t.calGrandparents||"Grands-Parents"}</span>
+              <span className="chip" style={{fontSize:11}}><span style={{fontSize:11,fontWeight:900,color:C.red,marginRight:4}}>14</span>{t.holiday}</span>
+              <span className="chip" style={{fontSize:11}}><span style={{width:14,height:14,borderRadius:4,border:`2px solid ${C.grn}`,display:"inline-block",marginRight:4,verticalAlign:"middle"}} />{t.vacation}</span>
+              <span className="chip" style={{fontSize:11}}>🌸 {t.motherDay?.replace(/^🌸\s*/,"")||"Fête des Mères"}</span>
+              <span className="chip" style={{fontSize:11}}>🎩 {t.fatherDay?.replace(/^🎩\s*/,"")||"Fête des Pères"}</span>
+              <span className="chip" style={{fontSize:11}}>👴 {t.calGrandparents||"Grands-Parents"}</span>
               {cfg.parents.map((p,i)=>p.name&&<span key={i} className="chip" style={{fontSize:11,borderColor:p.color}}><span style={{width:8,height:8,borderRadius:"50%",background:p.color,display:"inline-block",marginRight:4}} />{p.name}</span>)}
               {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=><span key={o.id} className="chip" style={{fontSize:11,borderColor:"#f59e0b"}}><span style={{width:8,height:8,borderRadius:"50%",background:"#f59e0b",display:"inline-block",marginRight:4}} />🏠 {o.name||(o.email||"").split("@")[0]}</span>)}
             </div>
@@ -7740,10 +7740,23 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
         {days.map(d=>{
           const bg = d.isToday ? `${C.vio}22` : cellBg(d.guard);
           const hasBadge = d.isChangeDay && d.guard;
-          const dotColor = !d.isBirthday && !d.fer && (d.sco ? C.grn : d.specials[0]?.color);
           // Priorité couleur du numéro : férié (rouge gras) > week-end (gris foncé gras) > normal
           const numColor = d.fer ? C.red : d.isWE ? "#52525b" : (d.isToday ? C.vio : C.txt);
           const numWeight = (d.fer || d.isWE || d.isToday) ? 900 : 700;
+          // Détection icône spéciale (fête des mères, pères, grands-parents)
+          const specialIcon = !d.isBirthday && !d.fer && !d.sco
+            ? d.specials.find(ev => ev.label?.includes("🌸") || ev.label?.includes("🎩") || ev.label?.includes("👴") || ev.label?.includes("👵"))
+            : null;
+          const specialIconChar = specialIcon
+            ? (specialIcon.label?.match(/🌸|🎩|👴|👵/)?.[0] || null)
+            : null;
+          // Point coloré uniquement si ni vacances, ni jour férié, ni icône spéciale, ni anniversaire
+          const dotColor = !d.isBirthday && !d.fer && !d.sco && !specialIconChar
+            ? d.specials[0]?.color
+            : null;
+          // Encadrement vert si vacances scolaires (priorité sur bordure today/inline)
+          const scoBorder = d.sco ? `2px solid ${C.grn}` : null;
+          const activeBorder = d.isToday ? `1.5px solid ${C.vio}` : inlineDs===d.ds ? `1.5px solid ${C.vio}` : "1.5px solid transparent";
           return (
             <div key={d.ds} onClick={()=>openDay(d.ds)}
               title={d.ferName||d.scoName||d.specials[0]?.label||undefined}
@@ -7751,7 +7764,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
                 aspectRatio:"1",borderRadius:10,background:bg,padding:"6px 6px",
                 display:"flex",flexDirection:"column",justifyContent:"space-between",
                 cursor:readOnly?"default":"pointer",position:"relative",
-                border:d.isToday?`1.5px solid ${C.vio}`:inlineDs===d.ds?`1.5px solid ${C.vio}`:"1.5px solid transparent",
+                border:scoBorder || activeBorder,
                 transition:"transform .12s, box-shadow .12s",
                 minWidth:0,boxSizing:"border-box",overflow:"hidden",
               }}>
@@ -7759,6 +7772,9 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
                 <span style={{fontSize:13,fontWeight:numWeight,color:numColor}}>{d.day}</span>
                 {d.isBirthday && <span style={{fontSize:11,lineHeight:1}}>🎂</span>}
               </span>
+              {specialIconChar && (
+                <span style={{position:"absolute",top:5,right:5,fontSize:12,lineHeight:1}}>{specialIconChar}</span>
+              )}
               {dotColor && (
                 <span style={{position:"absolute",top:7,right:7,width:6,height:6,borderRadius:"50%",background:dotColor}} />
               )}
