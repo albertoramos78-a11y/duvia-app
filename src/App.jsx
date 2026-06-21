@@ -7772,6 +7772,18 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
           // Encadrement vert si vacances scolaires (priorité sur bordure today/inline)
           const scoBorder = d.sco ? `2px solid ${C.grn}` : null;
           const activeBorder = d.isToday ? `1.5px solid ${C.vio}` : inlineDs===d.ds ? `1.5px solid ${C.vio}` : "1.5px solid transparent";
+          // Heure + lieu du rendez-vous de garde (ex: "12:00 → 14:00" / "📍 MANTES")
+          const g = d.guard;
+          let cellTime = "";
+          if(g && g.timeType && g.timeType!=="full"){
+            const st=g.startTime, et=g.endTime;
+            if(g.timeType==="start"&&st) cellTime=`▶ ${st}`;
+            else if(g.timeType==="end"&&et) cellTime=`⏹ ${et}`;
+            else if(g.timeType==="split"&&st&&et) cellTime=`${st} → ${et}`;
+            else if(g.timeType==="split"&&st) cellTime=`▶ ${st}`;
+            else if(g.timeType==="split"&&et) cellTime=`⏹ ${et}`;
+          }
+          const cellLocation = g?.location || "";
           return (
             <div key={d.ds} onClick={()=>openDay(d.ds)}
               title={d.ferName||d.scoName||d.specials[0]?.label||undefined}
@@ -7787,6 +7799,12 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
                 <span style={{fontSize:13,fontWeight:numWeight,color:numColor}}>{d.day}</span>
                 {d.isBirthday && <span style={{fontSize:11,lineHeight:1}}>🎂</span>}
               </span>
+              {(cellTime || cellLocation) && (
+                <span style={{textAlign:"center",minWidth:0,overflow:"hidden"}}>
+                  {cellTime && <span style={{display:"block",fontSize:9,fontWeight:800,color:C.vio,fontFamily:"JetBrains Mono",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cellTime}</span>}
+                  {cellLocation && <span style={{display:"block",fontSize:8,fontWeight:700,color:C.pin,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {cellLocation}</span>}
+                </span>
+              )}
               {specialIconChar && (
                 <span style={{position:"absolute",top:5,right:5,fontSize:12,lineHeight:1}}>{specialIconChar}</span>
               )}
@@ -7885,6 +7903,18 @@ function GuardCell({guard,readOnly,isOpen,onClick,onFull}) {
 function InlinePicker({ds,guard,onClose,onFull,dayInfo}) {
   const {C,t,cfg,updateCal} = useApp();
   const guardianObs=(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard);
+  // Résumé heure/lieu du rendez-vous (même logique que GuardCell), affiché dans le panneau rapide
+  const timeStr = (()=>{
+    if(!guard || !guard.timeType || guard.timeType==="full") return "";
+    const st=guard.startTime, et=guard.endTime;
+    if(guard.timeType==="start"&&st) return `▶ ${st}`;
+    if(guard.timeType==="end"&&et) return `⏹ ${et}`;
+    if(guard.timeType==="split"&&st&&et) return `${st} → ${et}`;
+    if(guard.timeType==="split"&&st) return `▶ ${st}`;
+    if(guard.timeType==="split"&&et) return `⏹ ${et}`;
+    return "";
+  })();
+  const hasRdv = !!(timeStr || guard?.location || guard?.note);
   return (
     <div className="fi" style={{background:C.sur,borderBottom:`1.5px solid ${C.bor}`,padding:"9px 12px 12px",display:"flex",flexDirection:"column",gap:8}}>
       {dayInfo && dayInfo.length>0 && (
@@ -7894,6 +7924,19 @@ function InlinePicker({ds,guard,onClose,onFull,dayInfo}) {
               {info.icon} {info.label}
             </span>
           ))}
+        </div>
+      )}
+      {hasRdv && (
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:12,background:`${C.vio}14`,border:`1.5px solid ${C.vio}33`,flexWrap:"wrap"}}>
+          {timeStr && <span style={{fontSize:14,fontWeight:900,color:C.vio,fontFamily:"JetBrains Mono"}}>{timeStr}</span>}
+          {guard?.location && (
+            <span style={{fontSize:12,fontWeight:800,color:C.pin,display:"flex",alignItems:"center",gap:3}}>
+              📍 {guard.location}
+            </span>
+          )}
+          {guard?.note && (
+            <span style={{fontSize:11,color:C.mut,fontStyle:"italic",width:"100%"}}>📝 {guard.note}</span>
+          )}
         </div>
       )}
       <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
