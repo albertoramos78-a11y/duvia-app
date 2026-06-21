@@ -4032,7 +4032,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     if(!usingPhoneId && !isValidEmail(cleanEmail)){ setErr(finalRolePreCheck==="parent" ? "Adresse email invalide." : "Adresse email ou numéro de téléphone invalide."); return; }
     const pwErr = validatePassword(pw);
     if(pwErr){ setErr(pwErr); return; }
-    if(pw !== pwConfirm){ setErr("⚠️ Les mots de passe ne correspondent pas."); return; }
+    if(pw !== pwConfirm){ setErr(t.pwMismatch); return; }
     // Nettoyage du cache localStorage : on supprime toute entrée locale pour cet email
     // Le vrai doublon sera détecté par Supabase lors du signUp (linkAccount).
     setUsers(us => us.filter(u => u.email !== cleanEmail));
@@ -4353,7 +4353,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
               {!showExistingAccount && isChildInvite && <div style={{background:`${C.grn}12`,border:`1.5px solid ${C.grn}44`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:C.grn,fontWeight:700,textAlign:"center"}}>{t.regChildInviteMsg||"🧒 Rejoindre la famille en tant qu'enfant"}</div>}
               {!showExistingAccount && isObsInvite && <div style={{background:`${C.blu}12`,border:`1.5px solid ${C.blu}44`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:C.blu,fontWeight:700,textAlign:"center"}}>👀 {t.obsJoinInfo||"Vous avez été invité(e) à rejoindre Duvia en tant qu'observateur."}</div>}
               {!showExistingAccount && <><div className="field"><label className="lbl">{t.fullName}</label><input value={name} onChange={e=>setName(e.target.value)} className={shakeName?"duvia-shake":""} /></div>
-              {!isAnyInvite&&<div className="field"><label className="lbl">{t.roleLabel||"Rôle"}</label><select value={role} onChange={e=>setRole(e.target.value)}><option value="parent">{t.roleParent}</option><option value="observer">{t.roleObs}</option><option value="child">{t.roleChild||"Enfant"}</option></select></div>}
+              {!isAnyInvite&&<div className="field"><label className="lbl">{t.roleLabel||"Rôle"}</label><select value={role} onChange={e=>setRole(e.target.value)}><option value="parent">{t.roleParent}</option><option value="observer">{t.roleObs}</option></select></div>}
 
               {/* Vous êtes — pour les observateurs invités */}
               {isObsInvite && (
@@ -4444,7 +4444,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
                 </div>
               )}
 
-              {!isChildInvite && !isParentInvite && <div className="field"><label className="lbl" style={{color:C.pin}}>{t.refPlaceholder||"Code parrain (optionnel)"}</label><input value={refInput} onChange={e=>setRefInput(e.target.value)} placeholder="DUV-XXXX-0000" style={{fontFamily:"monospace",letterSpacing:2,textTransform:"uppercase"}} /></div>}
+              {/* Champ « Code parrain » retiré : le parrainage se fait via le menu Premium (invitation). */}
             </div>
           )}
           {(() => {
@@ -4471,9 +4471,9 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
               <button type="button" onClick={()=>setShowPw(v=>!v)} aria-label={showPw?"Masquer":"Afficher"} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",width:32,height:32,background:"transparent",border:"none",color:C.mut,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>{showPw?"🙈":"👁️"}</button>
             </div>
           </div>}
-          {mode==="register"&&<div className="field"><label className="lbl">{"Confirmer le mot de passe"}</label>
+          {mode==="register"&&<div className="field"><label className="lbl">{t.confirmPw}</label>
             <div style={{position:"relative"}}>
-              <input type={showPw?"text":"password"} value={pwConfirm} onChange={e=>setPwConfirm(e.target.value)} placeholder={"Répéter le mot de passe"} style={{width:"100%",boxSizing:"border-box",paddingRight:42,borderColor:pwConfirm&&pwConfirm!==pw?C.red:undefined}} />
+              <input type={showPw?"text":"password"} value={pwConfirm} onChange={e=>setPwConfirm(e.target.value)} placeholder={t.confirmPwPlaceholder} style={{width:"100%",boxSizing:"border-box",paddingRight:42,borderColor:pwConfirm&&pwConfirm!==pw?C.red:undefined}} />
               {pwConfirm && <span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",fontSize:16}}>{pwConfirm===pw?"✅":"❌"}</span>}
             </div>
           </div>}
@@ -4499,11 +4499,6 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
             <a href="https://duvia.fr" style={{display:"block",width:"100%",textAlign:"center",marginTop:6,color:C.mut,fontSize:12,textDecoration:"underline",fontFamily:"inherit"}}>
               {t.backToSite}
             </a>
-          )}
-          {(mode==="login"||mode==="register")&&(
-            <button onClick={()=>{ try{ window.location.href = window.location.origin + "/"; }catch{} }} style={{display:"block",width:"100%",textAlign:"center",marginTop:6,background:"none",border:"none",color:C.vio,fontSize:12,textDecoration:"underline",cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>
-              app.duvia.fr
-            </button>
           )}
           {mode==="obs_waiting"&&(
             <div style={{textAlign:"center",padding:"8px 0 4px"}}>
@@ -4958,9 +4953,9 @@ function ConfigTab() {
             {!inviteResult ? (
               <>
                 <div style={{fontSize:28,textAlign:"center",marginBottom:6}}>👋</div>
-                <div style={{fontSize:16,fontWeight:900,color:C.txt,textAlign:"center",marginBottom:4}}>Inviter l'autre parent</div>
+                <div style={{fontSize:16,fontWeight:900,color:C.txt,textAlign:"center",marginBottom:4}}>{t.inviteOtherParent}</div>
                 <div style={{fontSize:12,color:C.mut,textAlign:"center",marginBottom:20,lineHeight:1.5}}>
-                  Remplis au moins un champ.<br/>Le lien sera valable 24h.
+                  {t.inviteFillField}<br/>{t.inviteLink24h}
                 </div>
 
                 <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:5,textTransform:"uppercase",letterSpacing:".06em"}}>
@@ -4989,27 +4984,27 @@ function ConfigTab() {
                 {inviteErr && <div style={{fontSize:12,color:C.red,marginBottom:12}}>{inviteErr}</div>}
                 <div style={{display:"flex",flexDirection:"column",gap:10}}>
                   <button disabled={sendingInvite} onClick={confirmInvite} style={{width:"100%",minHeight:44,padding:"10px 12px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13,whiteSpace:"normal",lineHeight:1.3,opacity:sendingInvite?0.6:1,cursor:sendingInvite?"not-allowed":"pointer"}}>
-                    {sendingInvite ? "⏳ Génération…" : "🔗 Générer le lien d'invitation"}
+                    {sendingInvite ? t.inviteGenerating : t.inviteGenerate}
                   </button>
-                  <button onClick={()=>setShowInviteModal(false)} style={{width:"100%",height:40,background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13}}>Annuler</button>
+                  <button onClick={()=>setShowInviteModal(false)} style={{width:"100%",height:40,background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13}}>{t.cancel}</button>
                 </div>
               </>
             ) : (
               <>
                 <div style={{fontSize:28,textAlign:"center",marginBottom:6}}>✅</div>
-                <div style={{fontSize:16,fontWeight:900,color:C.txt,textAlign:"center",marginBottom:4}}>Lien prêt !</div>
+                <div style={{fontSize:16,fontWeight:900,color:C.txt,textAlign:"center",marginBottom:4}}>{t.linkReady}</div>
                 <div style={{fontSize:12,color:C.mut,textAlign:"center",marginBottom:16,lineHeight:1.5}}>
-                  Choisis comment l'envoyer (valable 24h) :
+                  {t.chooseHowSend}
                 </div>
                 <ParentInviteShareBtns C={C} parent={{inviteUrl:inviteResult.url, inviteEmail:inviteResult.email, invitePhone:inviteResult.phone}} familyName={cfg.parents[0]?.name || "Votre famille"} />
                 <button onClick={()=>{
                   navigator.clipboard.writeText(inviteResult.url);
                   pushNotif("Lien copié !","info");
                 }} style={{width:"100%",height:40,background:C.sur,color:C.txt,border:`1.5px solid ${C.bor}`,borderRadius:10,fontWeight:700,fontSize:13,marginBottom:10}}>
-                  📋 Copier le lien
+                  {t.copyInviteLink}
                 </button>
                 <button onClick={()=>{setShowInviteModal(false);setInviteResult(null);setInvitePhone("");setInviteEmail("");}} style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13}}>
-                  Terminé
+                  {t.doneBtn}
                 </button>
               </>
             )}
@@ -5162,13 +5157,13 @@ function StepId({setParent,setChild,addParent,removeParent,addChild,removeChild,
         if(p.inviteStatus==="pending") return (
           <div key={i} className="card" style={{marginBottom:12,borderColor:p.color,borderStyle:"dashed"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <span style={{fontSize:11,fontWeight:800,color:p.color,textTransform:"uppercase",letterSpacing:".06em"}}>{i===0?"Créateur":"Invité"}</span>
+              <span style={{fontSize:11,fontWeight:800,color:p.color,textTransform:"uppercase",letterSpacing:".06em"}}>{i===0?t.creatorLabel:t.guestLabel}</span>
               <button onClick={()=>setCfg(c=>({...c,parents:c.parents.filter((_,j)=>j!==i)}))} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.remove}</button>
             </div>
             <div style={{display:"flex",gap:12,alignItems:"center",padding:"8px 0 14px"}}>
               <div style={{width:44,height:44,borderRadius:"50%",background:`${p.color}22`,border:`2px dashed ${p.color}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>⏳</div>
               <div>
-                <div style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:3}}>En attente d'inscription</div>
+                <div style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:3}}>{t.waitingSignup}</div>
                 <div style={{fontSize:12,color:C.mut}}>
                   {p.inviteEmail && <span>✉️ {p.inviteEmail}</span>}
                   {p.inviteEmail && p.invitePhone && <span style={{margin:"0 6px",opacity:.4}}>·</span>}
@@ -5224,7 +5219,7 @@ function StepId({setParent,setChild,addParent,removeParent,addChild,removeChild,
           {/* Header */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
             <div style={{display:"flex",alignItems:"center",gap:6}}>
-              <span style={{fontSize:11,fontWeight:800,color:p.color,textTransform:"uppercase",letterSpacing:".06em"}}>{i===0?"Créateur":"Invité"}</span>
+              <span style={{fontSize:11,fontWeight:800,color:p.color,textTransform:"uppercase",letterSpacing:".06em"}}>{i===0?t.creatorLabel:t.guestLabel}</span>
               {sub?.subscriberParentIdx===i && (
                 <span style={{fontSize:9,fontWeight:900,background:`linear-gradient(135deg,${C.yel},${C.ora})`,color:"#fff",padding:"2px 7px",borderRadius:8,letterSpacing:".04em"}}>
                   👑 Souscripteur Premium
@@ -5238,7 +5233,7 @@ function StepId({setParent,setChild,addParent,removeParent,addChild,removeChild,
             </div>
             {i===user?.parentIdx ? (
               cfg.parents.length>1 ? (
-                <button onClick={quitterFamille} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>🚪 Quitter la famille</button>
+                <button onClick={quitterFamille} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.leaveFamily}</button>
               ) : null
             ) : (user?.parentIdx===0 && i===1) ? (
               sub?.subscriberParentIdx===i
@@ -5446,7 +5441,7 @@ function ParentInviteShareBtns({ C, parent, familyName }) {
   return (
     <div style={{marginBottom:12,paddingBottom:12,borderBottom:`1px solid ${C.bor}`}}>
       <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:8}}>
-        📨 Envoyer le lien d'invitation
+        {t.sendInviteLink}
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
         <button onClick={handleSMS} style={{
@@ -5464,7 +5459,7 @@ function ParentInviteShareBtns({ C, parent, familyName }) {
       </div>
       {!parent.invitePhone && (
         <div style={{fontSize:10,color:C.mut,marginTop:5}}>
-          💡 Supprime et réinvite avec un numéro pour pré-remplir SMS/WhatsApp.
+          {t.reinviteNumberTip}
         </div>
       )}
     </div>
@@ -6902,7 +6897,7 @@ function StepAccess() {
               <div style={{fontWeight:800,fontSize:15,color:C.grn,marginBottom:4}}>{t.obsInviteSent}</div>
               <div style={{fontSize:12,color:C.mut,marginBottom:12}}>{t.obsInviteExpiry}</div>
             </div>
-            <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:8}}>📨 Envoyer le lien d'invitation</div>
+            <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:8}}>{t.sendInviteLink}</div>
             <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
               <button onClick={handleSendSMS} disabled={!phone} style={{padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:phone?"pointer":"not-allowed",opacity:phone?1:.4,background:"#25D36618",color:"#128C7E",border:"1.5px solid #25D36644"}}>💬 SMS</button>
               <button onClick={handleSendWhatsApp} disabled={!phone} style={{padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:phone?"pointer":"not-allowed",opacity:phone?1:.4,background:"#25D36618",color:"#25D366",border:"1.5px solid #25D36644"}}>📱 WhatsApp</button>
