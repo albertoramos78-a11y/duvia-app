@@ -7727,22 +7727,22 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
   }
 
   return (
-    <div className="card" style={{padding:14,overflow:"hidden"}}>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5,marginBottom:6}}>
+    <div className="card" style={{padding:14,overflow:"hidden",width:"100%",boxSizing:"border-box"}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5,marginBottom:6,width:"100%",boxSizing:"border-box"}}>
         {dayLetters.map((lbl,i)=>(
-          <div key={i} style={{textAlign:"center",fontSize:10,fontWeight:800,letterSpacing:".04em",color:C.mut,padding:"2px 0"}}>{lbl}</div>
+          <div key={i} style={{textAlign:"center",fontSize:10,fontWeight:800,letterSpacing:".04em",color:C.mut,padding:"2px 0",minWidth:0,overflow:"hidden"}}>{lbl}</div>
         ))}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5,width:"100%",boxSizing:"border-box"}}>
         {Array.from({length:firstDow}).map((_,i)=>(
-          <div key={`pad-${i}`} style={{aspectRatio:"1",borderRadius:10,background:`${C.sur}66`}} />
+          <div key={`pad-${i}`} style={{aspectRatio:"1",borderRadius:10,background:`${C.sur}66`,minWidth:0,boxSizing:"border-box"}} />
         ))}
         {days.map(d=>{
           const bg = d.isToday ? `${C.vio}22` : cellBg(d.guard);
           const hasBadge = d.isChangeDay && d.guard;
-          const dotColor = !d.isBirthday && (d.fer ? C.red : d.sco ? C.grn : d.specials[0]?.color);
-          // Priorité couleur du numéro : férié (rouge gras) > week-end (orange gras) > normal
-          const numColor = d.fer ? C.red : d.isWE ? C.ora : (d.isToday ? C.vio : C.txt);
+          const dotColor = !d.isBirthday && !d.fer && (d.sco ? C.grn : d.specials[0]?.color);
+          // Priorité couleur du numéro : férié (rouge gras) > week-end (gris foncé gras) > normal
+          const numColor = d.fer ? C.red : d.isWE ? "#52525b" : (d.isToday ? C.vio : C.txt);
           const numWeight = (d.fer || d.isWE || d.isToday) ? 900 : 700;
           return (
             <div key={d.ds} onClick={()=>openDay(d.ds)}
@@ -7753,6 +7753,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
                 cursor:readOnly?"default":"pointer",position:"relative",
                 border:d.isToday?`1.5px solid ${C.vio}`:inlineDs===d.ds?`1.5px solid ${C.vio}`:"1.5px solid transparent",
                 transition:"transform .12s, box-shadow .12s",
+                minWidth:0,boxSizing:"border-box",overflow:"hidden",
               }}>
               <span style={{display:"flex",alignItems:"center",gap:3}}>
                 <span style={{fontSize:13,fontWeight:numWeight,color:numColor}}>{d.day}</span>
@@ -7775,9 +7776,13 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
       {inlineDs && !readOnly && (() => {
         const d = days.find(d=>d.ds===inlineDs);
         if(!d) return null;
+        const dayInfo = [];
+        if(d.fer) dayInfo.push({icon:"📍",label:d.ferName||t.holiday||"Férié",color:C.red});
+        if(d.sco) dayInfo.push({icon:"🌿",label:d.scoName||t.vacation||"Vacances",color:C.grn});
+        d.specials.forEach(ev=>dayInfo.push({icon:"",label:ev.label,color:ev.color}));
         return (
           <div style={{marginTop:10}}>
-            <InlinePicker ds={inlineDs} guard={d.guard} onClose={()=>setInlineDs(null)}
+            <InlinePicker ds={inlineDs} guard={d.guard} onClose={()=>setInlineDs(null)} dayInfo={dayInfo}
               onFull={!editBlocked?()=>{setFullDs(inlineDs);setInlineDs(null);}:null} />
           </div>
         );
@@ -7847,28 +7852,39 @@ function GuardCell({guard,readOnly,isOpen,onClick,onFull}) {
   );
 }
 
-function InlinePicker({ds,guard,onClose,onFull}) {
+function InlinePicker({ds,guard,onClose,onFull,dayInfo}) {
   const {C,t,cfg,updateCal} = useApp();
   const guardianObs=(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard);
   return (
-    <div className="fi" style={{background:C.sur,borderBottom:`1.5px solid ${C.bor}`,padding:"9px 12px 12px",display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
-      {cfg.parents.map((p,pi)=>(
-        <button key={pi} onClick={()=>{updateCal(ds,{parentIdx:pi,obsId:undefined,timeType:"full",startTime:"",endTime:"",location:"",note:""});onClose();}}
-          style={{padding:"5px 12px",background:guard?.parentIdx===pi&&!guard?.obsId?p.color:`${p.color}22`,color:guard?.parentIdx===pi&&!guard?.obsId?"#fff":p.color,border:`2px solid ${p.color}`,borderRadius:20,fontSize:13,fontWeight:700}}>
-          {p.name||`P${pi+1}`}
-        </button>
-      ))}
-      {guardianObs.map(o=>(
-        <button key={o.id} onClick={()=>{updateCal(ds,{parentIdx:undefined,obsId:o.id,obsName:o.name,timeType:"full",startTime:"",endTime:"",location:"",note:""});onClose();}}
-          style={{padding:"5px 12px",background:guard?.obsId===o.id?"#f59e0b":"#f59e0b18",color:guard?.obsId===o.id?"#fff":"#f59e0b",border:"2px solid #f59e0b",borderRadius:20,fontSize:13,fontWeight:700}}>
-          🏠 {o.name||(o.email||"").split("@")[0]}
-        </button>
-      ))}
-      <button onClick={()=>{updateCal(ds,{parentIdx:undefined,obsId:undefined});onClose();}} style={{padding:"5px 10px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:20,fontSize:12}}>✕</button>
-      {onFull
-        ? <button onClick={onFull} style={{padding:"5px 10px",background:"transparent",color:C.vio,border:`1.5px solid ${C.vio}`,borderRadius:20,fontSize:12,marginLeft:"auto"}}>{t.fullEdit}</button>
-        : <button disabled style={{padding:"5px 10px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:20,fontSize:12,marginLeft:"auto",opacity:.6,cursor:"not-allowed",display:"flex",alignItems:"center",gap:5}}>🔒 {t.fullEdit}</button>
-      }
+    <div className="fi" style={{background:C.sur,borderBottom:`1.5px solid ${C.bor}`,padding:"9px 12px 12px",display:"flex",flexDirection:"column",gap:8}}>
+      {dayInfo && dayInfo.length>0 && (
+        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+          {dayInfo.map((info,i)=>(
+            <span key={i} style={{display:"flex",alignItems:"center",gap:4,padding:"3px 9px",borderRadius:14,background:`${info.color}1f`,color:info.color,fontSize:11,fontWeight:800}}>
+              {info.icon} {info.label}
+            </span>
+          ))}
+        </div>
+      )}
+      <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
+        {cfg.parents.map((p,pi)=>(
+          <button key={pi} onClick={()=>{updateCal(ds,{parentIdx:pi,obsId:undefined,timeType:"full",startTime:"",endTime:"",location:"",note:""});onClose();}}
+            style={{padding:"5px 12px",background:guard?.parentIdx===pi&&!guard?.obsId?p.color:`${p.color}22`,color:guard?.parentIdx===pi&&!guard?.obsId?"#fff":p.color,border:`2px solid ${p.color}`,borderRadius:20,fontSize:13,fontWeight:700}}>
+            {p.name||`P${pi+1}`}
+          </button>
+        ))}
+        {guardianObs.map(o=>(
+          <button key={o.id} onClick={()=>{updateCal(ds,{parentIdx:undefined,obsId:o.id,obsName:o.name,timeType:"full",startTime:"",endTime:"",location:"",note:""});onClose();}}
+            style={{padding:"5px 12px",background:guard?.obsId===o.id?"#f59e0b":"#f59e0b18",color:guard?.obsId===o.id?"#fff":"#f59e0b",border:"2px solid #f59e0b",borderRadius:20,fontSize:13,fontWeight:700}}>
+            🏠 {o.name||(o.email||"").split("@")[0]}
+          </button>
+        ))}
+        <button onClick={()=>{updateCal(ds,{parentIdx:undefined,obsId:undefined});onClose();}} style={{padding:"5px 10px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:20,fontSize:12}}>✕</button>
+        {onFull
+          ? <button onClick={onFull} style={{padding:"5px 10px",background:"transparent",color:C.vio,border:`1.5px solid ${C.vio}`,borderRadius:20,fontSize:12,marginLeft:"auto"}}>{t.fullEdit}</button>
+          : <button disabled style={{padding:"5px 10px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:20,fontSize:12,marginLeft:"auto",opacity:.6,cursor:"not-allowed",display:"flex",alignItems:"center",gap:5}}>🔒 {t.fullEdit}</button>
+        }
+      </div>
     </div>
   );
 }
