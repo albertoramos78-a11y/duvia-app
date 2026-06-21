@@ -3250,29 +3250,12 @@ export default function App() {
       <div style={{flexShrink:0,background:headerBG,borderBottom:`1.5px solid ${C.bor}`,boxShadow:"0 1px 6px rgba(0,0,0,.06)"}}>
       <div style={{padding:"0 14px",display:"flex",alignItems:"center",gap:12,height:58}}>
         <img src="/logo-nav.png" alt="Duvia" style={{width:42,height:42,borderRadius:0,objectFit:"contain",flexShrink:0}} />
-        {/* Left block: tagline + family selector */}
-        <div style={{display:"flex",flexDirection:"column",justifyContent:"center",gap:3,minWidth:0,flex:1}}>
+        {/* Left block: tagline */}
+        <div style={{display:"flex",flexDirection:"column",justifyContent:"center",minWidth:0,flex:1}}>
           <div style={{fontSize:10,color:C.mut,fontStyle:"italic",lineHeight:1.2}}>
             <span>Two homes · One family</span>
             {C._wc && <span style={{fontSize:14,display:"inline-block",animation:"wcBall 3s ease-in-out infinite",transformOrigin:"center",marginLeft:4}}>⚽</span>}
           </div>
-          {familySync.families.length > 1 && (
-            <div style={{display:"flex",alignItems:"center",gap:5}}>
-              <span style={{fontSize:13}}>👨‍👩‍👧</span>
-              <select
-                value={familySync.familyId || ""}
-                onChange={e => familySync.switchFamily(e.target.value)}
-                style={{height:26,maxWidth:120,fontSize:11,fontWeight:800,color:C.vio,background:`${C.vio}12`,border:`2px solid ${C.vio}`,borderRadius:8,cursor:"pointer",padding:"0 4px"}}
-              >
-                {familySync.families.map(f => (
-                  <option key={f.id} value={f.id} style={{color:C.txt}}>{f.label}</option>
-                ))}
-              </select>
-              <InfoBubble C={C} tipKey={`duvia_famtip_${user?.id||"x"}`} title={t.multiFamilyTitle||"Plusieurs familles"}>
-                {t.multiFamilyInfo||"Vous appartenez à plusieurs familles. Utilisez ce menu pour basculer de l'une à l'autre."}
-              </InfoBubble>
-            </div>
-          )}
         </div>
         {/* Right controls: palette → 🏆 lots → ☰ */}
         <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
@@ -3576,6 +3559,36 @@ Date d'entrée en vigueur : 14 juin 2026
       </div>
 
       {bell && <BellPanel onClose={()=>setBell(false)} />}
+
+      {/* BARRE FAMILLE — visible uniquement si plusieurs familles */}
+      {familySync.families.length > 1 && (
+        <div style={{
+          flexShrink:0,
+          background:headerBG,
+          borderBottom:`1.5px solid ${C.bor}`,
+          padding:"6px 14px",
+          display:"flex",alignItems:"center",gap:8,
+        }}>
+          <span style={{fontSize:16,flexShrink:0}}>👨‍👩‍👧</span>
+          <select
+            value={familySync.familyId || ""}
+            onChange={e => familySync.switchFamily(e.target.value)}
+            style={{
+              flex:1,height:34,fontSize:13,fontWeight:800,
+              color:C.vio,background:`${C.vio}12`,
+              border:`2px solid ${C.vio}`,borderRadius:12,
+              cursor:"pointer",padding:"0 10px",
+            }}
+          >
+            {familySync.families.map(f => (
+              <option key={f.id} value={f.id} style={{color:C.txt}}>{f.label}</option>
+            ))}
+          </select>
+          <InfoBubble C={C} tipKey={`duvia_famtip_${user?.id||"x"}`} title={t.multiFamilyTitle||"Plusieurs familles"}>
+            {t.multiFamilyInfo||"Vous appartenez à plusieurs familles. Utilisez ce menu pour basculer de l'une à l'autre."}
+          </InfoBubble>
+        </div>
+      )}
 
       {/* NAV — en haut. En config : remplacée par les étapes au même endroit */}
       {menuTab==="config" ? (
