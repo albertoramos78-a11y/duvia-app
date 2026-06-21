@@ -1433,7 +1433,17 @@ function useFamilySync(cfg, setCfg) {
             .select("family_id, status")
             .eq("user_id", uid);
           if (memErr) throw memErr;
-          const active = (memberships || []).find(m => m.status === "active");
+          const actives = (memberships || []).filter(m => m.status === "active");
+          // 🔧 Multi-familles : si plusieurs familles actives, préférer celle
+          // notée localement (duvia_family_id) — typiquement celle rejointe via
+          // un lien d'invitation — plutôt que « la première venue » (qui pouvait
+          // être une famille vierge laissée par un départ précédent).
+          let active = null;
+          try {
+            const noted = window.localStorage.getItem("duvia_family_id");
+            if (noted) active = actives.find(m => m.family_id === noted) || null;
+          } catch {}
+          if (!active) active = actives[0] || null;
           if (active?.family_id) {
             familyId = active.family_id;
             try { window.localStorage.setItem("duvia_family_id", familyId); } catch {}
@@ -2334,7 +2344,9 @@ export default function App() {
   // ancienne entrée admin qui aurait pu rester enregistrée sur cet appareil
   // (avec l'ancien mot de passe codé en dur, maintenant invalide de toute façon).
   useEffect(()=>{
-    setUsers(u => u.filter(x => x.role !== "admin"));
+    // 🔒 Purge le mot de passe stocké en clair (héritage) : la connexion passe
+    // par Supabase Auth — ce champ ne sert à rien et ne doit pas rester sur l'appareil.
+    setUsers(u => u.filter(x => x.role !== "admin").map(({password, ...rest}) => rest));
   },[]);
 
   const [sub,setSub]     = useLocalStorage("duvia_sub", makeSub);
@@ -2431,6 +2443,21 @@ export default function App() {
   // (L'admin est maintenant un vrai compte Supabase, plus d'exemption nécessaire.)
   useEffect(() => {
     if (!sessionEmail) return;
+    // ⏱️ « Rester connecté » plafonné à 24h : passé l'échéance, déconnexion
+    // forcée. Vérif LOCALE (basée sur l'horloge) → s'applique même hors-ligne.
+    try {
+      const until = parseInt(window.localStorage.getItem("duvia_remember_until") || "0", 10);
+      if (window.localStorage.getItem("duvia_remember") === "1" && until && Date.now() > until) {
+        ["duvia_remember","duvia_remember_until","duvia_session"].forEach(k => window.localStorage.removeItem(k));
+        [window.sessionStorage, window.localStorage].forEach(store => {
+          Object.keys(store).filter(k => k.startsWith("sb-")).forEach(k => store.removeItem(k));
+        });
+        supabase.auth.signOut().catch(()=>{});
+        setUser(null);
+        setSessionEmail(null);
+        return;
+      }
+    } catch {}
     (async () => {
       try {
         const { data: sessData } = await supabase.auth.getSession();
@@ -3821,7 +3848,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
   // connexion : on remet le drapeau à zéro au montage (évite qu'une valeur
   // « 1 » d'une session précédente garde l'utilisateur connecté par erreur).
   const [remember,setRemember]=useState(false);
-  useEffect(()=>{ try{ window.localStorage.removeItem("duvia_remember"); }catch{} },[]);
+  useEffect(()=>{ try{ window.localStorage.removeItem("duvia_remember"); window.localStorage.removeItem("duvia_remember_until"); }catch{} },[]);
   // Compte à rebours sur l'écran d'attente : le bouton Retour est bloqué 15 s.
   const [waitLeft,setWaitLeft]=useState(15);
   useEffect(()=>{
@@ -3868,9 +3895,9 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     const meta = data.user?.user_metadata || {};
     const existing = users.find(u => u.email===cleanEmail);
     const profile = existing
-      ? { ...existing, password: pw }
+      ? { ...existing }
       : {
-          id: Date.now(), email: cleanEmail, password: pw,
+          id: Date.now(), email: cleanEmail,
           name: meta.name || cleanEmail.split("@")[0],
           role: meta.role || "parent",
           parentIdx: meta.parentIdx ?? 0,
@@ -3988,7 +4015,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     // Vérifier que le lien d'invitation observateur n'a pas déjà été utilisé
     if(isObsInvite && obsInviteCode?.code){
       const inv=(cfg.pendingInvites||[]).find(i=>i.code===obsInviteCode.code);
-      if(inv && inv.used){ setErr("⚠️ Ce lien d'invitation a déjà été utilisé. Demandez un nouveau lien aux parents."); return; }
+      if(inv && inv.used){ setErr(t.invErrUsedObs); return; }
     }
     const finalRolePreCheck = isObsInvite ? "observer" : isChildInvite ? "child" : role;
     // Observateurs et enfants peuvent s'identifier par email OU par téléphone.
@@ -4034,7 +4061,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
       }
     }
     const childAgeNum = isChildInvite ? parseInt(childAge) : undefined;
-    const newUser = {id:newId,email:cleanEmail,password:pw,name:cleanName,role:finalRole,parentIdx,
+    const newUser = {id:newId,email:cleanEmail,name:cleanName,role:finalRole,parentIdx,
       gender: finalRole==="parent" ? (parentGender||"M") : undefined,
       phone:  finalRole==="parent" ? (parentPhone.trim()||"") : (regPhoneId||undefined),
       refCode:newRefCode,refUsed,refCount:0,validatedRefCount:0,refMonths:0,trialExtension:0,pendingSpins:0,monthlyRefMonth:null,monthlyRefCount:0,accountCreatedAt:new Date().toISOString(),startsAsPremiumTrial:!!refUsed,
@@ -4070,12 +4097,13 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
         // 🔗 Nouveau format : rejoindre en "pending" via le token — écran d'attente.
         const joinRes = await familySync.joinFamilyByToken(obsInviteCode.code, { name: cleanName, gender: parentGender||"M" });
         if(joinRes.ok){
+          try{ window.localStorage.setItem("duvia_family_id", joinRes.familyId); }catch{}
           parentInviteWaiting = true;
         } else {
           setErr(
-            joinRes.error==="expired" ? "⚠️ Ce lien d'invitation a expiré. Demande un nouveau lien." :
-            joinRes.error==="used"    ? "⚠️ Ce lien d'invitation a déjà été utilisé." :
-            "⚠️ Lien d'invitation invalide."
+            joinRes.error==="expired" ? t.invErrExpired :
+            joinRes.error==="used"    ? t.invErrUsed :
+            t.invErrInvalid
           );
         }
       } else if(isParentInvite && obsInviteCode.family){
@@ -4152,7 +4180,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     const meta = data.user?.user_metadata || {};
     const existing = users.find(u2 => u2.email===cleanEmail);
     const u = existing || {
-      id: Date.now(), email: cleanEmail, password: pw,
+      id: Date.now(), email: cleanEmail,
       name: meta.name || cleanEmail.split("@")[0],
       role: meta.role || "parent",
       parentIdx: meta.parentIdx ?? (isParentInvite ? 1 : 0),
@@ -4162,7 +4190,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     // Rattacher le compte existant à la famille via le lien d'invitation
     const childAgeNum = isChildInvite ? parseInt(childAge) : undefined;
     const updatedUser = {
-      ...u, password: pw,
+      ...u,
       ...(isParentInvite ? {
         obsFamilyCode: obsInviteCode.family,
         obsInviteCode: obsInviteCode.code,
@@ -4196,15 +4224,18 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
         // d'attente. Pas de court-circuit « j'ai déjà une famille active » : le
         // lien cible la famille de l'inviteur, pas une autre.
         const joinRes = await familySync.joinFamilyByToken(obsInviteCode.code, { name: u.name||updatedUser.name, gender: u.gender||meta.gender||"M" });
-        if(joinRes.ok || joinRes.error==="used"){
-          // ok = vient de rejoindre ; "used" = déjà membre via ce lien.
-          // (Si elle est déjà validée, elle entre via le lien « app.duvia.fr ».)
+        if(joinRes.ok){
+          // 🔧 Famille rejointe via le lien → on la note comme famille par
+          // défaut. Sinon, avec une famille vierge laissée par un départ
+          // précédent, l'app pouvait basculer sur la mauvaise après validation.
+          try{ window.localStorage.setItem("duvia_family_id", joinRes.familyId); }catch{}
           setShowExistingAccount(false); setErr("");
           setMode("obs_waiting");
         } else {
           setErr(
-            joinRes.error==="expired" ? "⚠️ Ce lien d'invitation a expiré. Demande un nouveau lien." :
-            "⚠️ Lien d'invitation invalide ou erreur. Réessaie."
+            joinRes.error==="expired" ? t.invErrExpired :
+            joinRes.error==="used"    ? t.invErrUsed :
+            t.invErrInvalid
           );
         }
         return;
@@ -4265,7 +4296,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
         <div className="card" style={C._brand?{background:`linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`}:undefined}>
           {isExpiredInvite && (
             <div style={{background:`${C.red}12`,border:`1.5px solid ${C.red}44`,borderRadius:10,padding:"12px 14px",marginBottom:14,fontSize:13,color:C.red,fontWeight:700,textAlign:"center"}}>
-              ⏰ {"Ce lien d'invitation a expiré (validité 24h). Demandez un nouveau lien aux parents."}
+              ⏰ {t.invErrExpiredWait}
             </div>
           )}
           {isAnyInvite && !isExpiredInvite && (
@@ -4449,9 +4480,9 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
           {(mode==="login"||mode==="register")&&(
             <label style={{display:"flex",alignItems:"center",gap:8,margin:"2px 0 12px",cursor:"pointer",fontSize:12.5,color:C.mut}}>
               <input type="checkbox" checked={remember}
-                onChange={e=>{ const v=e.target.checked; setRemember(v); try{ if(v) window.localStorage.setItem("duvia_remember","1"); else window.localStorage.removeItem("duvia_remember"); }catch{} }}
+                onChange={e=>{ const v=e.target.checked; setRemember(v); try{ if(v){ window.localStorage.setItem("duvia_remember","1"); window.localStorage.setItem("duvia_remember_until", String(Date.now()+24*60*60*1000)); } else { window.localStorage.removeItem("duvia_remember"); window.localStorage.removeItem("duvia_remember_until"); } }catch{} }}
                 style={{width:17,height:17,accentColor:C.vio,cursor:"pointer"}} />
-              {t.rememberMe||"Rester connecté sur cet appareil"}
+              {t.rememberMe||"Rester connecté 24h sur cet appareil"}
             </label>
           )}
           <button onClick={mode==="login"?doLogin:mode==="register"?doReg:doForgot} style={{width:"100%",height:48,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:15,fontWeight:800,marginBottom:10,borderRadius:12,boxShadow:`0 4px 14px ${C.vio}44`}}>
@@ -5030,15 +5061,7 @@ function FamilySyncCard() {
   const [joinCode,setJoinCode] = useState("");
   const [joinMsg,setJoinMsg] = useState("");
   const [joining,setJoining] = useState(false);
-  const [copied,setCopied] = useState(false);
   const [expanded,setExpanded] = useState(false);
-
-  function copyCode(){
-    try{
-      navigator.clipboard.writeText(cfg.shareCode);
-      setCopied(true); setTimeout(()=>setCopied(false),2000);
-    }catch{}
-  }
 
   async function handleJoin(){
     if(!joinCode.trim()) return;
@@ -5076,9 +5099,6 @@ function FamilySyncCard() {
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,flexWrap:"wrap"}}>
             <span style={{fontSize:11,color:C.mut,fontWeight:700}}>{t.familyCode} :</span>
             <span style={{fontFamily:"JetBrains Mono",fontSize:15,fontWeight:800,letterSpacing:2,color:C.vio}}>{cfg.shareCode}</span>
-            <button onClick={copyCode} style={{marginLeft:"auto",padding:"5px 12px",height:32,background:copied?C.grn:C.sur,color:copied?"#fff":C.mut,border:`1.5px solid ${copied?C.grn:C.bor}`,borderRadius:8,fontSize:11,fontWeight:700}}>
-              {copied ? `✅ ${t.obsInviteCopied?.replace("✅ ","")||t.copy}` : `📋 ${t.copy}`}
-            </button>
           </div>
 
           {/* Bloc « Rejoindre une famille existante » masqué : l'ajout d'un 2e
