@@ -7721,6 +7721,32 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
     if(g.parentIdx>=0){ const p=cfg.parents[g.parentIdx]; return p?.color || C.vio; }
     return C.mut;
   }
+  // Convertit "HH:MM" en pourcentage de la journée (00:00=0%, 12:00=50%, 24:00=100%)
+  function timeToPercent(hm){
+    if(!hm) return 50;
+    const [h,mi]=hm.split(":").map(Number);
+    if(Number.isNaN(h)) return 50;
+    return Math.max(0,Math.min(100,((h*60+(mi||0))/1440)*100));
+  }
+  // Jours avec prise/fin de garde à heure précise : dégradé vertical au prorata de l'heure
+  // (ex: prise à 07:55 → la couleur du matin occupe ~33% du haut de la case, le reste en bas).
+  days.forEach((d,i)=>{
+    d.splitBefore=null; d.splitAfter=null; d.splitPercent=null;
+    const g=d.guard;
+    let before=null, after=null, pct=null;
+    if(g && g.timeType==="start" && g.startTime){
+      before = badgeColor(i>0 ? days[i-1].guard : null);
+      after  = badgeColor(g);
+      pct    = timeToPercent(g.startTime);
+    } else if(g && g.timeType==="end" && g.endTime){
+      before = badgeColor(g);
+      after  = badgeColor(i<days.length-1 ? days[i+1].guard : null);
+      pct    = timeToPercent(g.endTime);
+    }
+    if(before && after && before!==after){
+      d.splitBefore=before; d.splitAfter=after; d.splitPercent=pct;
+    }
+  });
   function badgeLabel(g){
     if(!g) return "";
     if(g.allParents) return "★";
@@ -7753,7 +7779,10 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
           <div key={`pad-${i}`} style={{aspectRatio:"1",borderRadius:10,background:`${C.sur}66`,minWidth:0,boxSizing:"border-box"}} />
         ))}
         {days.map(d=>{
-          const bg = d.isToday ? `${C.vio}22` : cellBg(d.guard);
+          const hasSplit = d.splitBefore && d.splitAfter;
+          const bg = hasSplit
+            ? `linear-gradient(180deg, ${d.splitBefore}40 0%, ${d.splitBefore}40 ${d.splitPercent}%, ${d.splitAfter}40 ${d.splitPercent}%, ${d.splitAfter}40 100%)`
+            : (d.isToday ? `${C.vio}22` : cellBg(d.guard));
           const hasBadge = d.isRealChange && d.guard && !d.isBirthday;
           // Priorité couleur du numéro : férié (rouge gras) > week-end (gris foncé gras) > normal
           const numColor = d.fer ? C.red : d.isWE ? "#52525b" : (d.isToday ? C.vio : C.txt);
