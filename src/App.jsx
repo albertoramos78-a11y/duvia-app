@@ -7675,8 +7675,9 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
     const ferName=getPublicHolName(ds,activeCountry,apiData), fer=!!ferName;
     const scoName=getHolName(ds,scoZone,activeCountry,apiData), sco=!!scoName;
     const specials=getSpecialEvents(date,cfg);
+    const isBirthday=specials.some(ev=>ev.label?.includes("🎂")||ev.label?.includes("🎁"));
     const guard=resolveGuard(ds,cfg,activeChildId);
-    return {day,ds,dw,fer,ferName,sco,scoName,specials,guard,isToday:ds===todayStr,isWE:dw>=5};
+    return {day,ds,dw,fer,ferName,sco,scoName,specials,isBirthday,guard,isToday:ds===todayStr,isWE:dw>=5};
   });
 
   // Le badge rond résume "qui garde cette semaine" : on l'affiche le dimanche (fin de semaine,
@@ -7739,7 +7740,10 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
         {days.map(d=>{
           const bg = d.isToday ? `${C.vio}22` : cellBg(d.guard);
           const hasBadge = d.isChangeDay && d.guard;
-          const dotColor = d.fer ? C.red : d.sco ? C.grn : d.specials[0]?.color;
+          const dotColor = !d.isBirthday && (d.fer ? C.red : d.sco ? C.grn : d.specials[0]?.color);
+          // Priorité couleur du numéro : férié (rouge gras) > week-end (orange gras) > normal
+          const numColor = d.fer ? C.red : d.isWE ? C.ora : (d.isToday ? C.vio : C.txt);
+          const numWeight = (d.fer || d.isWE || d.isToday) ? 900 : 700;
           return (
             <div key={d.ds} onClick={()=>openDay(d.ds)}
               title={d.ferName||d.scoName||d.specials[0]?.label||undefined}
@@ -7750,7 +7754,10 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
                 border:d.isToday?`1.5px solid ${C.vio}`:inlineDs===d.ds?`1.5px solid ${C.vio}`:"1.5px solid transparent",
                 transition:"transform .12s, box-shadow .12s",
               }}>
-              <span style={{fontSize:13,fontWeight:d.isToday?900:700,color:d.isToday?C.vio:d.isWE?C.yel:C.txt}}>{d.day}</span>
+              <span style={{display:"flex",alignItems:"center",gap:3}}>
+                <span style={{fontSize:13,fontWeight:numWeight,color:numColor}}>{d.day}</span>
+                {d.isBirthday && <span style={{fontSize:11,lineHeight:1}}>🎂</span>}
+              </span>
               {dotColor && (
                 <span style={{position:"absolute",top:7,right:7,width:6,height:6,borderRadius:"50%",background:dotColor}} />
               )}
