@@ -3058,12 +3058,14 @@ export default function App() {
     <div>
       <style>{cssString}</style>
       {updateAvailable && (
-        <div style={{position:"fixed",top:14,left:"50%",transform:"translateX(-50%)",zIndex:9999,
-          background:C.card,border:`1.5px solid ${C.vio}`,borderRadius:14,padding:"10px 14px",
-          display:"flex",alignItems:"center",gap:10,boxShadow:"0 8px 30px rgba(0,0,0,.22)",maxWidth:"90vw"}}>
-          <span style={{fontSize:18}}>🔄</span>
-          <span style={{fontSize:12,fontWeight:700,color:C.txt}}>Nouvelle version disponible</span>
-          <button onClick={()=>duviaReload()} style={{padding:"6px 12px",background:C.vio,color:"#fff",fontSize:11,fontWeight:800,borderRadius:8}}>Rafraîchir</button>
+        <div style={{position:"fixed",inset:0,zIndex:10001,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.card,borderRadius:22,padding:"28px 24px",maxWidth:360,width:"100%",boxShadow:"0 16px 48px rgba(0,0,0,.3)",textAlign:"center",animation:"popIn .35s cubic-bezier(.34,1.56,.64,1)"}}>
+            <div style={{fontSize:44,marginBottom:12}}>🚀</div>
+            <div style={{fontSize:17,fontWeight:900,color:C.txt,marginBottom:8}}>Nouvelle version disponible</div>
+            <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:22}}>Une mise à jour de l'application est prête. Rechargez pour profiter des dernières améliorations.</div>
+            <button onClick={()=>duviaReload()} style={{width:"100%",padding:"13px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:15,fontWeight:800,borderRadius:12,marginBottom:10}}>Mettre à jour</button>
+            <button onClick={()=>setUpdateAvailable(false)} style={{width:"100%",padding:"10px",background:"transparent",color:C.mut,fontSize:13,border:`1.5px solid ${C.bor}`,borderRadius:12}}>Plus tard</button>
+          </div>
         </div>
       )}
       {!rgpdOk ? (
@@ -3163,12 +3165,14 @@ export default function App() {
       )}
 
       {updateAvailable && (
-        <div style={{position:"fixed",top:14,left:"50%",transform:"translateX(-50%)",zIndex:9999,
-          background:C.card,border:`1.5px solid ${C.vio}`,borderRadius:14,padding:"10px 14px",
-          display:"flex",alignItems:"center",gap:10,boxShadow:"0 8px 30px rgba(0,0,0,.22)",maxWidth:"90vw"}}>
-          <span style={{fontSize:18}}>🔄</span>
-          <span style={{fontSize:12,fontWeight:700,color:C.txt}}>Nouvelle version disponible</span>
-          <button onClick={()=>duviaReload()} style={{padding:"6px 12px",background:C.vio,color:"#fff",fontSize:11,fontWeight:800,borderRadius:8}}>Rafraîchir</button>
+        <div style={{position:"fixed",inset:0,zIndex:10001,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.card,borderRadius:22,padding:"28px 24px",maxWidth:360,width:"100%",boxShadow:"0 16px 48px rgba(0,0,0,.3)",textAlign:"center",animation:"popIn .35s cubic-bezier(.34,1.56,.64,1)"}}>
+            <div style={{fontSize:44,marginBottom:12}}>🚀</div>
+            <div style={{fontSize:17,fontWeight:900,color:C.txt,marginBottom:8}}>Nouvelle version disponible</div>
+            <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:22}}>Une mise à jour de l'application est prête. Rechargez pour profiter des dernières améliorations.</div>
+            <button onClick={()=>duviaReload()} style={{width:"100%",padding:"13px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:15,fontWeight:800,borderRadius:12,marginBottom:10}}>Mettre à jour</button>
+            <button onClick={()=>setUpdateAvailable(false)} style={{width:"100%",padding:"10px",background:"transparent",color:C.mut,fontSize:13,border:`1.5px solid ${C.bor}`,borderRadius:12}}>Plus tard</button>
+          </div>
         </div>
       )}
 
@@ -7923,6 +7927,22 @@ function InlinePicker({ds,guard,onClose,onFull,dayInfo}) {
           ))}
         </div>
       )}
+      {guard && guard.timeType && guard.timeType !== "full" && (() => {
+        const st = guard.startTime; const et = guard.endTime;
+        let timeStr = "";
+        if(guard.timeType==="start" && st) timeStr = `▶ ${st}`;
+        else if(guard.timeType==="end" && et) timeStr = `⏹ ${et}`;
+        else if(guard.timeType==="split" && st && et) timeStr = `${st} → ${et}`;
+        else if(guard.timeType==="split" && st) timeStr = `▶ ${st}`;
+        else if(guard.timeType==="split" && et) timeStr = `⏹ ${et}`;
+        if(!timeStr && !guard.location) return null;
+        return (
+          <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:10,background:`${C.vio}12`,border:`1px solid ${C.vio}33`}}>
+            {timeStr && <span style={{fontSize:13,fontWeight:800,color:C.vio}}>⏰ {timeStr}</span>}
+            {guard.location && <span style={{fontSize:12,color:C.mut,fontWeight:600}}>📍 {guard.location}</span>}
+          </div>
+        );
+      })()}
       <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
         {cfg.parents.map((p,pi)=>(
           <button key={pi} onClick={()=>{updateCal(ds,{parentIdx:pi,obsId:undefined,timeType:"full",startTime:"",endTime:"",location:"",note:""});onClose();}}
