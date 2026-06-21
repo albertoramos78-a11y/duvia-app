@@ -470,5 +470,15 @@ const en = {
     guestLabel:"Guest",
     waitingSignup:"Awaiting sign-up",
     leaveFamily:"🚪 Leave family",
+    bugReportMenu:"Report a problem",
+    bugReportTitle:"Report a problem",
+    bugReportDesc:"Describe the problem you ran into. A technical report will be attached automatically to help us reproduce it.",
+    bugReportPlaceholder:"Describe what happened…",
+    bugReportScreenshot:"Attach a screenshot of the current screen",
+    bugReportScreenshotWarn:"The screenshot may contain info visible on screen (names, data). Enable only if useful.",
+    bugReportSend:"Send",
+    bugReportSending:"Sending…",
+    bugReportThanks:"Thank you. The diagnostic report has been sent.",
+    bugReportError:"Sending failed. The report is saved and will be resent automatically later.",
   };
 export default en;

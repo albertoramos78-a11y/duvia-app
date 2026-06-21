@@ -520,5 +520,15 @@ const fr = {
     guestLabel:"Invité",
     waitingSignup:"En attente d'inscription",
     leaveFamily:"🚪 Quitter la famille",
+    bugReportMenu:"Signaler un problème",
+    bugReportTitle:"Signaler un problème",
+    bugReportDesc:"Décris le problème rencontré. Un rapport technique sera joint automatiquement pour nous aider à le reproduire.",
+    bugReportPlaceholder:"Décris ce qui s'est passé…",
+    bugReportScreenshot:"Joindre une capture de l'écran actuel",
+    bugReportScreenshotWarn:"La capture peut contenir des infos visibles à l'écran (noms, données). À activer seulement si utile.",
+    bugReportSend:"Envoyer",
+    bugReportSending:"Envoi…",
+    bugReportThanks:"Merci. Le rapport de diagnostic a été envoyé.",
+    bugReportError:"L'envoi a échoué. Le rapport est conservé et sera renvoyé automatiquement plus tard.",
   };
 export default fr;

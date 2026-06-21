@@ -468,5 +468,15 @@ const pt = {
     guestLabel:"Convidado",
     waitingSignup:"A aguardar inscrição",
     leaveFamily:"🚪 Sair da família",
+    bugReportMenu:"Reportar um problema",
+    bugReportTitle:"Reportar um problema",
+    bugReportDesc:"Descreve o problema que encontraste. Será anexado automaticamente um relatório técnico para nos ajudar a reproduzi-lo.",
+    bugReportPlaceholder:"Descreve o que aconteceu…",
+    bugReportScreenshot:"Anexar uma captura do ecrã atual",
+    bugReportScreenshotWarn:"A captura pode conter informação visível no ecrã (nomes, dados). Ativa apenas se for útil.",
+    bugReportSend:"Enviar",
+    bugReportSending:"A enviar…",
+    bugReportThanks:"Obrigado. O relatório de diagnóstico foi enviado.",
+    bugReportError:"O envio falhou. O relatório foi guardado e será reenviado automaticamente mais tarde.",
   };
 export default pt;

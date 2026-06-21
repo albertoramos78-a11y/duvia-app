@@ -468,5 +468,15 @@ const de = {
     guestLabel:"Gast",
     waitingSignup:"Wartet auf Registrierung",
     leaveFamily:"🚪 Familie verlassen",
+    bugReportMenu:"Problem melden",
+    bugReportTitle:"Problem melden",
+    bugReportDesc:"Beschreibe das aufgetretene Problem. Ein technischer Bericht wird automatisch angehängt, damit wir es nachstellen können.",
+    bugReportPlaceholder:"Beschreibe, was passiert ist…",
+    bugReportScreenshot:"Screenshot des aktuellen Bildschirms anhängen",
+    bugReportScreenshotWarn:"Der Screenshot kann sichtbare Infos enthalten (Namen, Daten). Nur aktivieren, wenn sinnvoll.",
+    bugReportSend:"Senden",
+    bugReportSending:"Senden…",
+    bugReportThanks:"Danke. Der Diagnosebericht wurde gesendet.",
+    bugReportError:"Senden fehlgeschlagen. Der Bericht wird gespeichert und später automatisch erneut gesendet.",
   };
 export default de;
