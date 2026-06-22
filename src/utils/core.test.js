@@ -348,6 +348,15 @@ test("markDepartedParents : idempotent (déjà marqué → null)", () => {
   assert.equal(markDepartedParents(parents, { activeIds: ["B"], inactiveIds: ["A"], myUid: "B", myEmail: "mere@x.fr" }), null);
 });
 
+test("markDepartedParents : enregistre leftAt à la date fournie", () => {
+  const parents = [{ name: "pere", email: "pere@x.fr" }, { userId: "B", email: "mere@x.fr" }];
+  const out = markDepartedParents(parents, {
+    activeIds: ["B"], inactiveIds: ["A"], myUid: "B", myEmail: "mere@x.fr", now: "2026-06-22T10:00:00.000Z",
+  });
+  assert.equal(out[0].left, true);
+  assert.equal(out[0].leftAt, "2026-06-22T10:00:00.000Z");
+});
+
 test("markDepartedParents : ré-invitation acceptée → la fiche redevient non-partie", () => {
   const parents = [{ userId: "A", email: "a@x.fr", left: true }, { userId: "B", email: "b@x.fr" }];
   const out = markDepartedParents(parents, { activeIds: ["A", "B"], inactiveIds: [], myUid: "B", myEmail: "b@x.fr" });
@@ -365,4 +374,17 @@ test("effectiveCreatorIdx : créateur parti → le parent restant (1) devient cr
 test("effectiveCreatorIdx : tableau vide ou tous partis → 0 (défaut sûr)", () => {
   assert.equal(effectiveCreatorIdx([]), 0);
   assert.equal(effectiveCreatorIdx([{ left: true }]), 0);
+});
+
+test("markDepartedParents : stampe leftAt à la date fournie, le retire au retour", () => {
+  const parents = [{ name: "pere", email: "p@x.fr" }, { userId: "B", email: "m@x.fr" }];
+  const out = markDepartedParents(parents, { activeIds: ["B"], inactiveIds: ["A"], myUid: "B", myEmail: "m@x.fr", now: "2026-06-22T10:00:00.000Z" });
+  assert.equal(out[0].leftAt, "2026-06-22T10:00:00.000Z");
+  // ré-invitation acceptée → left ET leftAt disparaissent
+  const back = markDepartedParents(out, { activeIds: ["B", "A2"], inactiveIds: [], myUid: "B", myEmail: "m@x.fr" });
+  // out[0] n'a pas de userId actif → reste parti ; simulate son retour via userId
+  const rejoined = [{ ...out[0], userId: "A2" }, out[1]];
+  const back2 = markDepartedParents(rejoined, { activeIds: ["B", "A2"], inactiveIds: [], myUid: "B", myEmail: "m@x.fr" });
+  assert.equal("leftAt" in back2[0], false);
+  assert.equal("left" in back2[0], false);
 });

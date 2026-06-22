@@ -352,6 +352,7 @@ export function markDepartedParents(parents, opts = {}) {
   const inactive = toSet(opts.inactiveIds);
   const myUid = opts.myUid || null;
   const myEmailLc = (opts.myEmail || "").toLowerCase();
+  const nowIso = opts.now || new Date().toISOString();
   const isMe = (p) => !!p && ((myUid && p.userId === myUid) ||
     (!!p.email && !!myEmailLc && p.email.toLowerCase() === myEmailLc));
 
@@ -372,8 +373,8 @@ export function markDepartedParents(parents, opts = {}) {
     else if (departedByUserId) shouldLeave = true;
     else if (!p.userId && unexplained > 0 && (p.email || p.name)) { shouldLeave = true; unexplained--; }
 
-    if (shouldLeave && !p.left) { changed = true; return { ...p, left: true }; }
-    if (!shouldLeave && p.left) { changed = true; const { left, ...rest } = p; return rest; }
+    if (shouldLeave && !p.left) { changed = true; return { ...p, left: true, leftAt: p.leftAt || nowIso }; }
+    if (!shouldLeave && p.left) { changed = true; const { left, leftAt, ...rest } = p; return rest; }
     return p;
   });
   return changed ? out : null;
