@@ -4021,6 +4021,9 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     try{
       const p = new URLSearchParams(window.location.search);
       // 🆕 Invitation enfant (Supabase-backed) : ?cinv=TOKEN
+      // Invitation observateur (Supabase-backed) : ?oinv=TOKEN
+      const oinv = p.get("oinv");
+      if(oinv) return {code:oinv, family:"__obs_token__", role:"observer", email:"", isNewObsInvite:true};
       const cinv = p.get("cinv");
       if(cinv){
         const cn = p.get("cname"); const cp = p.get("cphone");
@@ -4050,6 +4053,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
   });
   const isExpiredInvite = obsInviteCode?.expired === true;
   const isObsInvite    = obsInviteCode?.role==="observer" && obsInviteCode?.family;
+  const isNewObsInvite = !!(obsInviteCode?.isNewObsInvite);
   const isChildInvite  = obsInviteCode?.role==="child"    && obsInviteCode?.family;
   const isParentInvite = obsInviteCode?.role==="parent"   && obsInviteCode?.family;
   const isAnyInvite    = isObsInvite || isChildInvite || isParentInvite;
@@ -4069,6 +4073,18 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
       // Nouveau format (jeton) : l'email est côté serveur. On le récupère pour
       // pré-remplir le champ ET savoir si le compte existe déjà → on ouvre
       // « Connexion » si oui, « Créer un compte » sinon.
+      // Invitation observateur (nouveau style Supabase) ─ pré-remplissage via peek.
+      if(obsInviteCode?.isNewObsInvite && obsInviteCode?.code){
+        try{
+          const { data } = await supabase.rpc("peek_observer_invitation", { p_token: obsInviteCode.code });
+          if(!cancelled && data?.found){
+            if(data.email) setEmail(data.email);
+            else if(data.phone) setEmail(data.phone);
+            setMode("register");
+          } else if(!cancelled){ setMode("register"); }
+        }catch{ if(!cancelled) setMode("register"); }
+        return;
+      }
       // Invitation enfant (nouveau style Supabase) ─ pré-remplissage direct.
       if(obsInviteCode?.isNewChildInvite){
         if(!cancelled){
@@ -4266,6 +4282,17 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     } else if(isParentInvite && obsInviteCode.newStyle){
       // ⚠️ Le rejoin par token a échoué — le message d'erreur est déjà affiché
       // plus haut (lien expiré/déjà utilisé/invalide). On ne touche à rien ici.
+    } else if(isObsInvite && isNewObsInvite){
+      // 🆕 Invitation observateur Supabase : vérification côté serveur.
+      const { data: obsFamId, error: obsErr } = await supabase.rpc("accept_observer_invitation", { p_token: obsInviteCode.code });
+      if(obsErr){
+        const msg = obsErr.message||"";
+        setErr(msg.includes("expired")?t.obsInvErrExpired:msg.includes("used")?t.obsInvErrUsed:t.obsInvErrInvalid);
+      } else {
+        try{ window.localStorage.setItem("duvia_family_id", obsFamId); }catch{}
+        onObsJoin({id:newId,name:cleanName,email:cleanEmail,phone:regPhoneId||undefined,role:"observer",obsRole:parentGender||"grandparent",status:"pending",inviteCode:obsInviteCode.code});
+        setMode("obs_waiting"); setErr("");
+      }
     } else if(isObsInvite){
       onObsJoin({id:newId,name:cleanName,email:cleanEmail,phone:regPhoneId||undefined,role:obsInviteCode.role||"observer",obsRole:parentGender||"grandparent",status:"pending",inviteCode:obsInviteCode.code});
       setMode("obs_waiting"); setErr("");
@@ -6949,20 +6976,30 @@ function StepAccess() {
     return c || null;
   }
 
-  // Generate a single-use invite code tied to this family
-  function makeInviteCode(){ return `OBS-${Math.random().toString(36).slice(2,8).toUpperCase()}`; }
+  const [genLoading, setGenLoading] = useState(false);
+  const [genErr, setGenErr]         = useState("");
 
-  function sendInvite(){
-    if(!email && !phone) return;
-    const code=makeInviteCode();
-    const expiresAt=new Date(Date.now()+24*60*60*1000).toISOString(); // 24h expiry
-    // Encode payload in base64 — family code not visible in the URL
-    const payload=btoa(JSON.stringify({code,role:"observer",family:cfg.shareCode,email:email||"",expiresAt}));
-    const inviteUrl=`https://app.duvia.fr/?inv=${payload}`;
-    // Store pending invite code so we can validate it on registration
-    setCfg(c=>({...c,pendingInvites:[...(c.pendingInvites||[]),{code,email,phone,role,canGuard,createdAt:new Date().toISOString(),expiresAt,used:false}]}));
-    setSent(inviteUrl);
-    setLastCode(code);
+  // 🆕 Génération Supabase-backed (token + URL ?oinv=)
+  async function sendInvite(){
+    if(!email && !phone){ return; }
+    setGenLoading(true); setGenErr("");
+    try {
+      const fid = familySync?.familyId;
+      if (!fid) throw new Error("no_family");
+      const { data: token, error } = await supabase.rpc("create_observer_invitation", {
+        p_family_id: fid, p_obs_role: role, p_can_guard: canGuard,
+        p_email: email||"", p_phone: phone||"",
+      });
+      if (error || !token) throw error || new Error("no_token");
+      const qp = new URLSearchParams({ oinv: token });
+      if (email) qp.set("oemail", encodeURIComponent(email));
+      if (phone) qp.set("ophone", encodeURIComponent(phone));
+      const inviteUrl = `https://app.duvia.fr/?${qp.toString()}`;
+      setSent(inviteUrl);
+    } catch(e){
+      setGenErr("⚠️ Erreur lors de la génération du lien. Vérifiez que la migration SQL 0023 est appliquée.");
+      console.error("[Duvia] create_observer_invitation:", e);
+    } finally { setGenLoading(false); }
   }
 
   const inviteMsg = (url) =>
@@ -7149,7 +7186,11 @@ function StepAccess() {
                 <div style={{fontSize:11,color:C.mut}}>Apparaît dans le calendrier comme option de garde</div>
               </div>
             </div>
-            <button onClick={sendInvite} disabled={!email&&!phone} style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:14,fontWeight:800,borderRadius:12,opacity:(email||phone)?1:.5}}>{t.obsInviteSend}</button>
+            <button onClick={sendInvite} disabled={(!email&&!phone)||genLoading}
+              style={{width:"100%",height:44,background:((!email&&!phone)||genLoading)?C.bor:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:14,fontWeight:800,borderRadius:12,cursor:((!email&&!phone)||genLoading)?"not-allowed":"pointer"}}>
+              {genLoading?"⏳ Génération…":(t.obsInviteGenerate||t.obsInviteSend)}
+            </button>
+            {genErr && <div style={{fontSize:11,color:C.red,marginTop:8,lineHeight:1.4}}>{genErr}</div>}
           </>
         ):(
           <div>
@@ -7176,21 +7217,53 @@ function StepAccess() {
 
       {/* ── Active observers list ── */}
       <div className="sec">{t.observersTitle} ({active.length})</div>
-      {active.length===0?<div style={{textAlign:"center",padding:28,color:C.mut}}><div style={{fontSize:32,marginBottom:8}}>👥</div>{t.noObs}</div>:active.map(o=>(
-        <div key={o.id} className="card" style={{marginBottom:10,display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:38,height:38,borderRadius:"50%",background:`linear-gradient(135deg,${C.ora},${C.pin})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>{o.role==="grandparent"?"👴":"👥"}</div>
-          <div style={{flex:1}}>
-            <div style={{fontWeight:700,fontSize:14}}>{o.name}</div>
-            <div style={{fontSize:12,color:C.mut}}>{o.email}</div>
-            {o.phone&&<a href={`tel:${o.phone.replace(/\s/g,"")}`} style={{fontSize:12,color:C.blu,fontWeight:700,textDecoration:"none",display:"flex",alignItems:"center",gap:4,marginTop:2}}>📞 {o.phone}</a>}
-            <span className="badge" style={{background:`${C.grn}22`,color:C.grn,marginTop:4,display:"inline-block"}}>{rl[o.role]||o.role} · {t.obsStatusActive}</span>
+      {active.length===0?<div style={{textAlign:"center",padding:28,color:C.mut}}><div style={{fontSize:32,marginBottom:8}}>👥</div>{t.noObs}</div>:active.map(o=>{
+        const setObsField=(field,val)=>setCfg(c=>({...c,observers:c.observers.map(x=>x.id===o.id?{...x,[field]:val}:x)}));
+        return (
+        <div key={o.id} className="card" style={{marginBottom:12,borderColor:`${C.ora}55`}}>
+          {/* Header */}
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+            <div style={{width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg,${C.ora},${C.pin})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{o.role==="grandparent"?"👴":"👥"}</div>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:800,fontSize:14,color:C.txt}}>{o.name}</div>
+              <span className="badge" style={{background:`${C.grn}22`,color:C.grn,display:"inline-block",marginTop:2}}>{rl[o.role]||o.role} · {t.obsStatusActive}</span>
+            </div>
+            <button onClick={()=>setCfg(c=>({...c,observers:c.observers.filter(x=>x.id!==o.id)}))} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.remove}</button>
           </div>
-          <div style={{display:"flex",gap:5,flexShrink:0}}>
-            {o.phone&&<a href={`tel:${o.phone.replace(/\s/g,"")}`} style={{display:"flex",alignItems:"center",justifyContent:"center",width:32,height:32,borderRadius:10,background:`${C.grn}22`,border:`1.5px solid ${C.grn}44`,textDecoration:"none",fontSize:14}}>📞</a>}
-            <button onClick={()=>setCfg(c=>({...c,observers:c.observers.filter(x=>x.id!==o.id)}))} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12}}>{t.remove}</button>
+          {/* Contact */}
+          <div style={{display:"flex",gap:10,marginBottom:10}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>✉️ Email</div>
+              <input value={o.email||""} onChange={e=>setObsField("email",e.target.value)} placeholder="email@exemple.com" style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt}} />
+            </div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>📞 {t.contactsPhone||"Téléphone"}</div>
+              <input value={o.phone||""} onChange={e=>setObsField("phone",e.target.value)} placeholder="06 12 34 56 78" style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt}} />
+            </div>
           </div>
+          {/* Lien de parenté + Adresse */}
+          <div style={{display:"flex",gap:10,marginBottom:10}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>{t.obsRelationship||"Lien de parenté"}</div>
+              <input value={o.relationship||""} onChange={e=>setObsField("relationship",e.target.value)} placeholder={t.obsRelationshipPh||"ex : Grand-père maternel…"} style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt}} />
+            </div>
+          </div>
+          <div style={{marginBottom:10}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>🏠 {t.obsAddress||"Adresse"}</div>
+            <input value={o.address||""} onChange={e=>setObsField("address",e.target.value)} placeholder={t.obsAddressPh||"Rue, code postal, ville"} style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt}} />
+          </div>
+          {/* Notes */}
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>{t.obsNotes||"📝 Notes"}</div>
+            <textarea value={o.notes||""} onChange={e=>setObsField("notes",e.target.value)} rows={2} placeholder={t.obsNotesPh||"Informations utiles, accès maison…"} style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt,resize:"vertical"}} />
+          </div>
+          {/* Liens rapides */}
+          {(o.email||o.phone) && <div style={{display:"flex",gap:8,marginTop:10}}>
+            {o.phone&&<a href={`tel:${o.phone.replace(/\s/g,"")}`} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:8,background:`${C.grn}18`,border:`1.5px solid ${C.grn}44`,color:C.grn,textDecoration:"none",fontSize:12,fontWeight:700}}>📞 {t.contactsPhone||"Appeler"}</a>}
+            {o.email&&<a href={`mailto:${o.email}`} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:8,background:`${C.vio}18`,border:`1.5px solid ${C.vio}44`,color:C.vio,textDecoration:"none",fontSize:12,fontWeight:700}}>✉️ Email</a>}
+          </div>}
         </div>
-      ))}
+      );})}
     </div>
   );
 }
