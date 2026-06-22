@@ -855,7 +855,7 @@ function duviaReload(){
 function makeCfg() {
   return {
     parents:[{id:1,name:"",gender:"F",birthDay:"",birthMonth:"",color:PCOLS[0]}],
-    children:[{id:1,name:"",email:"",birthDay:"",birthMonth:"",allergy:"",bloodType:"",
+    children:[{id:1,name:"",email:"",birthDay:"",birthMonth:"",birthYear:"",allergy:"",bloodType:"",
       home:{school:"",doctor:"",notes:"",emergencyContacts:""}}],
     observers:[],sameGuardAll:true,zone:"",subdivisionCode:"",country:"FR",activeNatHols:null,
     specialDates:{
@@ -4022,7 +4022,15 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
       const p = new URLSearchParams(window.location.search);
       // 🆕 Invitation enfant (Supabase-backed) : ?cinv=TOKEN
       const cinv = p.get("cinv");
-      if(cinv) return {code:cinv, family:"__child_token__", role:"child", email:"", isNewChildInvite:true};
+      if(cinv){
+        const cn = p.get("cname"); const cp = p.get("cphone");
+        return {code:cinv, family:"__child_token__", role:"child", email:"",
+          childName: cn ? decodeURIComponent(cn) : "",
+          childPhone: cp ? decodeURIComponent(cp) : "",
+          cborn: p.get("cborn") ? decodeURIComponent(p.get("cborn")) : "",
+          cconsent: p.get("cconsent")==="1",
+          isNewChildInvite:true};
+      }
       const inv = p.get("inv");
       if(inv){
         try{
@@ -4061,6 +4069,22 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
       // Nouveau format (jeton) : l'email est côté serveur. On le récupère pour
       // pré-remplir le champ ET savoir si le compte existe déjà → on ouvre
       // « Connexion » si oui, « Créer un compte » sinon.
+      // Invitation enfant (nouveau style Supabase) ─ pré-remplissage direct.
+      if(obsInviteCode?.isNewChildInvite){
+        if(!cancelled){
+          if(obsInviteCode.childName)  setName(obsInviteCode.childName);
+          if(obsInviteCode.childPhone) setEmail(obsInviteCode.childPhone);
+          // Dériver l'âge depuis cborn pour que les validations fonctionnent
+          if(obsInviteCode.cborn){
+            const y=parseInt(obsInviteCode.cborn); const today=new Date();
+            const a=today.getFullYear()-y; setChildAge(String(a>0?a:1));
+            // Si parent a déjà consenti (cconsent=1), marquer le consentement
+            if(obsInviteCode.cconsent) setParentConsent(true);
+          }
+          setMode("register");
+        }
+        return;
+      }
       if(obsInviteCode?.newStyle && obsInviteCode?.code){
         try{
           const { data, error } = await supabase.rpc("peek_invitation", { p_token: obsInviteCode.code });
@@ -4495,8 +4519,8 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
                 </div>
               )}
 
-              {/* Père / Mère / Autre — pour les parents uniquement */}
-              {(role==="parent"||isParentInvite) && (
+              {/* Père / Mère / Autre — pour les parents uniquement, jamais pour un enfant */}
+              {(role==="parent"||isParentInvite) && !isChildInvite && (
                 <div className="field">
                   <label className="lbl">{t.regYouAre||"Vous êtes"}</label>
                   <div style={{display:"flex",gap:8}}>
@@ -4522,51 +4546,14 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
               )}
               </>}
 
-              {/* Champ âge — uniquement pour invitation enfant */}
-              {isChildInvite && (
-                <div className="field">
-                  <label className="lbl">{t.regAge||"🎂 Âge"} <span style={{color:C.red}}>*</span></label>
-                  <input
-                    type="number" min="5" max="99"
-                    value={childAge}
-                    onChange={e=>setChildAge(e.target.value)}
-                    placeholder={t.regAgePlaceholder||"ex : 14"}
-                    style={{width:"100px"}}
-                  />
-                </div>
-              )}
+              {/* Champ âge supprimé : l'âge est calculé depuis la date de naissance saisie par le parent dans la fiche enfant (cborn dans l'URL). */}
 
-              {/* Consentement parental — moins de 15 ans */}
-              {isChildInvite && parseInt(childAge) > 0 && parseInt(childAge) < RGPD_CONSENT_AGE && (
-                <div style={{
-                  background:`${C.ora}10`,border:`1.5px solid ${C.ora}44`,
-                  borderRadius:10,padding:"12px 14px",marginBottom:12
-                }}>
-                  <label style={{display:"flex",gap:10,alignItems:"flex-start",cursor:"pointer"}}>
-                    <input
-                      type="checkbox"
-                      checked={parentConsent}
-                      onChange={e=>setParentConsent(e.target.checked)}
-                      style={{marginTop:3,flexShrink:0,width:16,height:16,cursor:"pointer"}}
-                    />
-                    <span style={{fontSize:12,color:C.txt,lineHeight:1.6}}>
-                      {t.regConsentText||"En tant que parent ou tuteur légal, je consens au traitement des données personnelles de cet enfant de moins de 15 ans sur Duvia, conformément au RGPD (Art. 8) et à la loi française."}{" "}
-                      <span style={{color:C.mut}}>
-                        {t.regConsentNote||"Duvia ne saurait être tenu responsable de l'utilisation de l'application par des mineurs ni des échanges effectués via la messagerie."}
-                      </span>
-                    </span>
-                  </label>
-                  <div style={{marginTop:8,fontSize:11,color:C.mut,display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{color:C.ora}}>ℹ️</span>
-                    {t.regMessagingWithConsent}
-                  </div>
-                </div>
-              )}
-
-              {/* Info messagerie — 15 ans et plus (accès libre) */}
-              {isChildInvite && parseInt(childAge) >= RGPD_CONSENT_AGE && (
-                <div style={{background:`${C.grn}10`,border:`1px solid ${C.grn}33`,borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:12,color:C.grn}}>
-                  ✅ {parseInt(childAge)} {t.regAgeFreeAccess}
+              {/* Pour les invitations enfant : le consentement parental est recueilli
+                  côté parent (modale dans ChildInviteBtn). On affiche juste un message de
+                  bienvenue / confirmation. */}
+              {isChildInvite && obsInviteCode?.cconsent && (
+                <div style={{background:`${C.grn}10`,border:`1px solid ${C.grn}33`,borderRadius:8,padding:"10px 14px",marginBottom:12,fontSize:12,color:C.grn,lineHeight:1.5}}>
+                  {(t.childMinorNotice||"✅ Accès autorisé par un parent — bienvenue {name} !").replace("{name}", name||obsInviteCode?.childName||"")}
                 </div>
               )}
 
@@ -5030,7 +5017,7 @@ function ConfigTab() {
     setEmailSimIdx(null);
     pushNotif(`🗑️ ${parentName} a été supprimé de la famille.`);
   }
-  function addChild(){if(cfg.children.length>=(perms?.maxChildren??1))return onUpgrade();setCfg(c=>({...c,children:[...c.children,{id:Date.now(),name:"",email:"",birthDay:"",birthMonth:"",allergy:"",bloodType:"",home:{school:"",doctor:"",notes:"",emergencyContacts:""}}]}));}
+  function addChild(){if(cfg.children.length>=(perms?.maxChildren??1))return onUpgrade();setCfg(c=>({...c,children:[...c.children,{id:Date.now(),name:"",email:"",birthDay:"",birthMonth:"",birthYear:"",allergy:"",bloodType:"",home:{school:"",doctor:"",notes:"",emergencyContacts:""}}]}));}
   function removeChild(i){setCfg(c=>{const children=c.children.filter((_,j)=>j!==i);return{...c,children,sameGuardAll:children.length<=1?true:c.sameGuardAll};});}
   return (
     <div>
@@ -5523,7 +5510,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             </div>
           </div>
 
-          {/* Row 2 : Jour naissance | Mois naissance */}
+          {/* Row 2 : Jour naissance | Mois naissance | Année */}
           <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:12}}>
             <div style={{...fieldBox,flex:1}}>
               <span style={lbl}>{t.birthDay}</span>
@@ -5535,6 +5522,15 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
                 {value:"",label:"--"},
                 ...(t.months||[]).map((m,j)=>({value:pad(j+1),label:m}))
               ]} />
+            </div>
+            <div style={{...fieldBox,flex:1}}>
+              <span style={lbl}>{t.childBirthYear||"Année"}</span>
+              <select value={ch.birthYear||""} onChange={e=>setChild(i,"birthYear",e.target.value)} style={{...inp,height:IH}}>
+                <option value="">----</option>
+                {Array.from({length:25},(_,k)=>new Date().getFullYear()-5-k).map(y=>(
+                  <option key={y} value={String(y)}>{y}</option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -5601,7 +5597,9 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
 
           {/* Row 7 : Lien d'invitation enfant */}
           {ch.name.trim() && (
-            <ChildInviteBtn childIdx={i} childName={ch.name} childPhone={ch.phone} childEmail={ch.email||""} />
+            <ChildInviteBtn childIdx={i} childName={ch.name} childPhone={ch.phone} childEmail={ch.email||""}
+              childBirthYear={ch.birthYear||""} childBirthMonth={ch.birthMonth||""} childBirthDay={ch.birthDay||""}
+              parentName={cfg.parents[user?.parentIdx??0]?.name||""} />
           )}
         </div>
           {/* Overlay lock pour enfants hors limite */}
@@ -5686,12 +5684,26 @@ function ParentInviteShareBtns({ C, parent, familyName }) {
 }
 
 // ─── CHILD INVITE BUTTON ─────────────────────────────────────────────────────
-function ChildInviteBtn({ childIdx, childName, childPhone, childEmail }) {
+function calcChildAge(year, month, day) {
+  if (!year || !parseInt(year)) return null;
+  const today = new Date();
+  const born = new Date(parseInt(year), parseInt(month||1)-1, parseInt(day||1));
+  let age = today.getFullYear() - born.getFullYear();
+  const m = today.getMonth() - born.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < born.getDate())) age--;
+  return age;
+}
+
+function ChildInviteBtn({ childIdx, childName, childPhone, childEmail, childBirthYear, childBirthMonth, childBirthDay, parentName }) {
   const { C, t, familySync } = useApp();
   const [inviteUrl, setInviteUrl] = useState("");
   const [loading, setLoading]     = useState(false);
   const [copied, setCopied]       = useState(false);
   const [errMsg, setErrMsg]       = useState("");
+  const [showConsent, setShowConsent] = useState(false);
+  const [consented, setConsented]     = useState(false);
+  const childAge = calcChildAge(childBirthYear, childBirthMonth, childBirthDay);
+  const needsConsent = childAge !== null && childAge < 15;
 
   function cleanPhoneWA(phone) {
     if (!phone) return null;
@@ -5704,6 +5716,8 @@ function ChildInviteBtn({ childIdx, childName, childPhone, childEmail }) {
   // Génère un token via Supabase (invalide l'ancien pour cet enfant).
   async function getOrGenUrl() {
     if (inviteUrl) return inviteUrl;
+      if (needsConsent && !consented) { setShowConsent(true); return null; }
+      if (needsConsent && !consented) { setShowConsent(true); return null; }
     setErrMsg(""); setLoading(true);
     try {
       const fid = familySync?.familyId;
@@ -5714,7 +5728,12 @@ function ChildInviteBtn({ childIdx, childName, childPhone, childEmail }) {
         p_child_name: childName || "",
       });
       if (error || !data) { console.error("[Duvia] create_child_invitation:", error); setErrMsg(error?.message||"Erreur lors de la génération du lien. Vérifie que la migration SQL 0022 est appliquée."); return null; }
-      const url = `https://app.duvia.fr/?cinv=${data}`;
+      const qp = new URLSearchParams({ cinv: data });
+      if (childName) qp.set("cname", encodeURIComponent(childName));
+      if (childPhone) qp.set("cphone", encodeURIComponent(childPhone));
+      if (childBirthYear) qp.set("cborn", encodeURIComponent(childBirthYear));
+      if (needsConsent && consented) qp.set("cconsent", "1");
+      const url = `https://app.duvia.fr/?${qp.toString()}`;
       setInviteUrl(url);
       return url;
     } finally { setLoading(false); }
@@ -5753,6 +5772,32 @@ function ChildInviteBtn({ childIdx, childName, childPhone, childEmail }) {
   const genLabel = loading
     ? (t.childInviteGenerating || "⏳ Génération…")
     : (t.childInviteGenerate || "🔗 Générer le lien pour {name}").replace("{name}", childName || "");
+
+  // ── Modale de consentement parental (< 15 ans) ──────────────────────────
+  if (showConsent) return (
+    <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.bor}`}}>
+      <div style={{background:`${C.ora}12`,border:`1.5px solid ${C.ora}55`,borderRadius:12,padding:16}}>
+        <div style={{fontSize:13,fontWeight:900,color:C.ora,marginBottom:10}}>⚠️ {t.childConsentTitle||"Autorisation parentale requise"}</div>
+        <label style={{display:"flex",gap:10,alignItems:"flex-start",cursor:"pointer",marginBottom:12}}>
+          <input type="checkbox" checked={consented} onChange={e=>setConsented(e.target.checked)}
+            style={{width:18,height:18,marginTop:2,flexShrink:0,accentColor:C.vio,cursor:"pointer"}} />
+          <span style={{fontSize:12,color:C.txt,lineHeight:1.7}}>
+            {(t.childConsentText||"Je soussigné(e), parent ou tuteur légal de {name}, autorise mon enfant mineur à accéder à l'application Duvia...").replace("{name}", childName||"l'enfant")}
+          </span>
+        </label>
+        <div style={{display:"flex",gap:8}}>
+          <button disabled={!consented} onClick={async()=>{setShowConsent(false);const url=await getOrGenUrl();if(!url)setShowConsent(true);}}
+            style={{flex:1,height:42,background:consented?`linear-gradient(135deg,${C.vio},${C.blu})`:C.bor,color:"#fff",border:"none",borderRadius:10,fontWeight:800,fontSize:13,cursor:consented?"pointer":"not-allowed"}}>
+            {t.childConsentConfirm||"Je confirme et génère le lien"}
+          </button>
+          <button onClick={()=>{setShowConsent(false);setConsented(false);}}
+            style={{height:42,padding:"0 16px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:10,fontWeight:700,fontSize:13}}>
+            {t.cancel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.bor}`}}>
