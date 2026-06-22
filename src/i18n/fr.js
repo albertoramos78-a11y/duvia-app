@@ -561,5 +561,17 @@ const fr = {
     childConsentConfirm:"Je confirme et génère le lien",
     childConsentCheck:"Je donne mon accord parental",
     childMinorNotice:"✅ Accès autorisé par un parent — bienvenue {name} !",
+    obsAddress:"Adresse",
+    obsAddressPh:"Rue, code postal, ville",
+    obsRelationship:"Lien de parenté",
+    obsRelationshipPh:"ex : Grand-père maternel, Maîtresse de maison, Voisin de confiance…",
+    obsNotes:"📝 Notes",
+    obsNotesPh:"Informations utiles, accès maison, habitudes…",
+    obsInviteGenerate:"🔗 Générer le lien d'invitation",
+    obsInviteValid:"Lien valable 30 jours.",
+    obsInvErrExpired:"⚠️ Ce lien d'invitation a expiré (30 jours). Demande un nouveau lien au parent.",
+    obsInvErrUsed:"⚠️ Ce lien a déjà été utilisé. Demande un nouveau lien au parent.",
+    obsInvErrInvalid:"⚠️ Lien invalide ou erreur. Réessaie ou demande un nouveau lien.",
+    obsWaitingMsg:"👁️ Ton accès est en cours de validation par les parents.",
   };
 export default fr;

@@ -509,5 +509,17 @@ const pt = {
     childConsentConfirm:"Confirmo e gero o link",
     childConsentCheck:"Dou o meu consentimento parental",
     childMinorNotice:"✅ Acesso autorizado por um pai/mãe — bem-vindo/a {name}!",
+    obsAddress:"Morada",
+    obsAddressPh:"Rua, código postal, cidade",
+    obsRelationship:"Parentesco",
+    obsRelationshipPh:"ex: Avô materno, Au pair, Vizinho de confiança…",
+    obsNotes:"📝 Notas",
+    obsNotesPh:"Informações úteis, acesso à casa, hábitos…",
+    obsInviteGenerate:"🔗 Gerar link de convite",
+    obsInviteValid:"Link válido 30 dias.",
+    obsInvErrExpired:"⚠️ Este link expirou (30 dias). Pede um novo link ao pai/mãe.",
+    obsInvErrUsed:"⚠️ Este link já foi utilizado. Pede um novo ao pai/mãe.",
+    obsInvErrInvalid:"⚠️ Link inválido ou erro. Tenta de novo ou pede um novo link.",
+    obsWaitingMsg:"👁️ O teu acesso está a ser validado pelos pais.",
   };
 export default pt;

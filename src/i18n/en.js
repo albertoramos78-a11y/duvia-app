@@ -511,5 +511,17 @@ const en = {
     childConsentConfirm:"I confirm and generate the link",
     childConsentCheck:"I give my parental consent",
     childMinorNotice:"✅ Access authorized by a parent — welcome {name}!",
+    obsAddress:"Address",
+    obsAddressPh:"Street, postcode, city",
+    obsRelationship:"Relationship",
+    obsRelationshipPh:"e.g. Maternal grandfather, Au pair, Trusted neighbour…",
+    obsNotes:"📝 Notes",
+    obsNotesPh:"Useful info, home access, habits…",
+    obsInviteGenerate:"🔗 Generate invitation link",
+    obsInviteValid:"Link valid for 30 days.",
+    obsInvErrExpired:"⚠️ This invitation link has expired (30 days). Ask the parent for a new one.",
+    obsInvErrUsed:"⚠️ This link has already been used. Ask the parent for a new one.",
+    obsInvErrInvalid:"⚠️ Invalid link or error. Try again or ask for a new one.",
+    obsWaitingMsg:"👁️ Your access is being validated by the parents.",
   };
 export default en;

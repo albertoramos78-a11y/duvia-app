@@ -509,5 +509,17 @@ const de = {
     childConsentConfirm:"Ich bestätige und generiere den Link",
     childConsentCheck:"Ich gebe meine elterliche Zustimmung",
     childMinorNotice:"✅ Zugang von einem Elternteil genehmigt — willkommen {name}!",
+    obsAddress:"Adresse",
+    obsAddressPh:"Straße, PLZ, Ort",
+    obsRelationship:"Verwandtschaftsverhältnis",
+    obsRelationshipPh:"z.B. Mütterlicherseits Großvater, Tagesmutter, Vertrauensnachbar…",
+    obsNotes:"📝 Notizen",
+    obsNotesPh:"Nützliche Infos, Hauszugang, Gewohnheiten…",
+    obsInviteGenerate:"🔗 Einladungslink erstellen",
+    obsInviteValid:"Link 30 Tage gültig.",
+    obsInvErrExpired:"⚠️ Dieser Einladungslink ist abgelaufen (30 Tage). Bitte das Elternteil um einen neuen Link.",
+    obsInvErrUsed:"⚠️ Dieser Link wurde bereits verwendet. Bitte das Elternteil um einen neuen.",
+    obsInvErrInvalid:"⚠️ Ungültiger Link oder Fehler. Erneut versuchen oder neuen Link anfordern.",
+    obsWaitingMsg:"👁️ Dein Zugang wird von den Eltern geprüft.",
   };
 export default de;
