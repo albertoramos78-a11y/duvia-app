@@ -503,5 +503,11 @@ const de = {
     childInvErrUsed:"⚠️ Dieser Link wurde bereits verwendet. Bitte deine Eltern um einen neuen.",
     childInvErrInvalid:"⚠️ Ungültiger Link oder Fehler. Erneut versuchen oder neuen Link anfordern.",
     childInvWaiting:"✅ Link kopiert! {name} kann der Familie jetzt beitreten.",
+    childBirthYear:"Geburtsjahr",
+    childConsentTitle:"Elterliche Zustimmung erforderlich",
+    childConsentText:"Ich, als Elternteil oder gesetzlicher Vormund von {name}, erlaube meinem minderjährigen Kind den Zugang zur Duvia-App und die Unterstützung bei der Organisation des Familienlebens. Ich stimme der Verarbeitung seiner personenbezogenen Daten gemäß DSGVO (Art. 8) zu.",
+    childConsentConfirm:"Ich bestätige und generiere den Link",
+    childConsentCheck:"Ich gebe meine elterliche Zustimmung",
+    childMinorNotice:"✅ Zugang von einem Elternteil genehmigt — willkommen {name}!",
   };
 export default de;

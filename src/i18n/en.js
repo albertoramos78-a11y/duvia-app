@@ -505,5 +505,11 @@ const en = {
     childInvErrUsed:"⚠️ This link has already been used. Ask your parents for a new one.",
     childInvErrInvalid:"⚠️ Invalid link or error. Try again or ask for a new link.",
     childInvWaiting:"✅ Link copied! {name} can now join the family.",
+    childBirthYear:"Birth year",
+    childConsentTitle:"Parental consent required",
+    childConsentText:"I, as parent or legal guardian of {name}, authorize my minor child to access the Duvia app and to be supported in organizing their family life. I consent to the processing of their personal data in accordance with GDPR (Art. 8). Duvia shall not be held responsible for messages exchanged through the app.",
+    childConsentConfirm:"I confirm and generate the link",
+    childConsentCheck:"I give my parental consent",
+    childMinorNotice:"✅ Access authorized by a parent — welcome {name}!",
   };
 export default en;

@@ -555,5 +555,11 @@ const fr = {
     childInvErrUsed:"⚠️ Ce lien a déjà été utilisé. Demande un nouveau lien à tes parents.",
     childInvErrInvalid:"⚠️ Lien invalide ou erreur. Réessaie ou demande un nouveau lien.",
     childInvWaiting:"✅ Lien copié ! {name} peut maintenant rejoindre la famille.",
+    childBirthYear:"Année de naissance",
+    childConsentTitle:"Autorisation parentale requise",
+    childConsentText:"Je soussigné(e), parent ou tuteur légal de {name}, autorise mon enfant mineur à accéder à l'application Duvia et à y être accompagné dans l'organisation de sa vie de famille. Je consens au traitement de ses données personnelles conformément au RGPD (Art. 8) et à la loi française. Duvia ne saurait être tenu responsable des échanges effectués via la messagerie.",
+    childConsentConfirm:"Je confirme et génère le lien",
+    childConsentCheck:"Je donne mon accord parental",
+    childMinorNotice:"✅ Accès autorisé par un parent — bienvenue {name} !",
   };
 export default fr;
