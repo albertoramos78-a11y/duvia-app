@@ -7812,21 +7812,20 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
 
   return (
     <div className="card" style={{padding:14,overflow:"hidden",width:"100%",boxSizing:"border-box"}}>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:0,marginBottom:6,width:"100%",boxSizing:"border-box"}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5,marginBottom:6,width:"100%",boxSizing:"border-box"}}>
         {dayLetters.map((lbl,i)=>(
-          <div key={i} style={{textAlign:"center",fontSize:10,fontWeight:800,letterSpacing:".04em",color:C.mut,padding:"2px 0",minWidth:0,overflow:"hidden",borderRight:i<6?`1px solid ${C.bor}`:undefined}}>{lbl}</div>
+          <div key={i} style={{textAlign:"center",fontSize:10,fontWeight:800,letterSpacing:".04em",color:C.mut,padding:"2px 0",minWidth:0,overflow:"hidden"}}>{lbl}</div>
         ))}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:0,width:"100%",boxSizing:"border-box",borderLeft:`1px solid ${C.bor}`,borderTop:`1px solid ${C.bor}`}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5,width:"100%",boxSizing:"border-box"}}>
         {Array.from({length:firstDow}).map((_,i)=>(
-          <div key={`pad-${i}`} style={{aspectRatio:"1",borderRadius:0,background:`${C.sur}66`,minWidth:0,boxSizing:"border-box",borderRight:`1px solid ${C.bor}`,borderBottom:`1px solid ${C.bor}`}} />
+          <div key={`pad-${i}`} style={{aspectRatio:"1",borderRadius:10,background:`${C.sur}66`,minWidth:0,boxSizing:"border-box"}} />
         ))}
         {days.map(d=>{
           const hasSplit = d.splitBefore && d.splitAfter;
           const bg = hasSplit
             ? `linear-gradient(180deg, ${d.splitBefore}40 0%, ${d.splitBefore}40 ${d.splitPercent}%, ${d.splitAfter}40 ${d.splitPercent}%, ${d.splitAfter}40 100%)`
             : (d.isToday ? `${C.vio}22` : cellBg(d.guard));
-          // hasBadge computed below after cellTime
           // Priorité couleur du numéro : férié (rouge gras) > week-end (gris foncé gras) > normal
           const numColor = d.fer ? C.red : d.isWE ? "#52525b" : (d.isToday ? C.vio : C.txt);
           const numWeight = (d.fer || d.isWE || d.isToday) ? 900 : 700;
@@ -7855,19 +7854,17 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
             else if(g.timeType==="split"&&st) cellTime=`▶ ${st}`;
             else if(g.timeType==="split"&&et) cellTime=`⏹ ${et}`;
           }
-          const cellLocation = g?.location || "";
+          // Badge 🔄 masqué si une heure de prise/fin de garde est affichée (lisibilité)
           const hasBadge = d.isRealChange && d.guard && !d.isBirthday && !cellTime;
+          const cellLocation = g?.location || "";
           return (
             <div key={d.ds} onClick={()=>openDay(d.ds)}
               title={d.ferName||d.scoName||d.specials[0]?.label||undefined}
               style={{
-                aspectRatio:"1",borderRadius:0,background:bg,padding:"6px 6px",
+                aspectRatio:"1",borderRadius:10,background:bg,padding:"6px 6px",
                 display:"flex",flexDirection:"column",justifyContent:"space-between",
                 cursor:readOnly?"default":"pointer",position:"relative",
-                borderRight:`1px solid ${C.bor}`,
-                borderBottom:`1px solid ${C.bor}`,
-                outline: scoBorder ? scoBorder : (inlineDs===d.ds||d.isToday ? `1.5px solid ${C.vio}` : undefined),
-                outlineOffset:"-1px",
+                border:scoBorder || activeBorder,
                 transition:"transform .12s, box-shadow .12s",
                 minWidth:0,boxSizing:"border-box",overflow:"hidden",
               }}>
