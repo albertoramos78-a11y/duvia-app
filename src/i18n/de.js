@@ -521,5 +521,10 @@ const de = {
     obsInvErrUsed:"⚠️ Dieser Link wurde bereits verwendet. Bitte das Elternteil um einen neuen.",
     obsInvErrInvalid:"⚠️ Ungültiger Link oder Fehler. Erneut versuchen oder neuen Link anfordern.",
     obsWaitingMsg:"👁️ Dein Zugang wird von den Eltern geprüft.",
+    obsLeaveFamily:"Familie verlassen",
+    familyDisbanded:"Diese Familie hat keinen aktiven Elternteil mehr.",
+    familyDisbandedObs:"Ihr Zugang bleibt bestehen, aber kein Elternteil verwaltet diese Familie mehr. Sie können austreten.",
+    obsCanGuard:"Kann Vormund sein",
+    obsCanGuardDesc:"Erscheint im Kalender als Betreuungsoption",
   };
 export default de;

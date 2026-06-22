@@ -573,5 +573,10 @@ const fr = {
     obsInvErrUsed:"⚠️ Ce lien a déjà été utilisé. Demande un nouveau lien au parent.",
     obsInvErrInvalid:"⚠️ Lien invalide ou erreur. Réessaie ou demande un nouveau lien.",
     obsWaitingMsg:"👁️ Ton accès est en cours de validation par les parents.",
+    obsLeaveFamily:"Quitter la famille",
+    familyDisbanded:"Cette famille n'a plus de parent actif.",
+    familyDisbandedObs:"Votre accès est maintenu mais aucun parent ne gère plus cette famille. Vous pouvez quitter.",
+    obsCanGuard:"Peut être gardien",
+    obsCanGuardDesc:"Apparaît dans le calendrier comme option de garde",
   };
 export default fr;

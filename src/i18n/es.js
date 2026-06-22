@@ -521,5 +521,10 @@ const es = {
     obsInvErrUsed:"⚠️ Este enlace ya se ha utilizado. Pide un nuevo enlace al padre/madre.",
     obsInvErrInvalid:"⚠️ Enlace inválido o error. Inténtalo de nuevo o pide uno nuevo.",
     obsWaitingMsg:"👁️ Tu acceso está siendo validado por los padres.",
+    obsLeaveFamily:"Salir de la familia",
+    familyDisbanded:"Esta familia ya no tiene ningún progenitor activo.",
+    familyDisbandedObs:"Tu acceso se mantiene pero ningún progenitor gestiona esta familia. Puedes salir.",
+    obsCanGuard:"Puede ser guardián",
+    obsCanGuardDesc:"Aparece en el calendario como opción de custodia",
   };
 export default es;
