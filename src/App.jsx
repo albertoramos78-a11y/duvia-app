@@ -1159,6 +1159,15 @@ button.btn-icon{width:44px;height:44px;padding:0;border-radius:10px;}
   font-weight:600;
 }
 
+/* ── Écrans d'authentification (login/register/attente) ──
+   100vh sur mobile inclut la zone masquée par la barre d'adresse du
+   navigateur ; quand celle-ci se montre/cache au scroll, 100vh change
+   et le contenu centré « sautille » verticalement. 100dvh suit la
+   hauteur visible réelle et reste stable. Fallback 100vh pour les
+   navigateurs qui ne supportent pas dvh (ignoré sinon).
+*/
+.auth-screen{min-height:100vh;min-height:100dvh;}
+
 /* ── Animations ── */
 @keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .fi{animation:fi .22s ease;}
@@ -3086,7 +3095,7 @@ export default function App() {
   );
 
   if(familySync.pendingApproval) return (
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
+    <div className="auth-screen" style={{display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
       <div style={{textAlign:"center",maxWidth:320}}>
         <div style={{fontSize:40,marginBottom:10}}>⏳</div>
         <div style={{fontWeight:900,fontSize:17,marginBottom:8,color:C.txt}}>En attente d'approbation</div>
@@ -3097,7 +3106,7 @@ export default function App() {
   );
 
   if(familySync.syncStatus==="error" && !familySync.familyId) return (
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
+    <div className="auth-screen" style={{display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
       <div style={{textAlign:"center",maxWidth:320}}>
         <div style={{fontSize:40,marginBottom:10}}>⚠️</div>
         <div style={{fontWeight:900,fontSize:17,marginBottom:8,color:C.txt}}>Problème de connexion</div>
@@ -3836,7 +3845,7 @@ function RgpdConsentScreen({C,t,onAccept}) {
   const [checked,setChecked] = useState(false);
   const link = {color:C.vio,fontWeight:800,textDecoration:"underline"};
   return (
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:C.bg}}>
+    <div className="auth-screen" style={{display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:C.bg}}>
       <div style={{width:"100%",maxWidth:460}} className="fi">
         <div style={{background:C.card,borderRadius:20,padding:"26px 24px",boxShadow:"0 10px 40px rgba(0,0,0,.12)"}}>
           <div style={{fontSize:20,fontWeight:900,color:C.txt,marginBottom:6}}>
@@ -3882,7 +3891,7 @@ function ConsentScreen({C,t,user,onAccept,onDecline}) {
   const [checked3,setChecked3] = useState(false);
   const canAccept = checked1 && checked2 && checked3;
   return (
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:`radial-gradient(ellipse at 30% 20%,rgba(124,111,205,.15) 0%,transparent 60%),${C.bg}`}}>
+    <div className="auth-screen" style={{display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:`radial-gradient(ellipse at 30% 20%,rgba(124,111,205,.15) 0%,transparent 60%),${C.bg}`}}>
       <div style={{width:"100%",maxWidth:420}} className="fi">
         <div style={{textAlign:"center",marginBottom:22,paddingLeft:180}}>
           <div style={{fontSize:36,marginBottom:8}}>👨‍👩‍👧</div>
@@ -4088,7 +4097,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
   // formulaire ni le bouton « Envoyer le lien », qui n'ont rien à faire ici).
   // ⚠️ Placé APRÈS tous les hooks (sinon « Rendered fewer hooks » / React #300).
   if(mode==="obs_waiting") return (
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
+    <div className="auth-screen" style={{display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
       <div style={{background:C.card,borderRadius:20,padding:"30px 24px",maxWidth:420,width:"100%",textAlign:"center",boxShadow:"0 10px 40px rgba(0,0,0,.12)"}}>
         <div style={{fontSize:44,marginBottom:12}}>⏳</div>
         <div style={{fontWeight:900,fontSize:18,marginBottom:8,color:C.txt}}>{t.obsJoinWaiting||"En attente d'approbation"}</div>
@@ -4355,7 +4364,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     }
   }
   return (
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),radial-gradient(ellipse at 30% 20%,rgba(124,111,205,.15) 0%,transparent 60%),${C.bg}`}}>
+    <div className="auth-screen" style={{display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),radial-gradient(ellipse at 30% 20%,rgba(124,111,205,.15) 0%,transparent 60%),${C.bg}`}}>
       <div style={{width:"100%",maxWidth:400}} className="fi">
         <div style={{display:"grid",gridTemplateColumns:"1fr auto auto",alignItems:"center",gap:8,marginBottom:16}}>
           <div />{/* spacer pour centrer le logo */}
