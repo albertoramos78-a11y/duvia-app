@@ -2025,6 +2025,12 @@ function useFamilySync(cfg, setCfg) {
           } catch {}
         }
       } catch (e) { console.warn("[Duvia][sync] leaveFamily: création famille vierge:", e); }
+
+      // 🔧 Purger la liste de familles : retire l’ancienne du dropdown dès le
+      // retour, sans attendre le rechargement. La famille quittée est désormais
+      // status="removed" → refreshFamilies (qui filtre status=active) ne la
+      // renverra plus. Père1 ne voit plus "Sissi & Alb" dans son sélecteur.
+      try { await refreshFamilies(uidRef.current); } catch {}
       return { ok: true };
     } catch (e) {
       console.error("[Duvia][sync] leaveFamily error:", e);
