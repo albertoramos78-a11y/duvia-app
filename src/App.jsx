@@ -855,7 +855,7 @@ function duviaReload(){
 function makeCfg() {
   return {
     parents:[{id:1,name:"",gender:"F",birthDay:"",birthMonth:"",color:PCOLS[0]}],
-    children:[{id:1,name:"",birthDay:"",birthMonth:"",allergy:"",bloodType:"",
+    children:[{id:1,name:"",email:"",birthDay:"",birthMonth:"",allergy:"",bloodType:"",
       home:{school:"",doctor:"",notes:"",emergencyContacts:""}}],
     observers:[],sameGuardAll:true,zone:"",subdivisionCode:"",country:"FR",activeNatHols:null,
     specialDates:{
@@ -5030,7 +5030,7 @@ function ConfigTab() {
     setEmailSimIdx(null);
     pushNotif(`🗑️ ${parentName} a été supprimé de la famille.`);
   }
-  function addChild(){if(cfg.children.length>=(perms?.maxChildren??1))return onUpgrade();setCfg(c=>({...c,children:[...c.children,{id:Date.now(),name:"",birthDay:"",birthMonth:"",allergy:"",bloodType:"",home:{school:"",doctor:"",notes:"",emergencyContacts:""}}]}));}
+  function addChild(){if(cfg.children.length>=(perms?.maxChildren??1))return onUpgrade();setCfg(c=>({...c,children:[...c.children,{id:Date.now(),name:"",email:"",birthDay:"",birthMonth:"",allergy:"",bloodType:"",home:{school:"",doctor:"",notes:"",emergencyContacts:""}}]}));}
   function removeChild(i){setCfg(c=>{const children=c.children.filter((_,j)=>j!==i);return{...c,children,sameGuardAll:children.length<=1?true:c.sameGuardAll};});}
   return (
     <div>
@@ -5538,10 +5538,16 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             </div>
           </div>
 
-          {/* Row 3 : Téléphone */}
-          <div style={fieldBox}>
-            <span style={lbl}>📞 {t.contactsPhone||"Téléphone"}</span>
-            <input type="tel" value={ch.phone||""} onChange={e=>setChild(i,"phone",e.target.value)} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} style={inp} />
+          {/* Row 3 : Téléphone + Email */}
+          <div style={{display:"flex",gap:10,marginBottom:0}}>
+            <div style={{...fieldBox,flex:1}}>
+              <span style={lbl}>📞 {t.contactsPhone||"Téléphone"}</span>
+              <input type="tel" value={ch.phone||""} onChange={e=>setChild(i,"phone",e.target.value)} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} style={inp} />
+            </div>
+            <div style={{...fieldBox,flex:1}}>
+              <span style={lbl}>✉️ Email</span>
+              <input type="email" value={ch.email||""} onChange={e=>setChild(i,"email",e.target.value)} placeholder="email@exemple.com" style={inp} />
+            </div>
           </div>
 
           {/* Row 4 : Santé (champs communs) */}
@@ -5595,7 +5601,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
 
           {/* Row 7 : Lien d'invitation enfant */}
           {ch.name.trim() && (
-            <ChildInviteBtn childIdx={i} childName={ch.name} childPhone={ch.phone} />
+            <ChildInviteBtn childIdx={i} childName={ch.name} childPhone={ch.phone} childEmail={ch.email||""} />
           )}
         </div>
           {/* Overlay lock pour enfants hors limite */}
@@ -5680,7 +5686,7 @@ function ParentInviteShareBtns({ C, parent, familyName }) {
 }
 
 // ─── CHILD INVITE BUTTON ─────────────────────────────────────────────────────
-function ChildInviteBtn({ childIdx, childName, childPhone }) {
+function ChildInviteBtn({ childIdx, childName, childPhone, childEmail }) {
   const { C, t, familySync } = useApp();
   const [inviteUrl, setInviteUrl] = useState("");
   const [loading, setLoading]     = useState(false);
@@ -5733,7 +5739,8 @@ function ChildInviteBtn({ childIdx, childName, childPhone }) {
   async function handleEmail() {
     const url = await getOrGenUrl(); if (!url) return;
     const subject = encodeURIComponent(`Rejoins notre famille sur Duvia 👨‍👩‍👧`);
-    window.open(`mailto:?subject=${subject}&body=${encodeURIComponent(msgText(url))}`, "_blank");
+    const to = childEmail ? encodeURIComponent(childEmail) : "";
+    window.open(`mailto:${to}?subject=${subject}&body=${encodeURIComponent(msgText(url))}`, "_blank");
   }
 
   async function handleCopy() {
