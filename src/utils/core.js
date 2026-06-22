@@ -328,3 +328,34 @@ export function addReader(msg, userId) {
   if (readBy.includes(userId)) return msg; // pas de doublon de lecteur
   return { ...msg, read_by: [...readBy, userId] };
 }
+
+// ── Départ d'un parent (multi-familles) ──────────────────────────────────────
+// Marque comme « parti » (left:true) tout parent dont l'adhésion n'est plus
+// active, SANS le retirer du tableau : son identité (nom, couleur) reste à sa
+// place pour préserver l'attribution des dépenses et de la garde, qui sont
+// indexées par POSITION. Un parent redevenu actif (ré-invitation acceptée)
+// repasse non-parti. Retourne un nouveau tableau si quelque chose change, sinon
+// null (pour éviter un setCfg inutile).
+export function markDepartedParents(parents, inactiveUserIds) {
+  if (!Array.isArray(parents)) return null;
+  const inactive = inactiveUserIds instanceof Set ? inactiveUserIds : new Set(inactiveUserIds || []);
+  let changed = false;
+  const out = parents.map(p => {
+    if (!p) return p;
+    const gone = !!(p.userId && inactive.has(p.userId));
+    if (gone && !p.left) { changed = true; return { ...p, left: true }; }
+    if (!gone && p.left) { changed = true; const { left, ...rest } = p; return rest; }
+    return p;
+  });
+  return changed ? out : null;
+}
+
+// Index du parent « créateur » EFFECTIF = premier parent non-parti. Sert à
+// étiqueter les cartes (Créateur / Invité) sans dépendre de la position 0 :
+// si le créateur d'origine est parti, le parent restant devient créateur de
+// fait. Retourne 0 par défaut (tableau vide ou tous partis).
+export function effectiveCreatorIdx(parents) {
+  if (!Array.isArray(parents)) return 0;
+  const i = parents.findIndex(p => p && !p.left);
+  return i < 0 ? 0 : i;
+}
