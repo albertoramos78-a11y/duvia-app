@@ -1159,15 +1159,6 @@ button.btn-icon{width:44px;height:44px;padding:0;border-radius:10px;}
   font-weight:600;
 }
 
-/* ── Écrans d'authentification (login/register/attente) ──
-   100vh sur mobile inclut la zone masquée par la barre d'adresse du
-   navigateur ; quand celle-ci se montre/cache au scroll, 100vh change
-   et le contenu centré « sautille » verticalement. 100dvh suit la
-   hauteur visible réelle et reste stable. Fallback 100vh pour les
-   navigateurs qui ne supportent pas dvh (ignoré sinon).
-*/
-.auth-screen{min-height:100vh;min-height:100dvh;}
-
 /* ── Animations ── */
 @keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .fi{animation:fi .22s ease;}
@@ -3095,7 +3086,7 @@ export default function App() {
   );
 
   if(familySync.pendingApproval) return (
-    <div className="auth-screen" style={{display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
       <div style={{textAlign:"center",maxWidth:320}}>
         <div style={{fontSize:40,marginBottom:10}}>⏳</div>
         <div style={{fontWeight:900,fontSize:17,marginBottom:8,color:C.txt}}>En attente d'approbation</div>
@@ -3106,7 +3097,7 @@ export default function App() {
   );
 
   if(familySync.syncStatus==="error" && !familySync.familyId) return (
-    <div className="auth-screen" style={{display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
       <div style={{textAlign:"center",maxWidth:320}}>
         <div style={{fontSize:40,marginBottom:10}}>⚠️</div>
         <div style={{fontWeight:900,fontSize:17,marginBottom:8,color:C.txt}}>Problème de connexion</div>
@@ -3845,7 +3836,7 @@ function RgpdConsentScreen({C,t,onAccept}) {
   const [checked,setChecked] = useState(false);
   const link = {color:C.vio,fontWeight:800,textDecoration:"underline"};
   return (
-    <div className="auth-screen" style={{display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 20px 40px",background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:C.bg}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:C.bg}}>
       <div style={{width:"100%",maxWidth:460}} className="fi">
         <div style={{background:C.card,borderRadius:20,padding:"26px 24px",boxShadow:"0 10px 40px rgba(0,0,0,.12)"}}>
           <div style={{fontSize:20,fontWeight:900,color:C.txt,marginBottom:6}}>
@@ -3891,7 +3882,7 @@ function ConsentScreen({C,t,user,onAccept,onDecline}) {
   const [checked3,setChecked3] = useState(false);
   const canAccept = checked1 && checked2 && checked3;
   return (
-    <div className="auth-screen" style={{display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 20px 40px",background:C._brand?`linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:`radial-gradient(ellipse at 30% 20%,rgba(124,111,205,.15) 0%,transparent 60%),${C.bg}`}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:`radial-gradient(ellipse at 30% 20%,rgba(124,111,205,.15) 0%,transparent 60%),${C.bg}`}}>
       <div style={{width:"100%",maxWidth:420}} className="fi">
         <div style={{textAlign:"center",marginBottom:22,paddingLeft:180}}>
           <div style={{fontSize:36,marginBottom:8}}>👨‍👩‍👧</div>
@@ -4097,7 +4088,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
   // formulaire ni le bouton « Envoyer le lien », qui n'ont rien à faire ici).
   // ⚠️ Placé APRÈS tous les hooks (sinon « Rendered fewer hooks » / React #300).
   if(mode==="obs_waiting") return (
-    <div className="auth-screen" style={{display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 20px 40px",background:C.bg}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
       <div style={{background:C.card,borderRadius:20,padding:"30px 24px",maxWidth:420,width:"100%",textAlign:"center",boxShadow:"0 10px 40px rgba(0,0,0,.12)"}}>
         <div style={{fontSize:44,marginBottom:12}}>⏳</div>
         <div style={{fontWeight:900,fontSize:18,marginBottom:8,color:C.txt}}>{t.obsJoinWaiting||"En attente d'approbation"}</div>
@@ -4364,7 +4355,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     }
   }
   return (
-    <div className="auth-screen" style={{display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 20px 40px",background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),radial-gradient(ellipse at 30% 20%,rgba(124,111,205,.15) 0%,transparent 60%),${C.bg}`}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),radial-gradient(ellipse at 30% 20%,rgba(124,111,205,.15) 0%,transparent 60%),${C.bg}`}}>
       <div style={{width:"100%",maxWidth:400}} className="fi">
         <div style={{display:"grid",gridTemplateColumns:"1fr auto auto",alignItems:"center",gap:8,marginBottom:16}}>
           <div />{/* spacer pour centrer le logo */}
@@ -7821,21 +7812,21 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
 
   return (
     <div className="card" style={{padding:14,overflow:"hidden",width:"100%",boxSizing:"border-box"}}>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5,marginBottom:6,width:"100%",boxSizing:"border-box"}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:0,marginBottom:6,width:"100%",boxSizing:"border-box"}}>
         {dayLetters.map((lbl,i)=>(
-          <div key={i} style={{textAlign:"center",fontSize:10,fontWeight:800,letterSpacing:".04em",color:C.mut,padding:"2px 0",minWidth:0,overflow:"hidden"}}>{lbl}</div>
+          <div key={i} style={{textAlign:"center",fontSize:10,fontWeight:800,letterSpacing:".04em",color:C.mut,padding:"2px 0",minWidth:0,overflow:"hidden",borderRight:i<6?`1px solid ${C.bor}`:undefined}}>{lbl}</div>
         ))}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5,width:"100%",boxSizing:"border-box"}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:0,width:"100%",boxSizing:"border-box",borderLeft:`1px solid ${C.bor}`,borderTop:`1px solid ${C.bor}`}}>
         {Array.from({length:firstDow}).map((_,i)=>(
-          <div key={`pad-${i}`} style={{aspectRatio:"1",borderRadius:10,background:`${C.sur}66`,minWidth:0,boxSizing:"border-box"}} />
+          <div key={`pad-${i}`} style={{aspectRatio:"1",borderRadius:0,background:`${C.sur}66`,minWidth:0,boxSizing:"border-box",borderRight:`1px solid ${C.bor}`,borderBottom:`1px solid ${C.bor}`}} />
         ))}
         {days.map(d=>{
           const hasSplit = d.splitBefore && d.splitAfter;
           const bg = hasSplit
             ? `linear-gradient(180deg, ${d.splitBefore}40 0%, ${d.splitBefore}40 ${d.splitPercent}%, ${d.splitAfter}40 ${d.splitPercent}%, ${d.splitAfter}40 100%)`
             : (d.isToday ? `${C.vio}22` : cellBg(d.guard));
-          const hasBadge = d.isRealChange && d.guard && !d.isBirthday;
+          const hasBadge = d.isRealChange && d.guard && !d.isBirthday && !cellTime;
           // Priorité couleur du numéro : férié (rouge gras) > week-end (gris foncé gras) > normal
           const numColor = d.fer ? C.red : d.isWE ? "#52525b" : (d.isToday ? C.vio : C.txt);
           const numWeight = (d.fer || d.isWE || d.isToday) ? 900 : 700;
@@ -7869,10 +7860,13 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
             <div key={d.ds} onClick={()=>openDay(d.ds)}
               title={d.ferName||d.scoName||d.specials[0]?.label||undefined}
               style={{
-                aspectRatio:"1",borderRadius:10,background:bg,padding:"6px 6px",
+                aspectRatio:"1",borderRadius:0,background:bg,padding:"6px 6px",
                 display:"flex",flexDirection:"column",justifyContent:"space-between",
                 cursor:readOnly?"default":"pointer",position:"relative",
-                border:scoBorder || activeBorder,
+                borderRight:`1px solid ${C.bor}`,
+                borderBottom:`1px solid ${C.bor}`,
+                outline: scoBorder ? scoBorder : (inlineDs===d.ds||d.isToday ? `1.5px solid ${C.vio}` : undefined),
+                outlineOffset:"-1px",
                 transition:"transform .12s, box-shadow .12s",
                 minWidth:0,boxSizing:"border-box",overflow:"hidden",
               }}>
