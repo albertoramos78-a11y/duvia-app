@@ -855,7 +855,11 @@ function duviaReload(){
 function makeCfg() {
   return {
     parents:[{id:1,name:"",gender:"F",birthDay:"",birthMonth:"",color:PCOLS[0]}],
-    children:[{id:1,name:"",birthDay:"",birthMonth:""}],
+    children:[{id:1,name:"",birthDay:"",birthMonth:"",allergy:"",bloodType:"",
+      home:[
+        {school:"",doctor:"",notes:"",emergencyContacts:""},
+        {school:"",doctor:"",notes:"",emergencyContacts:""},
+      ]}],
     observers:[],sameGuardAll:true,zone:"",subdivisionCode:"",country:"FR",activeNatHols:null,
     specialDates:{
       motherDay:{enabled:false},fatherDay:{enabled:false},
@@ -3574,7 +3578,7 @@ Date d'entrée en vigueur : 14 juin 2026
       {bell && <BellPanel onClose={()=>setBell(false)} />}
 
       {/* BARRE FAMILLE — visible uniquement si plusieurs familles */}
-      {familySync.families.length > 1 && (
+      {familySync.families.length > 1 && !isChild && (
         <div style={{
           flexShrink:0,
           background:headerBG,
@@ -4019,6 +4023,9 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
   const [obsInviteCode] = useState(()=>{
     try{
       const p = new URLSearchParams(window.location.search);
+      // 🆕 Invitation enfant (Supabase-backed) : ?cinv=TOKEN
+      const cinv = p.get("cinv");
+      if(cinv) return {code:cinv, family:"__child_token__", role:"child", email:"", isNewChildInvite:true};
       const inv = p.get("inv");
       if(inv){
         try{
@@ -4241,6 +4248,16 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     } else if(isObsInvite){
       onObsJoin({id:newId,name:cleanName,email:cleanEmail,phone:regPhoneId||undefined,role:obsInviteCode.role||"observer",obsRole:parentGender||"grandparent",status:"pending",inviteCode:obsInviteCode.code});
       setMode("obs_waiting"); setErr("");
+    } else if(isChildInvite && obsInviteCode.isNewChildInvite){
+      const { data: childFamId, error: childErr } = await supabase.rpc("accept_child_invitation", { p_token: obsInviteCode.code });
+      if(childErr){
+        const msg = childErr.message||"";
+        setErr(msg.includes("expired")?t.childInvErrExpired:msg.includes("used")?t.childInvErrUsed:t.childInvErrInvalid);
+      } else {
+        try{ window.localStorage.setItem("duvia_family_id", childFamId); }catch{}
+        onObsJoin({id:newId,name:cleanName,email:cleanEmail,phone:regPhoneId||undefined,role:"child",status:"active",inviteCode:obsInviteCode.code,childAge:childAgeNum,childMessagingAllowed:true});
+        setOk(`✅ Bienvenue ${cleanName} !`); setMode("login"); setErr("");
+      }
     } else if(isChildInvite){
       onObsJoin({id:newId,name:cleanName,email:cleanEmail,phone:regPhoneId||undefined,role:"child",status:"active",inviteCode:obsInviteCode.code,childAge:childAgeNum,childMessagingAllowed:true});
       setOk(`✅ Compte créé ! Bienvenue ${cleanName}.`);
@@ -4317,6 +4334,15 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     if(isObsInvite){
       onObsJoin({...updatedUser, role:obsInviteCode.role||"grandparent", status:"pending", inviteCode:obsInviteCode.code});
       setMode("obs_waiting"); setErr("");
+    } else if(isChildInvite && obsInviteCode.isNewChildInvite){
+      const { data: cFid, error: cErr } = await supabase.rpc("accept_child_invitation", { p_token: obsInviteCode.code });
+      if(cErr){
+        const msg=cErr.message||""; setErr(msg.includes("expired")?t.childInvErrExpired:msg.includes("used")?t.childInvErrUsed:t.childInvErrInvalid);
+      } else {
+        try{ window.localStorage.setItem("duvia_family_id", cFid); }catch{}
+        onObsJoin({...updatedUser, role:"child", status:"active", inviteCode:obsInviteCode.code, childAge:childAgeNum, childMessagingAllowed:true});
+        setShowExistingAccount(false); setErr(""); onLogin({...updatedUser,role:"child"});
+      }
     } else if(isChildInvite){
       onObsJoin({...updatedUser, role:"child", status:"active", inviteCode:obsInviteCode.code, childAge:childAgeNum, childMessagingAllowed:true});
       setShowExistingAccount(false); setErr("");
@@ -4818,6 +4844,7 @@ function ConfigTab() {
 
   function setParent(i,f,v){setCfg(c=>{const p=[...c.parents];p[i]={...p[i],[f]:v};return{...c,parents:p};});}
   function setChild(i,f,v){setCfg(c=>{const ch=[...c.children];ch[i]={...ch[i],[f]:v};return{...c,children:ch};});}
+  function setChildHome(ci,pi,f,v){setCfg(c=>{const ch=[...c.children];const home=(ch[ci].home||[{},{}]).map((h,j)=>j===pi?{...h,[f]:v}:h);ch[ci]={...ch[ci],home};return{...c,children:ch};});}
 
   function addParent(){
     if(cfg.parents.length >= 2) return; // limite absolue de 2 parents
@@ -5006,7 +5033,7 @@ function ConfigTab() {
     setEmailSimIdx(null);
     pushNotif(`🗑️ ${parentName} a été supprimé de la famille.`);
   }
-  function addChild(){if(cfg.children.length>=(perms?.maxChildren??1))return onUpgrade();setCfg(c=>({...c,children:[...c.children,{id:Date.now(),name:"",birthDay:"",birthMonth:""}]}));}
+  function addChild(){if(cfg.children.length>=(perms?.maxChildren??1))return onUpgrade();setCfg(c=>({...c,children:[...c.children,{id:Date.now(),name:"",birthDay:"",birthMonth:"",allergy:"",bloodType:"",home:[{school:"",doctor:"",notes:"",emergencyContacts:""},{school:"",doctor:"",notes:"",emergencyContacts:""}]}]}));}
   function removeChild(i){setCfg(c=>{const children=c.children.filter((_,j)=>j!==i);return{...c,children,sameGuardAll:children.length<=1?true:c.sameGuardAll};});}
   return (
     <div>
@@ -5480,7 +5507,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           {/* Header */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
             <span style={{fontSize:11,fontWeight:800,color:C.vio,textTransform:"uppercase",letterSpacing:".06em"}}>{t.childN} {i+1}</span>
-            {i>0&&<button onClick={()=>removeChild(i)} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12}}>{t.remove}</button>}
+            {!isChild && <button onClick={()=>removeChild(i)} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12}}>{t.remove}</button>}
           </div>
 
           {/* Row 1 : Avatar | Nom */}
@@ -5520,7 +5547,63 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             <input type="tel" value={ch.phone||""} onChange={e=>setChild(i,"phone",e.target.value)} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} style={inp} />
           </div>
 
-          {/* Row 4 : Lien d'invitation enfant */}
+          {/* Row 4 : Santé (champs communs) */}
+          <div style={{marginTop:14,paddingTop:12,borderTop:`1px solid ${C.bor}`}}>
+            <div style={{fontSize:11,fontWeight:800,color:C.vio,textTransform:"uppercase",letterSpacing:".06em",marginBottom:10}}>{t.childHealth}</div>
+            <div style={{display:"flex",gap:10,marginBottom:10}}>
+              <div style={{...fieldBox,flex:2}}>
+                <span style={lbl}>{t.childAllergy}</span>
+                <input value={ch.allergy||""} onChange={e=>setChild(i,"allergy",e.target.value)} placeholder={t.childAllergyPh} style={inp} />
+              </div>
+              <div style={{...fieldBox,flex:1}}>
+                <span style={lbl}>{t.childBloodType}</span>
+                <select value={ch.bloodType||""} onChange={e=>setChild(i,"bloodType",e.target.value)} style={{...inp,height:IH}}>
+                  {["","A+","A-","B+","B-","AB+","AB-","O+","O-"].map(v=><option key={v} value={v}>{v||"--"}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Rows 5-6 : Infos par parent (chez parent0 / chez parent1) */}
+          {cfg.parents.filter(p2=>p2&&!p2.left).map((_,pi)=>{
+            const parentName = cfg.parents[pi]?.name || `Parent ${pi+1}`;
+            const home = ch.home?.[pi] || {school:"",doctor:"",notes:"",emergencyContacts:""};
+            const canEdit = !isChild && user?.parentIdx === pi;
+            const sectionLabel = (t.childAtHome||"Chez {parent}").replace("{parent}", parentName);
+            const readLabel = (t.childReadOnly||"(géré par {parent})").replace("{parent}", parentName);
+            return (
+              <div key={pi} style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.bor}`}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                  <span style={{fontSize:11,fontWeight:800,color:cfg.parents[pi]?.color||C.vio,textTransform:"uppercase",letterSpacing:".06em"}}>{sectionLabel}</span>
+                  {!canEdit && <span style={{fontSize:10,color:C.mut,fontStyle:"italic"}}>{readLabel}</span>}
+                </div>
+                <div style={{display:"flex",gap:10,marginBottom:10}}>
+                  <div style={{...fieldBox,flex:1}}>
+                    <span style={lbl}>{t.childSchool}</span>
+                    <input disabled={!canEdit} value={home.school||""} onChange={e=>setChildHome(i,pi,"school",e.target.value)}
+                      placeholder={canEdit?t.childSchoolPh:""} style={{...inp,opacity:canEdit?1:.7,background:canEdit?undefined:`${C.mut}11`}} />
+                  </div>
+                </div>
+                <div style={{...fieldBox,marginBottom:10}}>
+                  <span style={lbl}>{t.childDoctor}</span>
+                  <input disabled={!canEdit} value={home.doctor||""} onChange={e=>setChildHome(i,pi,"doctor",e.target.value)}
+                    placeholder={canEdit?t.childDoctorPh:""} style={{...inp,opacity:canEdit?1:.7,background:canEdit?undefined:`${C.mut}11`}} />
+                </div>
+                <div style={{...fieldBox,marginBottom:10}}>
+                  <span style={lbl}>{t.childEmergency}</span>
+                  <textarea disabled={!canEdit} rows={2} value={home.emergencyContacts||""} onChange={e=>setChildHome(i,pi,"emergencyContacts",e.target.value)}
+                    placeholder={canEdit?t.childEmergencyPh:""} style={{...inp,height:"auto",resize:"vertical",padding:10,opacity:canEdit?1:.7,background:canEdit?undefined:`${C.mut}11`}} />
+                </div>
+                <div style={fieldBox}>
+                  <span style={lbl}>{t.childNotes}</span>
+                  <textarea disabled={!canEdit} rows={2} value={home.notes||""} onChange={e=>setChildHome(i,pi,"notes",e.target.value)}
+                    placeholder={canEdit?t.childNotesPh:""} style={{...inp,height:"auto",resize:"vertical",padding:10,opacity:canEdit?1:.7,background:canEdit?undefined:`${C.mut}11`}} />
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Row 7 : Lien d'invitation enfant */}
           {ch.name.trim() && (
             <ChildInviteBtn childIdx={i} childName={ch.name} childPhone={ch.phone} />
           )}
@@ -5608,10 +5691,11 @@ function ParentInviteShareBtns({ C, parent, familyName }) {
 
 // ─── CHILD INVITE BUTTON ─────────────────────────────────────────────────────
 function ChildInviteBtn({ childIdx, childName, childPhone }) {
-  const { C, t, cfg, setCfg } = useApp();
+  const { C, t, familySync } = useApp();
   const [inviteUrl, setInviteUrl] = useState("");
+  const [loading, setLoading]     = useState(false);
+  const [copied, setCopied]       = useState(false);
 
-  // Nettoie le numéro pour WhatsApp (supprime espaces/tirets, gère le 0 → 33)
   function cleanPhoneWA(phone) {
     if (!phone) return null;
     let p = phone.replace(/[\s.\-()+]/g, "");
@@ -5620,88 +5704,80 @@ function ChildInviteBtn({ childIdx, childName, childPhone }) {
     return p || null;
   }
 
-  function getOrGenUrl() {
+  // Génère un token via Supabase (invalide l'ancien pour cet enfant).
+  async function getOrGenUrl() {
     if (inviteUrl) return inviteUrl;
-    const code = `CHILD-${cfg.shareCode||"DUVIA"}-${Math.random().toString(36).slice(2,6).toUpperCase()}`;
-    const url  = `https://app.duvia.fr/?code=${code}&role=child&family=${cfg.shareCode||"DUVIA"}&idx=${childIdx}`;
-    setCfg(c => ({
-      ...c,
-      pendingChildInvites: [
-        ...(c.pendingChildInvites||[]).filter(inv => inv.childIdx !== childIdx),
-        { code, childIdx, childName, used: false, createdAt: new Date().toISOString() }
-      ]
-    }));
-    setInviteUrl(url);
-    return url;
+    setLoading(true);
+    try {
+      const fid = familySync?.familyId;
+      if (!fid) return null;
+      const { data, error } = await supabase.rpc("create_child_invitation", {
+        p_family_id: fid,
+        p_child_idx: childIdx,
+        p_child_name: childName || "",
+      });
+      if (error || !data) { console.error("[Duvia] create_child_invitation:", error); return null; }
+      const url = `https://app.duvia.fr/?cinv=${data}`;
+      setInviteUrl(url);
+      return url;
+    } finally { setLoading(false); }
   }
 
-  const msgText = (url) =>
-    `Bonjour ${childName} 👋\nRejoins notre famille sur Duvia !\nClique ici pour créer ton compte :\n${url}`;
-
-  function handleEmail() {
-    const url     = getOrGenUrl();
-    const subject = encodeURIComponent(`Rejoins notre famille sur Duvia 👨‍👩‍👧`);
-    const body    = encodeURIComponent(msgText(url));
-    window.open(`mailto:?subject=${subject}&body=${body}`, "_blank");
+  function msgText(url) {
+    return `Bonjour ${childName} 👋\nRejoins notre famille sur Duvia !\nClique ici pour créer ton compte :\n${url}`;
   }
 
-  function handleSMS() {
-    const url = getOrGenUrl();
-    const body = encodeURIComponent(msgText(url));
+  async function handleSMS() {
+    const url = await getOrGenUrl(); if (!url) return;
     const phone = childPhone ? childPhone.replace(/[\s.\-()+]/g,"") : "";
-    window.open(`sms:${phone}?&body=${body}`, "_blank");
+    window.open(`sms:${phone}?&body=${encodeURIComponent(msgText(url))}`, "_blank");
   }
 
-  function handleWhatsApp() {
-    const url  = getOrGenUrl();
-    const body = encodeURIComponent(msgText(url));
+  async function handleWhatsApp() {
+    const url = await getOrGenUrl(); if (!url) return;
     const phone = cleanPhoneWA(childPhone);
-    // wa.me sans numéro = ouvre WhatsApp avec le texte (l'utilisateur choisit le contact)
-    window.open(`https://wa.me/${phone||""}?text=${body}`, "_blank");
+    window.open(`https://wa.me/${phone||""}?text=${encodeURIComponent(msgText(url))}`, "_blank");
   }
+
+  async function handleEmail() {
+    const url = await getOrGenUrl(); if (!url) return;
+    const subject = encodeURIComponent(`Rejoins notre famille sur Duvia 👨‍👩‍👧`);
+    window.open(`mailto:?subject=${subject}&body=${encodeURIComponent(msgText(url))}`, "_blank");
+  }
+
+  async function handleCopy() {
+    const url = await getOrGenUrl(); if (!url) return;
+    try { await navigator.clipboard.writeText(url); } catch { /* fallback silencieux */ }
+    setCopied(true); setTimeout(() => setCopied(false), 2500);
+  }
+
+  const invLabel = (t.childInviteTitle || "📨 Inviter {name} à rejoindre l'app").replace("{name}", childName || "");
+  const genLabel = loading
+    ? (t.childInviteGenerating || "⏳ Génération…")
+    : (t.childInviteGenerate || "🔗 Générer le lien pour {name}").replace("{name}", childName || "");
 
   return (
     <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.bor}`}}>
-      <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:8}}>
-        📨 Inviter {childName} à rejoindre l'app
-      </div>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-
-        {/* SMS */}
-        <button onClick={handleSMS} style={{
-          display:"flex",alignItems:"center",gap:6,
-          padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",
-          background:"#25D36618",color:"#128C7E",border:"1.5px solid #25D36644",
-        }}>
-          💬 SMS
+      <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:8}}>{invLabel}</div>
+      {!inviteUrl ? (
+        <button onClick={handleCopy} disabled={loading}
+          style={{width:"100%",height:38,background:loading?C.bor:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:10,fontWeight:800,fontSize:12,cursor:loading?"wait":"pointer",marginBottom:6}}>
+          {genLabel}
         </button>
-
-        {/* WhatsApp */}
-        <button onClick={handleWhatsApp} style={{
-          display:"flex",alignItems:"center",gap:6,
-          padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",
-          background:"#25D36618",color:"#25D366",border:"1.5px solid #25D36644",
-        }}>
-          <span style={{fontSize:14}}>📱</span> WhatsApp
-        </button>
-
-        {/* Email */}
-        <button onClick={handleEmail} style={{
-          display:"flex",alignItems:"center",gap:6,
-          padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",
-          background:`${C.vio}12`,color:C.vio,border:`1.5px solid ${C.vio}44`,
-        }}>
-          ✉️ Email
-        </button>
-      </div>
-      {!childPhone && (
-        <div style={{fontSize:10,color:C.mut,marginTop:5}}>
-          💡 Ajoute un numéro de téléphone pour pré-remplir l'envoi.
-        </div>
+      ) : (
+        <>
+          <div style={{fontSize:11,color:C.grn,marginBottom:8}}>✅ {t.childInviteValid||"Lien valable 30 jours."}</div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:6}}>
+            <button onClick={handleSMS} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:"#25D36618",color:"#128C7E",border:"1.5px solid #25D36644"}}>💬 SMS</button>
+            <button onClick={handleWhatsApp} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:"#25D36618",color:"#25D366",border:"1.5px solid #25D36644"}}><span style={{fontSize:14}}>📱</span> WhatsApp</button>
+            <button onClick={handleEmail} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:`${C.vio}18`,color:C.vio,border:`1.5px solid ${C.vio}44`}}>✉️ Email</button>
+            <button onClick={handleCopy} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:copied?`${C.grn}18`:C.sur,color:copied?C.grn:C.mut,border:`1.5px solid ${C.bor}`}}>
+              {copied ? "✅ Copié !" : "📋 Copier"}
+            </button>
+          </div>
+          <button onClick={()=>setInviteUrl("")} style={{fontSize:11,color:C.mut,background:"none",border:"none",cursor:"pointer",textDecoration:"underline",padding:0}}>↩️ Regénérer un lien</button>
+        </>
       )}
-      <div style={{fontSize:10,color:C.mut,marginTop:4}}>
-        {t.regInviteAgeInfo}
-      </div>
     </div>
   );
 }
@@ -7830,8 +7906,9 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
         {days.map(d=>{
           const hasSplit = d.splitBefore && d.splitAfter;
           const bg = hasSplit
-            ? `linear-gradient(180deg, ${d.splitBefore}22 0%, ${d.splitBefore}22 ${d.splitPercent}%, ${d.splitAfter}22 ${d.splitPercent}%, ${d.splitAfter}22 100%)`
+            ? `linear-gradient(180deg, ${d.splitBefore}40 0%, ${d.splitBefore}40 ${d.splitPercent}%, ${d.splitAfter}40 ${d.splitPercent}%, ${d.splitAfter}40 100%)`
             : (d.isToday ? `${C.vio}22` : cellBg(d.guard));
+          const hasBadge = d.isRealChange && d.guard && !d.isBirthday;
           // Priorité couleur du numéro : férié (rouge gras) > week-end (gris foncé gras) > normal
           const numColor = d.fer ? C.red : d.isWE ? "#52525b" : (d.isToday ? C.vio : C.txt);
           const numWeight = (d.fer || d.isWE || d.isToday) ? 900 : 700;
@@ -7860,8 +7937,6 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
             else if(g.timeType==="split"&&st) cellTime=`▶ ${st}`;
             else if(g.timeType==="split"&&et) cellTime=`⏹ ${et}`;
           }
-          // Badge 🔄 masqué si une heure de prise/fin de garde est affichée (lisibilité)
-          const hasBadge = d.isRealChange && d.guard && !d.isBirthday && !cellTime;
           const cellLocation = g?.location || "";
           return (
             <div key={d.ds} onClick={()=>openDay(d.ds)}
