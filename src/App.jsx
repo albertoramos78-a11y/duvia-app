@@ -1374,13 +1374,13 @@ function useFamilySync(cfg, setCfg) {
             //     partagée (cfg.parents) et prévenir (notification au créateur).
             if (row?.user_id && row.user_id !== uid && (row.status === "removed" || row.status === "left")) {
               const parents = cfgRef.current?.parents || [];
-              const idx = parents.findIndex(p => p && p.userId === row.user_id);
-              if (idx >= 0 && !parents[idx]?.left) {
-                const leftName = parents[idx]?.name || "L'invité";
-                setCfg(c => {
-                  const next = markDepartedParents(c.parents, new Set([row.user_id]));
-                  return next ? { ...c, parents: next } : c;
-                });
+              let myEmail2 = ""; try { myEmail2 = JSON.parse(window.localStorage.getItem("duvia_session") || "null") || ""; } catch {}
+              const activeIds = parents.map(p => p?.userId).filter(Boolean).filter(id => id !== row.user_id);
+              const next = markDepartedParents(parents, { activeIds, inactiveIds: [row.user_id], myUid: uid, myEmail: myEmail2 });
+              if (next) {
+                const idx = next.findIndex((p, j) => p?.left && !parents[j]?.left);
+                const leftName = idx >= 0 ? (parents[idx]?.name || "L'invité") : "L'invité";
+                setCfg(c => ({ ...c, parents: next }));
                 try { window.dispatchEvent(new CustomEvent("duvia-invite-left", { detail: leftName })); } catch {}
               }
             }
@@ -1599,10 +1599,12 @@ function useFamilySync(cfg, setCfg) {
           try {
             const { data: mems } = await supabase
               .from("family_members").select("user_id,status").eq("family_id", familyId);
+            const active = new Set((mems || []).filter(m => m.status === "active").map(m => m.user_id));
             const inactive = new Set((mems || []).filter(m => m.status !== "active").map(m => m.user_id));
+            let myEmail2 = ""; try { myEmail2 = JSON.parse(window.localStorage.getItem("duvia_session") || "null") || ""; } catch {}
             if (inactive.size && !cancelled) {
               setCfg(c => {
-                const next = markDepartedParents(c.parents, inactive);
+                const next = markDepartedParents(c.parents, { activeIds: active, inactiveIds: inactive, myUid: uid, myEmail: myEmail2 });
                 return next ? { ...c, parents: next } : c;
               });
             }
