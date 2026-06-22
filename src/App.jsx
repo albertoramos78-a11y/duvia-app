@@ -4276,8 +4276,9 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
         setErr(msg.includes("expired")?t.childInvErrExpired:msg.includes("used")?t.childInvErrUsed:t.childInvErrInvalid);
       } else {
         try{ window.localStorage.setItem("duvia_family_id", childFamId); }catch{}
-        onObsJoin({id:newId,name:cleanName,email:cleanEmail,phone:regPhoneId||undefined,role:"child",status:"active",inviteCode:obsInviteCode.code,childAge:childAgeNum,childMessagingAllowed:true});
-        setOk(`✅ Bienvenue ${cleanName} !`); setMode("login"); setErr("");
+        const childUser = {...newUser, role:"child", status:"active", inviteCode:obsInviteCode.code, childAge:childAgeNum, childMessagingAllowed:true};
+        onObsJoin(childUser);
+        setErr(""); onLogin(childUser); // connexion directe, pas de retour à l’écran login
       }
     } else if(isChildInvite){
       onObsJoin({id:newId,name:cleanName,email:cleanEmail,phone:regPhoneId||undefined,role:"child",status:"active",inviteCode:obsInviteCode.code,childAge:childAgeNum,childMessagingAllowed:true});
