@@ -7826,7 +7826,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
           const bg = hasSplit
             ? `linear-gradient(180deg, ${d.splitBefore}40 0%, ${d.splitBefore}40 ${d.splitPercent}%, ${d.splitAfter}40 ${d.splitPercent}%, ${d.splitAfter}40 100%)`
             : (d.isToday ? `${C.vio}22` : cellBg(d.guard));
-          const hasBadge = d.isRealChange && d.guard && !d.isBirthday && !cellTime;
+          // hasBadge computed below after cellTime
           // Priorité couleur du numéro : férié (rouge gras) > week-end (gris foncé gras) > normal
           const numColor = d.fer ? C.red : d.isWE ? "#52525b" : (d.isToday ? C.vio : C.txt);
           const numWeight = (d.fer || d.isWE || d.isToday) ? 900 : 700;
@@ -7856,6 +7856,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
             else if(g.timeType==="split"&&et) cellTime=`⏹ ${et}`;
           }
           const cellLocation = g?.location || "";
+          const hasBadge = d.isRealChange && d.guard && !d.isBirthday && !cellTime;
           return (
             <div key={d.ds} onClick={()=>openDay(d.ds)}
               title={d.ferName||d.scoName||d.specials[0]?.label||undefined}
