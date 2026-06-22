@@ -5259,7 +5259,7 @@ function FamilySyncCard() {
 
 
 function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,removeChild,onShowEmailSim,quitterFamille,retirerInvite}) {
-  const {C,t,cfg,setCfg,prem,perms,onUpgrade,user,sub,familySync} = useApp();
+  const {C,t,cfg,setCfg,prem,perms,onUpgrade,user,sub,familySync,isChild} = useApp();
   const [touched,setTouched] = useState({});
   const [pidActing,setPidActing] = useState(null); // userId en cours de validation/refus
 
