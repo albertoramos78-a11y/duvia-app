@@ -4819,12 +4819,22 @@ function ConfigTab() {
     setShowInviteModal(true);
   }
 
+  // Réinviter un parent PARTI : on pré-remplit son email et on ouvre le modal.
+  // confirmInvite réutilisera SA fiche existante (par email) → ses dépenses/garde
+  // restent attribuées à lui. Contourne la limite « 2 parents » (même personne).
+  function reinviteParent(p){
+    setInviteEmail((p && (p.email || p.inviteEmail)) || "");
+    setInvitePhone((p && p.invitePhone) || "");
+    setInviteErr(""); setInviteResult(null);
+    setShowInviteModal(true);
+  }
+
   async function confirmInvite(){
     const em  = inviteEmail.trim();
     const tel = invitePhone.trim();
     if(!em && !tel){ setInviteErr("Saisis au moins un email ou un numéro de téléphone."); return; }
     if(em && !em.includes("@")){ setInviteErr("Email invalide."); return; }
-    if(cfg.parents.some(p=>p.inviteEmail && p.inviteEmail===em)){ setInviteErr("Cet email a déjà été invité."); return; }
+    if(cfg.parents.some(p=>p.inviteStatus==="pending" && p.inviteEmail && p.inviteEmail===em)){ setInviteErr("Cet email a déjà une invitation en attente."); return; }
     if(!familySync?.familyId){ setInviteErr("Famille introuvable, réessaie."); return; }
     setSendingInvite(true);
     try {
@@ -4861,15 +4871,27 @@ function ConfigTab() {
         .single();
       if (error || !inv?.token) throw error || new Error("no-token");
       const inviteUrl = `${APP_URL}/?inv=${inv.token}`;
-      // 🔧 L'invité va toujours à l'index 1 (jamais 0) — le créateur de la
-      // famille reste toujours en position 1 (le haut de la liste).
-      setCfg(c=>({...c,parents:[...c.parents,{
-        id:Date.now(), name:"", gender:"M", birthDay:"", birthMonth:"",
-        color:PCOLS[c.parents.length%PCOLS.length],
-        inviteStatus:"pending", inviteEmail:em||null,
-        invitePhone: tel||null,
-        inviteCode: inv.token, inviteUrl,
-      }]}));
+      // 🔧 Si une fiche parent existe déjà pour cet email (ex. parent PARTI
+      // qu'on réinvite), on RÉUTILISE sa fiche (préserve l'historique
+      // dépenses/garde, indexé par position) au lieu d'en créer une nouvelle.
+      // Sinon, on ajoute une nouvelle fiche invitée.
+      setCfg(c=>{
+        const lc = (em||"").toLowerCase();
+        const exIdx = lc ? (c.parents||[]).findIndex(p => p && (((p.email||"").toLowerCase()===lc) || ((p.inviteEmail||"").toLowerCase()===lc))) : -1;
+        if (exIdx >= 0) {
+          const parents = c.parents.slice();
+          const { left, leftAt, userId, ...rest } = parents[exIdx] || {};
+          parents[exIdx] = { ...rest, inviteStatus:"pending", inviteEmail: em||null, invitePhone: tel||null, inviteCode: inv.token, inviteUrl };
+          return { ...c, parents };
+        }
+        return { ...c, parents:[...c.parents, {
+          id:Date.now(), name:"", gender:"M", birthDay:"", birthMonth:"",
+          color:PCOLS[c.parents.length%PCOLS.length],
+          inviteStatus:"pending", inviteEmail:em||null,
+          invitePhone: tel||null,
+          inviteCode: inv.token, inviteUrl,
+        }]};
+      });
       setInviteResult({ url: inviteUrl, email: em||null, phone: tel||null });
     } catch (e) {
       console.error("[Duvia] confirmInvite error:", e);
@@ -5110,7 +5132,7 @@ function ConfigTab() {
       )}
       {/* Step tabs — now rendered in the bottom nav bar */}
       <div className="fi">
-        {step===0 && <StepId setParent={setParent} setChild={setChild} addParent={addParent} removeParent={removeParent} addChild={addChild} removeChild={removeChild} onShowEmailSim={setEmailSimIdx} quitterFamille={quitterFamille} retirerInvite={retirerInvite} />}
+        {step===0 && <StepId setParent={setParent} setChild={setChild} addParent={addParent} reinvite={reinviteParent} removeParent={removeParent} addChild={addChild} removeChild={removeChild} onShowEmailSim={setEmailSimIdx} quitterFamille={quitterFamille} retirerInvite={retirerInvite} />}
         {step===1 && <StepAccess />}
         {step===2 && <StepDates />}
         {step===3 && <StepGarde />}
@@ -5203,7 +5225,7 @@ function FamilySyncCard() {
 }
 
 
-function StepId({setParent,setChild,addParent,removeParent,addChild,removeChild,onShowEmailSim,quitterFamille,retirerInvite}) {
+function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,removeChild,onShowEmailSim,quitterFamille,retirerInvite}) {
   const {C,t,cfg,setCfg,prem,perms,onUpgrade,user,sub,familySync} = useApp();
   const [touched,setTouched] = useState({});
   const [pidActing,setPidActing] = useState(null); // userId en cours de validation/refus
@@ -5238,7 +5260,20 @@ function StepId({setParent,setChild,addParent,removeParent,addChild,removeChild,
 
       <div className="sec">{t.parents}</div>
       {cfg.parents.map((p,i)=>{
-        if(p?.left) return null; // fiche masquée : parent parti (son identité reste pour l'historique dépenses/garde)
+        if(p?.left) return (
+          <div key={i} className="card" style={{marginBottom:12,borderColor:C.bor,borderStyle:"dashed"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+                <div style={{width:40,height:40,borderRadius:"50%",background:C.sur,border:`2px dashed ${C.bor}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,filter:"grayscale(1)",opacity:.8}}>🚪</div>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:800,color:C.mut,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.name||p.email||t.guestLabel}</div>
+                  <div style={{fontSize:11,color:C.mut}}>{(t.parentLeftOn||"A quitté la famille le {date}").replace("{date}", p.leftAt ? new Date(p.leftAt).toLocaleDateString() : "—")}</div>
+                </div>
+              </div>
+              <button onClick={()=>reinvite&&reinvite(p)} style={{padding:"7px 14px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:10,fontSize:12,fontWeight:800,cursor:"pointer",flexShrink:0}}>↩️ {t.reinvite}</button>
+            </div>
+          </div>
+        );
         const pKey=`p${i}`; const pErr=touched[pKey]&&!p.name.trim();
         // 🔒 Email = identifiant de connexion (« lié au compte »). Il n'est
         // éditable QUE sur un créneau non encore réclamé par un compte (ex. le
