@@ -480,5 +480,7 @@ const en = {
     bugReportSending:"Sending…",
     bugReportThanks:"Thank you. The diagnostic report has been sent.",
     bugReportError:"Sending failed. The report is saved and will be resent automatically later.",
+    reinvite:"Re-invite",
+    parentLeftOn:"Left the family on {date}",
   };
 export default en;

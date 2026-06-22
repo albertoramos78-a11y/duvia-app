@@ -478,5 +478,7 @@ const es = {
     bugReportSending:"Enviando…",
     bugReportThanks:"Gracias. El informe de diagnóstico se ha enviado.",
     bugReportError:"El envío ha fallado. El informe se ha guardado y se reenviará automáticamente más tarde.",
+    reinvite:"Reinvitar",
+    parentLeftOn:"Salió de la familia el {date}",
   };
 export default es;

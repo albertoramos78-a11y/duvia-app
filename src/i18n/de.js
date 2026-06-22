@@ -478,5 +478,7 @@ const de = {
     bugReportSending:"Senden…",
     bugReportThanks:"Danke. Der Diagnosebericht wurde gesendet.",
     bugReportError:"Senden fehlgeschlagen. Der Bericht wird gespeichert und später automatisch erneut gesendet.",
+    reinvite:"Erneut einladen",
+    parentLeftOn:"Hat die Familie am {date} verlassen",
   };
 export default de;

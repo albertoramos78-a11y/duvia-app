@@ -530,5 +530,7 @@ const fr = {
     bugReportSending:"Envoi…",
     bugReportThanks:"Merci. Le rapport de diagnostic a été envoyé.",
     bugReportError:"L'envoi a échoué. Le rapport est conservé et sera renvoyé automatiquement plus tard.",
+    reinvite:"Réinviter",
+    parentLeftOn:"A quitté la famille le {date}",
   };
 export default fr;
