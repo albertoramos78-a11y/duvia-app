@@ -7824,7 +7824,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
         {days.map(d=>{
           const hasSplit = d.splitBefore && d.splitAfter;
           const bg = hasSplit
-            ? `linear-gradient(180deg, ${d.splitBefore}40 0%, ${d.splitBefore}40 ${d.splitPercent}%, ${d.splitAfter}40 ${d.splitPercent}%, ${d.splitAfter}40 100%)`
+            ? `linear-gradient(180deg, ${d.splitBefore}22 0%, ${d.splitBefore}22 ${d.splitPercent}%, ${d.splitAfter}22 ${d.splitPercent}%, ${d.splitAfter}22 100%)`
             : (d.isToday ? `${C.vio}22` : cellBg(d.guard));
           // Priorité couleur du numéro : férié (rouge gras) > week-end (gris foncé gras) > normal
           const numColor = d.fer ? C.red : d.isWE ? "#52525b" : (d.isToday ? C.vio : C.txt);
