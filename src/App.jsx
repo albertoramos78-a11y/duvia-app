@@ -856,10 +856,7 @@ function makeCfg() {
   return {
     parents:[{id:1,name:"",gender:"F",birthDay:"",birthMonth:"",color:PCOLS[0]}],
     children:[{id:1,name:"",birthDay:"",birthMonth:"",allergy:"",bloodType:"",
-      home:[
-        {school:"",doctor:"",notes:"",emergencyContacts:""},
-        {school:"",doctor:"",notes:"",emergencyContacts:""},
-      ]}],
+      home:{school:"",doctor:"",notes:"",emergencyContacts:""}}],
     observers:[],sameGuardAll:true,zone:"",subdivisionCode:"",country:"FR",activeNatHols:null,
     specialDates:{
       motherDay:{enabled:false},fatherDay:{enabled:false},
@@ -4844,7 +4841,7 @@ function ConfigTab() {
 
   function setParent(i,f,v){setCfg(c=>{const p=[...c.parents];p[i]={...p[i],[f]:v};return{...c,parents:p};});}
   function setChild(i,f,v){setCfg(c=>{const ch=[...c.children];ch[i]={...ch[i],[f]:v};return{...c,children:ch};});}
-  function setChildHome(ci,pi,f,v){setCfg(c=>{const ch=[...c.children];const home=(ch[ci].home||[{},{}]).map((h,j)=>j===pi?{...h,[f]:v}:h);ch[ci]={...ch[ci],home};return{...c,children:ch};});}
+  function setChildHome(ci,f,v){setCfg(c=>{const ch=[...c.children];ch[ci]={...ch[ci],home:{...(ch[ci].home||{}),[ f]:v}};return{...c,children:ch};});}
 
   function addParent(){
     if(cfg.parents.length >= 2) return; // limite absolue de 2 parents
@@ -5033,7 +5030,7 @@ function ConfigTab() {
     setEmailSimIdx(null);
     pushNotif(`🗑️ ${parentName} a été supprimé de la famille.`);
   }
-  function addChild(){if(cfg.children.length>=(perms?.maxChildren??1))return onUpgrade();setCfg(c=>({...c,children:[...c.children,{id:Date.now(),name:"",birthDay:"",birthMonth:"",allergy:"",bloodType:"",home:[{school:"",doctor:"",notes:"",emergencyContacts:""},{school:"",doctor:"",notes:"",emergencyContacts:""}]}]}));}
+  function addChild(){if(cfg.children.length>=(perms?.maxChildren??1))return onUpgrade();setCfg(c=>({...c,children:[...c.children,{id:Date.now(),name:"",birthDay:"",birthMonth:"",allergy:"",bloodType:"",home:{school:"",doctor:"",notes:"",emergencyContacts:""}}]}));}
   function removeChild(i){setCfg(c=>{const children=c.children.filter((_,j)=>j!==i);return{...c,children,sameGuardAll:children.length<=1?true:c.sameGuardAll};});}
   return (
     <div>
@@ -5564,44 +5561,37 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             </div>
           </div>
 
-          {/* Rows 5-6 : Infos par parent (chez parent0 / chez parent1) */}
-          {cfg.parents.filter(p2=>p2&&!p2.left).map((_,pi)=>{
-            const parentName = cfg.parents[pi]?.name || `Parent ${pi+1}`;
-            const home = ch.home?.[pi] || {school:"",doctor:"",notes:"",emergencyContacts:""};
-            const canEdit = !isChild && user?.parentIdx === pi;
-            const sectionLabel = (t.childAtHome||"Chez {parent}").replace("{parent}", parentName);
-            const readLabel = (t.childReadOnly||"(géré par {parent})").replace("{parent}", parentName);
+          {/* Row 5 : Infos communes (école, médecin, urgences, notes) */}
+          {(() => {
+            const home = (typeof ch.home === 'object' && !Array.isArray(ch.home)) ? ch.home : {school:"",doctor:"",notes:"",emergencyContacts:""};
+            const canEdit = !isChild;
             return (
-              <div key={pi} style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.bor}`}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                  <span style={{fontSize:11,fontWeight:800,color:cfg.parents[pi]?.color||C.vio,textTransform:"uppercase",letterSpacing:".06em"}}>{sectionLabel}</span>
-                  {!canEdit && <span style={{fontSize:10,color:C.mut,fontStyle:"italic"}}>{readLabel}</span>}
-                </div>
+              <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.bor}`}}>
                 <div style={{display:"flex",gap:10,marginBottom:10}}>
                   <div style={{...fieldBox,flex:1}}>
                     <span style={lbl}>{t.childSchool}</span>
-                    <input disabled={!canEdit} value={home.school||""} onChange={e=>setChildHome(i,pi,"school",e.target.value)}
-                      placeholder={canEdit?t.childSchoolPh:""} style={{...inp,opacity:canEdit?1:.7,background:canEdit?undefined:`${C.mut}11`}} />
+                    <input disabled={!canEdit} value={home.school||""} onChange={e=>setChildHome(i,"school",e.target.value)}
+                      placeholder={t.childSchoolPh} style={inp} />
                   </div>
                 </div>
                 <div style={{...fieldBox,marginBottom:10}}>
                   <span style={lbl}>{t.childDoctor}</span>
-                  <input disabled={!canEdit} value={home.doctor||""} onChange={e=>setChildHome(i,pi,"doctor",e.target.value)}
-                    placeholder={canEdit?t.childDoctorPh:""} style={{...inp,opacity:canEdit?1:.7,background:canEdit?undefined:`${C.mut}11`}} />
+                  <input disabled={!canEdit} value={home.doctor||""} onChange={e=>setChildHome(i,"doctor",e.target.value)}
+                    placeholder={t.childDoctorPh} style={inp} />
                 </div>
                 <div style={{...fieldBox,marginBottom:10}}>
                   <span style={lbl}>{t.childEmergency}</span>
-                  <textarea disabled={!canEdit} rows={2} value={home.emergencyContacts||""} onChange={e=>setChildHome(i,pi,"emergencyContacts",e.target.value)}
-                    placeholder={canEdit?t.childEmergencyPh:""} style={{...inp,height:"auto",resize:"vertical",padding:10,opacity:canEdit?1:.7,background:canEdit?undefined:`${C.mut}11`}} />
+                  <textarea disabled={!canEdit} rows={2} value={home.emergencyContacts||""} onChange={e=>setChildHome(i,"emergencyContacts",e.target.value)}
+                    placeholder={t.childEmergencyPh} style={{...inp,height:"auto",resize:"vertical",padding:10}} />
                 </div>
                 <div style={fieldBox}>
                   <span style={lbl}>{t.childNotes}</span>
-                  <textarea disabled={!canEdit} rows={2} value={home.notes||""} onChange={e=>setChildHome(i,pi,"notes",e.target.value)}
-                    placeholder={canEdit?t.childNotesPh:""} style={{...inp,height:"auto",resize:"vertical",padding:10,opacity:canEdit?1:.7,background:canEdit?undefined:`${C.mut}11`}} />
+                  <textarea disabled={!canEdit} rows={2} value={home.notes||""} onChange={e=>setChildHome(i,"notes",e.target.value)}
+                    placeholder={t.childNotesPh} style={{...inp,height:"auto",resize:"vertical",padding:10}} />
                 </div>
               </div>
             );
-          })}
+          })()}
 
           {/* Row 7 : Lien d'invitation enfant */}
           {ch.name.trim() && (
@@ -5695,6 +5685,7 @@ function ChildInviteBtn({ childIdx, childName, childPhone }) {
   const [inviteUrl, setInviteUrl] = useState("");
   const [loading, setLoading]     = useState(false);
   const [copied, setCopied]       = useState(false);
+  const [errMsg, setErrMsg]       = useState("");
 
   function cleanPhoneWA(phone) {
     if (!phone) return null;
@@ -5707,7 +5698,7 @@ function ChildInviteBtn({ childIdx, childName, childPhone }) {
   // Génère un token via Supabase (invalide l'ancien pour cet enfant).
   async function getOrGenUrl() {
     if (inviteUrl) return inviteUrl;
-    setLoading(true);
+    setErrMsg(""); setLoading(true);
     try {
       const fid = familySync?.familyId;
       if (!fid) return null;
@@ -5716,7 +5707,7 @@ function ChildInviteBtn({ childIdx, childName, childPhone }) {
         p_child_idx: childIdx,
         p_child_name: childName || "",
       });
-      if (error || !data) { console.error("[Duvia] create_child_invitation:", error); return null; }
+      if (error || !data) { console.error("[Duvia] create_child_invitation:", error); setErrMsg(error?.message||"Erreur lors de la génération du lien. Vérifie que la migration SQL 0022 est appliquée."); return null; }
       const url = `https://app.duvia.fr/?cinv=${data}`;
       setInviteUrl(url);
       return url;
@@ -5759,6 +5750,7 @@ function ChildInviteBtn({ childIdx, childName, childPhone }) {
   return (
     <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.bor}`}}>
       <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:8}}>{invLabel}</div>
+      {errMsg && <div style={{fontSize:11,color:C.red,marginBottom:8,lineHeight:1.4}}>⚠️ {errMsg}</div>}
       {!inviteUrl ? (
         <button onClick={handleCopy} disabled={loading}
           style={{width:"100%",height:38,background:loading?C.bor:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:10,fontWeight:800,fontSize:12,cursor:loading?"wait":"pointer",marginBottom:6}}>
