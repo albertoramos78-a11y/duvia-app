@@ -3845,7 +3845,7 @@ function RgpdConsentScreen({C,t,onAccept}) {
   const [checked,setChecked] = useState(false);
   const link = {color:C.vio,fontWeight:800,textDecoration:"underline"};
   return (
-    <div className="auth-screen" style={{display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:C.bg}}>
+    <div className="auth-screen" style={{display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 20px 40px",background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:C.bg}}>
       <div style={{width:"100%",maxWidth:460}} className="fi">
         <div style={{background:C.card,borderRadius:20,padding:"26px 24px",boxShadow:"0 10px 40px rgba(0,0,0,.12)"}}>
           <div style={{fontSize:20,fontWeight:900,color:C.txt,marginBottom:6}}>
@@ -3891,7 +3891,7 @@ function ConsentScreen({C,t,user,onAccept,onDecline}) {
   const [checked3,setChecked3] = useState(false);
   const canAccept = checked1 && checked2 && checked3;
   return (
-    <div className="auth-screen" style={{display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:`radial-gradient(ellipse at 30% 20%,rgba(124,111,205,.15) 0%,transparent 60%),${C.bg}`}}>
+    <div className="auth-screen" style={{display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 20px 40px",background:C._brand?`linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:`radial-gradient(ellipse at 30% 20%,rgba(124,111,205,.15) 0%,transparent 60%),${C.bg}`}}>
       <div style={{width:"100%",maxWidth:420}} className="fi">
         <div style={{textAlign:"center",marginBottom:22,paddingLeft:180}}>
           <div style={{fontSize:36,marginBottom:8}}>👨‍👩‍👧</div>
@@ -4097,7 +4097,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
   // formulaire ni le bouton « Envoyer le lien », qui n'ont rien à faire ici).
   // ⚠️ Placé APRÈS tous les hooks (sinon « Rendered fewer hooks » / React #300).
   if(mode==="obs_waiting") return (
-    <div className="auth-screen" style={{display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
+    <div className="auth-screen" style={{display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 20px 40px",background:C.bg}}>
       <div style={{background:C.card,borderRadius:20,padding:"30px 24px",maxWidth:420,width:"100%",textAlign:"center",boxShadow:"0 10px 40px rgba(0,0,0,.12)"}}>
         <div style={{fontSize:44,marginBottom:12}}>⏳</div>
         <div style={{fontWeight:900,fontSize:18,marginBottom:8,color:C.txt}}>{t.obsJoinWaiting||"En attente d'approbation"}</div>
@@ -4364,7 +4364,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     }
   }
   return (
-    <div className="auth-screen" style={{display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),radial-gradient(ellipse at 30% 20%,rgba(124,111,205,.15) 0%,transparent 60%),${C.bg}`}}>
+    <div className="auth-screen" style={{display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 20px 40px",background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),radial-gradient(ellipse at 30% 20%,rgba(124,111,205,.15) 0%,transparent 60%),${C.bg}`}}>
       <div style={{width:"100%",maxWidth:400}} className="fi">
         <div style={{display:"grid",gridTemplateColumns:"1fr auto auto",alignItems:"center",gap:8,marginBottom:16}}>
           <div />{/* spacer pour centrer le logo */}
