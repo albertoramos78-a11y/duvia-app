@@ -6,7 +6,7 @@ import { useMessages } from "./hooks/useMessages";
 import { useIdLinks } from "./hooks/useIdLinks";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, PRIVACY_URL, CGU_URL, RGPD_NOTICE_VERSION } from './config.js';
-import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked } from './utils/core.js';
+import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, BRAND, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1375,9 +1375,12 @@ function useFamilySync(cfg, setCfg) {
             if (row?.user_id && row.user_id !== uid && (row.status === "removed" || row.status === "left")) {
               const parents = cfgRef.current?.parents || [];
               const idx = parents.findIndex(p => p && p.userId === row.user_id);
-              if (idx > 0) {
+              if (idx >= 0 && !parents[idx]?.left) {
                 const leftName = parents[idx]?.name || "L'invité";
-                setCfg(c => ({ ...c, parents: c.parents.filter((_, j) => j !== idx) }));
+                setCfg(c => {
+                  const next = markDepartedParents(c.parents, new Set([row.user_id]));
+                  return next ? { ...c, parents: next } : c;
+                });
                 try { window.dispatchEvent(new CustomEvent("duvia-invite-left", { detail: leftName })); } catch {}
               }
             }
@@ -1588,17 +1591,19 @@ function useFamilySync(cfg, setCfg) {
             if (patched && !cancelled) setCfg(c => ({ ...c, parents: patched }));
           } catch {}
 
-          // 🔧 Réconciliation : retirer de cfg.parents tout parent dont l'adhésion
-          // n'est plus active (l'invité a quitté/été retiré pendant que j'étais
-          // hors-ligne). Le créateur (index 0) n'est jamais retiré.
+          // 🔧 Réconciliation : marquer « parti » (left) tout parent dont
+          // l'adhésion n'est plus active — SANS ré-indexer (on préserve
+          // l'attribution des dépenses/garde, indexées par position). Couvre
+          // aussi le cas où le CRÉATEUR est parti : le parent restant devient
+          // créateur de fait à l'affichage (effectiveCreatorIdx).
           try {
             const { data: mems } = await supabase
               .from("family_members").select("user_id,status").eq("family_id", familyId);
             const inactive = new Set((mems || []).filter(m => m.status !== "active").map(m => m.user_id));
             if (inactive.size && !cancelled) {
               setCfg(c => {
-                const kept = (c.parents || []).filter((p, j) => j === 0 || !(p && p.userId && inactive.has(p.userId)));
-                return kept.length !== (c.parents || []).length ? { ...c, parents: kept } : c;
+                const next = markDepartedParents(c.parents, inactive);
+                return next ? { ...c, parents: next } : c;
               });
             }
           } catch {}
@@ -5231,6 +5236,7 @@ function StepId({setParent,setChild,addParent,removeParent,addChild,removeChild,
 
       <div className="sec">{t.parents}</div>
       {cfg.parents.map((p,i)=>{
+        if(p?.left) return null; // fiche masquée : parent parti (son identité reste pour l'historique dépenses/garde)
         const pKey=`p${i}`; const pErr=touched[pKey]&&!p.name.trim();
         // 🔒 Email = identifiant de connexion (« lié au compte »). Il n'est
         // éditable QUE sur un créneau non encore réclamé par un compte (ex. le
@@ -5247,7 +5253,7 @@ function StepId({setParent,setChild,addParent,removeParent,addChild,removeChild,
         if(p.inviteStatus==="pending") return (
           <div key={i} className="card" style={{marginBottom:12,borderColor:p.color,borderStyle:"dashed"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <span style={{fontSize:11,fontWeight:800,color:p.color,textTransform:"uppercase",letterSpacing:".06em"}}>{i===0?t.creatorLabel:t.guestLabel}</span>
+              <span style={{fontSize:11,fontWeight:800,color:p.color,textTransform:"uppercase",letterSpacing:".06em"}}>{i===effectiveCreatorIdx(cfg.parents)?t.creatorLabel:t.guestLabel}</span>
               <button onClick={()=>setCfg(c=>({...c,parents:c.parents.filter((_,j)=>j!==i)}))} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.remove}</button>
             </div>
             <div style={{display:"flex",gap:12,alignItems:"center",padding:"8px 0 14px"}}>
@@ -5309,7 +5315,7 @@ function StepId({setParent,setChild,addParent,removeParent,addChild,removeChild,
           {/* Header */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
             <div style={{display:"flex",alignItems:"center",gap:6}}>
-              <span style={{fontSize:11,fontWeight:800,color:p.color,textTransform:"uppercase",letterSpacing:".06em"}}>{i===0?t.creatorLabel:t.guestLabel}</span>
+              <span style={{fontSize:11,fontWeight:800,color:p.color,textTransform:"uppercase",letterSpacing:".06em"}}>{i===effectiveCreatorIdx(cfg.parents)?t.creatorLabel:t.guestLabel}</span>
               {sub?.subscriberParentIdx===i && (
                 <span style={{fontSize:9,fontWeight:900,background:`linear-gradient(135deg,${C.yel},${C.ora})`,color:"#fff",padding:"2px 7px",borderRadius:8,letterSpacing:".04em"}}>
                   👑 Souscripteur Premium
