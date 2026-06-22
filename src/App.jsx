@@ -1919,6 +1919,16 @@ function useFamilySync(cfg, setCfg) {
       // ensuite vers Supabase). L'invité affinera son propre nom à sa connexion.
       if ((m.role || "parent") === "parent") {
         setCfg(c => ({ ...c, parents: insertValidatedParent(c.parents, m) }));
+      } else if (m.role === "observer") {
+        // Observateur Supabase validé → l'ajouter à cfg.observers (actif).
+        setCfg(c => ({
+          ...c,
+          observers: [
+            ...(c.observers||[]).filter(o => String(o.id) !== String(m.userId) && o.userId !== m.userId),
+            { id: m.userId, userId: m.userId, name: m.displayName||m.email||"Observateur",
+              email: m.email||"", phone:"", role:"grandparent", status:"active", canGuard:false }
+          ]
+        }));
       }
 
       await refreshPendingMembers();
@@ -3430,6 +3440,17 @@ export default function App() {
                 </>
               )}
               {/* ── Lots gagnés déplacés dans le bouton 🏆 de la barre ───── */}
+              {isObs && !isAdm && (
+                <button onClick={async()=>{
+                  if(!window.confirm("Quitter la famille ? Vous n'aurez plus accès au calendrier ni à la messagerie.")) return;
+                  await familySync?.leaveFamily?.();
+                  setShowMenu(false);
+                  handleSetUser(null); setTab(0);
+                }} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.red,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                  <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🚪</span>
+                  <span style={{flex:1,textAlign:"left"}}>{t.obsLeaveFamily||"Quitter la famille"}</span>
+                </button>
+              )}
               {isChild && !isAdm && (
                 <button onClick={()=>{setMenuTab("notifs");setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
                   <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🔔</span><span style={{flex:1,textAlign:"left"}}>{t.tabNotifs}</span>
@@ -3664,12 +3685,26 @@ Date d'entrée en vigueur : 14 juin 2026
       {/* CONTENT */}
       <div id="duvia-scroll" style={{flex:1,overflowY:"auto",padding:16,background:C.bg}}>
         {(isObs && !isAdm) ? (
+          (cfg.parents||[]).filter(pp=>pp&&!pp.left).length===0 ? (
+            <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:300,padding:20}}>
+              <div style={{background:C.card,borderRadius:18,padding:28,maxWidth:380,textAlign:"center",boxShadow:"0 8px 32px rgba(0,0,0,.1)"}}>
+                <div style={{fontSize:44,marginBottom:12}}>🏚️</div>
+                <div style={{fontWeight:900,fontSize:17,color:C.txt,marginBottom:8}}>{t.familyDisbanded||"Cette famille n'a plus de parent actif."}</div>
+                <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:20}}>{t.familyDisbandedObs||"Votre accès est maintenu mais aucun parent ne gère plus cette famille. Vous pouvez quitter."}</div>
+                <button onClick={async()=>{if(!window.confirm("Quitter la famille ?")) return; await familySync?.leaveFamily?.(); handleSetUser(null); setTab(0);}}
+                  style={{height:44,padding:"0 24px",background:C.red,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:14,cursor:"pointer"}}>
+                  🚪 {t.obsLeaveFamily||"Quitter la famille"}
+                </button>
+              </div>
+            </div>
+          ) : (
           <div>
             {tab===0 && <CalTab readOnly updateCal={()=>{}} />}
             {tab===1 && <ContactsTab readOnly />}
             {tab===2 && <MessagingTab />}
             {tab===3 && <GameTab />}
           </div>
+          ) /* fin condition 0 parents */
         ) : (isChild && !isAdm) ? (
           <div>
             {tab===0 && <CalTab readOnly updateCal={()=>{}} />}
@@ -4547,8 +4582,8 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
                 </div>
               )}
 
-              {/* Père / Mère / Autre — pour les parents uniquement, jamais pour un enfant */}
-              {(role==="parent"||isParentInvite) && !isChildInvite && (
+              {/* Père / Mère / Autre — pour les parents uniquement, jamais pour enfant ni observateur */}
+              {(role==="parent"||isParentInvite) && !isChildInvite && !isObsInvite && (
                 <div className="field">
                   <label className="lbl">{t.regYouAre||"Vous êtes"}</label>
                   <div style={{display:"flex",gap:8}}>
@@ -7114,7 +7149,7 @@ function StepAccess() {
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontWeight:800,fontSize:13}}>{m.displayName || m.email || "Parent invité"}</div>
               {m.displayName && m.email && <div style={{fontSize:10,color:C.mut}}>{m.email}</div>}
-              <div style={{fontSize:11,color:C.mut}}>Souhaite rejoindre cette famille</div>
+              <div style={{fontSize:11,color:C.mut}}>{m.role==="observer"?`${t.roleObs||"Observateur"} — ${t.obsPendingInfo||"souhaite rejoindre la famille"}`:t.obsPendingInfo||"Souhaite rejoindre cette famille"}</div>
             </div>
             <button disabled={pendingActionId===m.userId} onClick={async ()=>{
               setPendingActionId(m.userId);
@@ -7257,6 +7292,15 @@ function StepAccess() {
             <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>{t.obsNotes||"📝 Notes"}</div>
             <textarea value={o.notes||""} onChange={e=>setObsField("notes",e.target.value)} rows={2} placeholder={t.obsNotesPh||"Informations utiles, accès maison…"} style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt,resize:"vertical"}} />
           </div>
+          {/* canGuard toggle dans la fiche active */}
+          <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",marginTop:10,padding:"10px 14px",borderRadius:10,background:o.canGuard?`#f59e0b18`:`${C.bor}22`,border:`1.5px solid ${o.canGuard?"#f59e0b":C.bor}`,transition:"all .2s"}}>
+            <input type="checkbox" checked={!!o.canGuard} onChange={e=>setObsField("canGuard",e.target.checked)}
+              style={{width:18,height:18,accentColor:"#f59e0b",cursor:"pointer",flexShrink:0}} />
+            <div>
+              <div style={{fontSize:13,fontWeight:800,color:o.canGuard?"#f59e0b":C.txt}}>🏠 {t.obsCanGuard||"Peut être gardien"}</div>
+              <div style={{fontSize:11,color:C.mut}}>{t.obsCanGuardDesc||"Apparaît dans le calendrier comme option de garde"}</div>
+            </div>
+          </label>
           {/* Liens rapides */}
           {(o.email||o.phone) && <div style={{display:"flex",gap:8,marginTop:10}}>
             {o.phone&&<a href={`tel:${o.phone.replace(/\s/g,"")}`} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:8,background:`${C.grn}18`,border:`1.5px solid ${C.grn}44`,color:C.grn,textDecoration:"none",fontSize:12,fontWeight:700}}>📞 {t.contactsPhone||"Appeler"}</a>}
