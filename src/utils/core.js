@@ -330,21 +330,50 @@ export function addReader(msg, userId) {
 }
 
 // ── Départ d'un parent (multi-familles) ──────────────────────────────────────
-// Marque comme « parti » (left:true) tout parent dont l'adhésion n'est plus
-// active, SANS le retirer du tableau : son identité (nom, couleur) reste à sa
-// place pour préserver l'attribution des dépenses et de la garde, qui sont
-// indexées par POSITION. Un parent redevenu actif (ré-invitation acceptée)
-// repasse non-parti. Retourne un nouveau tableau si quelque chose change, sinon
-// null (pour éviter un setCfg inutile).
-export function markDepartedParents(parents, inactiveUserIds) {
+// Marque comme « parti » (left:true) les fiches parents dont le membre n'est
+// plus actif, SANS ré-indexer (l'identité reste en place → dépenses/garde,
+// indexées par position, restent valides). Un parent ré-invité redevient actif.
+//
+// Détection robuste — car le CRÉATEUR n'a jamais de `userId` écrit dans sa
+// fiche (seul l'invité en reçoit un à la connexion) :
+//   • on identifie « ma » fiche par userId OU par email → jamais marquée ;
+//   • une invitation encore en attente (inviteStatus:"pending") → jamais marquée ;
+//   • une fiche à userId inactif → marquée (cas invité parti) ;
+//   • s'il reste des départs « inexpliqués » (membres removed sans fiche à
+//     userId = créateur parti), on marque par élimination les fiches restantes
+//     (non-moi, non-actives, non-en-attente), au plus autant que de départs.
+//
+// opts = { activeIds:Set|[], inactiveIds:Set|[], myUid, myEmail }
+// Retourne un nouveau tableau si changement, sinon null.
+export function markDepartedParents(parents, opts = {}) {
   if (!Array.isArray(parents)) return null;
-  const inactive = inactiveUserIds instanceof Set ? inactiveUserIds : new Set(inactiveUserIds || []);
+  const toSet = (v) => (v instanceof Set ? v : new Set(v || []));
+  const active = toSet(opts.activeIds);
+  const inactive = toSet(opts.inactiveIds);
+  const myUid = opts.myUid || null;
+  const myEmailLc = (opts.myEmail || "").toLowerCase();
+  const isMe = (p) => !!p && ((myUid && p.userId === myUid) ||
+    (!!p.email && !!myEmailLc && p.email.toLowerCase() === myEmailLc));
+
+  // Départs déjà expliqués par une fiche à userId inactif.
+  let explained = 0;
+  for (const p of parents) if (p && p.userId && inactive.has(p.userId)) explained++;
+  let unexplained = Math.max(0, inactive.size - explained); // ex. créateur parti (fiche sans userId)
+
   let changed = false;
-  const out = parents.map(p => {
+  const out = parents.map((p) => {
     if (!p) return p;
-    const gone = !!(p.userId && inactive.has(p.userId));
-    if (gone && !p.left) { changed = true; return { ...p, left: true }; }
-    if (!gone && p.left) { changed = true; const { left, ...rest } = p; return rest; }
+    const mine = isMe(p);
+    const activeOther = !!(p.userId && active.has(p.userId));
+    const pending = p.inviteStatus === "pending";
+    const departedByUserId = !!(p.userId && inactive.has(p.userId));
+    let shouldLeave = false;
+    if (mine || activeOther || pending) shouldLeave = false;
+    else if (departedByUserId) shouldLeave = true;
+    else if (!p.userId && unexplained > 0 && (p.email || p.name)) { shouldLeave = true; unexplained--; }
+
+    if (shouldLeave && !p.left) { changed = true; return { ...p, left: true }; }
+    if (!shouldLeave && p.left) { changed = true; const { left, ...rest } = p; return rest; }
     return p;
   });
   return changed ? out : null;

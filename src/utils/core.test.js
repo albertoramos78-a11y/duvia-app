@@ -310,35 +310,48 @@ test("isParentEmailLocked : créneau parent 2 vierge éditable par le créateur 
 
 import { markDepartedParents, effectiveCreatorIdx } from "./core.js";
 
-test("markDepartedParents : le créateur (slot 0) parti est marqué left, le restant intact", () => {
-  const parents = [{ userId: "A", name: "Papa" }, { userId: "B", name: "Maman" }];
-  const out = markDepartedParents(parents, new Set(["A"]));
+test("markDepartedParents : créateur parti SANS userId (cas réel) marqué left par élimination", () => {
+  const parents = [{ name: "pere3@g.fr", email: "pere3@g.fr" }, { userId: "B", name: "mere3", email: "mere3@g.fr" }];
+  const out = markDepartedParents(parents, {
+    activeIds: ["B"], inactiveIds: ["A"], myUid: "B", myEmail: "mere3@g.fr",
+  });
   assert.equal(out[0].left, true);
-  assert.equal(out[1].left, undefined);  // le restant n'est pas touché
-  assert.equal(out[1].name, "Maman");
+  assert.equal(out[1].left, undefined);
 });
 
-test("markDepartedParents : préserve la position (pas de ré-indexation)", () => {
-  const parents = [{ userId: "A" }, { userId: "B" }];
-  const out = markDepartedParents(parents, new Set(["A"]));
-  assert.equal(out.length, 2);          // longueur inchangée → dépenses/garde restent valides
-  assert.equal(out[1].userId, "B");      // B reste en position 1
+test("markDepartedParents : invité parti AVEC userId marqué left", () => {
+  const parents = [{ userId: "A", email: "a@x.fr" }, { userId: "B", email: "b@x.fr" }];
+  const out = markDepartedParents(parents, { activeIds: ["A"], inactiveIds: ["B"], myUid: "A", myEmail: "a@x.fr" });
+  assert.equal(out[1].left, true);
+  assert.equal(out[0].left, undefined);
+});
+
+test("markDepartedParents : ma propre fiche n'est jamais marquée (match par email, sans userId)", () => {
+  const parents = [{ name: "moi", email: "moi@x.fr" }, { userId: "B", email: "b@x.fr" }];
+  const out = markDepartedParents(parents, { activeIds: ["me", "B"], inactiveIds: [], myUid: "me", myEmail: "moi@x.fr" });
+  assert.equal(out, null);
+});
+
+test("markDepartedParents : aucun départ → une fiche parent2 vierge n'est PAS marquée", () => {
+  const parents = [{ name: "moi", email: "moi@x.fr" }, { name: "", email: "" }];
+  assert.equal(markDepartedParents(parents, { activeIds: ["me"], inactiveIds: [], myUid: "me", myEmail: "moi@x.fr" }), null);
+});
+
+test("markDepartedParents : invitation en attente jamais marquée même s'il y a un départ", () => {
+  const parents = [{ name: "moi", email: "moi@x.fr" }, { email: "invite@x.fr", inviteStatus: "pending" }];
+  const out = markDepartedParents(parents, { activeIds: ["me"], inactiveIds: ["gone"], myUid: "me", myEmail: "moi@x.fr" });
+  assert.equal(out, null);
 });
 
 test("markDepartedParents : idempotent (déjà marqué → null)", () => {
-  const parents = [{ userId: "A", left: true }, { userId: "B" }];
-  assert.equal(markDepartedParents(parents, new Set(["A"])), null);
+  const parents = [{ email: "pere@x.fr", left: true }, { userId: "B", email: "mere@x.fr" }];
+  assert.equal(markDepartedParents(parents, { activeIds: ["B"], inactiveIds: ["A"], myUid: "B", myEmail: "mere@x.fr" }), null);
 });
 
-test("markDepartedParents : ré-invitation acceptée → le parent redevient non-parti", () => {
-  const parents = [{ userId: "A", left: true }, { userId: "B" }];
-  const out = markDepartedParents(parents, new Set()); // A de nouveau actif
+test("markDepartedParents : ré-invitation acceptée → la fiche redevient non-partie", () => {
+  const parents = [{ userId: "A", email: "a@x.fr", left: true }, { userId: "B", email: "b@x.fr" }];
+  const out = markDepartedParents(parents, { activeIds: ["A", "B"], inactiveIds: [], myUid: "B", myEmail: "b@x.fr" });
   assert.equal("left" in out[0], false);
-});
-
-test("markDepartedParents : un parent sans userId (en attente) n'est jamais marqué parti", () => {
-  const parents = [{ userId: "A" }, { name: "Invité en attente" }];
-  assert.equal(markDepartedParents(parents, new Set(["A"]))[1].left, undefined);
 });
 
 test("effectiveCreatorIdx : créateur présent → 0", () => {
@@ -346,7 +359,7 @@ test("effectiveCreatorIdx : créateur présent → 0", () => {
 });
 
 test("effectiveCreatorIdx : créateur parti → le parent restant (1) devient créateur", () => {
-  assert.equal(effectiveCreatorIdx([{ userId: "A", left: true }, { userId: "B" }]), 1);
+  assert.equal(effectiveCreatorIdx([{ left: true }, { userId: "B" }]), 1);
 });
 
 test("effectiveCreatorIdx : tableau vide ou tous partis → 0 (défaut sûr)", () => {
