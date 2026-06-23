@@ -1960,24 +1960,43 @@ function useFamilySync(cfg, setCfg) {
       if ((m.role || "parent") === "parent") {
         setCfg(c => ({ ...c, parents: insertValidatedParent(c.parents, m) }));
       } else if (m.role === "observer") {
-        // Observateur Supabase validé → l'ajouter à cfg.observers (actif).
-        // 🔧 CORRECTIF : récupérer canGuard depuis l'invite originale dans cfg.observers
-        // (stockée au moment de la création du lien) plutôt que de hardcoder false.
+        // Observateur Supabase validé → mettre à jour la fiche existante en "active".
+        // On cherche la fiche d'origine par userId, id local, ou email (quand disponible).
+        // Si trouvée : on la met à jour sur place (pas de création de doublon).
+        // Si non trouvée (cas rare) : on crée une nouvelle entrée active.
         setCfg(c => {
-          const originalInvite = (c.observers||[]).find(o =>
-            String(o.id) === String(m.userId) || o.userId === m.userId ||
-            (m.email && o.email === m.email)
-          );
+          const matchFn = o =>
+            String(o.id) === String(m.userId) ||
+            o.userId === m.userId ||
+            (m.email && o.email && o.email === m.email) ||
+            (m.displayName && (m.displayName === o.email || m.displayName === o.name));
+
+          const originalInvite = (c.observers||[]).find(matchFn);
+
+          if (originalInvite) {
+            // ✅ Mise à jour en place : on préserve toutes les données de la fiche existante
+            return {
+              ...c,
+              observers: (c.observers||[]).map(o =>
+                matchFn(o)
+                  ? { ...o, id: m.userId, userId: m.userId,
+                      status: "active",
+                      name: o.name && o.name !== "Observateur" ? o.name : (m.displayName||m.email||o.name||"Observateur"),
+                      email: o.email || m.email || "" }
+                  : o
+              )
+            };
+          }
+          // Fallback : aucune fiche existante trouvée → on en crée une nouvelle
           return {
             ...c,
             observers: [
-              ...(c.observers||[]).filter(o => String(o.id) !== String(m.userId) && o.userId !== m.userId),
-              { id: m.userId, userId: m.userId, name: m.displayName||m.email||"Observateur",
-                email: m.email||"", phone: originalInvite?.phone||"",
-                address: originalInvite?.address||"",
-                role: originalInvite?.role||"grandparent",
-                status:"active",
-                canGuard: originalInvite?.canGuard||false }
+              ...(c.observers||[]),
+              { id: m.userId, userId: m.userId,
+                name: m.displayName||m.email||"Observateur",
+                email: m.email||"", phone: "",
+                address: "", role: "grandparent",
+                status:"active", canGuard: false }
             ]
           };
         });
