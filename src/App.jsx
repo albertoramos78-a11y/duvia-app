@@ -2007,6 +2007,8 @@ function useFamilySync(cfg, setCfg) {
         // Si non trouvée (cas rare) : on crée une nouvelle entrée active.
         setCfg(c => {
           const matchFn = o =>
+            // 🔧 obsCardId = ID direct de la carte passé par l'appelant — fiable à 100%
+            (m.obsCardId && String(o.id) === String(m.obsCardId)) ||
             String(o.id) === String(m.userId) ||
             o.userId === m.userId ||
             (m.email && o.email && o.email === m.email) ||
@@ -7339,7 +7341,12 @@ function StepAccess() {
             </div>
             <button disabled={pendingActionId===m.userId} onClick={async ()=>{
               setPendingActionId(m.userId);
-              const res = await familySync.validateMember(m);
+              // 🔧 Cherche la carte observateur correspondante pour passer son ID direct
+              const obsCard = m.role==="observer" ? (cfg.observers||[]).find(o=>
+                (m.email && o.email && o.email===m.email) ||
+                (m.displayName && (o.email===m.displayName || o.name===m.displayName))
+              ) : null;
+              const res = await familySync.validateMember(obsCard ? {...m, obsCardId: obsCard.id} : m);
               setPendingActionId(null);
               if(!res.ok) alert("⚠️ Erreur lors de la validation.");
             }} style={{padding:"7px 12px",background:C.grn,color:"#fff",borderRadius:8,fontSize:12,fontWeight:800,opacity:pendingActionId===m.userId?0.6:1}}>✅ Valider</button>
@@ -7500,7 +7507,7 @@ function StepAccess() {
             <div style={{marginTop:12,display:"flex",gap:8}}>
               <button disabled={pendingActionId===matchingPending.userId} onClick={async()=>{
                 setPendingActionId(matchingPending.userId);
-                const res = await familySync.validateMember(matchingPending);
+                const res = await familySync.validateMember({...matchingPending, obsCardId: o.id});
                 setPendingActionId(null);
                 if(!res.ok) alert("⚠️ Erreur lors de la validation.");
               }} style={{flex:1,height:42,background:C.grn,color:"#fff",fontSize:13,fontWeight:800,borderRadius:10,opacity:pendingActionId===matchingPending.userId?0.6:1}}>✅ {t.obsApprove||"Valider"}</button>
