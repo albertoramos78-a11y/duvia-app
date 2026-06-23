@@ -1803,8 +1803,8 @@ function useFamilySync(cfg, setCfg) {
         const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
         if (signInErr) throw signInErr;
       }
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      return { ok: true, userId: authUser?.id };
+      const getUserRes = await supabase.auth.getUser();
+      return { ok: true, userId: getUserRes.data?.user?.id };
     } catch (e) {
       console.error("[Duvia][sync] linkAccount error:", e);
       return { ok: false, error: e.message || "error" };
@@ -1963,19 +1963,33 @@ function useFamilySync(cfg, setCfg) {
         .eq("status", "pending");
       if (error) throw error;
       if (!pendingRows?.length) { setPendingMembers([]); return; }
-      // L'email reste un complément d'affichage (le nom fait foi côté serveur).
+      // L'email + le token relient le membre DB à la carte locale.
+      // Parents → family_invitations ; observateurs → observer_invitations.
+      const emailByUid = {};
+      const tokenByUid = {};
       const { data: invRows } = await supabase
         .from("family_invitations")
         .select("used_by, email")
         .eq("family_id", familyIdRef.current)
         .not("used_by", "is", null);
-      const emailByUid = {};
       (invRows || []).forEach(r => { if (r.used_by) emailByUid[r.used_by] = r.email; });
+      const { data: obsInvRows } = await supabase
+        .from("observer_invitations")
+        .select("used_by, email, token")
+        .eq("family_id", familyIdRef.current)
+        .not("used_by", "is", null);
+      (obsInvRows || []).forEach(r => {
+        if (r.used_by) {
+          if (r.email) emailByUid[r.used_by] = r.email;
+          if (r.token) tokenByUid[r.used_by] = r.token;
+        }
+      });
       setPendingMembers(pendingRows.map(r => ({
         userId: r.user_id, role: r.role, joinedAt: r.joined_at,
         displayName: r.display_name || null,
         gender: r.gender || null,
         email: emailByUid[r.user_id] || null,
+        inviteToken: tokenByUid[r.user_id] || null,
       })));
     } catch (e) {
       console.warn("[Duvia][sync] refreshPendingMembers failed:", e);
@@ -2007,7 +2021,9 @@ function useFamilySync(cfg, setCfg) {
         // Si non trouvée (cas rare) : on crée une nouvelle entrée active.
         setCfg(c => {
           const matchFn = o =>
-            // 🔧 obsCardId = ID direct de la carte passé par l'appelant — fiable à 100%
+            // 🔑 Token = clé fiable à 100% reliant la carte pending_invite au membre DB
+            (m.inviteToken && o.inviteToken && o.inviteToken === m.inviteToken) ||
+            // obsCardId = ID direct passé par l'appelant
             (m.obsCardId && String(o.id) === String(m.obsCardId)) ||
             String(o.id) === String(m.userId) ||
             o.userId === m.userId ||
@@ -4482,7 +4498,11 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
       const { data: obsFamId, error: obsErr } = await supabase.rpc("accept_observer_invitation", { p_token: obsInviteCode.code });
       if(obsErr){
         const msg = obsErr.message||"";
-        setErr(msg.includes("expired")?t.obsInvErrExpired:msg.includes("used")?t.obsInvErrUsed:t.obsInvErrInvalid);
+        const errMsg = msg.includes("expired") ? (t.obsInvErrExpired||"❌ Ce lien a expiré.") :
+                       msg.includes("used")    ? (t.obsInvErrUsed||"❌ Ce lien a déjà été utilisé. Demandez un nouveau lien au parent.") :
+                                                 (t.obsInvErrInvalid||"❌ Lien invalide. Vérifiez que vous avez bien ouvert le bon lien.");
+        setErr(errMsg);
+        console.error("[Duvia] accept_observer_invitation error:", msg);
       } else {
         try{ window.localStorage.setItem("duvia_family_id", obsFamId); }catch{}
         onObsJoin({id:realUserId,name:cleanName,email:cleanEmail,phone:regPhoneId||undefined,role:"observer",obsRole:parentGender||"grandparent",status:"pending",inviteCode:obsInviteCode.code});
@@ -7421,7 +7441,8 @@ function StepAccess() {
         // comme display_name dans family_members par accept_observer_invitation)
         const matchingPending = familySync.pendingMembers.find(m=>
           m.role==="observer" && (
-            (m.email && m.email===o.email) ||
+            (m.inviteToken && o.inviteToken && m.inviteToken===o.inviteToken) ||
+            (m.email && o.email && m.email===o.email) ||
             String(m.userId)===String(o.userId) ||
             (m.displayName && (m.displayName===o.email || m.displayName===o.name))
           )
