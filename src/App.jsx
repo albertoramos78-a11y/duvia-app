@@ -5380,6 +5380,10 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
   const [showTip, setShowTip] = useState(true);
   function dismissTip() { setShowTip(false); }
 
+  // Replier/déplier chaque fiche enfant (1er enfant ouvert par défaut)
+  const [expandedChildren, setExpandedChildren] = useState(()=>new Set([0]));
+  const toggleChild = i => setExpandedChildren(s => { const n=new Set(s); n.has(i)?n.delete(i):n.add(i); return n; });
+
   return (
     <div>
       <FamilySyncCard />
@@ -7165,9 +7169,6 @@ function StepAccess() {
     setCfg(c=>({...c,observers:c.observers.filter(o=>o.id!==id)}));
     pushNotif(`${obs?.name||obs?.email} — ${t.obsRejected}`,"info");
   }
-
-  const [expandedChildren, setExpandedChildren] = React.useState(()=>new Set([0])); // 1er enfant ouvert par défaut
-  const toggleChild = i => setExpandedChildren(s => { const n=new Set(s); n.has(i)?n.delete(i):n.add(i); return n; });
 
   return (
     <div>
