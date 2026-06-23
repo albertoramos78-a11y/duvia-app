@@ -7226,9 +7226,9 @@ function StepAccess() {
         <button onClick={()=>familySync.refreshPendingMembers()} style={{background:"transparent",color:C.vio,fontSize:11,fontWeight:700,padding:"2px 8px"}}>🔄 Actualiser</button>
       </div>
       <div className="card" style={{marginBottom:16}}>
-        {familySync.pendingMembers.length===0 ? (
+        {familySync.pendingMembers.filter(m=>m.role!=="observer").length===0 ? (
           <div style={{fontSize:13,color:C.mut,textAlign:"center",padding:"6px 0"}}>Aucune demande en attente.</div>
-        ) : familySync.pendingMembers.map(m => (
+        ) : familySync.pendingMembers.filter(m=>m.role!=="observer").map(m => (
           <div key={m.userId} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${C.bor}`}}>
             <div style={{width:36,height:36,borderRadius:"50%",background:`${C.yel}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>⏳</div>
             <div style={{flex:1,minWidth:0}}>
@@ -7255,29 +7255,7 @@ function StepAccess() {
       </>
       )}
 
-      {/* ── Pending approvals ── */}
-      {pending.length>0&&(
-        <div style={{marginBottom:16}}>
-          <div className="sec">🔔 {t.obsPendingTitle} ({pending.length})</div>
-          {pending.map(o=>(
-            <div key={o.id} className="card" style={{marginBottom:10,borderColor:`${C.yel}88`,background:`${C.yel}08`}}>
-              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-                <div style={{width:38,height:38,borderRadius:"50%",background:`linear-gradient(135deg,${C.yel},${C.ora})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>⏳</div>
-                <div style={{flex:1}}>
-                  <div style={{fontWeight:800,fontSize:14}}>{o.name||o.email}</div>
-                  <div style={{fontSize:12,color:C.mut}}>{o.email}</div>
-                  <span className="badge" style={{background:`${C.yel}22`,color:C.yel,marginTop:4,display:"inline-block"}}>{rl[o.role]||o.role} · {t.obsStatusPending}</span>
-                </div>
-              </div>
-              <div style={{fontSize:13,color:C.mut,marginBottom:12}}>{o.name||o.email} {t.obsPendingInfo}</div>
-              <div style={{display:"flex",gap:8}}>
-                <button onClick={()=>approveObs(o.id)} style={{flex:1,background:C.grn,color:"#fff",height:40,fontSize:13,fontWeight:800}}>{t.obsApprove}</button>
-                <button onClick={()=>rejectObs(o.id)} style={{flex:1,background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,height:40,fontSize:13,fontWeight:700}}>{t.obsReject}</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Pending approvals déplacés dans les fiches observateurs ci-dessous */}
 
       {/* ── Invite form ── */}
       <div className="sec">📨 {t.obsInviteTitle}</div>
@@ -7320,17 +7298,7 @@ function StepAccess() {
             {genErr && <div style={{fontSize:11,color:C.red,marginTop:8,lineHeight:1.4}}>{genErr}</div>}
           </>
         ):(
-          <div>
-            <div style={{fontSize:11,color:C.grn,marginBottom:8}}>✅ {t.obsInviteExpiry}</div>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              <button onClick={handleSendSMS} disabled={!phone} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:phone?"pointer":"not-allowed",opacity:phone?1:.4,background:"#25D36618",color:"#128C7E",border:"1.5px solid #25D36644"}}>💬 SMS</button>
-              <button onClick={handleSendWhatsApp} disabled={!phone} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:phone?"pointer":"not-allowed",opacity:phone?1:.4,background:"#25D36618",color:"#25D366",border:"1.5px solid #25D36644"}}><span style={{fontSize:14}}>📱</span> WhatsApp</button>
-              <button onClick={handleSendEmail} disabled={!email} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:email?"pointer":"not-allowed",opacity:email?1:.4,background:`${C.vio}18`,color:C.vio,border:`1.5px solid ${C.vio}44`}}>✉️ Email</button>
-              <button onClick={copyInvite} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:copied?`${C.grn}18`:C.sur,color:copied?C.grn:C.mut,border:`1.5px solid ${C.bor}`}}>
-                {copied ? "✅ Copié !" : "📋 Copier"}
-              </button>
-            </div>
-          </div>
+          <div style={{fontSize:12,color:C.grn,padding:"8px 0"}}>✅ {t.obsInviteExpiry||"Lien généré — envoyez-le via la fiche ci-dessous"}</div>
         )}
       </div>
       {sent && (
@@ -7342,8 +7310,14 @@ function StepAccess() {
       <div className="sec">{t.observersTitle} ({active.length})</div>
       {active.length===0?<div style={{textAlign:"center",padding:28,color:C.mut}}><div style={{fontSize:32,marginBottom:8}}>👥</div>{t.noObs}</div>:active.map(o=>{
         const setObsField=(field,val)=>setCfg(c=>({...c,observers:c.observers.map(x=>x.id===o.id?{...x,[field]:val}:x)}));
+        // Observer pending validation (clicked the link, awaiting parent approval)
+        const matchingPending = familySync.pendingMembers.find(m=>
+          m.role==="observer" && (m.email===o.email || String(m.userId)===String(o.userId))
+        );
+        // Invite link sent for this specific card
+        const cardSentUrl = (sent && o.inviteToken && typeof sent==="string" && sent.includes(o.inviteToken)) ? sent : null;
         return (
-        <div key={o.id} className="card" style={{marginBottom:12,borderColor:`${C.ora}55`}}>
+        <div key={o.id} className="card" style={{marginBottom:12,borderColor:matchingPending?`${C.grn}88`:o.status==="pending_invite"?`${C.yel}55`:`${C.ora}55`}}>
           {/* Header */}
           <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
             <div style={{width:40,height:40,borderRadius:"50%",background:o.status==="pending_invite"?`${C.mut}22`:`linear-gradient(135deg,${C.ora},${C.pin})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,filter:o.status==="pending_invite"?"grayscale(1)":"none"}}>
@@ -7351,9 +7325,11 @@ function StepAccess() {
             </div>
             <div style={{flex:1}}>
               <div style={{fontWeight:800,fontSize:14,color:C.txt}}>{o.name}</div>
-              {o.status==="pending_invite"
-                ? <span className="badge" style={{background:`${C.yel}22`,color:C.yel,display:"inline-block",marginTop:2}}>⏳ En attente — lien non encore cliqué</span>
-                : <span className="badge" style={{background:`${C.grn}22`,color:C.grn,display:"inline-block",marginTop:2}}>{rl[o.role]||o.role} · {t.obsStatusActive}</span>
+              {matchingPending
+                ? <span className="badge" style={{background:`${C.grn}22`,color:C.grn,display:"inline-block",marginTop:2}}>🔔 A rejoint — en attente de validation</span>
+                : o.status==="pending_invite"
+                  ? <span className="badge" style={{background:`${C.yel}22`,color:C.yel,display:"inline-block",marginTop:2}}>⏳ En attente — lien non encore cliqué</span>
+                  : <span className="badge" style={{background:`${C.grn}22`,color:C.grn,display:"inline-block",marginTop:2}}>{rl[o.role]||o.role} · {t.obsStatusActive}</span>
               }
             </div>
             <button onClick={()=>setCfg(c=>({...c,observers:c.observers.filter(x=>x.id!==o.id)}))} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.remove}</button>
@@ -7380,11 +7356,7 @@ function StepAccess() {
             <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>🏠 {t.obsAddress||"📍 Adresse postale"}</div>
             <input value={o.address||""} onChange={e=>setObsField("address",e.target.value)} placeholder={t.obsAddressPh||"Numéro, rue, code postal, ville"} style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt}} />
           </div>
-          {/* Notes */}
-          <div>
-            <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>{t.obsNotes||"📋 Observation"}</div>
-            <textarea value={o.notes||""} onChange={e=>setObsField("notes",e.target.value)} rows={2} placeholder={t.obsNotesPh||"Informations utiles, habitudes…"} style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt,resize:"vertical"}} />
-          </div>
+          {/* Notes supprimées (simplification UX) */}
           {/* canGuard toggle dans la fiche active */}
           <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",marginTop:10,padding:"10px 14px",borderRadius:10,background:o.canGuard?`#f59e0b18`:`${C.bor}22`,border:`1.5px solid ${o.canGuard?"#f59e0b":C.bor}`,transition:"all .2s"}}>
             <input type="checkbox" checked={!!o.canGuard} onChange={e=>setObsField("canGuard",e.target.checked)}
@@ -7394,11 +7366,42 @@ function StepAccess() {
               <div style={{fontSize:11,color:C.mut}}>{t.obsCanGuardDesc||"Apparaît dans le calendrier comme option de garde"}</div>
             </div>
           </label>
-          {/* Liens rapides */}
-          {(o.email||o.phone) && <div style={{display:"flex",gap:8,marginTop:10}}>
-            {o.phone&&<a href={`tel:${o.phone.replace(/\s/g,"")}`} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:8,background:`${C.grn}18`,border:`1.5px solid ${C.grn}44`,color:C.grn,textDecoration:"none",fontSize:12,fontWeight:700}}>📞 {t.contactsPhone||"Appeler"}</a>}
-            {o.email&&<a href={`mailto:${o.email}`} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:8,background:`${C.vio}18`,border:`1.5px solid ${C.vio}44`,color:C.vio,textDecoration:"none",fontSize:12,fontWeight:700}}>✉️ Email</a>}
+          {/* Liens rapides — appel uniquement */}
+          {o.phone && !matchingPending && <div style={{display:"flex",gap:8,marginTop:10}}>
+            <a href={`tel:${o.phone.replace(/\s/g,"")}`} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:8,background:`${C.grn}18`,border:`1.5px solid ${C.grn}44`,color:C.grn,textDecoration:"none",fontSize:12,fontWeight:700}}>📞 {t.contactsPhone||"Appeler"}</a>
           </div>}
+          {/* Boutons envoi lien (déplacés depuis le bloc invite) */}
+          {cardSentUrl && (
+            <div style={{marginTop:12,padding:"10px 12px",borderRadius:10,background:`${C.yel}10`,border:`1.5px solid ${C.yel}44`}}>
+              <div style={{fontSize:11,color:C.grn,marginBottom:8,fontWeight:700}}>✅ {t.obsInviteExpiry||"Lien généré — partagez-le :"}</div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                <button onClick={handleSendSMS} disabled={!o.phone} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:o.phone?"pointer":"not-allowed",opacity:o.phone?1:.4,background:"#25D36618",color:"#128C7E",border:"1.5px solid #25D36644"}}>💬 SMS</button>
+                <button onClick={handleSendWhatsApp} disabled={!o.phone} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:o.phone?"pointer":"not-allowed",opacity:o.phone?1:.4,background:"#25D36618",color:"#25D366",border:"1.5px solid #25D36644"}}><span style={{fontSize:14}}>📱</span> WhatsApp</button>
+                <button onClick={handleSendEmail} disabled={!o.email} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:o.email?"pointer":"not-allowed",opacity:o.email?1:.4,background:`${C.vio}18`,color:C.vio,border:`1.5px solid ${C.vio}44`}}>✉️ Email</button>
+                <button onClick={copyInvite} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:copied?`${C.grn}18`:C.sur,color:copied?C.grn:C.mut,border:`1.5px solid ${C.bor}`}}>
+                  {copied ? "✅ Copié !" : "📋 Copier"}
+                </button>
+              </div>
+            </div>
+          )}
+          {/* Valider / Refuser l'observateur (sur sa fiche) */}
+          {matchingPending && (
+            <div style={{marginTop:12,display:"flex",gap:8}}>
+              <button disabled={pendingActionId===matchingPending.userId} onClick={async()=>{
+                setPendingActionId(matchingPending.userId);
+                const res = await familySync.validateMember(matchingPending);
+                setPendingActionId(null);
+                if(!res.ok) alert("⚠️ Erreur lors de la validation.");
+              }} style={{flex:1,height:42,background:C.grn,color:"#fff",fontSize:13,fontWeight:800,borderRadius:10,opacity:pendingActionId===matchingPending.userId?0.6:1}}>✅ {t.obsApprove||"Valider"}</button>
+              <button disabled={pendingActionId===matchingPending.userId} onClick={async()=>{
+                if(!window.confirm("Refuser cette demande ?")) return;
+                setPendingActionId(matchingPending.userId);
+                const res = await familySync.rejectMember(matchingPending.userId);
+                setPendingActionId(null);
+                if(!res.ok) alert("⚠️ Erreur lors du refus.");
+              }} style={{padding:"0 16px",height:42,background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,fontSize:13,fontWeight:700,borderRadius:10,opacity:pendingActionId===matchingPending.userId?0.6:1}}>❌ {t.obsReject||"Refuser"}</button>
+            </div>
+          )}
         </div>
       );})}
     </div>
