@@ -1332,6 +1332,7 @@ function useFamilySync(cfg, setCfg) {
   const [families, setFamilies] = useState([]); // [{id,label}] — familles validées (status=active) de ce compte
   const [pendingMembers, setPendingMembers] = useState([]); // [{userId,email,role,joinedAt}] — en attente de ma validation
   const [pendingApproval, setPendingApproval] = useState(false); // ce compte n'a qu'une adhésion "pending", pas d'accès
+  const [removedObserver, setRemovedObserver] = useState(false); // observateur retiré → page no-access
   const familyIdRef = useRef(null);
   const skipNextSave = useRef(true);
   const saveTimer = useRef(null);
@@ -1431,6 +1432,7 @@ function useFamilySync(cfg, setCfg) {
         let familyId = null;
         let hasPendingOnly = false;
         let wasRemoved = false;
+        let wasRemovedObserver = false;
         let membershipQueryFailed = false;
         try {
           const { data: memberships, error: memErr } = await supabase
@@ -1458,8 +1460,13 @@ function useFamilySync(cfg, setCfg) {
             hasPendingOnly = true;
           } else if ((memberships || []).some(m => m.status === "removed")) {
             // 🔧 Le compte a été RETIRÉ de sa (seule) famille par l'inviteur →
-            // on repart sur une famille vierge, seul (cf. branche plus bas).
-            wasRemoved = true;
+            // Distinguer : observateur retiré (→ page "no access") vs parent (→ famille vierge)
+            const removedAsMember = (memberships || []).find(m => m.status === "removed");
+            if (removedAsMember?.role === "observer") {
+              wasRemovedObserver = true;
+            } else {
+              wasRemoved = true;
+            }
           }
         } catch (e) {
           console.warn("[Duvia][sync] membership lookup failed:", e);
@@ -1468,6 +1475,12 @@ function useFamilySync(cfg, setCfg) {
 
         if (hasPendingOnly) {
           if (!cancelled) { setPendingApproval(true); setSyncStatus("synced"); }
+          return;
+        }
+
+        // 🔧 Observateur retiré → page "no access" (pas de nouvelle famille)
+        if (wasRemovedObserver) {
+          if (!cancelled) { setRemovedObserver(true); setSyncStatus("synced"); }
           return;
         }
 
@@ -3138,6 +3151,23 @@ export default function App() {
       ) : (
         <LoginScreen C={C} t={t} lang={lang} setLang={setLang} themeMode={themeMode} cycleTheme={cycleTheme} users={users} setUsers={setUsers} onLogin={handleLogin} onObsJoin={handleObsJoin} familySync={familySync} cfg={cfg} setCfg={setCfg} />
       )}
+    </div>
+  );
+
+  // Page "no access" pour observateur retiré de la famille
+  if(removedObserver) return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
+      <div style={{textAlign:"center",maxWidth:340}}>
+        <div style={{fontSize:48,marginBottom:12}}>🚫</div>
+        <div style={{fontWeight:900,fontSize:18,marginBottom:10,color:C.txt}}>Accès retiré</div>
+        <div style={{fontSize:14,color:C.mut,lineHeight:1.7,marginBottom:24}}>
+          Tu n'as plus accès à cette famille. Si tu penses que c'est une erreur, contacte le parent responsable.
+        </div>
+        <button onClick={()=>handleSetUser(null)}
+          style={{height:44,padding:"0 24px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13,borderRadius:10}}>
+          Se déconnecter
+        </button>
+      </div>
     </div>
   );
 
@@ -7297,9 +7327,7 @@ function StepAccess() {
             </button>
             {genErr && <div style={{fontSize:11,color:C.red,marginTop:8,lineHeight:1.4}}>{genErr}</div>}
           </>
-        ):(
-          <div style={{fontSize:12,color:C.grn,padding:"8px 0"}}>✅ {t.obsInviteExpiry||"Lien généré — envoyez-le via la fiche ci-dessous"}</div>
-        )}
+        ):null}
       </div>
       {sent && (
         <button onClick={()=>{setSent(false);setCopied(false);setEmail("");setPhone("");setAddress("");setRole("grandparent");setCanGuard(false);}}
@@ -7311,8 +7339,14 @@ function StepAccess() {
       {active.length===0?<div style={{textAlign:"center",padding:28,color:C.mut}}><div style={{fontSize:32,marginBottom:8}}>👥</div>{t.noObs}</div>:active.map(o=>{
         const setObsField=(field,val)=>setCfg(c=>({...c,observers:c.observers.map(x=>x.id===o.id?{...x,[field]:val}:x)}));
         // Observer pending validation (clicked the link, awaiting parent approval)
+        // Match par email (family_invitations.used_by) OU displayName (email souvent stocké
+        // comme display_name dans family_members par accept_observer_invitation)
         const matchingPending = familySync.pendingMembers.find(m=>
-          m.role==="observer" && (m.email===o.email || String(m.userId)===String(o.userId))
+          m.role==="observer" && (
+            (m.email && m.email===o.email) ||
+            String(m.userId)===String(o.userId) ||
+            (m.displayName && (m.displayName===o.email || m.displayName===o.name))
+          )
         );
         // Invite link sent for this specific card
         const cardSentUrl = (sent && o.inviteToken && typeof sent==="string" && sent.includes(o.inviteToken)) ? sent : null;
@@ -7332,7 +7366,13 @@ function StepAccess() {
                   : <span className="badge" style={{background:`${C.grn}22`,color:C.grn,display:"inline-block",marginTop:2}}>{rl[o.role]||o.role} · {t.obsStatusActive}</span>
               }
             </div>
-            <button onClick={()=>setCfg(c=>({...c,observers:c.observers.filter(x=>x.id!==o.id)}))} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.remove}</button>
+            <button onClick={async()=>{
+              if(!window.confirm(`Retirer ${o.name||o.email||"cet observateur"} de la famille ?`)) return;
+              // Supprimer de Supabase si l'observateur a un compte (userId)
+              if(o.userId){ await familySync.removeFamilyMember(o.userId); }
+              // Supprimer de cfg local
+              setCfg(c=>({...c,observers:c.observers.filter(x=>x.id!==o.id)}));
+            }} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.remove}</button>
           </div>
           {/* Contact */}
           <div style={{display:"flex",gap:10,marginBottom:10}}>
