@@ -1803,7 +1803,8 @@ function useFamilySync(cfg, setCfg) {
         const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
         if (signInErr) throw signInErr;
       }
-      return { ok: true };
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      return { ok: true, userId: authUser?.id };
     } catch (e) {
       console.error("[Duvia][sync] linkAccount error:", e);
       return { ok: false, error: e.message || "error" };
@@ -4418,6 +4419,8 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     // Exception : l'admin est local uniquement.
     if(finalRole !== "admin"){
       const linkRes = await familySync.linkAccount(cleanEmail, pw, {role:finalRole, parentIdx, name:cleanName, phone:regPhoneId||undefined});
+      // 🔧 UUID réel Supabase — utilisé dans onObsJoin pour que matchFn trouve la carte
+      const realUserId = linkRes.userId || newId;
       if(!linkRes.ok){
         if(linkRes.error === "already_registered"){
           // Email déjà dans Supabase → on annule la création locale et on bloque
@@ -4480,11 +4483,11 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
         setErr(msg.includes("expired")?t.obsInvErrExpired:msg.includes("used")?t.obsInvErrUsed:t.obsInvErrInvalid);
       } else {
         try{ window.localStorage.setItem("duvia_family_id", obsFamId); }catch{}
-        onObsJoin({id:newId,name:cleanName,email:cleanEmail,phone:regPhoneId||undefined,role:"observer",obsRole:parentGender||"grandparent",status:"pending",inviteCode:obsInviteCode.code});
+        onObsJoin({id:realUserId,name:cleanName,email:cleanEmail,phone:regPhoneId||undefined,role:"observer",obsRole:parentGender||"grandparent",status:"pending",inviteCode:obsInviteCode.code});
         setMode("obs_waiting"); setErr("");
       }
     } else if(isObsInvite){
-      onObsJoin({id:newId,name:cleanName,email:cleanEmail,phone:regPhoneId||undefined,role:obsInviteCode.role||"observer",obsRole:parentGender||"grandparent",status:"pending",inviteCode:obsInviteCode.code});
+      onObsJoin({id:realUserId,name:cleanName,email:cleanEmail,phone:regPhoneId||undefined,role:obsInviteCode.role||"observer",obsRole:parentGender||"grandparent",status:"pending",inviteCode:obsInviteCode.code});
       setMode("obs_waiting"); setErr("");
     } else if(isChildInvite && obsInviteCode.isNewChildInvite){
       const { data: childFamId, error: childErr } = await supabase.rpc("accept_child_invitation", { p_token: obsInviteCode.code });
@@ -4584,7 +4587,8 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
         }
         try{ window.localStorage.setItem("duvia_family_id", obsFamId); }catch{}
       }
-      onObsJoin({...updatedUser, role:obsInviteCode.role||"grandparent", status:"pending", inviteCode:obsInviteCode.code});
+      // 🔧 UUID réel depuis signInWithPassword — garantit que matchFn trouve la carte
+      onObsJoin({...updatedUser, id:data.user?.id||updatedUser.id, role:obsInviteCode.role||"grandparent", status:"pending", inviteCode:obsInviteCode.code});
       setMode("obs_waiting"); setErr("");
     } else if(isChildInvite && obsInviteCode.isNewChildInvite){
       const { data: cFid, error: cErr } = await supabase.rpc("accept_child_invitation", { p_token: obsInviteCode.code });
