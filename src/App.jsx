@@ -5716,7 +5716,8 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
               childBirthYear={ch.birthYear||""} childBirthMonth={ch.birthMonth||""} childBirthDay={ch.birthDay||""}
               parentName={cfg.parents[user?.parentIdx??0]?.name||""} />
           )}
-        </div>
+          </>}
+          </div>
           {/* Overlay lock pour enfants hors limite */}
           {isLocked && (
             <div onClick={onUpgrade} style={{position:"absolute",inset:0,borderRadius:12,background:"rgba(0,0,0,.18)",backdropFilter:"blur(0px)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,zIndex:10,cursor:"pointer"}}>
@@ -5933,8 +5934,6 @@ function ChildInviteBtn({ childIdx, childName, childPhone, childEmail, childBirt
             <button onClick={handleCopy} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:copied?`${C.grn}18`:C.sur,color:copied?C.grn:C.mut,border:`1.5px solid ${C.bor}`}}>
               {copied ? "✅ Copié !" : "📋 Copier"}
             </button>
-          </>
-          }
           </div>
           <button onClick={()=>setInviteUrl("")} style={{fontSize:11,color:C.mut,background:"none",border:"none",cursor:"pointer",textDecoration:"underline",padding:0}}>↩️ Regénérer un lien</button>
         </>
