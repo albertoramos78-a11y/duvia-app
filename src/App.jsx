@@ -1592,11 +1592,7 @@ function useFamilySync(cfg, setCfg) {
             if (patched && !cancelled) setCfg(c => ({ ...c, parents: patched }));
           } catch {}
 
-          // 🔧 Réconciliation : marquer « parti » (left) tout parent dont
-          // l'adhésion n'est plus active — SANS ré-indexer (on préserve
-          // l'attribution des dépenses/garde, indexées par position). Couvre
-          // aussi le cas où le CRÉATEUR est parti : le parent restant devient
-          // créateur de fait à l'affichage (effectiveCreatorIdx).
+          // 🔧 Réconciliation parents : marquer « parti » (left) si inactif
           try {
             const { data: mems } = await supabase
               .from("family_members").select("user_id,status").eq("family_id", familyId);
@@ -1607,6 +1603,37 @@ function useFamilySync(cfg, setCfg) {
               setCfg(c => {
                 const next = markDepartedParents(c.parents, { activeIds: active, inactiveIds: inactive, myUid: uid, myEmail: myEmail2 });
                 return next ? { ...c, parents: next } : c;
+              });
+            }
+          } catch {}
+
+          // 🔧 Réconciliation observateurs : ajouter dans cfg.observers tout
+          // membre actif role='observer' présent dans family_members mais absent
+          // du blob — cas typique : validation faite juste avant un rechargement.
+          try {
+            const { data: obsRows } = await supabase
+              .from("family_members")
+              .select("user_id, display_name, role, status")
+              .eq("family_id", familyId)
+              .eq("role", "observer")
+              .eq("status", "active");
+            if (obsRows && obsRows.length > 0 && !cancelled) {
+              setCfg(c => {
+                const existing = new Set((c.observers || []).map(o => String(o.id || o.userId)));
+                const toAdd = obsRows.filter(r => !existing.has(String(r.user_id)));
+                if (!toAdd.length) return c;
+                return {
+                  ...c,
+                  observers: [
+                    ...(c.observers || []),
+                    ...toAdd.map(r => ({
+                      id: r.user_id, userId: r.user_id,
+                      name: r.display_name || "Observateur",
+                      email: "", phone: "", role: "grandparent",
+                      status: "active", canGuard: false,
+                    }))
+                  ]
+                };
               });
             }
           } catch {}
@@ -7031,6 +7058,21 @@ function StepAccess() {
       if (phone) qp.set("ophone", encodeURIComponent(phone));
       const inviteUrl = `https://app.duvia.fr/?${qp.toString()}`;
       setSent(inviteUrl);
+      // 🆕 Afficher l'obs dans la liste immédiatement (statut "en attente du lien")
+      setCfg(c => {
+        const alreadyThere = (c.observers||[]).some(o =>
+          (email && (o.email===email||o.userId===email)) ||
+          (phone && o.phone===phone)
+        );
+        if (alreadyThere) return c;
+        return { ...c, observers: [...(c.observers||[]), {
+          id: `invite-${token.slice(0,8)}`, inviteToken: token,
+          name: email||phone||"Observateur invité",
+          email: email||"", phone: phone||"",
+          address: address||"", role, canGuard,
+          status: "pending_invite",
+        }]};
+      });
     } catch(e){
       setGenErr("⚠️ Erreur lors de la génération du lien. Vérifiez que la migration SQL 0023 est appliquée.");
       console.error("[Duvia] create_observer_invitation:", e);
@@ -7203,6 +7245,11 @@ function StepAccess() {
             <div className="field"><label className="lbl">{t.obsInviteEmail} <span style={{color:C.mut,fontWeight:400}}>({t.optional||"optionnel"})</span></label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="mamie@exemple.fr" /></div>
             <div className="field"><label className="lbl">📞 {t.obsInvitePhone||"Téléphone"} <span style={{color:C.mut,fontWeight:400}}>({t.optional||"optionnel"})</span></label><input type="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} /></div>
             <div style={{fontSize:11,color:C.mut,marginTop:-6,marginBottom:10}}>{t.obsInviteContactHint||"Renseignez au moins un moyen de contact (email ou téléphone)."}</div>
+            {/* Adresse postale */}
+            <div style={{marginBottom:10}}>
+              <label style={{fontSize:11,fontWeight:700,color:C.mut,textTransform:"uppercase",letterSpacing:".05em",display:"block",marginBottom:6}}>📍 {t.obsAddress||"Adresse postale"}</label>
+              <input value={address} onChange={e=>setAddress(e.target.value)} placeholder={t.obsAddressPh||"Numéro, rue, code postal, ville"} style={{width:"100%",boxSizing:"border-box",padding:"10px 14px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:13,background:C.sur,color:C.txt}} />
+            </div>
             <div className="field"><label className="lbl">{t.obsInviteType}</label>
               <CustomSelect value={role} onChange={v=>setRole(v)} options={[
                 {value:"grandparent",label:t.grandparent,icon:"👴"},
@@ -7258,10 +7305,15 @@ function StepAccess() {
         <div key={o.id} className="card" style={{marginBottom:12,borderColor:`${C.ora}55`}}>
           {/* Header */}
           <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
-            <div style={{width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg,${C.ora},${C.pin})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{o.role==="grandparent"?"👴":"👥"}</div>
+            <div style={{width:40,height:40,borderRadius:"50%",background:o.status==="pending_invite"?`${C.mut}22`:`linear-gradient(135deg,${C.ora},${C.pin})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,filter:o.status==="pending_invite"?"grayscale(1)":"none"}}>
+              {o.status==="pending_invite" ? "📨" : (o.role==="grandparent"?"👴":"👥")}
+            </div>
             <div style={{flex:1}}>
               <div style={{fontWeight:800,fontSize:14,color:C.txt}}>{o.name}</div>
-              <span className="badge" style={{background:`${C.grn}22`,color:C.grn,display:"inline-block",marginTop:2}}>{rl[o.role]||o.role} · {t.obsStatusActive}</span>
+              {o.status==="pending_invite"
+                ? <span className="badge" style={{background:`${C.mut}22`,color:C.mut,display:"inline-block",marginTop:2}}>⏳ En attente — lien non encore cliqué</span>
+                : <span className="badge" style={{background:`${C.grn}22`,color:C.grn,display:"inline-block",marginTop:2}}>{rl[o.role]||o.role} · {t.obsStatusActive}</span>
+              }
             </div>
             <button onClick={()=>setCfg(c=>({...c,observers:c.observers.filter(x=>x.id!==o.id)}))} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.remove}</button>
           </div>
@@ -7279,18 +7331,18 @@ function StepAccess() {
           {/* Lien de parenté + Adresse */}
           <div style={{display:"flex",gap:10,marginBottom:10}}>
             <div style={{flex:1}}>
-              <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>{t.obsRelationship||"Lien de parenté"}</div>
-              <input value={o.relationship||""} onChange={e=>setObsField("relationship",e.target.value)} placeholder={t.obsRelationshipPh||"ex : Grand-père maternel…"} style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt}} />
+              <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>{t.obsRelationship||"Lien avec l'enfant"}</div>
+              <input value={o.relationship||""} onChange={e=>setObsField("relationship",e.target.value)} placeholder={t.obsRelationshipPh||"ex : Grand-père de…"} style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt}} />
             </div>
           </div>
           <div style={{marginBottom:10}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>🏠 {t.obsAddress||"Adresse"}</div>
-            <input value={o.address||""} onChange={e=>setObsField("address",e.target.value)} placeholder={t.obsAddressPh||"Rue, code postal, ville"} style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt}} />
+            <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>🏠 {t.obsAddress||"📍 Adresse postale"}</div>
+            <input value={o.address||""} onChange={e=>setObsField("address",e.target.value)} placeholder={t.obsAddressPh||"Numéro, rue, code postal, ville"} style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt}} />
           </div>
           {/* Notes */}
           <div>
-            <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>{t.obsNotes||"📝 Notes"}</div>
-            <textarea value={o.notes||""} onChange={e=>setObsField("notes",e.target.value)} rows={2} placeholder={t.obsNotesPh||"Informations utiles, accès maison…"} style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt,resize:"vertical"}} />
+            <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>{t.obsNotes||"📋 Observation"}</div>
+            <textarea value={o.notes||""} onChange={e=>setObsField("notes",e.target.value)} rows={2} placeholder={t.obsNotesPh||"Informations utiles, habitudes…"} style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt,resize:"vertical"}} />
           </div>
           {/* canGuard toggle dans la fiche active */}
           <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",marginTop:10,padding:"10px 14px",borderRadius:10,background:o.canGuard?`#f59e0b18`:`${C.bor}22`,border:`1.5px solid ${o.canGuard?"#f59e0b":C.bor}`,transition:"all .2s"}}>
@@ -7996,9 +8048,9 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
 
   function cellBg(g){
     if(!g) return C.sur;
-    if(g.allParents) return "#a855f722";
-    if(g.obsId) return "#f59e0b22";
-    if(g.parentIdx>=0){ const p=cfg.parents[g.parentIdx]; return p?.color ? p.color+"22" : C.sur; }
+    if(g.allParents) return "#a855f730";
+    if(g.obsId) return "#f59e0b30";
+    if(g.parentIdx>=0){ const p=cfg.parents[g.parentIdx]; return p?.color ? p.color+"30" : C.sur; }
     return C.sur;
   }
   function badgeColor(g){
@@ -8068,9 +8120,8 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
         {days.map(d=>{
           const hasSplit = d.splitBefore && d.splitAfter;
           const bg = hasSplit
-            ? `linear-gradient(180deg, ${d.splitBefore}40 0%, ${d.splitBefore}40 ${d.splitPercent}%, ${d.splitAfter}40 ${d.splitPercent}%, ${d.splitAfter}40 100%)`
+            ? `linear-gradient(180deg, ${d.splitBefore}30 0%, ${d.splitBefore}30 ${d.splitPercent}%, ${d.splitAfter}30 ${d.splitPercent}%, ${d.splitAfter}30 100%)`
             : (d.isToday ? `${C.vio}22` : cellBg(d.guard));
-          const hasBadge = d.isRealChange && d.guard && !d.isBirthday;
           // Priorité couleur du numéro : férié (rouge gras) > week-end (gris foncé gras) > normal
           const numColor = d.fer ? C.red : d.isWE ? "#52525b" : (d.isToday ? C.vio : C.txt);
           const numWeight = (d.fer || d.isWE || d.isToday) ? 900 : 700;
@@ -8100,6 +8151,8 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
             else if(g.timeType==="split"&&et) cellTime=`⏹ ${et}`;
           }
           const cellLocation = g?.location || "";
+          // 🔄 masqué si une heure de prise/fin est déjà affichée (lisibilité)
+          const hasBadge = d.isRealChange && d.guard && !d.isBirthday && !cellTime;
           return (
             <div key={d.ds} onClick={()=>openDay(d.ds)}
               title={d.ferName||d.scoName||d.specials[0]?.label||undefined}
