@@ -7150,7 +7150,7 @@ function StepAccess() {
   const [copied,setCopied]=useState(false);
   const obs=cfg.observers||[];
   const pending=obs.filter(o=>o.status==="pending");
-  const active=obs.filter(o=>!o.status||o.status==="active"||o.status==="pending_invite");
+  const active=obs.filter(o=>!o.status||o.status==="active"||o.status==="pending_invite"||o.status==="pending");
   const rl={grandparent:t.grandparent,"uncle-aunt":t.uncleAunt,sibling:t.sibling,childcare:t.childcareRole,other:t.otherFamily};
 
   // Nettoie le numéro pour WhatsApp (supprime espaces/tirets, gère le 0 → 33)
