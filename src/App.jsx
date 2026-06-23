@@ -3712,6 +3712,25 @@ Date d'entrée en vigueur : 14 juin 2026
       {/* CONTENT */}
       <div id="duvia-scroll" style={{flex:1,overflowY:"auto",padding:16,background:C.bg}}>
         {(isObs && !isAdm) ? (
+          /* Cas 1 : obs sans famille active (retiré par un parent) */
+          !familySync.familyId ? (
+            <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"80vh",padding:20}}>
+              <div style={{background:C.card,borderRadius:18,padding:28,maxWidth:380,textAlign:"center",boxShadow:"0 8px 32px rgba(0,0,0,.1)"}}>
+                <div style={{fontSize:48,marginBottom:12}}>👁️</div>
+                <div style={{fontWeight:900,fontSize:17,color:C.txt,marginBottom:8}}>
+                  {t.obsNoFamily||"Vous n'êtes pas affecté à une famille."}
+                </div>
+                <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:20}}>
+                  {t.obsNoFamilyDesc||"Seule une famille peut vous inviter à rejoindre Duvia. Contactez le parent qui souhaitait vous donner accès pour qu'il génère un nouveau lien d'invitation."}
+                </div>
+                <button onClick={async()=>{ await supabase.auth.signOut(); handleSetUser(null); setTab(0); }}
+                  style={{height:44,padding:"0 24px",background:C.vio,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:14,cursor:"pointer"}}>
+                  🔓 {t.logout||"Se déconnecter"}
+                </button>
+              </div>
+            </div>
+          ) :
+          /* Cas 2 : obs dans famille sans parent actif (famille dissoute) */
           (cfg.parents||[]).filter(pp=>pp&&!pp.left).length===0 ? (
             <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:300,padding:20}}>
               <div style={{background:C.card,borderRadius:18,padding:28,maxWidth:380,textAlign:"center",boxShadow:"0 8px 32px rgba(0,0,0,.1)"}}>
@@ -5578,12 +5597,18 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
         return (
         <div key={i} style={{position:"relative",marginBottom:12}}>
           <div className="card" style={{borderColor:cErr?C.red:`${C.vio}55`, filter: isLocked ? "blur(3px)" : "none", pointerEvents: isLocked ? "none" : "auto", userSelect: isLocked ? "none" : "auto", opacity: isLocked ? 0.7 : 1, transition:"filter .2s,opacity .2s"}}>
-          {/* Header */}
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-            <span style={{fontSize:11,fontWeight:800,color:C.vio,textTransform:"uppercase",letterSpacing:".06em"}}>{t.childN} {i+1}</span>
-            {!isChild && <button onClick={()=>removeChild(i)} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12}}>{t.remove}</button>}
+          {/* Header — cliquable pour plier/déplier */}
+          <div onClick={()=>toggleChild(i)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:expandedChildren.has(i)?12:0,cursor:"pointer",userSelect:"none"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:11,fontWeight:800,color:C.vio,textTransform:"uppercase",letterSpacing:".06em"}}>{t.childN} {i+1}{ch.name.trim()?` — ${ch.name.trim()}`:""}</span>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              {!isChild && <button onClick={e=>{e.stopPropagation();removeChild(i);}} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12}}>{t.remove}</button>}
+              <span style={{fontSize:16,color:C.mut,transition:"transform .2s",display:"inline-block",transform:expandedChildren.has(i)?"rotate(180deg)":"rotate(0deg)"}}>⌄</span>
+            </div>
           </div>
 
+          {expandedChildren.has(i) && <>
           {/* Row 1 : Avatar | Nom */}
           <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:12}}>
             <div style={{...fieldBox,flexShrink:0}}>
@@ -5908,6 +5933,8 @@ function ChildInviteBtn({ childIdx, childName, childPhone, childEmail, childBirt
             <button onClick={handleCopy} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:copied?`${C.grn}18`:C.sur,color:copied?C.grn:C.mut,border:`1.5px solid ${C.bor}`}}>
               {copied ? "✅ Copié !" : "📋 Copier"}
             </button>
+          </>
+          }
           </div>
           <button onClick={()=>setInviteUrl("")} style={{fontSize:11,color:C.mut,background:"none",border:"none",cursor:"pointer",textDecoration:"underline",padding:0}}>↩️ Regénérer un lien</button>
         </>
@@ -7019,6 +7046,7 @@ function StepAccess() {
   useEffect(()=>{ familySync.refreshPendingMembers(); },[familySync.familyId]);
   const [email,setEmail]=useState("");
   const [phone,setPhone]=useState("");
+  const [address,setAddress]=useState("");
   const [role,setRole]=useState("grandparent");
   const [sent,setSent]=useState(false);
   const [canGuard,setCanGuard]=useState(false);
@@ -7026,7 +7054,7 @@ function StepAccess() {
   const [lastCode,setLastCode]=useState(null);
   const obs=cfg.observers||[];
   const pending=obs.filter(o=>o.status==="pending");
-  const active=obs.filter(o=>!o.status||o.status==="active");
+  const active=obs.filter(o=>!o.status||o.status==="active"||o.status==="pending_invite");
   const rl={grandparent:t.grandparent,"uncle-aunt":t.uncleAunt,sibling:t.sibling,childcare:t.childcareRole,other:t.otherFamily};
 
   // Nettoie le numéro pour WhatsApp (supprime espaces/tirets, gère le 0 → 33)
@@ -7138,6 +7166,9 @@ function StepAccess() {
     setCfg(c=>({...c,observers:c.observers.filter(o=>o.id!==id)}));
     pushNotif(`${obs?.name||obs?.email} — ${t.obsRejected}`,"info");
   }
+
+  const [expandedChildren, setExpandedChildren] = React.useState(()=>new Set([0])); // 1er enfant ouvert par défaut
+  const toggleChild = i => setExpandedChildren(s => { const n=new Set(s); n.has(i)?n.delete(i):n.add(i); return n; });
 
   return (
     <div>
