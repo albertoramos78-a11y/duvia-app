@@ -4498,11 +4498,13 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
       const { data: obsFamId, error: obsErr } = await supabase.rpc("accept_observer_invitation", { p_token: obsInviteCode.code });
       if(obsErr){
         const msg = obsErr.message||"";
-        const errMsg = msg.includes("expired") ? (t.obsInvErrExpired||"❌ Ce lien a expiré.") :
-                       msg.includes("used")    ? (t.obsInvErrUsed||"❌ Ce lien a déjà été utilisé. Demandez un nouveau lien au parent.") :
-                                                 (t.obsInvErrInvalid||"❌ Lien invalide. Vérifiez que vous avez bien ouvert le bon lien.");
-        setErr(errMsg);
         console.error("[Duvia] accept_observer_invitation error:", msg);
+        if(msg.includes("used")){
+          // Token déjà accepté → Papi a déjà rejoint, on affiche juste l'écran d'attente
+          onObsJoin({id:realUserId,name:cleanName,email:cleanEmail,phone:regPhoneId||undefined,role:"observer",obsRole:parentGender||"grandparent",status:"pending",inviteCode:obsInviteCode.code});
+          setMode("obs_waiting"); setErr(""); return;
+        }
+        setErr(msg.includes("expired") ? (t.obsInvErrExpired||"❌ Ce lien a expiré.") : (t.obsInvErrInvalid||"❌ Lien invalide."));
       } else {
         try{ window.localStorage.setItem("duvia_family_id", obsFamId); }catch{}
         onObsJoin({id:realUserId,name:cleanName,email:cleanEmail,phone:regPhoneId||undefined,role:"observer",obsRole:parentGender||"grandparent",status:"pending",inviteCode:obsInviteCode.code});
@@ -4604,10 +4606,16 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
         const { data: obsFamId, error: obsErr } = await supabase.rpc("accept_observer_invitation", { p_token: obsInviteCode.code });
         if(obsErr){
           const msg = obsErr.message||"";
-          setErr(msg.includes("expired")?t.obsInvErrExpired:msg.includes("used")?t.obsInvErrUsed:t.obsInvErrInvalid);
-          return;
+          console.error("[Duvia] accept_observer_invitation (login):", msg);
+          if(!msg.includes("used")){
+            // Expiré ou invalide → erreur bloquante
+            setErr(msg.includes("expired") ? (t.obsInvErrExpired||"❌ Ce lien a expiré.") : (t.obsInvErrInvalid||"❌ Lien invalide."));
+            return;
+          }
+          // "already used" → Papi a déjà accepté, on montre juste l'attente
+        } else {
+          try{ window.localStorage.setItem("duvia_family_id", obsFamId); }catch{}
         }
-        try{ window.localStorage.setItem("duvia_family_id", obsFamId); }catch{}
       }
       // 🔧 UUID réel depuis signInWithPassword — garantit que matchFn trouve la carte
       onObsJoin({...updatedUser, id:data.user?.id||updatedUser.id, role:obsInviteCode.role||"grandparent", status:"pending", inviteCode:obsInviteCode.code});
@@ -7341,17 +7349,15 @@ function StepAccess() {
 
   return (
     <div>
-      {/* ── Demandes en attente (multi-familles) — parents uniquement ── */}
-      {!isObs && !isChild && (
+      {/* ── Demandes en attente (repliée si vide) — parents uniquement ── */}
+      {!isObs && !isChild && familySync.pendingMembers.length > 0 && (
       <>
       <div className="sec" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <span>👋 Demandes en attente</span>
+        <span>👋 Demandes en attente ({familySync.pendingMembers.length})</span>
         <button onClick={()=>familySync.refreshPendingMembers()} style={{background:"transparent",color:C.vio,fontSize:11,fontWeight:700,padding:"2px 8px"}}>🔄 Actualiser</button>
       </div>
       <div className="card" style={{marginBottom:16}}>
-        {familySync.pendingMembers.length===0 ? (
-          <div style={{fontSize:13,color:C.mut,textAlign:"center",padding:"6px 0"}}>Aucune demande en attente.</div>
-        ) : familySync.pendingMembers.map(m => (
+        {familySync.pendingMembers.map(m => (
           <div key={m.userId} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${C.bor}`}}>
             <div style={{width:36,height:36,borderRadius:"50%",background:`${m.role==="observer"?C.ora:C.yel}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{m.role==="observer"?"👴":"⏳"}</div>
             <div style={{flex:1,minWidth:0}}>
@@ -7361,15 +7367,16 @@ function StepAccess() {
             </div>
             <button disabled={pendingActionId===m.userId} onClick={async ()=>{
               setPendingActionId(m.userId);
-              // 🔧 Cherche la carte observateur correspondante pour passer son ID direct
+              // 🔧 Cherche la carte observateur correspondante par token (fiable) ou email
               const obsCard = m.role==="observer" ? (cfg.observers||[]).find(o=>
+                (m.inviteToken && o.inviteToken && m.inviteToken===o.inviteToken) ||
                 (m.email && o.email && o.email===m.email) ||
                 (m.displayName && (o.email===m.displayName || o.name===m.displayName))
               ) : null;
               const res = await familySync.validateMember(obsCard ? {...m, obsCardId: obsCard.id} : m);
               setPendingActionId(null);
               if(!res.ok) alert("⚠️ Erreur lors de la validation.");
-            }} style={{padding:"7px 12px",background:C.grn,color:"#fff",borderRadius:8,fontSize:12,fontWeight:800,opacity:pendingActionId===m.userId?0.6:1}}>✅ Valider</button>
+            }} style={{padding:"7px 12px",background:C.grn,color:"#fff",borderRadius:8,fontSize:12,fontWeight:800,opacity:pendingActionId===m.userId?0.6:1}}>Valider</button>
             <button disabled={pendingActionId===m.userId} onClick={async ()=>{
               if(!window.confirm("Refuser cette demande ?")) return;
               setPendingActionId(m.userId);
@@ -7531,14 +7538,14 @@ function StepAccess() {
                 const res = await familySync.validateMember({...matchingPending, obsCardId: o.id});
                 setPendingActionId(null);
                 if(!res.ok) alert("⚠️ Erreur lors de la validation.");
-              }} style={{flex:1,height:42,background:C.grn,color:"#fff",fontSize:13,fontWeight:800,borderRadius:10,opacity:pendingActionId===matchingPending.userId?0.6:1}}>✅ {t.obsApprove||"Valider"}</button>
+              }} style={{flex:1,height:42,background:C.grn,color:"#fff",fontSize:13,fontWeight:800,borderRadius:10,opacity:pendingActionId===matchingPending.userId?0.6:1}}>{t.obsApprove||"Accepter"}</button>
               <button disabled={pendingActionId===matchingPending.userId} onClick={async()=>{
                 if(!window.confirm("Refuser cette demande ?")) return;
                 setPendingActionId(matchingPending.userId);
                 const res = await familySync.rejectMember(matchingPending.userId);
                 setPendingActionId(null);
                 if(!res.ok) alert("⚠️ Erreur lors du refus.");
-              }} style={{padding:"0 16px",height:42,background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,fontSize:13,fontWeight:700,borderRadius:10,opacity:pendingActionId===matchingPending.userId?0.6:1}}>❌ {t.obsReject||"Refuser"}</button>
+              }} style={{padding:"0 16px",height:42,background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,fontSize:13,fontWeight:700,borderRadius:10,opacity:pendingActionId===matchingPending.userId?0.6:1}}>{t.obsReject||"Refuser"}</button>
             </div>
           )}
         </div>
