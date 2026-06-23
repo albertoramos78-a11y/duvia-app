@@ -1392,21 +1392,33 @@ function useFamilySync(cfg, setCfg) {
     return () => { cancelled = true; if (ch) supabase.removeChannel(ch); };
   }, [familyId]);
 
-  // ── Rafraîchissement des demandes en attente, SANS dépendre du Realtime ──
-  // Garantit que le créateur voit la demande de validation d'un invité même si
-  // le Realtime n'est pas activé sur family_members : au focus de la fenêtre,
-  // au retour sur l'onglet, et par sécurité toutes les 12 s.
+  // ── Realtime + polling fallback 30s ───────────────────────────────────────
+  // Realtime : push instantané quand un obs clique sur son lien (INSERT/UPDATE).
+  // Polling 30s + focus/visibilité : filet de sécurité si Realtime est désactivé.
   useEffect(() => {
     if (!familyId) return;
     const tick = () => { try { refreshPendingMembers(); } catch {} };
     const onVis = () => { if (!document.hidden) tick(); };
     window.addEventListener("focus", tick);
     document.addEventListener("visibilitychange", onVis);
-    const id = setInterval(tick, 12000);
+    const pollId = setInterval(tick, 30000);
+
+    // Push instantané : écoute INSERT/UPDATE sur family_members pour cette famille
+    const channel = supabase
+      .channel(`family_members:${familyId}`)
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "family_members",
+        filter: `family_id=eq.${familyId}`,
+      }, () => { tick(); })
+      .subscribe();
+
     return () => {
-      clearInterval(id);
+      clearInterval(pollId);
       window.removeEventListener("focus", tick);
       document.removeEventListener("visibilitychange", onVis);
+      supabase.removeChannel(channel);
     };
   }, [familyId]);
   useEffect(() => {
@@ -1631,22 +1643,50 @@ function useFamilySync(cfg, setCfg) {
               .eq("role", "observer")
               .eq("status", "active");
             if (obsRows && obsRows.length > 0 && !cancelled) {
+              // Récupère les emails via family_invitations pour matcher les cartes pending_invite
+              let emailByObsUid = {};
+              try {
+                const { data: obsInvRows } = await supabase
+                  .from("family_invitations")
+                  .select("used_by, email")
+                  .eq("family_id", familyId)
+                  .not("used_by", "is", null);
+                (obsInvRows || []).forEach(r => { if(r.used_by) emailByObsUid[r.used_by] = r.email; });
+              } catch {}
               setCfg(c => {
                 const existing = new Set((c.observers || []).map(o => String(o.id || o.userId)));
                 const toAdd = obsRows.filter(r => !existing.has(String(r.user_id)));
                 if (!toAdd.length) return c;
-                return {
-                  ...c,
-                  observers: [
-                    ...(c.observers || []),
-                    ...toAdd.map(r => ({
+                let updatedObservers = [...(c.observers || [])];
+                for (const r of toAdd) {
+                  const rEmail = emailByObsUid[r.user_id] || "";
+                  // 🔧 CORRECTIF : avant d'ajouter une nouvelle carte, chercher une carte
+                  // pending_invite ou pending existante avec le même email — la mettre à jour
+                  // en place plutôt que créer un doublon.
+                  const pendingIdx = updatedObservers.findIndex(o =>
+                    (o.status === "pending_invite" || o.status === "pending") &&
+                    rEmail && o.email &&
+                    o.email.toLowerCase() === rEmail.toLowerCase()
+                  );
+                  if (pendingIdx >= 0) {
+                    updatedObservers[pendingIdx] = {
+                      ...updatedObservers[pendingIdx],
+                      id: r.user_id, userId: r.user_id,
+                      status: "active",
+                      name: (updatedObservers[pendingIdx].name && updatedObservers[pendingIdx].name !== "Observateur invité")
+                        ? updatedObservers[pendingIdx].name
+                        : (r.display_name || "Observateur"),
+                    };
+                  } else {
+                    updatedObservers.push({
                       id: r.user_id, userId: r.user_id,
                       name: r.display_name || "Observateur",
-                      email: "", phone: "", role: "grandparent",
+                      email: rEmail, phone: "", role: "grandparent",
                       status: "active", canGuard: false,
-                    }))
-                  ]
-                };
+                    });
+                  }
+                }
+                return { ...c, observers: updatedObservers };
               });
             }
           } catch {}
@@ -3059,8 +3099,28 @@ export default function App() {
     // Observateur standard
     setCfg(c=>{
       const invite=(c.pendingInvites||[]).find(inv=>inv.code===obsData.inviteCode);
+      // 🔧 CORRECTIF : ne pas créer de doublon — si une carte pending_invite existe déjà
+      // pour ce même email ou token, on la met à jour en place.
+      const existingIdx=(c.observers||[]).findIndex(o=>
+        o.status==="pending_invite" && (
+          (obsData.inviteCode && o.inviteToken===obsData.inviteCode) ||
+          (obsData.email && o.email && o.email.toLowerCase()===obsData.email.toLowerCase())
+        )
+      );
+      let newObservers;
+      if(existingIdx>=0){
+        newObservers=(c.observers||[]).map((o,i)=>
+          i===existingIdx
+            ? {...o, id:obsData.id, name:obsData.name||o.name, email:obsData.email||o.email,
+               role:obsData.role||o.role||"grandparent", status:"pending",
+               inviteCode:obsData.inviteCode, canGuard:invite?.canGuard??o.canGuard??false}
+            : o
+        );
+      } else {
+        newObservers=[...(c.observers||[]),{id:obsData.id,name:obsData.name,email:obsData.email,role:obsData.role||"grandparent",status:"pending",inviteCode:obsData.inviteCode,canGuard:invite?.canGuard||false}];
+      }
       return {...c,
-        observers:[...(c.observers||[]),{id:obsData.id,name:obsData.name,email:obsData.email,role:obsData.role||"grandparent",status:"pending",inviteCode:obsData.inviteCode,canGuard:invite?.canGuard||false}],
+        observers:newObservers,
         pendingInvites:(c.pendingInvites||[]).map(inv=>inv.code===obsData.inviteCode?{...inv,used:true}:inv),
       };
     });
@@ -4095,14 +4155,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
   // « 1 » d'une session précédente garde l'utilisateur connecté par erreur).
   const [remember,setRemember]=useState(false);
   useEffect(()=>{ try{ window.localStorage.removeItem("duvia_remember"); window.localStorage.removeItem("duvia_remember_until"); }catch{} },[]);
-  // Compte à rebours sur l'écran d'attente : le bouton Retour est bloqué 15 s.
-  const [waitLeft,setWaitLeft]=useState(15);
-  useEffect(()=>{
-    if(mode!=="obs_waiting") return;
-    setWaitLeft(15);
-    const id=setInterval(()=> setWaitLeft(s=> s<=1 ? 0 : s-1), 1000);
-    return ()=>clearInterval(id);
-  },[mode]);
+
 
   const [shakeName,setShakeName]=useState(false);
   function _triggerShakeName(){ setShakeName(true); setTimeout(()=>setShakeName(false),600); }
@@ -4285,13 +4338,8 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
         <div style={{fontSize:44,marginBottom:12}}>⏳</div>
         <div style={{fontWeight:900,fontSize:18,marginBottom:8,color:C.txt}}>{t.obsJoinWaiting||"En attente d'approbation"}</div>
         <div style={{fontSize:13.5,color:C.mut,lineHeight:1.6,marginBottom:18}}>{t.obsJoinWaitingInfo||"Votre demande a été envoyée aux parents. Vous recevrez une notification dès qu'elle sera approuvée."}</div>
-        {waitLeft>0 && (
-          <div style={{fontSize:13,color:C.vio,fontWeight:700,marginBottom:10}}>
-            ⏳ Veuillez patienter <b>{waitLeft}s</b>…
-          </div>
-        )}
-        <button onClick={()=>{ try{ window.location.href = window.location.origin + "/"; }catch{ setMode("login"); } }} disabled={waitLeft>0}
-          style={{height:42,padding:"0 22px",background:C.sur,color:waitLeft>0?C.bor:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13,borderRadius:10,opacity:waitLeft>0?0.55:1,cursor:waitLeft>0?"not-allowed":"pointer"}}>
+        <button onClick={()=>{ try{ window.location.href = window.location.origin + "/"; }catch{ setMode("login"); } }}
+          style={{height:42,padding:"0 22px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13,borderRadius:10}}>
           {t.backLogin||"Retour"}
         </button>
       </div>
