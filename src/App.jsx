@@ -7093,7 +7093,6 @@ function StepAccess() {
   const [sent,setSent]=useState(false);
   const [canGuard,setCanGuard]=useState(false);
   const [copied,setCopied]=useState(false);
-  const [lastCode,setLastCode]=useState(null);
   const obs=cfg.observers||[];
   const pending=obs.filter(o=>o.status==="pending");
   const active=obs.filter(o=>!o.status||o.status==="active"||o.status==="pending_invite");
@@ -7175,23 +7174,6 @@ function StepAccess() {
 
   // DEMO ONLY — simulate the invited person opening the link and registering,
   // so the "pending approval" flow can be tested end-to-end without a backend.
-  function simulateObsJoin(){
-    if(!lastCode) return;
-    setCfg(c=>{
-      const invite=(c.pendingInvites||[]).find(inv=>inv.code===lastCode && !inv.used);
-      if(!invite) return c;
-      const newId=`obs_${Date.now()}`;
-      return {
-        ...c,
-        observers:[...(c.observers||[]),{id:newId,name:invite.email?invite.email.split("@")[0]:(invite.phone||""),email:invite.email||"",phone:invite.phone||"",role:invite.role||"grandparent",status:"pending",inviteCode:lastCode,canGuard:invite.canGuard||false}],
-        pendingInvites:c.pendingInvites.map(inv=>inv.code===lastCode?{...inv,used:true}:inv),
-      };
-    });
-    pushNotif(t.obsDemoSimulate,"obs");
-    setSent(false);
-    setCopied(false);
-    setLastCode(null);
-  }
 
   function copyInvite(){
     navigator.clipboard.writeText(sent).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);});
@@ -7278,8 +7260,10 @@ function StepAccess() {
         {!prem&&<div style={{position:"absolute",inset:0,background:`${C.bg}cc`,backdropFilter:"blur(3px)",borderRadius:13,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,zIndex:5,cursor:"pointer"}} onClick={onUpgrade}><div style={{fontSize:24}}>📨</div><div style={{fontWeight:800,color:C.ora}}>🔒 {t.lockSection}</div><div style={{fontSize:11,color:C.mut}}>{t.lockDesc}</div></div>}
         {!sent?(
           <>
-            <div className="field"><label className="lbl">{t.obsInviteEmail} <span style={{color:C.mut,fontWeight:400}}>({t.optional||"optionnel"})</span></label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="mamie@exemple.fr" /></div>
-            <div className="field"><label className="lbl">📞 {t.obsInvitePhone||"Téléphone"} <span style={{color:C.mut,fontWeight:400}}>({t.optional||"optionnel"})</span></label><input type="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} /></div>
+            <div className="row">
+              <div className="field"><label className="lbl">{t.obsInviteEmail} <span style={{color:C.mut,fontWeight:400}}>({t.optional||"optionnel"})</span></label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="mamie@exemple.fr" /></div>
+              <div className="field"><label className="lbl">📞 {t.obsInvitePhone||"Téléphone"} <span style={{color:C.mut,fontWeight:400}}>({t.optional||"optionnel"})</span></label><input type="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} /></div>
+            </div>
             <div style={{fontSize:11,color:C.mut,marginTop:-6,marginBottom:10}}>{t.obsInviteContactHint||"Renseignez au moins un moyen de contact (email ou téléphone)."}</div>
             {/* Adresse postale */}
             <div style={{marginBottom:10}}>
@@ -7312,26 +7296,22 @@ function StepAccess() {
           </>
         ):(
           <div>
-            <div style={{textAlign:"center",marginBottom:14}}>
-              <div style={{fontSize:28,marginBottom:6}}>✅</div>
-              <div style={{fontWeight:800,fontSize:15,color:C.grn,marginBottom:4}}>{t.obsInviteSent}</div>
-              <div style={{fontSize:12,color:C.mut,marginBottom:12}}>{t.obsInviteExpiry}</div>
+            <div style={{fontSize:11,color:C.grn,marginBottom:8}}>✅ {t.obsInviteExpiry}</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <button onClick={handleSendSMS} disabled={!phone} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:phone?"pointer":"not-allowed",opacity:phone?1:.4,background:"#25D36618",color:"#128C7E",border:"1.5px solid #25D36644"}}>💬 SMS</button>
+              <button onClick={handleSendWhatsApp} disabled={!phone} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:phone?"pointer":"not-allowed",opacity:phone?1:.4,background:"#25D36618",color:"#25D366",border:"1.5px solid #25D36644"}}><span style={{fontSize:14}}>📱</span> WhatsApp</button>
+              <button onClick={handleSendEmail} disabled={!email} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:email?"pointer":"not-allowed",opacity:email?1:.4,background:`${C.vio}18`,color:C.vio,border:`1.5px solid ${C.vio}44`}}>✉️ Email</button>
+              <button onClick={copyInvite} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:copied?`${C.grn}18`:C.sur,color:copied?C.grn:C.mut,border:`1.5px solid ${C.bor}`}}>
+                {copied ? "✅ Copié !" : "📋 Copier"}
+              </button>
             </div>
-            <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:8}}>{t.sendInviteLink}</div>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
-              <button onClick={handleSendSMS} disabled={!phone} style={{padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:phone?"pointer":"not-allowed",opacity:phone?1:.4,background:"#25D36618",color:"#128C7E",border:"1.5px solid #25D36644"}}>💬 SMS</button>
-              <button onClick={handleSendWhatsApp} disabled={!phone} style={{padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:phone?"pointer":"not-allowed",opacity:phone?1:.4,background:"#25D36618",color:"#25D366",border:"1.5px solid #25D36644"}}>📱 WhatsApp</button>
-              <button onClick={handleSendEmail} disabled={!email} style={{padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:email?"pointer":"not-allowed",opacity:email?1:.4,background:`${C.vio}12`,color:C.vio,border:`1.5px solid ${C.vio}44`}}>✉️ Email</button>
-            </div>
-            <div style={{background:C.bg,borderRadius:10,padding:"10px 12px",marginBottom:10,border:`1.5px solid ${C.bor}`,display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontFamily:"JetBrains Mono",fontSize:11,color:C.vio,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sent}</span>
-              <button onClick={copyInvite} style={{padding:"5px 10px",background:copied?C.grn:C.vio,color:"#fff",fontSize:11,flexShrink:0,height:32}}>{copied?t.obsInviteCopied:t.obsInviteOrCopy}</button>
-            </div>
-            <button onClick={()=>{setSent(false);setCopied(false);setLastCode(null);setEmail("");setPhone("");}} style={{width:"100%",height:38,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13}}>{t.addObsBtn} →</button>
-            <button onClick={simulateObsJoin} style={{width:"100%",height:38,marginTop:8,background:"transparent",color:C.vio,border:`1.5px dashed ${C.vio}66`,fontSize:12,fontWeight:700,borderRadius:10}}>{t.obsDemoSimulate}</button>
           </div>
         )}
       </div>
+      {sent && (
+        <button onClick={()=>{setSent(false);setCopied(false);setEmail("");setPhone("");setAddress("");setRole("grandparent");setCanGuard(false);}}
+          style={{width:"100%",height:38,marginBottom:16,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13,borderRadius:10}}>{t.addObsBtn} →</button>
+      )}
 
       {/* ── Active observers list ── */}
       <div className="sec">{t.observersTitle} ({active.length})</div>
@@ -7347,7 +7327,7 @@ function StepAccess() {
             <div style={{flex:1}}>
               <div style={{fontWeight:800,fontSize:14,color:C.txt}}>{o.name}</div>
               {o.status==="pending_invite"
-                ? <span className="badge" style={{background:`${C.mut}22`,color:C.mut,display:"inline-block",marginTop:2}}>⏳ En attente — lien non encore cliqué</span>
+                ? <span className="badge" style={{background:`${C.yel}22`,color:C.yel,display:"inline-block",marginTop:2}}>⏳ En attente — lien non encore cliqué</span>
                 : <span className="badge" style={{background:`${C.grn}22`,color:C.grn,display:"inline-block",marginTop:2}}>{rl[o.role]||o.role} · {t.obsStatusActive}</span>
               }
             </div>
