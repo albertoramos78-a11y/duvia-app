@@ -7256,13 +7256,13 @@ function StepAccess() {
         <button onClick={()=>familySync.refreshPendingMembers()} style={{background:"transparent",color:C.vio,fontSize:11,fontWeight:700,padding:"2px 8px"}}>🔄 Actualiser</button>
       </div>
       <div className="card" style={{marginBottom:16}}>
-        {familySync.pendingMembers.filter(m=>m.role!=="observer").length===0 ? (
+        {familySync.pendingMembers.length===0 ? (
           <div style={{fontSize:13,color:C.mut,textAlign:"center",padding:"6px 0"}}>Aucune demande en attente.</div>
-        ) : familySync.pendingMembers.filter(m=>m.role!=="observer").map(m => (
+        ) : familySync.pendingMembers.map(m => (
           <div key={m.userId} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${C.bor}`}}>
-            <div style={{width:36,height:36,borderRadius:"50%",background:`${C.yel}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>⏳</div>
+            <div style={{width:36,height:36,borderRadius:"50%",background:`${m.role==="observer"?C.ora:C.yel}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{m.role==="observer"?"👴":"⏳"}</div>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontWeight:800,fontSize:13}}>{m.displayName || m.email || "Parent invité"}</div>
+              <div style={{fontWeight:800,fontSize:13}}>{m.displayName || m.email || (m.role==="observer" ? (t.roleObs||"Observateur") : "Parent invité")}</div>
               {m.displayName && m.email && <div style={{fontSize:10,color:C.mut}}>{m.email}</div>}
               <div style={{fontSize:11,color:C.mut}}>{m.role==="observer"?`${t.roleObs||"Observateur"} — ${t.obsPendingInfo||"souhaite rejoindre la famille"}`:t.obsPendingInfo||"Souhaite rejoindre cette famille"}</div>
             </div>
