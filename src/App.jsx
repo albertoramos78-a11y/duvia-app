@@ -1948,14 +1948,26 @@ function useFamilySync(cfg, setCfg) {
         setCfg(c => ({ ...c, parents: insertValidatedParent(c.parents, m) }));
       } else if (m.role === "observer") {
         // Observateur Supabase validé → l'ajouter à cfg.observers (actif).
-        setCfg(c => ({
-          ...c,
-          observers: [
-            ...(c.observers||[]).filter(o => String(o.id) !== String(m.userId) && o.userId !== m.userId),
-            { id: m.userId, userId: m.userId, name: m.displayName||m.email||"Observateur",
-              email: m.email||"", phone:"", role:"grandparent", status:"active", canGuard:false }
-          ]
-        }));
+        // 🔧 CORRECTIF : récupérer canGuard depuis l'invite originale dans cfg.observers
+        // (stockée au moment de la création du lien) plutôt que de hardcoder false.
+        setCfg(c => {
+          const originalInvite = (c.observers||[]).find(o =>
+            String(o.id) === String(m.userId) || o.userId === m.userId ||
+            (m.email && o.email === m.email)
+          );
+          return {
+            ...c,
+            observers: [
+              ...(c.observers||[]).filter(o => String(o.id) !== String(m.userId) && o.userId !== m.userId),
+              { id: m.userId, userId: m.userId, name: m.displayName||m.email||"Observateur",
+                email: m.email||"", phone: originalInvite?.phone||"",
+                address: originalInvite?.address||"",
+                role: originalInvite?.role||"grandparent",
+                status:"active",
+                canGuard: originalInvite?.canGuard||false }
+            ]
+          };
+        });
       }
 
       await refreshPendingMembers();
@@ -4462,6 +4474,19 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     else setUsers(us => [...us, updatedUser]);
 
     if(isObsInvite){
+      // 🔧 CORRECTIF : appeler la RPC pour créer la ligne family_members (status='pending').
+      // Sans ça, le parent ne voit jamais le bouton "Accepter" car refreshPendingMembers
+      // ne trouve rien dans family_members. Ce chemin (compte existant) n'appelait pas
+      // accept_observer_invitation contrairement au chemin "nouveau compte".
+      if(isNewObsInvite && obsInviteCode.code){
+        const { data: obsFamId, error: obsErr } = await supabase.rpc("accept_observer_invitation", { p_token: obsInviteCode.code });
+        if(obsErr){
+          const msg = obsErr.message||"";
+          setErr(msg.includes("expired")?t.obsInvErrExpired:msg.includes("used")?t.obsInvErrUsed:t.obsInvErrInvalid);
+          return;
+        }
+        try{ window.localStorage.setItem("duvia_family_id", obsFamId); }catch{}
+      }
       onObsJoin({...updatedUser, role:obsInviteCode.role||"grandparent", status:"pending", inviteCode:obsInviteCode.code});
       setMode("obs_waiting"); setErr("");
     } else if(isChildInvite && obsInviteCode.isNewChildInvite){
