@@ -5352,9 +5352,10 @@ function FamilySyncCard() {
 
 
 function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,removeChild,onShowEmailSim,quitterFamille,retirerInvite}) {
-  const {C,t,cfg,setCfg,prem,perms,onUpgrade,user,sub,familySync,isChild} = useApp();
+  const {C,t,cfg,setCfg,prem,perms,onUpgrade,user,sub,familySync,isChild,isObs} = useApp();
   const [touched,setTouched] = useState({});
   const [pidActing,setPidActing] = useState(null); // userId en cours de validation/refus
+  const [creatingFamily,setCreatingFamily] = useState(false);
 
   // Rafraîchir les demandes en attente à l'ouverture de la config (pour pouvoir
   // valider l'invité directement depuis la carte Parent ci-dessous).
@@ -5386,6 +5387,45 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
 
   return (
     <div>
+      {/* ── Mes familles (multi-familles) — parents uniquement ── */}
+      {!isObs && !isChild && (
+      <>
+      <div className="sec">🏠 Mes familles</div>
+      <div className="card" style={{marginBottom:16}}>
+        {familySync.families.length > 0 && (
+          <div style={{marginBottom:10}}>
+            {familySync.families.map(f => (
+              <div key={f.id} style={{fontSize:13,fontWeight:f.id===familySync.familyId?800:600,color:f.id===familySync.familyId?C.vio:C.txt,padding:"4px 0"}}>
+                {f.id===familySync.familyId ? "📍 " : "・"}{f.label}
+              </div>
+            ))}
+          </div>
+        )}
+        <button
+          disabled={creatingFamily}
+          onClick={async ()=>{
+            if(!window.confirm("Créer une nouvelle famille distincte ? Tu pourras basculer entre tes familles depuis le menu en haut de l'app.")) return;
+            setCreatingFamily(true);
+            const myProfile = (typeof user?.parentIdx === "number" ? cfg.parents[user.parentIdx] : null) || {};
+            const prefillParent = {
+              name: myProfile.name || "",
+              gender: myProfile.gender || "F",
+              birthDay: myProfile.birthDay || "",
+              birthMonth: myProfile.birthMonth || "",
+              phone: myProfile.phone || "",
+              email: user?.email || myProfile.email || "", // verrouillé : lié au compte
+            };
+            const res = await familySync.createNewFamily(prefillParent);
+            setCreatingFamily(false);
+            if(!res.ok) alert("⚠️ Erreur lors de la création de la famille.");
+          }}
+          style={{width:"100%",height:44,background:C.sur,color:C.vio,border:`1.5px solid ${C.vio}`,borderRadius:10,fontWeight:800,fontSize:13,cursor:creatingFamily?"not-allowed":"pointer",opacity:creatingFamily?0.6:1}}>
+          {creatingFamily ? "⏳ Création…" : "➕ Créer une nouvelle famille"}
+        </button>
+      </div>
+      </>
+      )}
+
       <FamilySyncCard />
 
       <div className="sec">{t.parents}</div>
@@ -5605,10 +5645,10 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           <div onClick={()=>toggleChild(i)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:expandedChildren.has(i)?12:0,cursor:"pointer",userSelect:"none"}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
               <span style={{fontSize:11,fontWeight:800,color:C.vio,textTransform:"uppercase",letterSpacing:".06em"}}>{t.childN} {i+1}{ch.name.trim()?` — ${ch.name.trim()}`:""}</span>
+              <span style={{fontSize:16,color:C.mut,transition:"transform .2s",display:"inline-block",transform:expandedChildren.has(i)?"rotate(180deg)":"rotate(0deg)"}}>⌄</span>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
               {!isChild && <button onClick={e=>{e.stopPropagation();removeChild(i);}} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12}}>{t.remove}</button>}
-              <span style={{fontSize:16,color:C.mut,transition:"transform .2s",display:"inline-block",transform:expandedChildren.has(i)?"rotate(180deg)":"rotate(0deg)"}}>⌄</span>
             </div>
           </div>
 
@@ -7044,7 +7084,6 @@ function WeekRow({wk, wkPiCounts, dominantPi, wkColor, wkLabel, hol, det, chGetH
 // ─── STEP 4: ACCESS ───────────────────────────────────────────────────────────
 function StepAccess() {
   const {C,t,cfg,setCfg,pushNotif,prem,perms,onUpgrade,user,familySync,isObs,isChild} = useApp();
-  const [creatingFamily,setCreatingFamily] = useState(false);
   const [pendingActionId,setPendingActionId] = useState(null);
   useEffect(()=>{ familySync.refreshPendingMembers(); },[familySync.familyId]);
   const [email,setEmail]=useState("");
@@ -7172,43 +7211,9 @@ function StepAccess() {
 
   return (
     <div>
-      {/* ── Mes familles (multi-familles) — parents uniquement ── */}
+      {/* ── Demandes en attente (multi-familles) — parents uniquement ── */}
       {!isObs && !isChild && (
       <>
-      <div className="sec">🏠 Mes familles</div>
-      <div className="card" style={{marginBottom:16}}>
-        {familySync.families.length > 0 && (
-          <div style={{marginBottom:10}}>
-            {familySync.families.map(f => (
-              <div key={f.id} style={{fontSize:13,fontWeight:f.id===familySync.familyId?800:600,color:f.id===familySync.familyId?C.vio:C.txt,padding:"4px 0"}}>
-                {f.id===familySync.familyId ? "📍 " : "・"}{f.label}
-              </div>
-            ))}
-          </div>
-        )}
-        <button
-          disabled={creatingFamily}
-          onClick={async ()=>{
-            if(!window.confirm("Créer une nouvelle famille distincte ? Tu pourras basculer entre tes familles depuis le menu en haut de l'app.")) return;
-            setCreatingFamily(true);
-            const myProfile = (typeof user?.parentIdx === "number" ? cfg.parents[user.parentIdx] : null) || {};
-            const prefillParent = {
-              name: myProfile.name || "",
-              gender: myProfile.gender || "F",
-              birthDay: myProfile.birthDay || "",
-              birthMonth: myProfile.birthMonth || "",
-              phone: myProfile.phone || "",
-              email: user?.email || myProfile.email || "", // verrouillé : lié au compte
-            };
-            const res = await familySync.createNewFamily(prefillParent);
-            setCreatingFamily(false);
-            if(!res.ok) alert("⚠️ Erreur lors de la création de la famille.");
-          }}
-          style={{width:"100%",height:44,background:C.sur,color:C.vio,border:`1.5px solid ${C.vio}`,borderRadius:10,fontWeight:800,fontSize:13,cursor:creatingFamily?"not-allowed":"pointer",opacity:creatingFamily?0.6:1}}>
-          {creatingFamily ? "⏳ Création…" : "➕ Créer une nouvelle famille"}
-        </button>
-      </div>
-
       <div className="sec" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <span>👋 Demandes en attente</span>
         <button onClick={()=>familySync.refreshPendingMembers()} style={{background:"transparent",color:C.vio,fontSize:11,fontWeight:700,padding:"2px 8px"}}>🔄 Actualiser</button>
