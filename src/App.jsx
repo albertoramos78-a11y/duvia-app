@@ -2101,7 +2101,7 @@ function useFamilySync(cfg, setCfg) {
     }
   }
 
-  return { syncStatus, familyId, families, joinFamily, linkAccount, signInExisting, switchFamily, createNewFamily, refreshFamilies, joinFamilyByToken, pendingMembers, refreshPendingMembers, validateMember, rejectMember, removeFamilyMember, leaveFamily, pendingApproval };
+  return { syncStatus, familyId, families, joinFamily, linkAccount, signInExisting, switchFamily, createNewFamily, refreshFamilies, joinFamilyByToken, pendingMembers, refreshPendingMembers, validateMember, rejectMember, removeFamilyMember, leaveFamily, pendingApproval, removedObserver };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -3155,7 +3155,7 @@ export default function App() {
   );
 
   // Page "no access" pour observateur retiré de la famille
-  if(removedObserver) return (
+  if(familySync.removedObserver) return (
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
       <div style={{textAlign:"center",maxWidth:340}}>
         <div style={{fontSize:48,marginBottom:12}}>🚫</div>
