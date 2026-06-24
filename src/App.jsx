@@ -972,6 +972,16 @@ function resolveGuard(ds,cfg,childId) {
   return null;
 }
 
+// ─── Helper : affiche le vrai prénom de l'observateur (jamais l'email brut) ──
+function obsLabel(o) {
+  const n = o.name || "";
+  // Si le nom ressemble à un email, on prend la partie avant @
+  if (n.includes("@")) return n.split("@")[0];
+  if (n) return n;
+  if (o.email) return o.email.split("@")[0];
+  return "Gardien";
+}
+
 // ─── CSS ──────────────────────────────────────────────────────────────────────
 function css(C) {
   const wcExtras = C._wc ? `
@@ -2045,7 +2055,8 @@ function useFamilySync(cfg, setCfg) {
                 matchFn(o)
                   ? { ...o, id: m.userId, userId: m.userId,
                       status: "active",
-                      name: o.name && o.name !== "Observateur" ? o.name : (m.displayName||m.email||o.name||"Observateur"),
+                      // Si le nom stocké ressemble à un email, on préfère le vrai nom Supabase
+                      name: (m.displayName && !m.displayName.includes("@")) ? m.displayName : (o.name && !o.name.includes("@") && o.name !== "Observateur") ? o.name : (m.displayName||m.email||o.name||"Observateur"),
                       email: o.email || m.email || "" }
                   : o
               )
@@ -7157,7 +7168,7 @@ function StepGarde() {
                       </button>
                     ))}
                     {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=>(
-                      <button key={o.id} onClick={()=>{const p=[...pat];p[i]={...p[i],parentIdx:undefined,obsId:o.id,obsName:o.name||(o.email||"").split("@")[0]};setPat(p);}}
+                      <button key={o.id} onClick={()=>{const p=[...pat];p[i]={...p[i],parentIdx:undefined,obsId:o.id,obsName:obsLabel(o)};setPat(p);}}
                         style={{width:"100%",padding:"4px 1px",marginBottom:2,background:pat[i]?.obsId===o.id?"#f59e0b":C.sur,color:pat[i]?.obsId===o.id?"#fff":"#f59e0b",border:"1.5px solid #f59e0b",borderRadius:6,fontSize:8,fontWeight:800}}>
                         🏠{(o.name||(o.email||"")).slice(0,3)}
                       </button>
@@ -7220,7 +7231,7 @@ function WeekRow({wk, wkPiCounts, dominantPi, wkColor, wkLabel, hol, det, chGetH
             <button key={o.id}
               onClick={()=>{const base=chGetHolDetails();const nd={...base,[hol.n]:{...(base[hol.n]||{})}};wk.forEach(({ds})=>{nd[hol.n][ds]=`obs:${o.id}`;});chSetHolDetails(nd);setOpen(false);}}
               style={{padding:"3px 9px",background:"#f59e0b22",color:"#f59e0b",border:"1.5px solid #f59e0b",borderRadius:20,fontSize:11,fontWeight:800}}>
-              🏠 {(o.name||(o.email||"")).split("@")[0].slice(0,6)}
+              🏠 {obsLabel(o)}
             </button>
           ))}
           <button onClick={()=>setOpen(o=>!o)}
@@ -7236,7 +7247,7 @@ function WeekRow({wk, wkPiCounts, dominantPi, wkColor, wkLabel, hol, det, chGetH
             const aP=aPi!==undefined?cfg.parents[aPi]:null;
             const isWE=dw>=5;
             const guardians=(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard);
-            const allChoices=[...cfg.parents.map((_,pi)=>({type:"parent",pi})),...guardians.map(o=>({type:"obs",id:o.id,name:o.name||(o.email||"").split("@")[0]}))];
+            const allChoices=[...cfg.parents.map((_,pi)=>({type:"parent",pi})),...guardians.map(o=>({type:"obs",id:o.id,name:obsLabel(o)}))];
             const currentChoiceIdx=aPi===undefined?-1:typeof aPi==="string"&&aPi.startsWith("obs:")?allChoices.findIndex(c=>c.type==="obs"&&c.id===aPi.slice(4)):allChoices.findIndex(c=>c.type==="parent"&&c.pi===aPi);
             const cycleDay=()=>{
               const nextIdx=currentChoiceIdx>=allChoices.length-1?undefined:currentChoiceIdx+1;
@@ -8157,7 +8168,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
               <span className="chip" style={{fontSize:11}}>🎩 {t.fatherDay?.replace(/^🎩\s*/,"")||"Fête des Pères"}</span>
               <span className="chip" style={{fontSize:11}}>👴 {t.calGrandparents||"Grands-Parents"}</span>
               {cfg.parents.map((p,i)=>p.name&&<span key={i} className="chip" style={{fontSize:11,borderColor:p.color,background:`${p.color}20`,color:p.color,fontWeight:700}}><span style={{width:8,height:8,borderRadius:"50%",background:p.color,display:"inline-block",marginRight:4,flexShrink:0}} />{p.name}</span>)}
-              {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=><span key={o.id} className="chip" style={{fontSize:11,borderColor:"#f59e0b"}}><span style={{width:8,height:8,borderRadius:"50%",background:"#f59e0b",display:"inline-block",marginRight:4}} />🏠 {o.name||(o.email||"").split("@")[0]}</span>)}
+              {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=><span key={o.id} className="chip" style={{fontSize:11,borderColor:"#f59e0b"}}><span style={{width:8,height:8,borderRadius:"50%",background:"#f59e0b",display:"inline-block",marginRight:4}} />🏠 {obsLabel(o)}</span>)}
             </div>
           )}
         </div>
@@ -8535,7 +8546,7 @@ function InlinePicker({ds,guard,onClose,onFull,dayInfo}) {
         {guardianObs.map(o=>(
           <button key={o.id} onClick={()=>{updateCal(ds,{parentIdx:undefined,obsId:o.id,obsName:o.name,timeType:"full",startTime:"",endTime:"",location:"",note:""});onClose();}}
             style={{padding:"5px 12px",background:guard?.obsId===o.id?"#f59e0b":"#f59e0b18",color:guard?.obsId===o.id?"#fff":"#f59e0b",border:"2px solid #f59e0b",borderRadius:20,fontSize:13,fontWeight:700}}>
-            🏠 {o.name||(o.email||"").split("@")[0]}
+            🏠 {obsLabel(o)}
           </button>
         ))}
         <button onClick={()=>{updateCal(ds,{parentIdx:undefined,obsId:undefined});onClose();}} style={{padding:"5px 10px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:20,fontSize:12}}>✕</button>
@@ -8580,7 +8591,7 @@ function EditDay({ds,onClose,editRef}) {
             <option value="">--</option>
             {cfg.parents.map((p,i)=><option key={i} value={String(i)}>{p.name||`${t.parentN} ${i+1}`}</option>)}
             {guardianObs.length>0&&<optgroup label="🏠 Gardiens">
-              {guardianObs.map(o=><option key={o.id} value={`obs:${o.id}`}>🏠 {o.name||(o.email||"").split("@")[0]}</option>)}
+              {guardianObs.map(o=><option key={o.id} value={`obs:${o.id}`}>🏠 {obsLabel(o)}</option>)}
             </optgroup>}
           </select>
         </div>
