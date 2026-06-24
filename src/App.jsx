@@ -10890,7 +10890,7 @@ function verifyMsg(m){return hashMsg(m.from,m.to,m.content,m.ts)===m.hash;}
 
 // ─── MESSAGING TAB ────────────────────────────────────────────────────────────
 function MessagingTab(){
-  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,myUid,uidToLocal}=useApp();
+  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,myUid,uidToLocal,emailToUid}=useApp();
   const [view,setView]=useState("list");
   const [convId,setConvId]=useState(null);
   const [draft,setDraft]=useState("");
@@ -10935,6 +10935,9 @@ function MessagingTab(){
       pMap[String(u.id)]={name:u.name,role:u.role||"parent",color:col,
         avatar:u.role==="observer"?"👁️":u.role==="child"?"🧒":"👤"};
     }
+    // Détecter si le destinataire a un compte Supabase (= peut recevoir un message)
+    u._registered = (uidToLocal&&Array.from(uidToLocal.values()).map(String).includes(String(u.id)))
+      || (u.email && emailToUid&&emailToUid.has(u.email));
   });
 
   function ck(ids){return[...new Set(ids)].map(String).sort().join('|');}
@@ -11009,13 +11012,25 @@ function MessagingTab(){
         <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
           {contacts.map(u=>{
             const uid=String(u.id);const sel=picked.includes(uid);const col=pMap[uid]?.color||C.vio;
+            const reg=u._registered;
             return(
-              <button key={uid} onClick={()=>setPicked(p=>sel?p.filter(x=>x!==uid):[...p,uid])} style={{
-                padding:"8px 14px",background:sel?`${col}22`:C.sur,border:`2px solid ${sel?col:C.bor}`,
-                borderRadius:20,display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:700,
-                color:sel?col:C.mut,transition:"all .15s",cursor:"pointer"
+              <button key={uid}
+                onClick={()=>{ if(!reg) return; setPicked(p=>sel?p.filter(x=>x!==uid):[...p,uid]); }}
+                disabled={!reg}
+                title={reg?"":(t.msgNotRegistered||"Pas encore inscrit — invitation à renvoyer")}
+                style={{
+                  padding:"8px 14px",
+                  background:!reg?`${C.mut}11`:(sel?`${col}22`:C.sur),
+                  border:`2px solid ${!reg?C.bor:(sel?col:C.bor)}`,
+                  borderRadius:20,display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:700,
+                  color:!reg?C.mut:(sel?col:C.mut),
+                  opacity:!reg?0.5:1,
+                  transition:"all .15s",cursor:!reg?"not-allowed":"pointer"
               }}>
-                <span>{pMap[uid]?.avatar||"👤"}</span><span>{u.name}</span>{sel&&<span style={{fontSize:10}}>✓</span>}
+                <span>{pMap[uid]?.avatar||"👤"}</span>
+                <span>{u.name}</span>
+                {!reg&&<span style={{fontSize:10,fontWeight:600}}>· {t.msgNotRegisteredShort||"pas inscrit"}</span>}
+                {sel&&<span style={{fontSize:10}}>✓</span>}
               </button>
             );
           })}
