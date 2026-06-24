@@ -4393,6 +4393,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     // Le vrai doublon sera détecté par Supabase lors du signUp (linkAccount).
     setUsers(us => us.filter(u => u.email !== cleanEmail));
     const newId=Date.now();
+    let realUserId = newId; // 🔧 déclaré ici (pas dans le if) pour être accessible partout
     const newRefCode=makeRefCode(newId,cleanEmail);
     let refUsed=null; let trialExtension=0;
     if(refInput.trim()){
@@ -4438,7 +4439,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     if(finalRole !== "admin"){
       const linkRes = await familySync.linkAccount(cleanEmail, pw, {role:finalRole, parentIdx, name:cleanName, phone:regPhoneId||undefined});
       // 🔧 UUID réel Supabase — utilisé dans onObsJoin pour que matchFn trouve la carte
-      const realUserId = linkRes.userId || newId;
+      realUserId = linkRes.userId || newId;
       if(!linkRes.ok){
         if(linkRes.error === "already_registered"){
           // Email déjà dans Supabase → on annule la création locale et on bloque
