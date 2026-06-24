@@ -3343,6 +3343,7 @@ export default function App() {
     expSubmittedPopup, setExpSubmittedPopup,
     setConfirmDeleteAccount,
     familySync,
+    uidToLocal,
   };
 
   return (
@@ -10865,7 +10866,7 @@ function verifyMsg(m){return hashMsg(m.from,m.to,m.content,m.ts)===m.hash;}
 
 // ─── MESSAGING TAB ────────────────────────────────────────────────────────────
 function MessagingTab(){
-  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,myUid}=useApp();
+  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,myUid,uidToLocal}=useApp();
   const [view,setView]=useState("list");
   const [convId,setConvId]=useState(null);
   const [draft,setDraft]=useState("");
@@ -10887,7 +10888,9 @@ function MessagingTab(){
       avatar:u.role==="admin"?"👑":u.role==="observer"?"👁️":u.role==="child"?"🧒":"👤"};
   });
 
-  const contacts=(users||[]).filter(u=>String(u.id)!==myId&&u.name&&u.role!=="admin"&&!String(u.email||"").endsWith("@demo.fr"));
+  // IDs locaux des membres de cette famille (via la table id_links Supabase)
+  const _familyLocalIds = new Set(Array.from((uidToLocal||new Map()).values()).map(String));
+  const contacts=(users||[]).filter(u=>String(u.id)!==myId&&u.name&&u.role!=="admin"&&!String(u.email||"").endsWith("@demo.fr")&&(_familyLocalIds.size===0||_familyLocalIds.has(String(u.id))));
 
   function ck(ids){return[...new Set(ids)].map(String).sort().join('|');}
 
