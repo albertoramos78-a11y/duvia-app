@@ -3623,8 +3623,8 @@ export default function App() {
             <div style={{position:"fixed",top:62,right:14,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:16,minWidth:260,maxWidth:"90vw",zIndex:300,boxShadow:"0 12px 40px rgba(0,0,0,.2)",overflow:"hidden"}}>
               {/* User header */}
               <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.bor}`,display:"flex",alignItems:"center",gap:10}}>
-                <div style={{width:36,height:36,borderRadius:10,background:`linear-gradient(135deg,${isAdm?"#FFD700":isObs?C.ora:isChild?C.grn:C.vio},${isAdm?"#ff9f43":C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
-                  {isAdm ? "👑" : isObs ? "👁️" : isChild ? "🧒" : (user?.avatar || "👤")}
+                <div style={{width:36,height:36,borderRadius:10,background:`linear-gradient(135deg,${isAdm?"#FFD700":isObs?C.ora:isChild?C.grn:((cfg.parents||[]).find(p=>p.name===user?.name)?.color||C.vio)},${isAdm?"#ff9f43":C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
+                  {isAdm ? "👑" : isObs ? "👁️" : isChild ? "🧒" : ((cfg.parents||[]).find(p=>p.name===user?.name)?.avatar || user?.avatar || "👤")}
                 </div>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:13,fontWeight:800}}>{user.name}</div>
@@ -11043,8 +11043,23 @@ function MessagingTab(){
     }).catch(e=>alert("⚠️ Erreur d'envoi : "+(e?.message||e)));
   }
 
-  function convName(ids){return ids.filter(id=>id!==String(myUid)).map(id=>pMap[id]?.name||"?").join(", ");}
-  function convColor(ids){const o=ids.find(id=>id!==String(myUid));return o?(pMap[o]?.color||C.vio):C.vio;}
+  function convName(ids){
+    return ids.filter(id=>id!==String(myUid)&&id!==myId).map(id=>{
+      if(pMap[id]?.name) return pMap[id].name;
+      // Fallback: chercher dans cfg par UID via emailToUid (reverse lookup)
+      if(emailToUid){
+        for(const [email, uid] of emailToUid){
+          if(uid===id){
+            const cfgP=(cfg.parents||[]).find(p=>p.email===email);
+            const cfgO=(cfg.observers||[]).find(o=>o.email===email);
+            if(cfgP||cfgO) return (cfgP||cfgO).name;
+          }
+        }
+      }
+      return "?";
+    }).join(", ");
+  }
+  function convColor(ids){const o=ids.find(id=>id!==String(myUid)&&id!==myId);return o?(pMap[o]?.color||C.vio):C.vio;}
 
   // ── NEW CONVERSATION ──────────────────────────────────────────────────────
   if(view==="new") return(
@@ -11102,8 +11117,8 @@ function MessagingTab(){
 
   // ── CHAT VIEW ─────────────────────────────────────────────────────────────
   if(view==="chat"&&currentConv){
+    const isGroup=currentConv.ids.length>2;
     const otherIds=currentConv.ids.filter(id=>id!==String(myUid));
-    const isGroup=otherIds.length>1;
     return(
       <div className="fi" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 190px)"}}>
         {/* Header */}
@@ -11243,8 +11258,9 @@ function MessagingTab(){
         const _myUidStr=String(myUid||"");
         const unread=conv.msgs.filter(m=>(m.to||[]).map(String).includes(_myUidStr)&&!(m.readBy||[]).map(String).includes(_myUidStr)).length;
         const col=convColor(conv.ids);
+        // Groupe = 3+ participants au total (2 personnes = toujours une conv 1-à-1)
+        const isGroup=conv.ids.length>2;
         const otherIds=conv.ids.filter(id=>id!==_myUidStr);
-        const isGroup=otherIds.length>1;
         const memberCount=conv.ids.length; // total including me
         return(
           <div key={conv.key} onClick={()=>{setConvId(conv.key);setView("chat");}} className="card" style={{
@@ -11282,7 +11298,7 @@ function MessagingTab(){
                   <div style={{fontSize:10,color:C.mut,marginBottom:3,display:"flex",alignItems:"center",gap:4}}>
                     <span style={{fontSize:11}}>👤</span>
                     <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                      {conv.ids.map(id=>id===String(myUid)?(t.msgMe||"Moi"):pMap[id]?.name||"?").join(" · ")}
+                      {conv.ids.map(id=>(myUid&&id===String(myUid))||id===myId?(t.msgMe||"Moi"):pMap[id]?.name||"?").join(" · ")}
                     </span>
                   </div>
                 )}
