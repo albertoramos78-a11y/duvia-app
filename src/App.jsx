@@ -933,7 +933,12 @@ function resolveGuard(ds,cfg,childId) {
     || cfg.specialDates?.schoolHolDetails || {};
   for(const holName of Object.keys(holDetails)) {
     const det = holDetails[holName];
-    if(det[ds]!==undefined) return {parentIdx:det[ds],timeType:"full",source:"schoolHol"};
+    if(det[ds]!==undefined) {
+      const v=det[ds];
+      if(typeof v==="string"&&v.startsWith("obs:"))
+        return {obsId:v.slice(4),timeType:"full",source:"schoolHol"};
+      return {parentIdx:v,timeType:"full",source:"schoolHol"};
+    }
   }
 
   // 5. Pattern de garde
@@ -7151,6 +7156,12 @@ function StepGarde() {
                         {p.name?p.name.split(" ")[0].slice(0,4):`P${pi+1}`}
                       </button>
                     ))}
+                    {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=>(
+                      <button key={o.id} onClick={()=>{const p=[...pat];p[i]={...p[i],parentIdx:undefined,obsId:o.id,obsName:o.name||(o.email||"").split("@")[0]};setPat(p);}}
+                        style={{width:"100%",padding:"4px 1px",marginBottom:2,background:pat[i]?.obsId===o.id?"#f59e0b":C.sur,color:pat[i]?.obsId===o.id?"#fff":"#f59e0b",border:"1.5px solid #f59e0b",borderRadius:6,fontSize:8,fontWeight:800}}>
+                        🏠{(o.name||(o.email||"")).slice(0,3)}
+                      </button>
+                    ))}
                   </div>
                 ))}
               </div>
@@ -7197,12 +7208,19 @@ function WeekRow({wk, wkPiCounts, dominantPi, wkColor, wkLabel, hol, det, chGetH
           <span style={{fontSize:11,fontWeight:800,color:C.txt,fontFamily:"JetBrains Mono"}}>{wkLabel}</span>
           <span style={{fontSize:10,color:C.mut}}>{wk.length}j</span>
         </div>
-        <div style={{display:"flex",gap:4,alignItems:"center"}}>
+        <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
           {cfg.parents.map((p,pi)=>(
             <button key={pi}
               onClick={()=>{const base=chGetHolDetails();const nd={...base,[hol.n]:{...(base[hol.n]||{})}};wk.forEach(({ds})=>{nd[hol.n][ds]=pi;});chSetHolDetails(nd);setOpen(false);}}
               style={{padding:"3px 9px",background:wkPiCounts[pi]===wk.length?p.color:`${p.color}22`,color:wkPiCounts[pi]===wk.length?"#fff":p.color,border:`1.5px solid ${p.color}`,borderRadius:20,fontSize:11,fontWeight:800}}>
               {p.name?p.name.split(" ")[0].slice(0,6):`P${pi+1}`}
+            </button>
+          ))}
+          {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=>(
+            <button key={o.id}
+              onClick={()=>{const base=chGetHolDetails();const nd={...base,[hol.n]:{...(base[hol.n]||{})}};wk.forEach(({ds})=>{nd[hol.n][ds]=`obs:${o.id}`;});chSetHolDetails(nd);setOpen(false);}}
+              style={{padding:"3px 9px",background:"#f59e0b22",color:"#f59e0b",border:"1.5px solid #f59e0b",borderRadius:20,fontSize:11,fontWeight:800}}>
+              🏠 {(o.name||(o.email||"")).split("@")[0].slice(0,6)}
             </button>
           ))}
           <button onClick={()=>setOpen(o=>!o)}
@@ -7217,17 +7235,25 @@ function WeekRow({wk, wkPiCounts, dominantPi, wkColor, wkLabel, hol, det, chGetH
             const aPi=det[ds];
             const aP=aPi!==undefined?cfg.parents[aPi]:null;
             const isWE=dw>=5;
+            const guardians=(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard);
+            const allChoices=[...cfg.parents.map((_,pi)=>({type:"parent",pi})),...guardians.map(o=>({type:"obs",id:o.id,name:o.name||(o.email||"").split("@")[0]}))];
+            const currentChoiceIdx=aPi===undefined?-1:typeof aPi==="string"&&aPi.startsWith("obs:")?allChoices.findIndex(c=>c.type==="obs"&&c.id===aPi.slice(4)):allChoices.findIndex(c=>c.type==="parent"&&c.pi===aPi);
             const cycleDay=()=>{
-              const next=aPi===undefined?0:aPi<cfg.parents.length-1?aPi+1:undefined;
-              chSetHD(hol.n,ds,next);
+              const nextIdx=currentChoiceIdx>=allChoices.length-1?undefined:currentChoiceIdx+1;
+              chSetHD(hol.n,ds,nextIdx===undefined?undefined:allChoices[nextIdx].type==="parent"?allChoices[nextIdx].pi:`obs:${allChoices[nextIdx].id}`);
             };
+            const isObs=typeof aPi==="string"&&aPi?.startsWith("obs:");
+            const obsGuard=isObs?guardians.find(o=>o.id===aPi.slice(4)):null;
+            const cellColor=isObs?"#f59e0b":aP?aP.color:C.bor;
+            const cellBg=isObs?"#f59e0b22":aP?`${aP.color}22`:"transparent";
+            const cellLabel=isObs?(obsGuard?.name||(obsGuard?.email||"").split("@")[0]||"🏠").slice(0,2):aP?(aP.name?aP.name[0].toUpperCase():"P"):"?";
             return (
               <div key={ds} onClick={cycleDay}
-                style={{flex:1,padding:"8px 4px",textAlign:"center",cursor:"pointer",background:aP?`${aP.color}22`:"transparent",borderRight:di<wk.length-1?`1px solid ${C.bor}`:"none",transition:"background .12s"}}>
+                style={{flex:1,padding:"8px 4px",textAlign:"center",cursor:"pointer",background:cellBg,borderRight:di<wk.length-1?`1px solid ${C.bor}`:"none",transition:"background .12s"}}>
                 <div style={{fontSize:9,fontWeight:800,color:isWE?C.yel:C.mut,marginBottom:2}}>{t.dayShort[dw]}</div>
                 <div style={{fontSize:9,color:C.mut,fontFamily:"JetBrains Mono",marginBottom:4}}>{ds.slice(8)}</div>
-                <div style={{width:22,height:22,borderRadius:"50%",margin:"0 auto",background:aP?aP.color:C.bor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:aP?"#fff":C.sur}}>
-                  {aP?(aP.name?aP.name[0].toUpperCase():"P"):"?"}
+                <div style={{width:22,height:22,borderRadius:"50%",margin:"0 auto",background:cellColor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:(aP||isObs)?"#fff":C.sur}}>
+                  {cellLabel}
                 </div>
               </div>
             );
