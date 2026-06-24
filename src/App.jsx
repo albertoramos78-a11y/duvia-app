@@ -2590,8 +2590,31 @@ export default function App() {
       hash: hashMsg(fromLocal, toLocal, cm.content, cm.created_at),
     };
   });
+  // emailToUid : email → supabase_uid (membres sans compte local sur cet appareil)
+  const [emailToUid, setEmailToUid] = useState(new Map());
+  useEffect(() => {
+    if (!familySync.familyId) return;
+    (async () => {
+      try {
+        const { data } = await supabase.from("id_links")
+          .select("email, supabase_uid")
+          .eq("family_id", familySync.familyId)
+          .not("email", "is", null);
+        if (data) setEmailToUid(new Map(data.map(r => [r.email, r.supabase_uid])));
+      } catch {}
+    })();
+  }, [familySync.familyId]);
+
   function sendCloudMessage(senderName, recipientLocalIds, content){
-    const recipientUids = recipientLocalIds.map(id=>localToUid.get(id)).filter(Boolean);
+    const recipientUids = recipientLocalIds.map(id=>{
+      if(localToUid.has(id)) return localToUid.get(id);
+      // ID synthétique (cfgp_email ou cfgo_email) : lookup par email
+      if(id.startsWith("cfgp_")||id.startsWith("cfgo_")){
+        const email=id.replace(/^cfg[po]_/,"");
+        return emailToUid.get(email)||null;
+      }
+      return null;
+    }).filter(Boolean);
     if(!myUid || recipientUids.length !== recipientLocalIds.length){
       return Promise.reject(new Error("Un destinataire n'a pas encore synchronisé son compte — demande-lui de se reconnecter une fois, puis réessaie."));
     }
@@ -2649,7 +2672,7 @@ export default function App() {
         if (!uid) return;
         setMyUid(uid);
         await supabase.from("id_links").upsert(
-          { family_id: familySync.familyId, local_id: String(user.id), supabase_uid: uid },
+          { family_id: familySync.familyId, local_id: String(user.id), supabase_uid: uid, email: user.email||null },
           { onConflict: "family_id,local_id" }
         );
       } catch (e) {
@@ -3344,6 +3367,7 @@ export default function App() {
     setConfirmDeleteAccount,
     familySync,
     uidToLocal,
+    emailToUid,
   };
 
   return (
@@ -10897,8 +10921,8 @@ function MessagingTab(){
       .filter(p=>p.name && p.email && p.email!==user?.email)
       .map(p=>_uByEmail[p.email]||{id:`cfgp_${p.email}`,name:p.name,email:p.email,role:"parent"}),
     ...(cfg.children||[])
-      .filter(c=>c.name)
-      .map(c=>_uByName[c.name]||{id:`cfgc_${c.name}`,name:c.name,role:"child"}),
+      .filter(c=>c.name && _uByName[c.name])  // enfants seulement si compte local existant
+      .map(c=>_uByName[c.name]),
     ...(cfg.observers||[])
       .filter(o=>o.status==="active"&&o.name)
       .map(o=>_uByEmail[o.email]||{id:`cfgo_${o.email||o.name}`,name:o.name,email:o.email,role:"observer"}),
