@@ -10880,7 +10880,7 @@ function MessagingTab(){
   const myId=String(user?.id||"");
   const myName=user?.name||"?";
 
-  // Participant map
+  // Participant map (tous les users locaux)
   const pMap={};
   (users||[]).forEach(u=>{
     const col=(cfg.parents||[]).find(p=>p.name&&u.name&&p.name===u.name)?.color||C.vio;
@@ -10888,20 +10888,30 @@ function MessagingTab(){
       avatar:u.role==="admin"?"👑":u.role==="observer"?"👁️":u.role==="child"?"🧒":"👤"};
   });
 
-  // Membres de cette famille : parents+observateurs par email, enfants par nom
-  const _famEmails = new Set([
-    ...(cfg.parents||[]).map(p=>p.email).filter(Boolean),
-    ...(cfg.observers||[]).filter(o=>o.status==="active").map(o=>o.email).filter(Boolean),
-  ]);
-  const _famChildNames = new Set((cfg.children||[]).map(c=>c.name).filter(Boolean));
-  const contacts=(users||[]).filter(u=>
-    String(u.id)!==myId && u.name && u.role!=="admin" &&
-    !String(u.email||"").endsWith("@demo.fr") &&
-    (
-      (u.email && _famEmails.has(u.email)) ||
-      (u.role==="child" && _famChildNames.has(u.name))
-    )
-  );
+  // Contacts depuis cfg (source de vérité famille, cross-device)
+  // Si le membre a un compte local → on l'utilise ; sinon → objet synthétique
+  const _uByEmail=Object.fromEntries((users||[]).filter(u=>u.email).map(u=>[u.email,u]));
+  const _uByName =Object.fromEntries((users||[]).filter(u=>u.name ).map(u=>[u.name, u]));
+  const contacts=[
+    ...(cfg.parents||[])
+      .filter(p=>p.name && p.email && p.email!==user?.email)
+      .map(p=>_uByEmail[p.email]||{id:`cfgp_${p.email}`,name:p.name,email:p.email,role:"parent"}),
+    ...(cfg.children||[])
+      .filter(c=>c.name)
+      .map(c=>_uByName[c.name]||{id:`cfgc_${c.name}`,name:c.name,role:"child"}),
+    ...(cfg.observers||[])
+      .filter(o=>o.status==="active"&&o.name)
+      .map(o=>_uByEmail[o.email]||{id:`cfgo_${o.email||o.name}`,name:o.name,email:o.email,role:"observer"}),
+  ].filter(u=>String(u.id)!==myId&&!String(u.email||"").endsWith("@demo.fr"));
+
+  // Enrichir pMap avec les membres cfg pas encore dans users (cross-device)
+  contacts.forEach(u=>{
+    if(!pMap[String(u.id)]){
+      const col=(cfg.parents||[]).find(p=>p.name===u.name)?.color||C.vio;
+      pMap[String(u.id)]={name:u.name,role:u.role||"parent",color:col,
+        avatar:u.role==="observer"?"👁️":u.role==="child"?"🧒":"👤"};
+    }
+  });
 
   function ck(ids){return[...new Set(ids)].map(String).sort().join('|');}
 
