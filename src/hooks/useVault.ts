@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { supabase } from "../services/supabase/supabaseClient";
+import { supabase } from "../supabaseClient";
 import {
   type VaultDocument,
   type VaultDocInput,
