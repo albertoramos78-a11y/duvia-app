@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { supabase } from "../services/supabase/supabaseClient";
+import { supabase } from "../supabaseClient";
 import { type DuviaMessage, listMessages, sendMessage, markMessageRead } from "../services/supabase/messageService";
 
 /**
@@ -40,9 +40,6 @@ export function useMessages(familyId: string | null) {
         (payload) => {
           if (payload.eventType === "INSERT") {
             const incoming = payload.new as DuviaMessage;
-            // Supabase diffuse l'événement INSERT à TOUS les abonnés, y compris
-            // l'émetteur — qui a déjà ajouté le message en optimiste dans `send`.
-            // On déduplique par id pour ne pas l'afficher deux fois.
             setMsgs((prev) => (prev.some((m) => m.id === incoming.id) ? prev : [...prev, incoming]));
           } else if (payload.eventType === "UPDATE") {
             setMsgs((prev) => prev.map((m) => (m.id === payload.new.id ? (payload.new as DuviaMessage) : m)));
@@ -59,8 +56,6 @@ export function useMessages(familyId: string | null) {
     async (senderId: string, senderName: string, recipientIds: string[], content: string) => {
       if (!familyId) throw new Error("Famille non prête");
       const msg = await sendMessage({ familyId, senderId, senderName, recipientIds, content });
-      // Dédup : l'événement realtime INSERT peut arriver avant ou après ce
-      // setState ; dans les deux cas on garde une seule occurrence par id.
       setMsgs((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
       return msg;
     },
@@ -72,7 +67,7 @@ export function useMessages(familyId: string | null) {
       const target = msgs.find((m) => m.id === id);
       if (!target) return;
       const currentReadBy = target.read_by ?? [];
-      if (currentReadBy.includes(userId)) return; // déjà lu — rien à faire
+      if (currentReadBy.includes(userId)) return;
       await markMessageRead(id, userId, currentReadBy);
       setMsgs((prev) =>
         prev.map((m) =>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "../services/supabase/supabaseClient";
+import { supabase } from "../supabaseClient";
 
 /**
  * La messagerie (MessagingTab) regroupe les conversations par id LOCAL
