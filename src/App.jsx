@@ -3068,12 +3068,14 @@ export default function App() {
   const isObs = user?.role==="observer";
   const isChild = user?.role==="child";
   const _myId = String(user?.id||"");
-  const unreadMsgs = useMemo(() =>
-    msgs.filter(m =>
-      (m.to||[]).map(String).includes(_myId) &&
-      !(m.readBy||[]).map(String).includes(_myId)
-    ).length,
-  [msgs, _myId]); // ✅ recalculé uniquement si msgs ou user change
+  const unreadMsgs = useMemo(() => {
+    const _uid = String(myUid || _myId || "");
+    if(!_uid) return 0;
+    return msgs.filter(m =>
+      (m.to||[]).map(String).includes(_uid) &&
+      !(m.readBy||[]).map(String).includes(_uid)
+    ).length;
+  }, [msgs, myUid, _myId]); // ✅ recalculé si msgs, myUid ou user change
   // seen: clé fixe, objet {[userId]: {vault,contacts,expenses}}
   const [allSeen,setAllSeen] = useLocalStorage("duvia_seen_all", {});
   const _seen = allSeen[_myId] || {vault:"",contacts:"",expenses:""};
@@ -10949,15 +10951,29 @@ function MessagingTab(){
       || (u.email && emailToUid&&emailToUid.has(u.email));
   });
 
-  // pMap par UID Supabase aussi (les messages cloud utilisent des UIDs)
-  // Map local_id → UID via id_links, puis copie l'entrée pMap[localId] vers pMap[uid]
+  // pMap par UID Supabase (les messages cloud utilisent des UIDs)
   if(uidToLocal){
     uidToLocal.forEach((localId, uid) => {
       if(pMap[localId] && !pMap[uid]) pMap[uid] = pMap[localId];
     });
   }
-  // Et pour mon propre UID (au cas où myUid pas dans uidToLocal)
+  // Mon propre UID
   if(myUid && pMap[myId] && !pMap[myUid]) pMap[myUid] = pMap[myId];
+  // Membres connus via emailToUid+cfg (cross-device sans local_id)
+  if(emailToUid){
+    emailToUid.forEach((uid, email) => {
+      if(!pMap[uid]){
+        const cfgP=(cfg.parents||[]).find(p=>p.email===email);
+        const cfgO=(cfg.observers||[]).find(o=>o.email===email);
+        const member=cfgP||cfgO;
+        if(member){
+          const col=cfgP?.color||C.vio;
+          pMap[uid]={name:member.name,role:cfgP?"parent":"observer",color:col,
+            avatar:cfgO?"👁️":"👤"};
+        }
+      }
+    });
+  }
 
   function ck(ids){return[...new Set(ids)].map(String).sort().join('|');}
 
@@ -11224,9 +11240,10 @@ function MessagingTab(){
 
       {convList.map(conv=>{
         const last=conv.msgs.at(-1);
-        const unread=conv.msgs.filter(m=>(m.to||[]).map(String).includes(myId)&&!(m.readBy||[]).map(String).includes(myId)).length;
+        const _myUidStr=String(myUid||"");
+        const unread=conv.msgs.filter(m=>(m.to||[]).map(String).includes(_myUidStr)&&!(m.readBy||[]).map(String).includes(_myUidStr)).length;
         const col=convColor(conv.ids);
-        const otherIds=conv.ids.filter(id=>id!==myId);
+        const otherIds=conv.ids.filter(id=>id!==_myUidStr);
         const isGroup=otherIds.length>1;
         const memberCount=conv.ids.length; // total including me
         return(
@@ -11265,7 +11282,7 @@ function MessagingTab(){
                   <div style={{fontSize:10,color:C.mut,marginBottom:3,display:"flex",alignItems:"center",gap:4}}>
                     <span style={{fontSize:11}}>👤</span>
                     <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                      {conv.ids.map(id=>id===myId?(t.msgMe||"Moi"):pMap[id]?.name||"?").join(" · ")}
+                      {conv.ids.map(id=>id===String(myUid)?(t.msgMe||"Moi"):pMap[id]?.name||"?").join(" · ")}
                     </span>
                   </div>
                 )}
