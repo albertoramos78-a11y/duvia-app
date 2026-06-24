@@ -10888,9 +10888,20 @@ function MessagingTab(){
       avatar:u.role==="admin"?"👑":u.role==="observer"?"👁️":u.role==="child"?"🧒":"👤"};
   });
 
-  // IDs locaux des membres de cette famille (via la table id_links Supabase)
-  const _familyLocalIds = new Set(Array.from((uidToLocal||new Map()).values()).map(String));
-  const contacts=(users||[]).filter(u=>String(u.id)!==myId&&u.name&&u.role!=="admin"&&!String(u.email||"").endsWith("@demo.fr")&&(_familyLocalIds.size===0||_familyLocalIds.has(String(u.id))));
+  // Membres de cette famille : parents+observateurs par email, enfants par nom
+  const _famEmails = new Set([
+    ...(cfg.parents||[]).map(p=>p.email).filter(Boolean),
+    ...(cfg.observers||[]).filter(o=>o.status==="active").map(o=>o.email).filter(Boolean),
+  ]);
+  const _famChildNames = new Set((cfg.children||[]).map(c=>c.name).filter(Boolean));
+  const contacts=(users||[]).filter(u=>
+    String(u.id)!==myId && u.name && u.role!=="admin" &&
+    !String(u.email||"").endsWith("@demo.fr") &&
+    (
+      (u.email && _famEmails.has(u.email)) ||
+      (u.role==="child" && _famChildNames.has(u.name))
+    )
+  );
 
   function ck(ids){return[...new Set(ids)].map(String).sort().join('|');}
 
