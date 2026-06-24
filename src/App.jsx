@@ -2580,14 +2580,14 @@ export default function App() {
   // sans y toucher. Le nom de l'expéditeur est gardé tel quel (sender_name,
   // une copie prise au moment de l'envoi) même si ce compte est supprimé
   // plus tard — exactement comme l'ancien système, mais côté serveur.
+  // On garde les UIDs Supabase tels quels — ils sont stables (1 par personne),
+  // contrairement aux local_id qui changent à chaque appareil/session.
   const msgs = (cloudMsgs||[]).map(cm => {
-    const fromLocal = uidToLocal.get(cm.sender_id) || cm.sender_id;
-    const toLocal = (cm.recipient_ids||[]).map(u => uidToLocal.get(u) || u);
-    const readByLocal = (cm.read_by||[]).map(u => uidToLocal.get(u) || u);
     return {
-      id: cm.id, from: fromLocal, fromName: cm.sender_name || "?",
-      to: toLocal, content: cm.content, ts: cm.created_at, readBy: readByLocal,
-      hash: hashMsg(fromLocal, toLocal, cm.content, cm.created_at),
+      id: cm.id, from: cm.sender_id, fromName: cm.sender_name || "?",
+      to: cm.recipient_ids || [], content: cm.content, ts: cm.created_at,
+      readBy: cm.read_by || [],
+      hash: hashMsg(cm.sender_id, cm.recipient_ids||[], cm.content, cm.created_at),
     };
   });
   // emailToUid : email → supabase_uid (membres sans compte local sur cet appareil)
@@ -3367,6 +3367,7 @@ export default function App() {
     setConfirmDeleteAccount,
     familySync,
     uidToLocal,
+    localToUid,
     emailToUid,
   };
 
@@ -10890,7 +10891,7 @@ function verifyMsg(m){return hashMsg(m.from,m.to,m.content,m.ts)===m.hash;}
 
 // ─── MESSAGING TAB ────────────────────────────────────────────────────────────
 function MessagingTab(){
-  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,myUid,uidToLocal,emailToUid}=useApp();
+  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,myUid,uidToLocal,localToUid,emailToUid}=useApp();
   const [view,setView]=useState("list");
   const [convId,setConvId]=useState(null);
   const [draft,setDraft]=useState("");
@@ -10940,13 +10941,23 @@ function MessagingTab(){
       || (u.email && emailToUid&&emailToUid.has(u.email));
   });
 
+  // pMap par UID Supabase aussi (les messages cloud utilisent des UIDs)
+  // Map local_id → UID via id_links, puis copie l'entrée pMap[localId] vers pMap[uid]
+  if(uidToLocal){
+    uidToLocal.forEach((localId, uid) => {
+      if(pMap[localId] && !pMap[uid]) pMap[uid] = pMap[localId];
+    });
+  }
+  // Et pour mon propre UID (au cas où myUid pas dans uidToLocal)
+  if(myUid && pMap[myId] && !pMap[myUid]) pMap[myUid] = pMap[myId];
+
   function ck(ids){return[...new Set(ids)].map(String).sort().join('|');}
 
-  // Build conversations
+  // Build conversations — filtre par UID Supabase (stable cross-device)
   const allConvs={};
   (msgs||[]).forEach(m=>{
     const ids=[String(m.from),...(m.to||[]).map(String)];
-    if(!ids.includes(myId))return;
+    if(!myUid || !ids.includes(String(myUid))) return;
     const key=ck(ids);
     if(!allConvs[key])allConvs[key]={key,ids,msgs:[]};
     allConvs[key].msgs.push(m);
@@ -10965,7 +10976,7 @@ function MessagingTab(){
     msgs.forEach(m=>{
       const ids=[String(m.from),...(m.to||[]).map(String)];
       if(ck(ids)!==convId)return;
-      if((m.to||[]).map(String).includes(myId)&&!(m.readBy||[]).map(String).includes(myId))
+      if((m.to||[]).map(String).includes(String(myUid))&&!(m.readBy||[]).map(String).includes(String(myUid)))
         markCloudMessageRead(m.id, myUid);
     });
   },[convId,myUid,msgs]);
@@ -10992,12 +11003,24 @@ function MessagingTab(){
     sendCloudMessage(myName, toIds, safeContent).then(()=>{
       setDraft("");
       addRefAction("SEND_MESSAGE");
-      if(view==="new"){setConvId(ck([myId,...toIds]));setView("chat");}
+      if(view==="new"){
+        // Construire le key avec UIDs Supabase (pour matcher allConvs)
+        const toUids = toIds.map(id => {
+          if(localToUid && localToUid.has(id)) return localToUid.get(id);
+          if(id.startsWith&&(id.startsWith("cfgp_")||id.startsWith("cfgo_"))){
+            const email = id.replace(/^cfg[po]_/,"");
+            return emailToUid && emailToUid.get(email);
+          }
+          return id;
+        }).filter(Boolean);
+        setConvId(ck([String(myUid),...toUids]));
+        setView("chat");
+      }
     }).catch(e=>alert("⚠️ Erreur d'envoi : "+(e?.message||e)));
   }
 
-  function convName(ids){return ids.filter(id=>id!==myId).map(id=>pMap[id]?.name||"?").join(", ");}
-  function convColor(ids){const o=ids.find(id=>id!==myId);return o?(pMap[o]?.color||C.vio):C.vio;}
+  function convName(ids){return ids.filter(id=>id!==String(myUid)).map(id=>pMap[id]?.name||"?").join(", ");}
+  function convColor(ids){const o=ids.find(id=>id!==String(myUid));return o?(pMap[o]?.color||C.vio):C.vio;}
 
   // ── NEW CONVERSATION ──────────────────────────────────────────────────────
   if(view==="new") return(
@@ -11055,7 +11078,7 @@ function MessagingTab(){
 
   // ── CHAT VIEW ─────────────────────────────────────────────────────────────
   if(view==="chat"&&currentConv){
-    const otherIds=currentConv.ids.filter(id=>id!==myId);
+    const otherIds=currentConv.ids.filter(id=>id!==String(myUid));
     const isGroup=otherIds.length>1;
     return(
       <div className="fi" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 190px)"}}>
