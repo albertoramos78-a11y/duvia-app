@@ -7032,9 +7032,27 @@ function StepGarde() {
 
   function setDay(idx,pi){
     setPat(prev=>{
-      const next=[...prev];next[idx]={...next[idx],parentIdx:pi};
-      const last=prev.reduce((acc,d,i)=>(d?.parentIdx===pi&&i<idx?i:acc),-1);
-      if(last>=0) for(let j=last+1;j<idx;j++) if(next[j]?.parentIdx===undefined) next[j]={...next[j],parentIdx:pi};
+      const next=prev.map(d=>({...d}));
+      // Sélection parent : efface obsId sur ce jour
+      next[idx]={...next[idx],parentIdx:pi,obsId:null,obsName:null};
+      // Autofill des jours sans sélection entre le dernier jour du même parent et idx
+      const last=prev.reduce((acc,d,i)=>(d?.parentIdx===pi&&!d?.obsId&&i<idx?i:acc),-1);
+      if(last>=0) for(let j=last+1;j<idx;j++){
+        if(next[j]?.parentIdx===undefined&&!next[j]?.obsId) next[j]={...next[j],parentIdx:pi,obsId:null};
+      }
+      return next;
+    });
+  }
+  function setDayObs(idx,obsId,obsName){
+    setPat(prev=>{
+      const next=prev.map(d=>({...d}));
+      if(next[idx]?.obsId===obsId){
+        // Toggle : désélectionne si déjà sélectionné
+        next[idx]={...next[idx],obsId:null,obsName:null};
+      } else {
+        // Sélection gardien : efface parentIdx sur ce jour
+        next[idx]={...next[idx],parentIdx:undefined,obsId,obsName};
+      }
       return next;
     });
   }
@@ -7168,9 +7186,9 @@ function StepGarde() {
                       </button>
                     ))}
                     {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=>(
-                      <button key={o.id} onClick={()=>{const p=[...pat];p[i]={...p[i],parentIdx:undefined,obsId:o.id,obsName:obsLabel(o)};setPat(p);}}
+                      <button key={o.id} onClick={()=>setDayObs(i,o.id,obsLabel(o))}
                         style={{width:"100%",padding:"4px 1px",marginBottom:2,background:pat[i]?.obsId===o.id?"#f59e0b":C.sur,color:pat[i]?.obsId===o.id?"#fff":"#f59e0b",border:"1.5px solid #f59e0b",borderRadius:6,fontSize:8,fontWeight:800}}>
-                        🏠{(o.name||(o.email||"")).slice(0,3)}
+                        🏠{obsLabel(o).slice(0,3)}
                       </button>
                     ))}
                   </div>
