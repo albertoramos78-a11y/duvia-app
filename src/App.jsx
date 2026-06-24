@@ -11123,11 +11123,11 @@ function MessagingTab(){
             <div style={{textAlign:"center",padding:40,color:C.mut,fontSize:13}}>{t.msgStartConv||"Démarrez la conversation"}</div>
           )}
           {currentMsgs.map((m,idx)=>{
-            const isMe=String(m.from)===myId;
+            const isMe=String(m.from)===String(myUid);
             const verified=verifyMsg(m);
             const prev=currentMsgs[idx-1];
             const showDate=!prev||new Date(m.ts).toDateString()!==new Date(prev.ts).toDateString();
-            const readOk=(m.readBy||[]).some(id=>String(id)!==myId);
+            const readOk=(m.readBy||[]).some(id=>String(id)!==String(myUid));
             const hhmm=new Date(m.ts).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
             const col=pMap[String(m.from)]?.color||C.vio;
             return(
@@ -11143,7 +11143,7 @@ function MessagingTab(){
                     {!isMe&&isGroup&&<div style={{fontSize:10,color:C.mut,marginBottom:2,fontWeight:700}}>{m.fromName}</div>}
                     <div onClick={()=>setShowProof(showProof===m.id?null:m.id)} style={{
                       padding:"10px 13px",
-                      background:isMe?`linear-gradient(135deg,${C.vio},${C.pin})`:C.sur,
+                      background:isMe?`linear-gradient(135deg,${col},${col}cc)`:C.sur,
                       color:isMe?"#fff":C.txt,
                       borderRadius:isMe?"18px 18px 4px 18px":"18px 18px 18px 4px",
                       fontSize:14,lineHeight:1.45,cursor:"pointer",
