@@ -2605,17 +2605,25 @@ export default function App() {
     })();
   }, [familySync.familyId]);
 
-  function sendCloudMessage(senderName, recipientLocalIds, content){
-    const recipientUids = recipientLocalIds.map(id=>{
-      if(localToUid.has(id)) return localToUid.get(id);
-      // ID synthétique (cfgp_email ou cfgo_email) : lookup par email
-      if(id.startsWith("cfgp_")||id.startsWith("cfgo_")){
-        const email=id.replace(/^cfg[po]_/,"");
-        return emailToUid.get(email)||null;
+  function sendCloudMessage(senderName, recipientIds, content){
+    // recipientIds peut contenir : local_ids, UIDs Supabase déjà résolus, ou IDs synthétiques (cfgp_email)
+    const _uidSet = uidToLocal ? new Set(Array.from(uidToLocal.keys()).map(String)) : new Set();
+    const recipientUids = recipientIds.map(id=>{
+      const sid = String(id);
+      // Déjà un UID Supabase ?
+      if(_uidSet.has(sid)) return sid;
+      // local_id connu ?
+      if(localToUid && localToUid.has(sid)) return localToUid.get(sid);
+      // ID synthétique cfgp_email / cfgo_email ?
+      if(sid.startsWith("cfgp_") || sid.startsWith("cfgo_")){
+        const email = sid.replace(/^cfg[po]_/,"");
+        return (emailToUid && emailToUid.get(email)) || null;
       }
+      // Format UUID ? (8-4-4-4-12 hex) → on suppose UID Supabase
+      if(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sid)) return sid;
       return null;
     }).filter(Boolean);
-    if(!myUid || recipientUids.length !== recipientLocalIds.length){
+    if(!myUid || recipientUids.length !== recipientIds.length){
       return Promise.reject(new Error("Un destinataire n'a pas encore synchronisé son compte — demande-lui de se reconnecter une fois, puis réessaie."));
     }
     return _sendCloudMsg(myUid, senderName, recipientUids, content);
