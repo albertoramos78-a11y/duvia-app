@@ -8354,7 +8354,21 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
         </div>
       )}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-        <button onClick={()=>setCur(d=>new Date(d.getFullYear(),d.getMonth()-1,1))} style={{padding:"7px 13px",background:C.sur,color:C.txt,border:`1.5px solid ${C.bor}`}}>{t.prev}</button>
+        <button onClick={()=>setCur(d=>new Date(d.getFullYear(),d.getMonth()-1,1))} style={{padding:4,background:"transparent",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <svg width="44" height="44" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="gradLeft" x1="64" y1="32" x2="0" y2="32" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#7AC8FF"/>
+                <stop offset="1" stopColor="#C68BFF"/>
+              </linearGradient>
+              <filter id="glowLeft" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="4" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+            <path d="M44 16L20 32L44 48" stroke="url(#gradLeft)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" filter="url(#glowLeft)"/>
+          </svg>
+        </button>
         <div style={{textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
           <div style={{fontSize:19,fontWeight:900}}>{t.months[m]} {y}</div>
           {(() => {
@@ -8371,7 +8385,21 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
           })()}
           {readOnly&&<div style={{fontSize:10,color:C.ora,fontWeight:700}}>{t.readOnly}</div>}
         </div>
-        <button onClick={()=>setCur(d=>new Date(d.getFullYear(),d.getMonth()+1,1))} style={{padding:"7px 13px",background:C.sur,color:C.txt,border:`1.5px solid ${C.bor}`}}>→</button>
+        <button onClick={()=>setCur(d=>new Date(d.getFullYear(),d.getMonth()+1,1))} style={{padding:4,background:"transparent",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <svg width="44" height="44" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="gradRight" x1="0" y1="32" x2="64" y2="32" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#7AC8FF"/>
+                <stop offset="1" stopColor="#C68BFF"/>
+              </linearGradient>
+              <filter id="glowRight" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="4" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+            <path d="M20 16L44 32L20 48" stroke="url(#gradRight)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" filter="url(#glowRight)"/>
+          </svg>
+        </button>
       </div>
       <div style={{marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
         <div>
