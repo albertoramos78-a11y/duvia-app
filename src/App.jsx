@@ -3624,7 +3624,15 @@ export default function App() {
               {/* User header */}
               <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.bor}`,display:"flex",alignItems:"center",gap:10}}>
                 <div style={{width:36,height:36,borderRadius:10,background:`linear-gradient(135deg,${isAdm?"#FFD700":isObs?C.ora:isChild?C.grn:((cfg.parents||[]).find(p=>p.name===user?.name)?.color||C.vio)},${isAdm?"#ff9f43":C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
-                  {isAdm ? "👑" : isObs ? "👁️" : isChild ? "🧒" : ((cfg.parents||[]).find(p=>p.name===user?.name)?.avatar || user?.avatar || "👤")}
+                  {(() => {
+                    if(isAdm) return "👑";
+                    if(isObs) return "👁️";
+                    if(isChild) return "🧒";
+                    const av = (cfg.parents||[]).find(p=>p.name===user?.name)?.avatar || user?.avatar || "👤";
+                    return (typeof av==="string"&&av.startsWith("http"))
+                      ? <img src={av} alt="" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:10}} />
+                      : av;
+                  })()}
                 </div>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:13,fontWeight:800}}>{user.name}</div>
@@ -5062,6 +5070,7 @@ const CHILD_AVATARS  = ["🧒","👧","👦","🧒‍♀️","🧒‍♂️","�
 const OBS_AVATARS    = ["👴","👵","🧓","👩‍👦","👨‍👦","👩‍👧","👨‍👧","🧑‍🤝‍🧑","👫","👬","👭","🤶","🎅","🧙‍♀️","🧙","🧝‍♀️","🦸‍♀️","🦸","🤴","👸"];
 
 function Avatar({emoji, color, size=40, onClick, selected=false}) {
+  const isPhoto = typeof emoji === "string" && emoji.startsWith("http");
   return (
     <div onClick={onClick} style={{
       width:size, height:size, borderRadius:"50%",
@@ -5071,13 +5080,44 @@ function Avatar({emoji, color, size=40, onClick, selected=false}) {
       fontSize:size*0.5, cursor:onClick?"pointer":"default",
       boxShadow:selected?`0 0 0 3px ${color||"#7c6fcd"}44`:"none",
       transition:"all .15s", flexShrink:0,
-      userSelect:"none",
-    }}>{emoji}</div>
+      userSelect:"none", overflow:"hidden",
+    }}>
+      {isPhoto
+        ? <img src={emoji} alt="" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:"50%"}} />
+        : emoji}
+    </div>
   );
 }
 
 function AvatarPicker({current, onSelect, pool, color}) {
   const [open, setOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
+  const {myUid} = useApp();
+
+  async function handlePhotoUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file || !myUid) return;
+    // Vérifier taille (max 2 MB) et type
+    if (file.size > 2 * 1024 * 1024) { alert("Photo trop lourde (max 2 Mo)"); return; }
+    if (!file.type.startsWith("image/")) { alert("Fichier non supporté"); return; }
+    setUploading(true);
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${myUid}/${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+      if (error) throw error;
+      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+      if (data?.publicUrl) { onSelect(data.publicUrl); setOpen(false); }
+    } catch (err) {
+      console.error("[Duvia] Avatar upload error:", err);
+      alert("Erreur lors de l'upload de la photo");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
   return (
     <div style={{position:"relative",zIndex:open?500:1}}>
       <Avatar emoji={current||pool[0]} color={color} size={44} onClick={()=>setOpen(o=>!o)} selected={!!current} />
@@ -5093,6 +5133,15 @@ function AvatarPicker({current, onSelect, pool, color}) {
                 transition:"all .1s",flexShrink:0,
               }}>{em}</div>
             ))}
+            {/* Bouton upload photo */}
+            <div onClick={()=>!uploading && fileRef.current?.click()} style={{
+              width:40,height:40,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",
+              fontSize:uploading?14:20,cursor:uploading?"wait":"pointer",
+              background:typeof current==="string"&&current.startsWith("http")?`${color||"#7c6fcd"}22`:"transparent",
+              border:`1.5px solid ${typeof current==="string"&&current.startsWith("http")?color||"#7c6fcd":"#e5e7eb"}`,
+              transition:"all .1s",flexShrink:0,
+            }}>{uploading?"⏳":"📷"}</div>
+            <input ref={fileRef} type="file" accept="image/*" onChange={handlePhotoUpload} style={{display:"none"}} />
           </div>
         </>
       )}
@@ -6984,7 +7033,9 @@ function StepDates() {
                 <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                   {parents.map(p=>(
                     <button key={p.id} onClick={()=>updCd("parentId",String(p.id))} style={{flex:1,minWidth:80,padding:"9px",background:cd.parentId===String(p.id)?p.color:C.sur,color:cd.parentId===String(p.id)?"#fff":C.mut,border:`2px solid ${cd.parentId===String(p.id)?p.color:C.bor}`,borderRadius:10,fontSize:13,fontWeight:800,display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>
-                      {p.avatar&&<span style={{fontSize:18}}>{p.avatar}</span>}{p.name||`Parent ${p.id}`}
+                      {p.avatar&&(typeof p.avatar==="string"&&p.avatar.startsWith("http")
+                        ? <img src={p.avatar} alt="" style={{width:22,height:22,borderRadius:"50%",objectFit:"cover",verticalAlign:"middle"}} />
+                        : <span style={{fontSize:18}}>{p.avatar}</span>)}{p.name||`Parent ${p.id}`}
                     </button>
                   ))}
                 </div>
@@ -10915,12 +10966,21 @@ function MessagingTab(){
   const myId=String(user?.id||"");
   const myName=user?.name||"?";
 
+  // Helper: affiche un emoji ou une photo en rond
+  function renderAvatar(av, size=24) {
+    if (typeof av==="string"&&av.startsWith("http"))
+      return <img src={av} alt="" style={{width:size,height:size,borderRadius:"50%",objectFit:"cover",verticalAlign:"middle"}} />;
+    return <span>{av||"👤"}</span>;
+  }
+
   // Participant map (tous les users locaux)
   const pMap={};
   (users||[]).forEach(u=>{
     const col=(cfg.parents||[]).find(p=>p.name&&u.name&&p.name===u.name)?.color||C.vio;
+    const cfgAvatar = (cfg.parents||[]).find(p=>p.name===u.name)?.avatar
+      || (cfg.children||[]).find(c=>c.name===u.name)?.avatar;
     pMap[String(u.id)]={name:u.name,role:u.role,color:col,
-      avatar:u.role==="admin"?"👑":u.role==="observer"?"👁️":u.role==="child"?"🧒":"👤"};
+      avatar:u.role==="admin"?"👑":u.role==="observer"?"👁️":cfgAvatar||(u.role==="child"?"🧒":"👤")};
   });
 
   // Contacts depuis cfg (source de vérité famille, cross-device)
@@ -10943,8 +11003,10 @@ function MessagingTab(){
   contacts.forEach(u=>{
     if(!pMap[String(u.id)]){
       const col=(cfg.parents||[]).find(p=>p.name===u.name)?.color||C.vio;
+      const cfgAv = (cfg.parents||[]).find(p=>p.name===u.name)?.avatar
+        || (cfg.observers||[]).find(o=>o.name===u.name)?.avatar;
       pMap[String(u.id)]={name:u.name,role:u.role||"parent",color:col,
-        avatar:u.role==="observer"?"👁️":u.role==="child"?"🧒":"👤"};
+        avatar:u.role==="observer"?(cfgAv||"👁️"):u.role==="child"?"🧒":(cfgAv||"👤")};
     }
     // Détecter si le destinataire a un compte Supabase (= peut recevoir un message)
     u._registered = (uidToLocal&&Array.from(uidToLocal.values()).map(String).includes(String(u.id)))
@@ -10969,7 +11031,7 @@ function MessagingTab(){
         if(member){
           const col=cfgP?.color||C.vio;
           pMap[uid]={name:member.name,role:cfgP?"parent":"observer",color:col,
-            avatar:cfgO?"👁️":"👤"};
+            avatar:member.avatar||(cfgO?"👁️":"👤")};
         }
       }
     });
@@ -11089,7 +11151,7 @@ function MessagingTab(){
                   opacity:!reg?0.5:1,
                   transition:"all .15s",cursor:!reg?"not-allowed":"pointer"
               }}>
-                <span>{pMap[uid]?.avatar||"👤"}</span>
+                {renderAvatar(pMap[uid]?.avatar)}
                 <span>{u.name}</span>
                 {!reg&&<span style={{fontSize:10,fontWeight:600}}>· {t.msgNotRegisteredShort||"pas inscrit"}</span>}
                 {sel&&<span style={{fontSize:10}}>✓</span>}
@@ -11126,7 +11188,7 @@ function MessagingTab(){
           <button onClick={()=>setView("list")} style={{padding:"6px 12px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:12,borderRadius:8}}>←</button>
           <div style={{position:"relative",flexShrink:0}}>
             <div style={{width:38,height:38,borderRadius:isGroup?11:"50%",background:isGroup?`linear-gradient(135deg,${C.vio},${C.pin})`:`linear-gradient(135deg,${convColor(currentConv.ids)},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,border:isGroup?`2px solid ${C.vio}44`:"none"}}>
-              {isGroup?"👥":pMap[otherIds[0]]?.avatar||"👤"}
+              {isGroup?"👥":renderAvatar(pMap[otherIds[0]]?.avatar,20)}
             </div>
             {isGroup&&(
               <div style={{position:"absolute",bottom:-4,right:-4,background:C.vio,color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:8,fontWeight:900,border:`2px solid ${C.card}`}}>
@@ -11167,7 +11229,7 @@ function MessagingTab(){
                 <div style={{display:"flex",flexDirection:isMe?"row-reverse":"row",alignItems:"flex-end",gap:6,marginBottom:6,paddingLeft:isMe?44:0,paddingRight:isMe?0:44}}>
                   {!isMe&&(
                     <div style={{width:30,height:30,borderRadius:"50%",background:`linear-gradient(135deg,${col},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>
-                      {pMap[String(m.from)]?.avatar||"👤"}
+                      {renderAvatar(pMap[String(m.from)]?.avatar)}
                     </div>
                   )}
                   <div style={{maxWidth:"78%"}}>
@@ -11272,7 +11334,7 @@ function MessagingTab(){
               {/* Avatar */}
               <div style={{position:"relative",flexShrink:0}}>
                 <div style={{width:46,height:46,borderRadius:isGroup?14:"50%",background:isGroup?`linear-gradient(135deg,${C.vio},${C.pin})`:`linear-gradient(135deg,${col},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,border:isGroup?`2px solid ${C.vio}44`:"none"}}>
-                  {isGroup?"👥":pMap[otherIds[0]]?.avatar||"👤"}
+                  {isGroup?"👥":renderAvatar(pMap[otherIds[0]]?.avatar,20)}
                 </div>
                 {/* Group member count badge */}
                 {isGroup&&(
