@@ -3635,7 +3635,8 @@ export default function App() {
                   })()}
                 </div>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:13,fontWeight:800}}>{user.name}</div>
+                  <div style={{fontSize:13,fontWeight:800}}>{(cfg.parents||[]).find(p=>p.email&&p.email===user?.email)?.name || user.name}</div>
+                  <div style={{fontSize:10,color:C.mut,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user?.email||""}</div>
                   <div style={{fontSize:11,color:isAdm?"#FFD700":isObs?C.ora:isChild?C.grn:C.mut}}>{isAdm?(t.menuAdmin||"👑 Administrateur"):isObs?t.roleObs:isChild?(t.roleChild||"🧒 Enfant"):t.roleParent}</div>
                 </div>
               </div>
@@ -5089,23 +5090,112 @@ function Avatar({emoji, color, size=40, onClick, selected=false}) {
   );
 }
 
+// ─── CROP MODAL (zoom + recadrage photo) ──────────────────────────────────────
+function CropModal({ file, onCrop, onCancel }) {
+  const canvasRef = useRef(null);
+  const [img, setImg] = useState(null);
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState({x:0, y:0});
+  const dragging = useRef(false);
+  const lastPos = useRef({x:0, y:0});
+  const SIZE = 240;
+
+  useEffect(() => {
+    if (!file) return;
+    const i = new Image();
+    i.onload = () => setImg(i);
+    i.src = URL.createObjectURL(file);
+    return () => URL.revokeObjectURL(i.src);
+  }, [file]);
+
+  useEffect(() => {
+    if (!img || !canvasRef.current) return;
+    const ctx = canvasRef.current.getContext("2d");
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    // Dessiner un cercle de clip
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(SIZE/2, SIZE/2, SIZE/2, 0, Math.PI*2);
+    ctx.clip();
+    // Calculer la taille de l'image zoomée
+    const scale = zoom * Math.max(SIZE/img.width, SIZE/img.height);
+    const w = img.width * scale;
+    const h = img.height * scale;
+    const x = (SIZE - w) / 2 + offset.x;
+    const y = (SIZE - h) / 2 + offset.y;
+    ctx.drawImage(img, x, y, w, h);
+    ctx.restore();
+    // Bordure du cercle
+    ctx.beginPath();
+    ctx.arc(SIZE/2, SIZE/2, SIZE/2 - 1, 0, Math.PI*2);
+    ctx.strokeStyle = "#7c6fcd";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }, [img, zoom, offset]);
+
+  function handlePointerDown(e) {
+    dragging.current = true;
+    lastPos.current = {x: e.clientX, y: e.clientY};
+    e.target.setPointerCapture(e.pointerId);
+  }
+  function handlePointerMove(e) {
+    if (!dragging.current) return;
+    setOffset(o => ({x: o.x + e.clientX - lastPos.current.x, y: o.y + e.clientY - lastPos.current.y}));
+    lastPos.current = {x: e.clientX, y: e.clientY};
+  }
+  function handlePointerUp() { dragging.current = false; }
+
+  function handleCrop() {
+    if (!canvasRef.current) return;
+    canvasRef.current.toBlob(blob => { if (blob) onCrop(blob); }, "image/jpeg", 0.85);
+  }
+
+  if (!file) return null;
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{background:"#fff",borderRadius:20,padding:20,maxWidth:320,width:"90%",textAlign:"center"}}>
+        <div style={{fontWeight:800,fontSize:14,marginBottom:12}}>📷 Recadrer la photo</div>
+        <canvas ref={canvasRef} width={SIZE} height={SIZE}
+          onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp}
+          style={{width:SIZE,height:SIZE,borderRadius:"50%",cursor:"grab",touchAction:"none",display:"block",margin:"0 auto"}} />
+        <div style={{marginTop:14,display:"flex",alignItems:"center",gap:8,justifyContent:"center"}}>
+          <span style={{fontSize:12}}>🔍</span>
+          <input type="range" min="1" max="3" step="0.05" value={zoom} onChange={e=>setZoom(+e.target.value)}
+            style={{flex:1,maxWidth:180,accentColor:"#7c6fcd"}} />
+          <span style={{fontSize:10,color:"#999"}}>{Math.round(zoom*100)}%</span>
+        </div>
+        <div style={{marginTop:14,display:"flex",gap:10,justifyContent:"center"}}>
+          <button onClick={onCancel} style={{padding:"8px 20px",borderRadius:10,border:"1.5px solid #ddd",background:"#f5f5f5",fontSize:13,fontWeight:600,cursor:"pointer"}}>Annuler</button>
+          <button onClick={handleCrop} style={{padding:"8px 20px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#7c6fcd,#e66fd2)",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>✓ Valider</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AvatarPicker({current, onSelect, pool, color}) {
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [cropFile, setCropFile] = useState(null);
   const fileRef = useRef(null);
   const {myUid} = useApp();
 
-  async function handlePhotoUpload(e) {
+  function handleFileSelect(e) {
     const file = e.target.files?.[0];
-    if (!file || !myUid) return;
-    // Vérifier taille (max 2 MB) et type
-    if (file.size > 2 * 1024 * 1024) { alert("Photo trop lourde (max 2 Mo)"); return; }
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { alert("Photo trop lourde (max 5 Mo)"); return; }
     if (!file.type.startsWith("image/")) { alert("Fichier non supporté"); return; }
+    setCropFile(file);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  async function handleCroppedBlob(blob) {
+    if (!myUid) return;
     setUploading(true);
+    setCropFile(null);
     try {
-      const ext = file.name.split(".").pop() || "jpg";
-      const path = `${myUid}/${Date.now()}.${ext}`;
-      const { error } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+      const path = `${myUid}/${Date.now()}.jpg`;
+      const { error } = await supabase.storage.from("avatars").upload(path, blob, { upsert: true, contentType: "image/jpeg" });
       if (error) throw error;
       const { data } = supabase.storage.from("avatars").getPublicUrl(path);
       if (data?.publicUrl) { onSelect(data.publicUrl); setOpen(false); }
@@ -5114,7 +5204,6 @@ function AvatarPicker({current, onSelect, pool, color}) {
       alert("Erreur lors de l'upload de la photo");
     } finally {
       setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
     }
   }
 
@@ -5133,18 +5222,27 @@ function AvatarPicker({current, onSelect, pool, color}) {
                 transition:"all .1s",flexShrink:0,
               }}>{em}</div>
             ))}
-            {/* Bouton upload photo */}
+            {/* Bouton galerie photo */}
             <div onClick={()=>!uploading && fileRef.current?.click()} style={{
               width:40,height:40,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",
               fontSize:uploading?14:20,cursor:uploading?"wait":"pointer",
               background:typeof current==="string"&&current.startsWith("http")?`${color||"#7c6fcd"}22`:"transparent",
               border:`1.5px solid ${typeof current==="string"&&current.startsWith("http")?color||"#7c6fcd":"#e5e7eb"}`,
               transition:"all .1s",flexShrink:0,
-            }}>{uploading?"⏳":"📷"}</div>
-            <input ref={fileRef} type="file" accept="image/*" onChange={handlePhotoUpload} style={{display:"none"}} />
+            }}>{uploading?"⏳":"🖼️"}</div>
+            {/* Bouton appareil photo (mobile) */}
+            <div onClick={()=>{if(!uploading){const inp=document.createElement("input");inp.type="file";inp.accept="image/*";inp.capture="user";inp.onchange=e=>handleFileSelect(e);inp.click();}}} style={{
+              width:40,height:40,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",
+              fontSize:20,cursor:uploading?"wait":"pointer",
+              background:"transparent",
+              border:`1.5px solid #e5e7eb`,
+              transition:"all .1s",flexShrink:0,
+            }}>📷</div>
+            <input ref={fileRef} type="file" accept="image/*" onChange={handleFileSelect} style={{display:"none"}} />
           </div>
         </>
       )}
+      {cropFile && <CropModal file={cropFile} onCrop={handleCroppedBlob} onCancel={()=>setCropFile(null)} />}
     </div>
   );
 }
@@ -7603,9 +7701,10 @@ function StepAccess() {
         <div key={o.id} className="card" style={{marginBottom:12,borderColor:matchingPending?`${C.grn}88`:o.status==="pending_invite"?`${C.yel}55`:`${C.ora}55`}}>
           {/* Header */}
           <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
-            <div style={{width:40,height:40,borderRadius:"50%",background:o.status==="pending_invite"?`${C.mut}22`:`linear-gradient(135deg,${C.ora},${C.pin})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,filter:o.status==="pending_invite"?"grayscale(1)":"none"}}>
-              {o.status==="pending_invite" ? "📨" : (o.role==="grandparent"?"👴":"👥")}
-            </div>
+            {o.status==="pending_invite"
+              ? <div style={{width:40,height:40,borderRadius:"50%",background:`${C.mut}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,filter:"grayscale(1)"}}>📨</div>
+              : <AvatarPicker current={o.avatar||(o.role==="grandparent"?"👴":"👥")} color={C.ora} pool={OBS_AVATARS} onSelect={av=>setObsField("avatar",av)} />
+            }
             <div style={{flex:1}}>
               <div style={{fontWeight:800,fontSize:14,color:C.txt}}>{o.name}</div>
               {matchingPending
