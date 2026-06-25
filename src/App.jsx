@@ -11083,9 +11083,9 @@ function MessagingTab(){
   const myName=user?.name||"?";
 
   // Helper: affiche un emoji ou une photo en rond
-  function renderAvatar(av, size=24) {
+  function renderAvatar(av, size) {
     if (typeof av==="string"&&av.startsWith("http"))
-      return <img src={av} alt="" style={{width:size,height:size,borderRadius:"50%",objectFit:"cover",verticalAlign:"middle"}} />;
+      return <img src={av} alt="" style={{width:size||"100%",height:size||"100%",borderRadius:"50%",objectFit:"cover",display:"block"}} />;
     return <span>{av||"👤"}</span>;
   }
 
@@ -11269,7 +11269,7 @@ function MessagingTab(){
                   opacity:!reg?0.5:1,
                   transition:"all .15s",cursor:!reg?"not-allowed":"pointer"
               }}>
-                {renderAvatar(pMap[uid]?.avatar)}
+                {renderAvatar(pMap[uid]?.avatar, 22)}
                 <span>{u.name}</span>
                 {!reg&&<span style={{fontSize:10,fontWeight:600}}>· {t.msgNotRegisteredShort||"pas inscrit"}</span>}
                 {sel&&<span style={{fontSize:10}}>✓</span>}
@@ -11305,8 +11305,8 @@ function MessagingTab(){
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexShrink:0}}>
           <button onClick={()=>setView("list")} style={{padding:"6px 12px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:12,borderRadius:8}}>←</button>
           <div style={{position:"relative",flexShrink:0}}>
-            <div style={{width:38,height:38,borderRadius:isGroup?11:"50%",background:isGroup?`linear-gradient(135deg,${C.vio},${C.pin})`:`linear-gradient(135deg,${convColor(currentConv.ids)},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,border:isGroup?`2px solid ${C.vio}44`:"none"}}>
-              {isGroup?"👥":renderAvatar(pMap[otherIds[0]]?.avatar,20)}
+            <div style={{width:38,height:38,borderRadius:isGroup?11:"50%",background:isGroup?`linear-gradient(135deg,${C.vio},${C.pin})`:`linear-gradient(135deg,${convColor(currentConv.ids)},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,border:isGroup?`2px solid ${C.vio}44`:"none",overflow:"hidden"}}>
+              {isGroup?"👥":renderAvatar(pMap[otherIds[0]]?.avatar)}
             </div>
             {isGroup&&(
               <div style={{position:"absolute",bottom:-4,right:-4,background:C.vio,color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:8,fontWeight:900,border:`2px solid ${C.card}`}}>
@@ -11346,7 +11346,7 @@ function MessagingTab(){
                 {showDate&&<div style={{textAlign:"center",fontSize:11,color:C.mut,margin:"12px 0 8px",fontWeight:600}}>{new Date(m.ts).toLocaleDateString()}</div>}
                 <div style={{display:"flex",flexDirection:isMe?"row-reverse":"row",alignItems:"flex-end",gap:6,marginBottom:6,paddingLeft:isMe?44:0,paddingRight:isMe?0:44}}>
                   {!isMe&&(
-                    <div style={{width:30,height:30,borderRadius:"50%",background:`linear-gradient(135deg,${col},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>
+                    <div style={{width:30,height:30,borderRadius:"50%",background:`linear-gradient(135deg,${col},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0,overflow:"hidden"}}>
                       {renderAvatar(pMap[String(m.from)]?.avatar)}
                     </div>
                   )}
@@ -11451,8 +11451,8 @@ function MessagingTab(){
             <div style={{display:"flex",alignItems:"center",gap:12}}>
               {/* Avatar */}
               <div style={{position:"relative",flexShrink:0}}>
-                <div style={{width:46,height:46,borderRadius:isGroup?14:"50%",background:isGroup?`linear-gradient(135deg,${C.vio},${C.pin})`:`linear-gradient(135deg,${col},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,border:isGroup?`2px solid ${C.vio}44`:"none"}}>
-                  {isGroup?"👥":renderAvatar(pMap[otherIds[0]]?.avatar,20)}
+                <div style={{width:46,height:46,borderRadius:isGroup?14:"50%",background:isGroup?`linear-gradient(135deg,${C.vio},${C.pin})`:`linear-gradient(135deg,${col},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,border:isGroup?`2px solid ${C.vio}44`:"none",overflow:"hidden"}}>
+                  {isGroup?"👥":renderAvatar(pMap[otherIds[0]]?.avatar)}
                 </div>
                 {/* Group member count badge */}
                 {isGroup&&(
