@@ -11073,6 +11073,10 @@ function verifyMsg(m){return hashMsg(m.from,m.to,m.content,m.ts)===m.hash;}
 // (url Supabase Storage, nom, type, taille), suivies d'un retour à la ligne
 // puis d'une légende optionnelle tapée par l'utilisateur.
 const MSG_ATTACH_PREFIX = "§DUVIA_ATTACH§";
+// Bucket privé (comme le Coffre-fort) : on stocke le CHEMIN de l'objet dans le
+// message, jamais une URL publique. Une URL signée temporaire est générée à
+// la demande au moment de l'affichage (voir useEffect dans MessagingTab).
+const CHAT_ATTACH_BUCKET = "chat-attachments";
 function parseMsgAttachment(content){
   if (typeof content!=="string" || !content.startsWith(MSG_ATTACH_PREFIX)) return null;
   const rest = content.slice(MSG_ATTACH_PREFIX.length);
@@ -11220,6 +11224,33 @@ function MessagingTab(){
   const currentConv=convId?allConvs[convId]:null;
   const currentMsgs=(currentConv?.msgs||[]).slice().sort((a,b)=>a.ts.localeCompare(b.ts));
 
+  // ── Pièces jointes : résolution d'URLs signées temporaires ──────────────────
+  // Le bucket "chat-attachments" est privé (comme le Coffre-fort) : on ne
+  // stocke jamais d'URL publique dans le message, seulement le chemin de
+  // l'objet. On génère ici des URLs signées (24h) pour les pièces jointes
+  // visibles dans la conversation ouverte, et on les régénère si elles ont
+  // expiré (ex: conversation rouverte plusieurs jours après).
+  const [attUrls,setAttUrls]=useState({}); // path -> {url, exp}
+  const attMsgIdsKey = currentMsgs.filter(m=>parseMsgAttachment(m.content)).map(m=>m.id).join(",");
+  useEffect(()=>{
+    const now = Date.now();
+    const paths = [...new Set(
+      currentMsgs.map(m=>parseMsgAttachment(m.content)?.path).filter(Boolean)
+    )].filter(p=>!attUrls[p] || attUrls[p].exp < now);
+    if(!paths.length) return;
+    const EXPIRES_IN = 60*60*24; // 24h
+    supabase.storage.from(CHAT_ATTACH_BUCKET).createSignedUrls(paths, EXPIRES_IN)
+      .then(({data})=>{
+        if(!data) return;
+        setAttUrls(prev=>{
+          const next={...prev};
+          data.forEach(d=>{ if(d?.signedUrl && d?.path) next[d.path]={ url:d.signedUrl, exp: Date.now()+EXPIRES_IN*1000-60000 }; });
+          return next;
+        });
+      }).catch(()=>{});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[attMsgIdsKey]);
+
   // Mark read on open
   useEffect(()=>{
     if(!convId||!myUid)return;
@@ -11274,11 +11305,13 @@ function MessagingTab(){
       try{
         const ext = "." + (pendingFile.file.name.split(".").pop()||"bin").toLowerCase();
         const path = `${familySync?.familyId||"shared"}/${Date.now()}_${Math.random().toString(36).slice(2,8)}${ext}`;
-        const { error: upErr } = await supabase.storage.from("chat-attachments")
+        const { error: upErr } = await supabase.storage.from(CHAT_ATTACH_BUCKET)
           .upload(path, pendingFile.file, { upsert:false, contentType: pendingFile.type||"application/octet-stream" });
         if(upErr) throw upErr;
-        const { data: pub } = supabase.storage.from("chat-attachments").getPublicUrl(path);
-        const meta = { url: pub.publicUrl, name: pendingFile.name, type: pendingFile.type, size: pendingFile.size };
+        // Bucket privé : on ne génère PAS d'URL publique. Seul le chemin est
+        // stocké ; l'URL d'accès (signée, temporaire) sera demandée à
+        // l'affichage par les destinataires autorisés (membres de la famille).
+        const meta = { path, name: pendingFile.name, type: pendingFile.type, size: pendingFile.size };
         const finalContent = MSG_ATTACH_PREFIX + JSON.stringify(meta) + "\n" + safeContent;
         await sendCloudMessage(myName, toIds, finalContent);
         clearPendingFile();
@@ -11458,17 +11491,33 @@ function MessagingTab(){
                       {!att ? m.content : (
                         <>
                           {attIsImg ? (
-                            <a href={att.url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{display:"block"}}>
-                              <img src={att.url} alt={att.name||""} style={{maxWidth:"100%",maxHeight:220,borderRadius:12,display:"block"}} />
-                            </a>
+                            attUrls[att.path]?.url ? (
+                              <a href={attUrls[att.path].url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{display:"block"}}>
+                                <img src={attUrls[att.path].url} alt={att.name||""} style={{maxWidth:"100%",maxHeight:220,borderRadius:12,display:"block"}} />
+                              </a>
+                            ) : (
+                              <div style={{width:160,height:120,borderRadius:12,background:isMe?"rgba(255,255,255,.15)":C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:isMe?"#fff":C.mut,opacity:.8}}>
+                                {t.msgLoadingFile||"Chargement…"}
+                              </div>
+                            )
                           ) : (
-                            <a href={att.url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 4px",color:"inherit",textDecoration:"none"}}>
-                              <span style={{fontSize:22,flexShrink:0}}>📄</span>
-                              <span style={{minWidth:0}}>
-                                <div style={{fontSize:13,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{att.name||"Fichier"}</div>
-                                {att.size?<div style={{fontSize:10,opacity:.75}}>{formatFileSize(att.size)}</div>:null}
-                              </span>
-                            </a>
+                            attUrls[att.path]?.url ? (
+                              <a href={attUrls[att.path].url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 4px",color:"inherit",textDecoration:"none"}}>
+                                <span style={{fontSize:22,flexShrink:0}}>📄</span>
+                                <span style={{minWidth:0}}>
+                                  <div style={{fontSize:13,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{att.name||"Fichier"}</div>
+                                  {att.size?<div style={{fontSize:10,opacity:.75}}>{formatFileSize(att.size)}</div>:null}
+                                </span>
+                              </a>
+                            ) : (
+                              <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 4px",opacity:.8}}>
+                                <span style={{fontSize:22,flexShrink:0}}>📄</span>
+                                <span style={{minWidth:0}}>
+                                  <div style={{fontSize:13,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{att.name||"Fichier"}</div>
+                                  <div style={{fontSize:10}}>{t.msgLoadingFile||"Chargement…"}</div>
+                                </span>
+                              </div>
+                            )
                           )}
                           {att.caption && <div style={{marginTop:attIsImg?6:2,padding:attIsImg?"0 4px":0}}>{att.caption}</div>}
                         </>
