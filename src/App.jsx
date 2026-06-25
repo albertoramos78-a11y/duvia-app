@@ -1045,7 +1045,7 @@ button{border-radius:8px!important;}
 .nav-tab.active{background:#181835!important;border-bottom-color:#8b5cf6!important;filter:drop-shadow(0 0 6px rgba(139,92,246,.5));}
 ` : '';
   const brandExtras = C._brand ? `
-body{background:linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)!important;min-height:100vh;}
+body{background:linear-gradient(145deg,#2d2d3a 0%,#1e1e2e 30%,#2a2a3c 60%,#1a1a2a 100%)!important;min-height:100vh;}
 ` : '';
   return `
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -3620,7 +3620,7 @@ export default function App() {
           {showMenu && (
             <>
             <div onClick={()=>setShowMenu(false)} style={{position:"fixed",inset:0,zIndex:199}} />
-            <div style={{position:"fixed",top:62,right:14,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:16,minWidth:260,maxWidth:"90vw",zIndex:300,boxShadow:"0 12px 40px rgba(0,0,0,.2)",overflow:"hidden"}}>
+            <div style={{position:"fixed",top:85,right:14,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:16,minWidth:260,maxWidth:"90vw",zIndex:300,boxShadow:"0 12px 40px rgba(0,0,0,.2)",overflow:"hidden"}}>
               {/* User header */}
               <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.bor}`,display:"flex",alignItems:"center",gap:10}}>
                 <div style={{width:36,height:36,borderRadius:10,background:`linear-gradient(135deg,${isAdm?"#FFD700":isObs?C.ora:isChild?C.grn:((cfg.parents||[]).find(p=>p.email&&p.email===user?.email)?.color||C.vio)},${isAdm?"#ff9f43":C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
