@@ -3623,12 +3623,12 @@ export default function App() {
             <div style={{position:"fixed",top:62,right:14,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:16,minWidth:260,maxWidth:"90vw",zIndex:300,boxShadow:"0 12px 40px rgba(0,0,0,.2)",overflow:"hidden"}}>
               {/* User header */}
               <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.bor}`,display:"flex",alignItems:"center",gap:10}}>
-                <div style={{width:36,height:36,borderRadius:10,background:`linear-gradient(135deg,${isAdm?"#FFD700":isObs?C.ora:isChild?C.grn:((cfg.parents||[]).find(p=>p.name===user?.name)?.color||C.vio)},${isAdm?"#ff9f43":C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
+                <div style={{width:36,height:36,borderRadius:10,background:`linear-gradient(135deg,${isAdm?"#FFD700":isObs?C.ora:isChild?C.grn:((cfg.parents||[]).find(p=>p.email&&p.email===user?.email)?.color||C.vio)},${isAdm?"#ff9f43":C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
                   {(() => {
                     if(isAdm) return "👑";
                     if(isObs) return "👁️";
                     if(isChild) return "🧒";
-                    const av = (cfg.parents||[]).find(p=>p.name===user?.name)?.avatar || user?.avatar || "👤";
+                    const av = (cfg.parents||[]).find(p=>p.email&&p.email===user?.email)?.avatar || user?.avatar || "👤";
                     return (typeof av==="string"&&av.startsWith("http"))
                       ? <img src={av} alt="" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:10}} />
                       : av;
@@ -10976,8 +10976,9 @@ function MessagingTab(){
   // Participant map (tous les users locaux)
   const pMap={};
   (users||[]).forEach(u=>{
-    const col=(cfg.parents||[]).find(p=>p.name&&u.name&&p.name===u.name)?.color||C.vio;
-    const cfgAvatar = (cfg.parents||[]).find(p=>p.name===u.name)?.avatar
+    const cfgP = (cfg.parents||[]).find(p=>(p.email&&u.email&&p.email===u.email)||(p.name&&u.name&&p.name===u.name));
+    const col = cfgP?.color||C.vio;
+    const cfgAvatar = cfgP?.avatar
       || (cfg.children||[]).find(c=>c.name===u.name)?.avatar;
     pMap[String(u.id)]={name:u.name,role:u.role,color:col,
       avatar:u.role==="admin"?"👑":u.role==="observer"?"👁️":cfgAvatar||(u.role==="child"?"🧒":"👤")};
@@ -11002,8 +11003,9 @@ function MessagingTab(){
   // Enrichir pMap avec les membres cfg pas encore dans users (cross-device)
   contacts.forEach(u=>{
     if(!pMap[String(u.id)]){
-      const col=(cfg.parents||[]).find(p=>p.name===u.name)?.color||C.vio;
-      const cfgAv = (cfg.parents||[]).find(p=>p.name===u.name)?.avatar
+      const cfgP2=(cfg.parents||[]).find(p=>(p.email&&u.email&&p.email===u.email)||(p.name&&u.name&&p.name===u.name));
+      const col=cfgP2?.color||C.vio;
+      const cfgAv = cfgP2?.avatar
         || (cfg.observers||[]).find(o=>o.name===u.name)?.avatar;
       pMap[String(u.id)]={name:u.name,role:u.role||"parent",color:col,
         avatar:u.role==="observer"?(cfgAv||"👁️"):u.role==="child"?"🧒":(cfgAv||"👤")};
