@@ -3341,34 +3341,16 @@ export default function App() {
     </div>
   );
 
-  // ── Icônes navigation SVG (bleu clair, halo actif, sans anneau) ───────────
-  const NavIcon = ({ name, active }) => {
-    const col  = active ? "#7BA8F5" : C.mut;
-    const glow = active ? `drop-shadow(0 0 5px ${"#7BA8F5"}99)` : "none";
-    const b = { fill:"none", stroke:col, strokeWidth:1.75, strokeLinecap:"round", strokeLinejoin:"round" };
-    const d = { fill:col, stroke:"none" };
-    const paths = {
-      cal:      <><rect x="3" y="4" width="18" height="18" rx="3" {...b}/><path d="M16 2v4M8 2v4M3 10h18" {...b}/><circle cx="8" cy="15" r="1.2" {...d}/><circle cx="12" cy="15" r="1.2" {...d}/><circle cx="16" cy="15" r="1.2" {...d}/></>,
-      schedule: <><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" {...b}/><path d="M9 5a2 2 0 000 4h6a2 2 0 000-4M9 5a2 2 0 012-2h2a2 2 0 012 2" {...b}/><path d="M9 12h6M9 16h4" {...b}/></>,
-      exp:      <><circle cx="12" cy="12" r="9" {...b}/><path d="M14.5 9a2.5 2 0 10-5 0c0 1.5 1 2 2.5 2.5 1.5.5 3 1.5 3 3a2.5 2 0 01-5 0M12 6.5V7m0 10v.5" {...b}/></>,
-      contacts: <><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" {...b}/><circle cx="9" cy="7" r="4" {...b}/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" {...b}/></>,
-      vault:    <><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z" {...b}/><circle cx="12" cy="13" r="2.5" {...b}/></>,
-      msg:      <><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" {...b}/></>,
-      game:     <><circle cx="12" cy="12" r="9" {...b}/><path d="M12 3v18M3 12h18" {...b}/><circle cx="12" cy="12" r="2.5" {...d}/></>,
-    };
-    return <svg viewBox="0 0 24 24" width="22" height="22" style={{display:"block",transition:"all .2s",filter:glow}}>{paths[name]}</svg>;
-  };
-
   const TABS = (isObs && !isAdm)
-    ? [{icon:"cal",label:t.tabCal},{icon:"contacts",label:t.tabContacts||"Contacts"},{icon:"msg",label:t.tabMsg||"Messages",badge:unreadMsgs},{icon:"game",label:t.tabGame||"Jeu"}]
+    ? [{icon:"📅",label:t.tabCal},{icon:"📞",label:t.tabContacts||"Contacts"},{icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},{icon:"🎡",label:t.tabGame||"Jeu"}]
     : (isChild && !isAdm)
     ? [
-        {icon:"cal",label:t.tabCal},
-        {icon:"schedule",label:t.tabSchedule||"EDT"},
-        {icon:"contacts",label:t.tabContacts||"Contacts"},
-        {icon:"msg",label:t.tabMsg||"Messages",badge:unreadMsgs},
+        {icon:"📅",label:t.tabCal},
+        {icon:"🎒",label:t.tabSchedule||"EDT"},
+        {icon:"📞",label:t.tabContacts||"Contacts"},
+        {icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},
       ]
-    : [{icon:"cal",label:t.tabCal},{icon:"schedule",label:t.tabSchedule||"EDT"},{icon:"exp",label:t.tabExp,badge:expDot?1:0},{icon:"contacts",label:t.tabContacts||"Contacts",badge:contactsDot?1:0},{icon:"vault",label:t.tabVault||"Coffre",badge:vaultDot?1:0},{icon:"msg",label:t.tabMsg||"Messages",badge:unreadMsgs},{icon:"game",label:t.tabGame||"Jeu"}];
+    : [{icon:"📅",label:t.tabCal},{icon:"🎒",label:t.tabSchedule||"EDT"},{icon:"💰",label:t.tabExp,badge:expDot?1:0},{icon:"📞",label:t.tabContacts||"Contacts",badge:contactsDot?1:0},{icon:"🗄️",label:t.tabVault||"Coffre",badge:vaultDot?1:0},{icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},{icon:"🎡",label:t.tabGame||"Jeu"}];
 
   // ── Context value ─────────────────────────────────────────────────────────
   const onUpgrade = () => { setMenuTab("premium"); setShowMenu(false); };
@@ -3905,8 +3887,8 @@ Date d'entrée en vigueur : 14 juin 2026
       ) : (
         <div style={{flexShrink:0,background:headerBG,borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:"0 1px 6px rgba(0,0,0,.05)"}}>
           {TABS.map((tb,i) => (
-            <button key={i} onClick={()=>{ setTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,padding:"10px 2px",background:tab===i&&!menuTab?C.sur:"transparent",borderBottom:tab===i&&!menuTab?`2.5px solid ${"#7BA8F5"}`:"2.5px solid transparent",borderRadius:0,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",transition:"all .15s"}}>
-              <NavIcon name={tb.icon} active={tab===i&&!menuTab} />
+            <button key={i} onClick={()=>{ setTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,padding:"10px 2px",background:tab===i&&!menuTab?C.sur:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,borderBottom:tab===i&&!menuTab?`2.5px solid ${C.vio}`:"2.5px solid transparent",borderRadius:0,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",transition:"all .15s"}}>
+              <span style={{lineHeight:1}}>{tb.icon}</span>
               {tb.badge>0 && <span style={{position:"absolute",top:5,right:"10%",background:C.red,borderRadius:"50%",width:8,height:8,border:`2px solid ${C.card}`}}/>}
             </button>
           ))}
