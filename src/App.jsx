@@ -5908,9 +5908,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
               )}
             </div>
             {i===user?.parentIdx ? (
-              cfg.parents.length>1 ? (
-                <button onClick={quitterFamille} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.leaveFamily}</button>
-              ) : null
+              <button onClick={quitterFamille} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.leaveFamily}</button>
             ) : (user?.parentIdx===0 && i===1) ? (
               sub?.subscriberParentIdx===i
                 ? <span style={{fontSize:11,color:C.mut,fontStyle:"italic"}}>🔒 Protégé</span>
