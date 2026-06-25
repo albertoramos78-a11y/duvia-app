@@ -5133,6 +5133,16 @@ function CropModal({ file, onCrop, onCancel }) {
     ctx.stroke();
   }, [img, zoom, offset]);
 
+  function clampOffset(ox, oy, z) {
+    if (!img) return {x:ox, y:oy};
+    const scale = z * Math.max(SIZE/img.width, SIZE/img.height);
+    const w = img.width * scale;
+    const h = img.height * scale;
+    const maxX = Math.max(0, (w - SIZE) / 2);
+    const maxY = Math.max(0, (h - SIZE) / 2);
+    return {x: Math.max(-maxX, Math.min(maxX, ox)), y: Math.max(-maxY, Math.min(maxY, oy))};
+  }
+
   function handlePointerDown(e) {
     dragging.current = true;
     lastPos.current = {x: e.clientX, y: e.clientY};
@@ -5140,10 +5150,17 @@ function CropModal({ file, onCrop, onCancel }) {
   }
   function handlePointerMove(e) {
     if (!dragging.current) return;
-    setOffset(o => ({x: o.x + e.clientX - lastPos.current.x, y: o.y + e.clientY - lastPos.current.y}));
+    const dx = e.clientX - lastPos.current.x;
+    const dy = e.clientY - lastPos.current.y;
+    setOffset(o => clampOffset(o.x + dx, o.y + dy, zoom));
     lastPos.current = {x: e.clientX, y: e.clientY};
   }
   function handlePointerUp() { dragging.current = false; }
+
+  function handleZoom(newZoom) {
+    setZoom(newZoom);
+    setOffset(o => clampOffset(o.x, o.y, newZoom));
+  }
 
   function handleCrop() {
     if (!canvasRef.current) return;
@@ -5160,7 +5177,7 @@ function CropModal({ file, onCrop, onCancel }) {
           style={{width:SIZE,height:SIZE,borderRadius:"50%",cursor:"grab",touchAction:"none",display:"block",margin:"0 auto"}} />
         <div style={{marginTop:14,display:"flex",alignItems:"center",gap:8,justifyContent:"center"}}>
           <span style={{fontSize:12}}>🔍</span>
-          <input type="range" min="1" max="3" step="0.05" value={zoom} onChange={e=>setZoom(+e.target.value)}
+          <input type="range" min="1" max="3" step="0.05" value={zoom} onChange={e=>handleZoom(+e.target.value)}
             style={{flex:1,maxWidth:180,accentColor:"#7c6fcd"}} />
           <span style={{fontSize:10,color:"#999"}}>{Math.round(zoom*100)}%</span>
         </div>
