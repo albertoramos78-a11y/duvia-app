@@ -11066,18 +11066,64 @@ function hashMsg(from,toArr,content,ts){
 }
 function verifyMsg(m){return hashMsg(m.from,m.to,m.content,m.ts)===m.hash;}
 
+// ─── PIÈCES JOINTES DANS LES MESSAGES ─────────────────────────────────────────
+// Le contenu d'un message reste une simple chaîne (pour rester compatible avec
+// le hash d'intégrité ci-dessus, qui hashe `content` tel quel) : pour une pièce
+// jointe, on préfixe le contenu par MSG_ATTACH_PREFIX + des métadonnées JSON
+// (url Supabase Storage, nom, type, taille), suivies d'un retour à la ligne
+// puis d'une légende optionnelle tapée par l'utilisateur.
+const MSG_ATTACH_PREFIX = "§DUVIA_ATTACH§";
+function parseMsgAttachment(content){
+  if (typeof content!=="string" || !content.startsWith(MSG_ATTACH_PREFIX)) return null;
+  const rest = content.slice(MSG_ATTACH_PREFIX.length);
+  const nl = rest.indexOf("\n");
+  const jsonPart = nl===-1 ? rest : rest.slice(0,nl);
+  const caption  = nl===-1 ? "" : rest.slice(nl+1);
+  try { const meta = JSON.parse(jsonPart); return { ...meta, caption }; } catch { return null; }
+}
+function formatFileSize(bytes){
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1024*1024) return `${(bytes/1024).toFixed(0)} Ko`;
+  return `${(bytes/(1024*1024)).toFixed(1)} Mo`;
+}
+
 // ─── MESSAGING TAB ────────────────────────────────────────────────────────────
 function MessagingTab(){
-  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,myUid,uidToLocal,localToUid,emailToUid}=useApp();
+  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,myUid,uidToLocal,localToUid,emailToUid,familySync}=useApp();
   const [view,setView]=useState("list");
   const [convId,setConvId]=useState(null);
   const [draft,setDraft]=useState("");
   const [picked,setPicked]=useState([]);
   const [showProof,setShowProof]=useState(null);
   const [shakeDraft,setShakeDraft]=useState(false);
+  const [pendingFile,setPendingFile]=useState(null); // {file,name,type,size,previewUrl}
+  const [uploadingFile,setUploadingFile]=useState(false);
+  const fileInputRef=useRef(null);
   const endRef=useRef(null);
 
   function _triggerShakeDraft(){ setShakeDraft(true); setTimeout(()=>setShakeDraft(false),600); }
+
+  // ── Pièce jointe (image / PDF) sélectionnée pour le prochain message ───────
+  function handleFilePick(e){
+    const f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if(!f) return;
+    const err = validateVaultFile(f); // mêmes formats/taille que le coffre-fort (PDF, JPG, PNG, WebP, GIF, HEIC)
+    if(err){ alert("⚠️ "+err); return; }
+    if(pendingFile?.previewUrl) URL.revokeObjectURL(pendingFile.previewUrl);
+    setPendingFile({
+      file: f,
+      name: sanitize(f.name).slice(0, LIMITS.DOC_NAME_MAX),
+      type: f.type,
+      size: f.size,
+      previewUrl: f.type.startsWith("image/") ? URL.createObjectURL(f) : null,
+    });
+  }
+  function clearPendingFile(){
+    if(pendingFile?.previewUrl) URL.revokeObjectURL(pendingFile.previewUrl);
+    setPendingFile(null);
+  }
 
   const myId=String(user?.id||"");
   const myName=user?.name||"?";
@@ -11187,9 +11233,27 @@ function MessagingTab(){
 
   useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[currentMsgs.length,view]);
 
-  function sendMsg(toIds){
+  function _afterSend(toIds){
+    setDraft("");
+    addRefAction("SEND_MESSAGE");
+    if(view==="new"){
+      // Construire le key avec UIDs Supabase (pour matcher allConvs)
+      const toUids = toIds.map(id => {
+        if(localToUid && localToUid.has(id)) return localToUid.get(id);
+        if(id.startsWith&&(id.startsWith("cfgp_")||id.startsWith("cfgo_"))){
+          const email = id.replace(/^cfg[po]_/,"");
+          return emailToUid && emailToUid.get(email);
+        }
+        return id;
+      }).filter(Boolean);
+      setConvId(ck([String(myUid),...toUids]));
+      setView("chat");
+    }
+  }
+
+  async function sendMsg(toIds){
     const content=draft.trim();
-    if(!content||!toIds.length)return;
+    if((!content&&!pendingFile)||!toIds.length)return;
     // ── Validations sécurité ────────────────────────────────────────
     if(content.length > LIMITS.MSG_MAX){
       alert((t.msgTooLong||"Message trop long (max {n} caractères).").replace("{n}",LIMITS.MSG_MAX));
@@ -11199,27 +11263,36 @@ function MessagingTab(){
       alert(t.msgRateLimit||"Trop de messages envoyés. Attends une minute avant de réessayer.");
       return;
     }
-    if(!isCleanText(content)){
+    if(content&&!isCleanText(content)){
       _triggerShakeDraft();
       return;
     }
-    const safeContent = sanitize(content);
-    sendCloudMessage(myName, toIds, safeContent).then(()=>{
-      setDraft("");
-      addRefAction("SEND_MESSAGE");
-      if(view==="new"){
-        // Construire le key avec UIDs Supabase (pour matcher allConvs)
-        const toUids = toIds.map(id => {
-          if(localToUid && localToUid.has(id)) return localToUid.get(id);
-          if(id.startsWith&&(id.startsWith("cfgp_")||id.startsWith("cfgo_"))){
-            const email = id.replace(/^cfg[po]_/,"");
-            return emailToUid && emailToUid.get(email);
-          }
-          return id;
-        }).filter(Boolean);
-        setConvId(ck([String(myUid),...toUids]));
-        setView("chat");
+    const safeContent = content ? sanitize(content) : "";
+
+    if(pendingFile){
+      setUploadingFile(true);
+      try{
+        const ext = "." + (pendingFile.file.name.split(".").pop()||"bin").toLowerCase();
+        const path = `${familySync?.familyId||"shared"}/${Date.now()}_${Math.random().toString(36).slice(2,8)}${ext}`;
+        const { error: upErr } = await supabase.storage.from("chat-attachments")
+          .upload(path, pendingFile.file, { upsert:false, contentType: pendingFile.type||"application/octet-stream" });
+        if(upErr) throw upErr;
+        const { data: pub } = supabase.storage.from("chat-attachments").getPublicUrl(path);
+        const meta = { url: pub.publicUrl, name: pendingFile.name, type: pendingFile.type, size: pendingFile.size };
+        const finalContent = MSG_ATTACH_PREFIX + JSON.stringify(meta) + "\n" + safeContent;
+        await sendCloudMessage(myName, toIds, finalContent);
+        clearPendingFile();
+        _afterSend(toIds);
+      }catch(e){
+        alert("⚠️ Erreur d'envoi du fichier : "+(e?.message||e));
+      }finally{
+        setUploadingFile(false);
       }
+      return;
+    }
+
+    sendCloudMessage(myName, toIds, safeContent).then(()=>{
+      _afterSend(toIds);
     }).catch(e=>alert("⚠️ Erreur d'envoi : "+(e?.message||e)));
   }
 
@@ -11279,18 +11352,37 @@ function MessagingTab(){
         </div>
       </div>
       {picked.length>0&&(
-        <div style={{display:"flex",gap:8,padding:"10px 12px",background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:22,alignItems:"center"}}>
-          <input value={draft} onChange={e=>setDraft(e.target.value)}
-            onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),sendMsg(picked))}
-            placeholder={t.msgFirstPlaceholder||"Premier message…"} autoFocus
-            className={shakeDraft?"duvia-shake":""}
-            style={{flex:1,background:"transparent",border:"none",outline:"none",fontSize:14,color:C.txt}} />
-          <button onClick={()=>sendMsg(picked)} disabled={!draft.trim()} style={{
-            width:36,height:36,borderRadius:"50%",border:"none",cursor:draft.trim()?"pointer":"default",
-            background:draft.trim()?`linear-gradient(135deg,${C.vio},${C.pin})`:`${C.vio}44`,
-            color:"#fff",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0
-          }}>→</button>
-        </div>
+        <>
+          {pendingFile && (
+            <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",marginBottom:8,background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:14}}>
+              {pendingFile.previewUrl
+                ? <img src={pendingFile.previewUrl} alt="" style={{width:42,height:42,borderRadius:8,objectFit:"cover",flexShrink:0}} />
+                : <div style={{width:42,height:42,borderRadius:8,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>📄</div>}
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:800,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pendingFile.name}</div>
+                <div style={{fontSize:10,color:C.mut}}>{formatFileSize(pendingFile.size)}</div>
+              </div>
+              <button onClick={clearPendingFile} disabled={uploadingFile} style={{width:26,height:26,borderRadius:"50%",border:"none",background:`${C.red}18`,color:C.red,fontSize:13,fontWeight:900,flexShrink:0,cursor:"pointer"}}>✕</button>
+            </div>
+          )}
+          <div style={{display:"flex",gap:8,padding:"10px 12px",background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:22,alignItems:"center"}}>
+            <input type="file" ref={fileInputRef} onChange={handleFilePick} accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif" style={{display:"none"}} />
+            <button onClick={()=>fileInputRef.current?.click()} disabled={uploadingFile} title={t.msgAttach||"Joindre un fichier"} style={{
+              width:32,height:32,borderRadius:"50%",border:`1.5px solid ${C.bor}`,background:"transparent",color:C.mut,
+              fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer"
+            }}>📎</button>
+            <input value={draft} onChange={e=>setDraft(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),sendMsg(picked))}
+              placeholder={pendingFile?(t.msgCaptionPlaceholder||"Légende (optionnel)…"):(t.msgFirstPlaceholder||"Premier message…")} autoFocus
+              className={shakeDraft?"duvia-shake":""}
+              style={{flex:1,background:"transparent",border:"none",outline:"none",fontSize:14,color:C.txt}} />
+            <button onClick={()=>sendMsg(picked)} disabled={(!draft.trim()&&!pendingFile)||uploadingFile} style={{
+              width:36,height:36,borderRadius:"50%",border:"none",cursor:(draft.trim()||pendingFile)&&!uploadingFile?"pointer":"default",
+              background:(draft.trim()||pendingFile)?`linear-gradient(135deg,${C.vio},${C.pin})`:`${C.vio}44`,
+              color:"#fff",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0
+            }}>{uploadingFile?"…":"→"}</button>
+          </div>
+        </>
       )}
     </div>
   );
@@ -11336,6 +11428,8 @@ function MessagingTab(){
           {currentMsgs.map((m,idx)=>{
             const isMe=String(m.from)===String(myUid);
             const verified=verifyMsg(m);
+            const att=parseMsgAttachment(m.content);
+            const attIsImg=att&&(att.type||"").startsWith("image/");
             const prev=currentMsgs[idx-1];
             const showDate=!prev||new Date(m.ts).toDateString()!==new Date(prev.ts).toDateString();
             const readOk=(m.readBy||[]).some(id=>String(id)!==String(myUid));
@@ -11353,14 +11447,33 @@ function MessagingTab(){
                   <div style={{maxWidth:"78%"}}>
                     {!isMe&&isGroup&&<div style={{fontSize:10,color:C.mut,marginBottom:2,fontWeight:700}}>{m.fromName}</div>}
                     <div onClick={()=>setShowProof(showProof===m.id?null:m.id)} style={{
-                      padding:"10px 13px",
+                      padding:att&&attIsImg?6:"10px 13px",
                       background:isMe?`linear-gradient(135deg,${col},${col}cc)`:C.sur,
                       color:isMe?"#fff":C.txt,
                       borderRadius:isMe?"18px 18px 4px 18px":"18px 18px 18px 4px",
                       fontSize:14,lineHeight:1.45,cursor:"pointer",
                       border:isMe?"none":`1px solid ${C.bor}`,
                       boxShadow:"0 1px 4px rgba(0,0,0,.08)",wordBreak:"break-word"
-                    }}>{m.content}</div>
+                    }}>
+                      {!att ? m.content : (
+                        <>
+                          {attIsImg ? (
+                            <a href={att.url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{display:"block"}}>
+                              <img src={att.url} alt={att.name||""} style={{maxWidth:"100%",maxHeight:220,borderRadius:12,display:"block"}} />
+                            </a>
+                          ) : (
+                            <a href={att.url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 4px",color:"inherit",textDecoration:"none"}}>
+                              <span style={{fontSize:22,flexShrink:0}}>📄</span>
+                              <span style={{minWidth:0}}>
+                                <div style={{fontSize:13,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{att.name||"Fichier"}</div>
+                                {att.size?<div style={{fontSize:10,opacity:.75}}>{formatFileSize(att.size)}</div>:null}
+                              </span>
+                            </a>
+                          )}
+                          {att.caption && <div style={{marginTop:attIsImg?6:2,padding:attIsImg?"0 4px":0}}>{att.caption}</div>}
+                        </>
+                      )}
+                    </div>
                     {showProof===m.id&&(
                       <div style={{marginTop:4,padding:"7px 10px",background:verified?`${C.grn}15`:`${C.red}15`,borderRadius:8,border:`1px solid ${verified?C.grn:C.red}`,fontSize:10}}>
                         <div style={{fontWeight:800,color:verified?C.grn:C.red,marginBottom:2}}>
@@ -11380,19 +11493,37 @@ function MessagingTab(){
           <div ref={endRef}/>
         </div>
 
+        {/* Aperçu pièce jointe en attente d'envoi */}
+        {pendingFile && (
+          <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",marginBottom:8,background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:14,flexShrink:0}}>
+            {pendingFile.previewUrl
+              ? <img src={pendingFile.previewUrl} alt="" style={{width:42,height:42,borderRadius:8,objectFit:"cover",flexShrink:0}} />
+              : <div style={{width:42,height:42,borderRadius:8,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>📄</div>}
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:12,fontWeight:800,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pendingFile.name}</div>
+              <div style={{fontSize:10,color:C.mut}}>{formatFileSize(pendingFile.size)}</div>
+            </div>
+            <button onClick={clearPendingFile} disabled={uploadingFile} style={{width:26,height:26,borderRadius:"50%",border:"none",background:`${C.red}18`,color:C.red,fontSize:13,fontWeight:900,flexShrink:0,cursor:"pointer"}}>✕</button>
+          </div>
+        )}
         {/* Input */}
         <div style={{display:"flex",gap:8,paddingTop:10,borderTop:`1px solid ${C.bor}`,flexShrink:0,alignItems:"center"}}>
+          <input type="file" ref={fileInputRef} onChange={handleFilePick} accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif" style={{display:"none"}} />
+          <button onClick={()=>fileInputRef.current?.click()} disabled={uploadingFile} title={t.msgAttach||"Joindre un fichier"} style={{
+            width:38,height:38,borderRadius:"50%",border:`1.5px solid ${C.bor}`,background:C.sur,color:C.mut,
+            fontSize:17,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer"
+          }}>📎</button>
           <input value={draft} onChange={e=>setDraft(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),sendMsg(otherIds))}
-            placeholder={t.msgPlaceholder||"Message…"}
+            placeholder={pendingFile?(t.msgCaptionPlaceholder||"Légende (optionnel)…"):(t.msgPlaceholder||"Message…")}
             className={shakeDraft?"duvia-shake":""}
             style={{flex:1,padding:"10px 14px",background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:22,fontSize:14,color:C.txt,outline:"none"}} />
-          <button onClick={()=>sendMsg(otherIds)} disabled={!draft.trim()} style={{
+          <button onClick={()=>sendMsg(otherIds)} disabled={(!draft.trim()&&!pendingFile)||uploadingFile} style={{
             width:42,height:42,borderRadius:"50%",border:"none",flexShrink:0,
-            background:draft.trim()?`linear-gradient(135deg,${C.vio},${C.pin})`:`${C.vio}44`,
+            background:(draft.trim()||pendingFile)?`linear-gradient(135deg,${C.vio},${C.pin})`:`${C.vio}44`,
             color:"#fff",fontSize:20,display:"flex",alignItems:"center",justifyContent:"center",
-            cursor:draft.trim()?"pointer":"default"
-          }}>→</button>
+            cursor:(draft.trim()||pendingFile)&&!uploadingFile?"pointer":"default"
+          }}>{uploadingFile?"…":"→"}</button>
         </div>
       </div>
     );
@@ -12084,8 +12215,12 @@ function ContactsTab({readOnly,addOnly,prem: premProp}) {
             return (
               <div key={contact.id} style={{display:"flex",alignItems:"center",gap:12,background:contact.emergency?`${C.red}0d`:C.card,border:`1.5px solid ${contact.emergency?C.red:C.bor}`,borderLeft:`4px solid ${color}`,borderRadius:"0 12px 12px 0",padding:"12px 14px",marginBottom:8}}>
                 {/* Avatar */}
-                <div style={{width:38,height:38,borderRadius:12,background:`${color}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0,border:`2px solid ${color}44`}}>
-                  {contact.avatar || (contact.emergency?"🆘":contact.cat==="parents"?"👤":contact.cat==="observers"?"👁️":contact.cat==="school"?"🏫":contact.cat==="health"?"🏥":"📋")}
+                <div style={{width:38,height:38,borderRadius:12,background:`${color}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0,border:`2px solid ${color}44`,overflow:"hidden"}}>
+                  {contact.avatar
+                    ? (typeof contact.avatar==="string" && contact.avatar.startsWith("http")
+                        ? <img src={contact.avatar} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} />
+                        : contact.avatar)
+                    : (contact.emergency?"🆘":contact.cat==="parents"?"👤":contact.cat==="observers"?"👁️":contact.cat==="school"?"🏫":contact.cat==="health"?"🏥":"📋")}
                 </div>
                 {/* Info */}
                 <div style={{flex:1,minWidth:0}}>
@@ -12897,7 +13032,7 @@ function GameTab() {
 // VAULT TAB — Coffre-fort de documents
 // ═══════════════════════════════════════════════════════════════════════════════
 function VaultTab() {
-  const { C, t, cfg, setCfg, user, prem, perms, onUpgrade, isObs, setActivity, addRefAction, sub, familySync } = useApp();
+  const { C, t, cfg, setCfg, user, users, prem, perms, onUpgrade, isObs, setActivity, addRefAction, sub, familySync } = useApp();
   const premFull = isPremFull(sub);
 
   // Identité cloud de la personne connectée (nécessaire pour savoir qui a uploadé quoi)
@@ -12920,10 +13055,21 @@ function VaultTab() {
   // Helper : si le doc a été ajouté par un parent supprimé
   function resolveAddedBy(name) {
     const deleted = (cfg.deletedParents||[]).find(d => d.name === name);
-    return deleted
-      ? { label:`${t.vaultDeletedParent||"Parent supprimé —"} ${name}`, deleted:true }
-      : { label:name, deleted:false };
+    if (deleted) return { label:`${t.vaultDeletedParent||"Parent supprimé —"} ${name}`, deleted:true };
+    // `name` est parfois le nom de COMPTE (identifiant de connexion, ex. "Sissi1")
+    // plutôt que le nom AFFICHÉ configuré pour la famille (ex. "Sissi", visible
+    // partout ailleurs dans l'app). On essaie de retrouver ce nom affiché via
+    // l'email du compte correspondant, sinon on garde le nom tel quel.
+    const accountUser = (users||[]).find(u => u.name === name);
+    const displayName = accountUser?.email
+      ? (cfg.parents||[]).find(p => p.email && p.email === accountUser.email)?.name
+      : null;
+    return { label: displayName || name, deleted:false };
   }
+  // Nom à enregistrer comme "ajouté par" pour CE compte : on privilégie le nom
+  // affiché de la famille (cfg.parents, configuré au moment de la création du
+  // foyer) plutôt que le nom de compte/connexion, qui peut différer.
+  const myDisplayName = (cfg.parents||[]).find(p => p.email && p.email === user?.email)?.name || user?.name || "?";
   const [showForm, setShowForm] = useState(false);
   const [editDoc, setEditDoc] = useState(null);
   const [savingDoc, setSavingDoc] = useState(false);
@@ -13031,7 +13177,7 @@ function VaultTab() {
         await addDoc({
           name: cleanDocName, categoryIdx: formCat, docDate: formDate, notes: cleanNotes, shared: formShared,
           file: formFile ? formFile.rawFile : null,
-        }, user?.name || "?");
+        }, myDisplayName);
         setActivity(a=>({...a,vault:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
         addRefAction("UPLOAD_DOC");
       }
