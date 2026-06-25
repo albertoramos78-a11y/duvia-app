@@ -6019,7 +6019,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
               <span style={{fontSize:16,color:C.mut,transition:"transform .2s",display:"inline-block",transform:expandedChildren.has(i)?"rotate(180deg)":"rotate(0deg)"}}>⌄</span>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              {!isChild && <button onClick={e=>{e.stopPropagation();removeChild(i);}} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12}}>{t.remove}</button>}
+              {!isChild && <button onClick={e=>{e.stopPropagation();if(!window.confirm(`Retirer ${ch.name.trim()||`l'enfant ${i+1}`} de la famille ?`)) return;removeChild(i);}} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12}}>{t.remove}</button>}
             </div>
           </div>
 
