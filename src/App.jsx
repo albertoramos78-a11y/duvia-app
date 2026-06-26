@@ -3574,15 +3574,14 @@ export default function App() {
 
       {/* HEADER */}
       <div style={{flexShrink:0,background:headerBG,borderBottom:`1.5px solid ${C.bor}`,boxShadow:"0 1px 6px rgba(0,0,0,.06)"}}>
-      <div style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:12,minHeight:58}}>
-        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flexShrink:0}}>
-          <img src="/logo-nav.png" alt="Duvia" style={{width:126,height:126,objectFit:"contain"}} />
-          <div style={{fontSize:9,color:C.mut,fontStyle:"italic",textAlign:"center",whiteSpace:"nowrap"}}>
+      <div style={{padding:"0 14px",display:"flex",alignItems:"center",gap:12,height:58}}>
+        <img src="/logo-nav.png" alt="Duvia" style={{width:84,height:84,objectFit:"contain",flexShrink:0,mixBlendMode:"multiply"}} />
+        <div style={{display:"flex",flexDirection:"column",justifyContent:"center",minWidth:0,flex:1}}>
+          <div style={{fontSize:10,color:C.mut,fontStyle:"italic",lineHeight:1.2}}>
             <span>Two homes · One family</span>
-            {C._wc && <span style={{fontSize:12,display:"inline-block",animation:"wcBall 3s ease-in-out infinite",transformOrigin:"center",marginLeft:4}}>⚽</span>}
+            {C._wc && <span style={{fontSize:14,display:"inline-block",animation:"wcBall 3s ease-in-out infinite",transformOrigin:"center",marginLeft:4}}>⚽</span>}
           </div>
         </div>
-        <div style={{flex:1}} />
         {/* Right controls: palette → 🏆 lots → ☰ */}
         <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
           <button onClick={()=>{cycleTheme();setSummerActive(false);setRgActive(false);setWcActive(false);setVideoActive(false);}} title={themeMode==="palette"?"→ Clair":themeMode==="clair"?"→ Sombre":"→ Palette"} style={{height:36,padding:"0 14px",background:themeMode==="palette"&&!summerActive&&!rgActive&&!wcActive?`${C.vio}18`:C.card,border:`1.5px solid ${themeMode==="palette"&&!summerActive&&!rgActive&&!wcActive?C.vio:C.bor}`,color:themeMode==="palette"&&!summerActive&&!rgActive&&!wcActive?C.vio:C.txt,fontSize:15,fontWeight:700,flexShrink:0,borderRadius:20,display:"flex",alignItems:"center",cursor:"pointer"}}>
