@@ -3208,16 +3208,28 @@ export default function App() {
       setSub(base);
     }
   },[user?.id]);
-  // ── Sync sub → Supabase user_metadata (cross-device, cross-login) ─────────
+  // ── Sync sub → table subscriptions (Stripe-ready) + user_metadata fallback ─
   useEffect(() => {
-    if (!user?.id || !sub || user?.role === "admin") return;
+    if (!user?.id || !sub || !myUid || user?.role === "admin") return;
     const timer = setTimeout(async () => {
-      try { await supabase.auth.updateUser({ data: { sub } }); }
-      catch(e) { console.warn("[Duvia] sub sync failed:", e); }
-    }, 3000); // debounce 3s pour éviter trop d'appels
+      try {
+        await supabase.from("subscriptions").upsert({
+          user_id: myUid, plan: sub.plan || "trial_premium",
+          premium_since: sub.premiumSince || null, cycle: sub.cycle || "yearly",
+          trial_start: sub.trialStart || sub.accountCreatedAt,
+          account_created_at: sub.accountCreatedAt,
+          trial_extension_days: sub.trialExtension || 0,
+          ref_code: sub.refCode || null, ref_used: sub.refUsed || null,
+          ref_count: sub.refCount || 0, validated_ref_count: sub.validatedRefCount || 0,
+          ref_months: sub.refMonths || 0, pending_spins: sub.pendingSpins || 0,
+          monthly_ref_month: sub.monthlyRefMonth || null, monthly_ref_count: sub.monthlyRefCount || 0,
+        }, { onConflict: "user_id" });
+        await supabase.auth.updateUser({ data: { sub } });
+      } catch(e) { console.warn("[Duvia] sub sync failed:", e); }
+    }, 3000);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sub]);
+  }, [sub, myUid]);
 
   // Trial end warning — handled by header bubble
   useEffect(()=>{
@@ -4371,9 +4383,25 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
           accountCreatedAt: new Date().toISOString(),
         };
     if(!existing) setUsers(u => [...u, profile]);
-    // 🔧 Restaurer sub depuis Supabase user_metadata (cross-device)
-    const cloudSub = meta.sub;
-    if(cloudSub) profile.sub = cloudSub;
+    // 🔧 Restaurer sub depuis table subscriptions (priorité) puis user_metadata (fallback)
+    try {
+      const { data: subRow } = await supabase.from("subscriptions")
+        .select("*").eq("user_id", data.user.id).maybeSingle();
+      if (subRow) {
+        profile.sub = {
+          plan: subRow.plan, premiumSince: subRow.premium_since, cycle: subRow.cycle,
+          trialStart: subRow.trial_start, accountCreatedAt: subRow.account_created_at,
+          trialExtension: subRow.trial_extension_days,
+          refCode: subRow.ref_code, refUsed: subRow.ref_used,
+          refCount: subRow.ref_count || 0, validatedRefCount: subRow.validated_ref_count || 0,
+          refMonths: subRow.ref_months || 0, pendingSpins: subRow.pending_spins || 0,
+          monthlyRefMonth: subRow.monthly_ref_month, monthlyRefCount: subRow.monthly_ref_count || 0,
+        };
+      } else {
+        const cloudSub = meta.sub;
+        if(cloudSub) profile.sub = cloudSub;
+      }
+    } catch { const cloudSub = meta.sub; if(cloudSub) profile.sub = cloudSub; }
     setOk("");
     onLogin(profile);
   }
