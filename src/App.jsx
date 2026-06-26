@@ -2906,6 +2906,30 @@ export default function App() {
     }
   }, [sessionEmail, setSessionEmail, setShowOnboardingTip, setSummerActive, setRgActive, setWcActive, setVideoActive, setThemeMode, setShowPrizesMenu]); // ✅ tous les setters existent à ce stade
 
+  // ── Google OAuth : détecte le retour de redirection et connecte l'utilisateur ──
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_IN" && session?.user) {
+        const provider = session.user.app_metadata?.provider;
+        if (provider === "google") {
+          const u = session.user;
+          const currentSession = JSON.parse(window.localStorage.getItem("duvia_session") || "null");
+          if (currentSession === u.email) return; // déjà connecté
+          const googleUser = {
+            id: u.id,
+            email: u.email,
+            name: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split("@")[0] || "Utilisateur",
+            role: "parent",
+            accountCreatedAt: new Date().toISOString(),
+          };
+          handleSetUser(googleUser);
+        }
+      }
+    });
+    return () => subscription.unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Sync automatique des infos du parent connecté → cfg.parents ──────────
   // Découplé de handleSetUser : doit aussi s'exécuter après un rechargement
   // de page (nouveau compte / nouvelle famille créée), une fois que la
