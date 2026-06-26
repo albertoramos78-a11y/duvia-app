@@ -2744,9 +2744,16 @@ export default function App() {
       try {
         const { data: sessData } = await supabase.auth.getSession();
         if (!sessData?.session) {
-          // Session Supabase absente ou expirée → déconnexion forcée
+          // Session Supabase absente ou expirée → déconnexion forcée + nettoyage thème
           setUser(null);
           setSessionEmail(null);
+          try {
+            window.localStorage.removeItem("duvia_session");
+            window.localStorage.removeItem("duvia_summer");
+            window.localStorage.removeItem("duvia_rg");
+            window.localStorage.removeItem("duvia_wc");
+            window.localStorage.removeItem("duvia_video");
+          } catch {}
         }
       } catch {
         // Pas de réseau → on garde la session locale (mode hors-ligne)
@@ -3358,7 +3365,7 @@ export default function App() {
           onAccept={()=>{ handleSetUser(pendingUser); setPendingUser(null); }}
           onDecline={()=>setPendingUser(null)} />
       ) : (
-        <LoginScreen C={C} t={t} lang={lang} setLang={setLang} themeMode={themeMode} cycleTheme={cycleTheme} users={users} setUsers={setUsers} onLogin={handleLogin} onObsJoin={handleObsJoin} familySync={familySync} cfg={cfg} setCfg={setCfg} />
+        <LoginScreen C={BRAND} t={t} lang={lang} setLang={setLang} themeMode={themeMode} cycleTheme={cycleTheme} users={users} setUsers={setUsers} onLogin={handleLogin} onObsJoin={handleObsJoin} familySync={familySync} cfg={cfg} setCfg={setCfg} />
       )}
     </div>
   );
