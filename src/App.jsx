@@ -3127,6 +3127,7 @@ export default function App() {
     themeMode==="clair" ? LIGHT : BRAND,
   [videoActive, wcActive, rgActive, summerActive, themeMode]); // ✅ recalculé uniquement si le thème change
   const cssString = useMemo(() => css(C), [C]); // ✅ ~300 lignes CSS générées une seule fois par thème
+  const brandCssString = useMemo(() => css(BRAND), []); // ✅ toujours BRAND pour la page de login
   const headerBG = C._brand ? `linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)` : C.card;
   const t     = useMemo(() => TR[lang], [lang]);
   const st    = useMemo(() => subStatus(sub), [sub]);
@@ -3348,7 +3349,7 @@ export default function App() {
 
   if(!user) return (
     <div>
-      <style>{cssString}</style>
+      <style>{brandCssString}</style>
       {updateAvailable && (
         <div style={{position:"fixed",top:14,left:"50%",transform:"translateX(-50%)",zIndex:9999,
           background:C.card,border:`1.5px solid ${C.vio}`,borderRadius:14,padding:"10px 14px",
