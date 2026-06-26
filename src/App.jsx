@@ -4533,8 +4533,8 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
         if(linkRes.error === "already_registered"){
           // Email déjà dans Supabase → on annule la création locale et on bloque
           setUsers(us => us.filter(u => u.email !== cleanEmail));
-          if(isAnyInvite){ setShowExistingAccount(true); setErr(""); return; }
-          setErr(usingPhoneId ? "Ce numéro de téléphone est déjà utilisé." : t.emailUsed); return;
+          if(usingPhoneId){ setErr("Ce numéro de téléphone est déjà utilisé."); return; }
+          setShowExistingAccount(true); setErr(""); return;
         }
         console.warn("[Duvia] Cloud account link failed:", linkRes.error);
       }
@@ -4849,7 +4849,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
                     width:"100%",height:44,background:`linear-gradient(135deg,${C.vio},${C.blu})`,
                     color:"#fff",fontSize:14,fontWeight:800,borderRadius:10,marginBottom:8,cursor:"pointer"
                   }}>
-                    {t.regLoginJoin||"✅ Se connecter et rejoindre la famille"}
+                    {isAnyInvite ? (t.regLoginJoin||"✅ Se connecter et rejoindre la famille") : (t.connect||"✅ Se connecter")}
                   </button>
                   <button onClick={()=>{setShowExistingAccount(false);setEmail("");setPw("");setErr("");}} style={{
                     width:"100%",height:38,background:"transparent",color:C.mut,
