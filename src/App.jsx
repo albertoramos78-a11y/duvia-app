@@ -4765,8 +4765,12 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
   return (
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),radial-gradient(ellipse at 30% 20%,rgba(124,111,205,.15) 0%,transparent 60%),${C.bg}`}}>
       <div style={{width:"100%",maxWidth:400}} className="fi">
-        <div style={{display:"grid",gridTemplateColumns:"1fr auto auto",alignItems:"center",gap:8,marginBottom:16}}>
-          <div />{/* spacer pour centrer le logo */}
+        <div style={{display:"grid",gridTemplateColumns:"auto 1fr auto auto",alignItems:"center",gap:8,marginBottom:36}}>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>setShowInstallModal(true)} title={t.installAppMenu} style={{width:36,height:36,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,flexShrink:0}}>📱</button>
+            <a href="https://duvia.fr" title={t.backToSite||"Retour au site Duvia"} target="_blank" rel="noopener noreferrer" style={{width:36,height:36,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,textDecoration:"none",flexShrink:0}}>🌐</a>
+          </div>
+          <div />{/* spacer */}
           <div style={{position:"relative"}}>
             <button onClick={()=>setShowLangMenu(v=>!v)} style={{height:36,padding:"0 12px",background:showLangMenu?`${C.vio}18`:C.card,border:`1.5px solid ${showLangMenu?C.vio:C.bor}`,color:showLangMenu?C.vio:C.txt,fontSize:13,fontWeight:700,borderRadius:8,display:"flex",alignItems:"center",gap:6,cursor:"pointer"}}>
               <span>{foundLang.flag}</span>
@@ -4958,16 +4962,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
           </button>
           {mode==="login"&&<button onClick={()=>{setMode("forgot");setErr("");setOk("");}} style={{width:"100%",height:36,background:"transparent",color:C.mut,fontSize:12,textDecoration:"underline"}}>{t.forgotPw}</button>}
           {mode==="forgot"&&<button onClick={()=>setMode("login")} style={{width:"100%",height:36,background:"transparent",color:C.mut,fontSize:12}}>{t.backLogin}</button>}
-          {(mode==="login"||mode==="register")&&(
-            <button onClick={()=>setShowInstallModal(true)} style={{display:"block",width:"100%",textAlign:"center",marginTop:6,background:"none",border:"none",color:C.mut,fontSize:12,textDecoration:"underline",cursor:"pointer",fontFamily:"inherit"}}>
-              {t.installAppMenu}
-            </button>
-          )}
-          {(mode==="login"||mode==="register")&&(
-            <a href="https://duvia.fr" style={{display:"block",width:"100%",textAlign:"center",marginTop:6,color:C.mut,fontSize:12,textDecoration:"underline",fontFamily:"inherit"}}>
-              {t.backToSite}
-            </a>
-          )}
+
           {mode==="obs_waiting"&&(
             <div style={{textAlign:"center",padding:"8px 0 4px"}}>
               <div style={{fontSize:36,marginBottom:8}}>⏳</div>
