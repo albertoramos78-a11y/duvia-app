@@ -2927,6 +2927,8 @@ export default function App() {
             email: u.email,
             name: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split("@")[0] || "Utilisateur",
             role: "parent",
+            parentIdx: 0,
+            sub: u.user_metadata?.sub || undefined,
             accountCreatedAt: new Date().toISOString(),
           };
           handleSetUser(googleUser);
@@ -3204,6 +3206,17 @@ export default function App() {
       setSub(base);
     }
   },[user?.id]);
+  // ── Sync sub → Supabase user_metadata (cross-device, cross-login) ─────────
+  useEffect(() => {
+    if (!user?.id || !sub || user?.role === "admin") return;
+    const timer = setTimeout(async () => {
+      try { await supabase.auth.updateUser({ data: { sub } }); }
+      catch(e) { console.warn("[Duvia] sub sync failed:", e); }
+    }, 3000); // debounce 3s pour éviter trop d'appels
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sub]);
+
   // Trial end warning — handled by header bubble
   useEffect(()=>{
     if(tab===2) _setSeen(s=>({...s,expenses:new Date().toISOString()}));
@@ -4357,6 +4370,9 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
           accountCreatedAt: new Date().toISOString(),
         };
     if(!existing) setUsers(u => [...u, profile]);
+    // 🔧 Restaurer sub depuis Supabase user_metadata (cross-device)
+    const cloudSub = meta.sub;
+    if(cloudSub) profile.sub = cloudSub;
     setOk("");
     onLogin(profile);
   }
