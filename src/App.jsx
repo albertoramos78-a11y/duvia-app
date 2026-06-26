@@ -344,7 +344,7 @@ function getPerms(sub) {
     balanceVisible:!isFree,
     contactAdd:    !isFree,
     maxVaultDocs:  (isPremium||isTrial) ? Infinity : 0,   // Coffre-fort : Premium + Bêta/trial
-    maxVaultSizeGB: (isPremium||isTrial) ? 1 : 0,          // Limite 1 Go total
+    maxVaultSizeGB: isPremium ? 1 : isTrial ? 0.05 : 0,   // Premium: 1 GB · Trial/bêta: 50 MB · Freemium: 0
     canSpin:       !isFree,
     spinWinSub:    isPremium,
   };
@@ -13236,7 +13236,10 @@ function VaultTab() {
   const totalSizeBytes = useMemo(() =>
     docs.reduce((sum, d) => sum + (d.file_size || 0), 0),
   [docs]);
-  const VAULT_MAX_BYTES = 1 * 1024 * 1024 * 1024; // 1 Go
+  const VAULT_MAX_BYTES = planLimits(sub).maxVaultSizeGB * 1024 * 1024 * 1024;
+  const VAULT_MAX_LABEL = planLimits(sub).maxVaultSizeGB >= 1
+    ? `${planLimits(sub).maxVaultSizeGB} Go`
+    : `${Math.round(planLimits(sub).maxVaultSizeGB * 1024)} Mo`;
   const totalSizeMB = (totalSizeBytes / (1024 * 1024)).toFixed(1);
   const totalSizeGB = (totalSizeBytes / (1024 * 1024 * 1024)).toFixed(2);
 
@@ -13307,7 +13310,7 @@ function VaultTab() {
   function openAdd() {
     if (!prem) { onUpgrade(); return; } // Coffre-fort : Premium (y compris Bêta/trial)
     if (totalSizeBytes >= VAULT_MAX_BYTES) {
-      alert(`⚠️ Limite de 1 Go atteinte (${totalSizeGB} Go utilisés). Supprimez des fichiers pour en ajouter.`);
+      alert(`⚠️ Limite de ${VAULT_MAX_LABEL} atteinte (${totalSizeGB} Go utilisés). Supprimez des fichiers pour en ajouter.`);
       return;
     }
     setEditDoc(null);
@@ -13333,7 +13336,7 @@ function VaultTab() {
     if (fileErr) { alert(fileErr); e.target.value = ""; return; }
     // Vérification limite 1 Go total
     if (totalSizeBytes + f.size > VAULT_MAX_BYTES) {
-      alert(`⚠️ Limite de stockage atteinte (1 Go max).\nUtilisé : ${totalSizeGB} Go · Fichier : ${(f.size/1024/1024).toFixed(1)} Mo`);
+      alert(`⚠️ Limite de stockage atteinte (${VAULT_MAX_LABEL} max).\nUtilisé : ${totalSizeGB} Go · Fichier : ${(f.size/1024/1024).toFixed(1)} Mo`);
       e.target.value = "";
       return;
     }
@@ -13648,7 +13651,7 @@ function VaultTab() {
         <div style={{marginBottom:14}}>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.mut,fontWeight:700,marginBottom:4}}>
             <span>Stockage utilisé</span>
-            <span>{totalSizeBytes < 1024*1024 ? `${(totalSizeBytes/1024).toFixed(0)} Ko` : totalSizeGB + " Go"} / 1 Go</span>
+            <span>{totalSizeBytes < 1024*1024 ? `${(totalSizeBytes/1024).toFixed(0)} Ko` : totalSizeGB + " Go"} / {VAULT_MAX_LABEL}</span>
           </div>
           <div style={{height:6,background:C.bor,borderRadius:4,overflow:"hidden"}}>
             <div style={{
