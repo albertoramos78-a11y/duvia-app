@@ -2808,6 +2808,8 @@ export default function App() {
     return ()=> window.removeEventListener("duvia-invite-left", h);
   },[]);
   const [tab,setTab]   = useState(0);
+  const tabDir = useRef("right");
+  function switchTab(i){ tabDir.current = i > tab ? "right" : "left"; setTab(i); }
   const [bell,setBell] = useState(false);
   const [showMenu,setShowMenu] = useState(false);
   const [showBugModal,setShowBugModal] = useState(false);
@@ -3969,7 +3971,7 @@ Date d'entrée en vigueur : 14 juin 2026
       ) : (
         <div style={{flexShrink:0,background:headerBG,borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:"0 1px 6px rgba(0,0,0,.05)"}}>
           {TABS.map((tb,i) => (
-            <button key={i} onClick={()=>{ setTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,padding:"10px 2px",background:tab===i&&!menuTab?C.sur:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,borderBottom:tab===i&&!menuTab?`2.5px solid ${C.vio}`:"2.5px solid transparent",borderRadius:0,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",transition:"all .15s"}}>
+            <button key={i} onClick={()=>{ switchTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,padding:"10px 2px",background:tab===i&&!menuTab?C.sur:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,borderBottom:tab===i&&!menuTab?`2.5px solid ${C.vio}`:"2.5px solid transparent",borderRadius:0,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",transition:"all .15s"}}>
               <span style={{lineHeight:1,display:"inline-block",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}>{tb.icon}</span>
               {tb.badge>0 && <span style={{position:"absolute",top:5,right:"10%",background:C.red,borderRadius:"50%",width:8,height:8,border:`2px solid ${C.card}`}}/>}
             </button>
@@ -4107,13 +4109,13 @@ Date d'entrée en vigueur : 14 juin 2026
                 <AdminTab />
               </div>
             )}
-            {!menuTab && tab===0 && <CalTab readOnly={false} canEdit={!isFreemiumPlan(sub)} />}
-            {!menuTab && tab===1 && <ScheduleTab />}
-            {!menuTab && tab===2 && <ExpTab />}
-            {!menuTab && tab===3 && <ContactsTab />}
-            {!menuTab && tab===4 && <VaultTab />}
-            {!menuTab && tab===5 && <MessagingTab />}
-            {!menuTab && tab===6 && <GameTab />}
+            {!menuTab && tab===0 && <div key="t0" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><CalTab readOnly={false} canEdit={!isFreemiumPlan(sub)} /></div>}
+            {!menuTab && tab===1 && <div key="t1" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><ScheduleTab /></div>}
+            {!menuTab && tab===2 && <div key="t2" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><ExpTab /></div>}
+            {!menuTab && tab===3 && <div key="t3" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><ContactsTab /></div>}
+            {!menuTab && tab===4 && <div key="t4" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><VaultTab /></div>}
+            {!menuTab && tab===5 && <div key="t5" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><MessagingTab /></div>}
+            {!menuTab && tab===6 && <div key="t6" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><GameTab /></div>}
           </div>
         )}
       </div>
