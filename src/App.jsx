@@ -1313,6 +1313,16 @@ button.btn-icon{width:44px;height:44px;padding:0;border-radius:10px;}
   90%    { transform:translateX(2px); }
 }
 @keyframes spin{ to{ transform:rotate(360deg); } }
+@keyframes navWobble{
+  0%,100%{transform:rotate(0deg) translateY(0)}
+  10%{transform:rotate(-14deg) translateY(-2px)}
+  20%{transform:rotate(14deg) translateY(-2px)}
+  30%{transform:rotate(-10deg) translateY(-1px)}
+  40%{transform:rotate(10deg) translateY(-1px)}
+  50%{transform:rotate(-6deg)}
+  60%{transform:rotate(6deg)}
+  70%{transform:rotate(0deg)}
+}
 .duvia-shake{
   animation: duvia-shake 0.55s cubic-bezier(.36,.07,.19,.97) both;
   border-color: ${C.red} !important;
@@ -3916,7 +3926,7 @@ Date d'entrée en vigueur : 14 juin 2026
         <div style={{flexShrink:0,background:headerBG,borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:"0 1px 6px rgba(0,0,0,.05)"}}>
           {TABS.map((tb,i) => (
             <button key={i} onClick={()=>{ setTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,padding:"10px 2px",background:tab===i&&!menuTab?C.sur:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,borderBottom:tab===i&&!menuTab?`2.5px solid ${C.vio}`:"2.5px solid transparent",borderRadius:0,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",transition:"all .15s"}}>
-              <span style={{lineHeight:1}}>{tb.icon}</span>
+              <span style={{lineHeight:1,display:"inline-block",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}>{tb.icon}</span>
               {tb.badge>0 && <span style={{position:"absolute",top:5,right:"10%",background:C.red,borderRadius:"50%",width:8,height:8,border:`2px solid ${C.card}`}}/>}
             </button>
           ))}
