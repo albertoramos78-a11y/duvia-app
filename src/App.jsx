@@ -8058,6 +8058,8 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
   const [fullDs,setFullDs]=useState(null);
   const [showLegend,setShowLegend]=useState(false);
   const [calView,setCalView]=useLocalStorage("duvia_cal_view","list");
+  const calViewDir=useRef("right"); // "right" = list→grid, "left" = grid→list
+  function switchCalView(v){ calViewDir.current=v==="grid"?"right":"left"; setCalView(v); }
   const editRef=useRef(null);
   const y=cur.getFullYear(),m=cur.getMonth();
   const dc=dInMonth(y,m);
@@ -8446,17 +8448,22 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
           )}
         </div>
         <div style={{display:"flex",gap:2,background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:20,padding:2,flexShrink:0}}>
-          <button onClick={()=>setCalView("list")}
+          <button onClick={()=>switchCalView("list")}
             style={{padding:"0 12px",height:26,background:calView==="list"?C.vio:"transparent",color:calView==="list"?"#fff":C.mut,border:"none",borderRadius:18,fontSize:11,fontWeight:800,display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}>
             ☰ {t.calViewList||"Détaillée"}
           </button>
-          <button onClick={()=>setCalView("grid")}
+          <button onClick={()=>switchCalView("grid")}
             style={{padding:"0 12px",height:26,background:calView==="grid"?C.vio:"transparent",color:calView==="grid"?"#fff":C.mut,border:"none",borderRadius:18,fontSize:11,fontWeight:800,display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}>
             ▦ {t.calViewGrid||"Mois"}
           </button>
         </div>
       </div>
+      <style>{`
+        @keyframes calSlideInRight{from{opacity:0;transform:translateX(32px) scale(0.98)}to{opacity:1;transform:translateX(0) scale(1)}}
+        @keyframes calSlideInLeft{from{opacity:0;transform:translateX(-32px) scale(0.98)}to{opacity:1;transform:translateX(0) scale(1)}}
+      `}</style>
       {calView==="grid" && (
+        <div style={{animation:`calSlideIn${calViewDir.current==="right"?"Right":"Left"} 0.28s cubic-bezier(.22,.68,0,1.2) both`}}>
         <MonthGridCalendar
           y={y} m={m} dc={dc} cfg={cfg} t={t} C={C} apiData={apiData}
           multiChild={multiChild} activeChildId={activeChildId}
@@ -8464,8 +8471,10 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
           inlineDs={inlineDs} setInlineDs={setInlineDs}
           setFullDs={setFullDs}
         />
+        </div>
       )}
       {calView==="list" && (
+        <div style={{animation:`calSlideIn${calViewDir.current==="left"?"Left":"Right"} 0.28s cubic-bezier(.22,.68,0,1.2) both`}}>
       <div className="card" style={{padding:0,overflow:"hidden"}}>
         <div style={{display:"grid",gridTemplateColumns:"32px 96px 1fr 1fr",background:C.sur,padding:"8px 12px",fontSize:10,color:C.mut,fontWeight:800,letterSpacing:".1em",textTransform:"uppercase",borderBottom:`1.5px solid ${C.bor}`}}>
           <span>{t.wk}</span><span>{t.day}</span><span>{t.info}</span>
@@ -8504,6 +8513,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
             </div>
           );
         })}
+      </div>
       </div>
       )}
       {fullDs&&!readOnly&&!editBlocked&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setFullDs(null)}><div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto",borderRadius:18}}><EditDay ds={fullDs} onClose={()=>setFullDs(null)} editRef={editRef} /></div></div>)}
