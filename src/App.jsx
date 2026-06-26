@@ -3575,7 +3575,7 @@ export default function App() {
       {/* HEADER */}
       <div style={{flexShrink:0,background:headerBG,borderBottom:`1.5px solid ${C.bor}`,boxShadow:"0 1px 6px rgba(0,0,0,.06)"}}>
       <div style={{padding:"0 14px",display:"flex",alignItems:"center",gap:12,height:58}}>
-        <img src="/logo-nav.png" alt="Duvia" style={{width:84,height:84,objectFit:"contain",flexShrink:0,mixBlendMode:"multiply"}} />
+        <img src="/logo-nav.png" alt="Duvia" style={{width:84,height:84,objectFit:"contain",flexShrink:0}} />
         <div style={{display:"flex",flexDirection:"column",justifyContent:"center",minWidth:0,flex:1}}>
           <div style={{fontSize:10,color:C.mut,fontStyle:"italic",lineHeight:1.2}}>
             <span>Two homes · One family</span>
