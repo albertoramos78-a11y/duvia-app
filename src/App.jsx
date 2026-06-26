@@ -13236,10 +13236,10 @@ function VaultTab() {
   const totalSizeBytes = useMemo(() =>
     docs.reduce((sum, d) => sum + (d.file_size || 0), 0),
   [docs]);
-  const VAULT_MAX_BYTES = planLimits(sub).maxVaultSizeGB * 1024 * 1024 * 1024;
-  const VAULT_MAX_LABEL = planLimits(sub).maxVaultSizeGB >= 1
-    ? `${planLimits(sub).maxVaultSizeGB} Go`
-    : `${Math.round(planLimits(sub).maxVaultSizeGB * 1024)} Mo`;
+  const VAULT_MAX_BYTES = getPerms(sub).maxVaultSizeGB * 1024 * 1024 * 1024;
+  const VAULT_MAX_LABEL = getPerms(sub).maxVaultSizeGB >= 1
+    ? `${getPerms(sub).maxVaultSizeGB} Go`
+    : `${Math.round(getPerms(sub).maxVaultSizeGB * 1024)} Mo`;
   const totalSizeMB = (totalSizeBytes / (1024 * 1024)).toFixed(1);
   const totalSizeGB = (totalSizeBytes / (1024 * 1024 * 1024)).toFixed(2);
 
