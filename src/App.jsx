@@ -4760,6 +4760,9 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
       }
       setShowExistingAccount(false); setErr("");
       onLogin(updatedUser);
+    } else {
+      // Inscription directe sans invitation → connexion simple
+      setShowExistingAccount(false); setErr(""); onLogin(updatedUser);
     }
   }
   return (
@@ -4851,7 +4854,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
                   }}>
                     {isAnyInvite ? (t.regLoginJoin||"✅ Se connecter et rejoindre la famille") : (t.connect||"✅ Se connecter")}
                   </button>
-                  <button onClick={()=>{setShowExistingAccount(false);setEmail("");setPw("");setErr("");}} style={{
+                  <button onClick={()=>{setShowExistingAccount(false);setEmail("");setPw("");setPwConfirm("");setErr("");}} style={{
                     width:"100%",height:38,background:"transparent",color:C.mut,
                     border:`1px solid ${C.bor}`,fontSize:13,borderRadius:10,cursor:"pointer"
                   }}>
