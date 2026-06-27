@@ -3015,7 +3015,10 @@ export default function App() {
     window.localStorage.removeItem("duvia_pending_join");
     familySync.joinFamilyByToken(pendingJoin, { name: user.name, gender: "M" })
       .then(res => {
-        if (res?.ok) try{ window.localStorage.setItem("duvia_family_id", res.familyId); }catch{}
+        if (res?.ok) {
+          try{ window.localStorage.setItem("duvia_family_id", res.familyId); }catch{}
+          window.location.reload(); // recharge pour afficher la famille en attente d'approbation
+        }
       })
       .catch(e => console.warn("[Duvia] Google OAuth family join failed:", e));
   // eslint-disable-next-line react-hooks/exhaustive-deps
