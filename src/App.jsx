@@ -5688,6 +5688,8 @@ function PrefsTab() {
     setEmailMode(false); setNewEmail("");
     setTimeout(()=>setEmailOk(""),8000);
   }
+
+  function exportRGPD(){
     const data = {
       export_date: new Date().toISOString(),
       compte: {nom:user?.name, email:user?.email},
