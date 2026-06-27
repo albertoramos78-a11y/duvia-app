@@ -5642,6 +5642,17 @@ function PrefsTab() {
     const {error} = await supabase.auth.updateUser({password:pw});
     setSaving(false);
     if(error){ setPwErr("Erreur : "+error.message); return; }
+    // Envoie l'email de confirmation via Edge Function (JWT de l'utilisateur)
+    try{
+      const {data:{session}} = await supabase.auth.getSession();
+      if(session?.access_token){
+        await fetch(`${_SUPA_URL}/functions/v1/notify-password-change`,{
+          method:"POST",
+          headers:{"Content-Type":"application/json","Authorization":`Bearer ${session.access_token}`},
+          body:JSON.stringify({}),
+        }).catch(()=>{});
+      }
+    }catch{}
     setPwOk("✅ Mot de passe mis à jour !"); setPwMode(false); setPw(""); setPw2("");
     setTimeout(()=>setPwOk(""),3000);
   }
