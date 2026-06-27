@@ -984,6 +984,60 @@ function resolveGuard(ds,cfg,childId) {
   return null;
 }
 
+// ─── EXPORT iCAL — Télécharge le planning de garde (.ics) ───────────────────
+function generateICS(cfg) {
+  const parents = cfg.parents || [];
+  const children = cfg.children || [];
+  const childNames = children.map(c => c.name).filter(Boolean).join(", ");
+  function pad(n) { return String(n).padStart(2,"0"); }
+  function toICS(d) { return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`; }
+  const lines = [
+    "BEGIN:VCALENDAR","VERSION:2.0",
+    "PRODID:-//Duvia//Calendrier de garde//FR",
+    "CALSCALE:GREGORIAN","METHOD:PUBLISH",
+    "X-WR-CALNAME:Duvia \u2013 Garde altern\u00e9e",
+  ];
+  const today = new Date(); today.setHours(0,0,0,0);
+  const endDate = new Date(today); endDate.setMonth(endDate.getMonth()+12);
+  let cur = new Date(today), periodStart = null, periodPIdx = null;
+  function pushEvent(start, end, pIdx) {
+    const p = parents[pIdx]; if(!p) return;
+    const name = p.name || `Parent ${pIdx+1}`;
+    const title = childNames ? `${childNames} chez ${name}` : `Garde chez ${name}`;
+    const endPlus = new Date(end); endPlus.setDate(endPlus.getDate()+1);
+    lines.push("BEGIN:VEVENT",
+      `DTSTART;VALUE=DATE:${toICS(start)}`,
+      `DTEND;VALUE=DATE:${toICS(endPlus)}`,
+      `SUMMARY:${title}`,
+      `UID:duvia-${toICS(start)}-p${pIdx}@duvia.fr`,
+      "END:VEVENT");
+  }
+  while(cur <= endDate) {
+    const ds = `${cur.getFullYear()}-${pad(cur.getMonth()+1)}-${pad(cur.getDate())}`;
+    const g = resolveGuard(ds, cfg, null);
+    const pIdx = (g?.parentIdx ?? -1);
+    if(pIdx !== periodPIdx) {
+      if(periodStart !== null && periodPIdx >= 0) {
+        const prev = new Date(cur); prev.setDate(prev.getDate()-1);
+        pushEvent(periodStart, prev, periodPIdx);
+      }
+      periodStart = new Date(cur); periodPIdx = pIdx;
+    }
+    cur.setDate(cur.getDate()+1);
+  }
+  if(periodStart !== null && periodPIdx >= 0) pushEvent(periodStart, endDate, periodPIdx);
+  lines.push("END:VCALENDAR");
+  return lines.join("\r\n");
+}
+function downloadICS(cfg) {
+  const content = generateICS(cfg);
+  const blob = new Blob([content],{type:"text/calendar;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href=url; a.download="duvia-garde.ics"; a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ─── Helper : affiche le vrai prénom de l'observateur (jamais l'email brut) ──
 function obsLabel(o) {
   const n = o.name || "";
@@ -2810,6 +2864,7 @@ export default function App() {
   const [tab,setTab]   = useState(0);
   const tabDir = useRef("right");
   function switchTab(i){ tabDir.current = i > tab ? "right" : "left"; setTab(i); }
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [bell,setBell] = useState(false);
   const [showMenu,setShowMenu] = useState(false);
   const [showBugModal,setShowBugModal] = useState(false);
@@ -2918,6 +2973,10 @@ export default function App() {
   // ── Google OAuth : détecte le retour de redirection et connecte l'utilisateur ──
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setShowPasswordReset(true);
+        return;
+      }
       if (event === "SIGNED_IN" && session?.user) {
         const provider = session.user.app_metadata?.provider;
         if (provider === "google") {
@@ -3373,6 +3432,10 @@ export default function App() {
     if(u.role==="parent") { setPendingUser(u); }
     else { handleSetUser(u); }
   }
+
+  if(showPasswordReset) return (
+    <PasswordResetScreen onDone={async()=>{ await supabase.auth.signOut(); setShowPasswordReset(false); }} />
+  );
 
   if(!user) return (
     <div>
@@ -4314,6 +4377,57 @@ function ConsentScreen({C,t,user,onAccept,onDecline}) {
         <div style={{fontSize:10,color:C.mut,textAlign:"center",lineHeight:1.5,padding:"0 10px"}}>
           {t.consentFooter||"Ces engagements sont demandés à chaque nouvelle connexion pour garantir une utilisation bienveillante de l'application."}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── PASSWORD RESET SCREEN ────────────────────────────────────────────────────
+function PasswordResetScreen({ onDone }) {
+  const [pw, setPw]   = useState("");
+  const [pw2, setPw2] = useState("");
+  const [err, setErr] = useState("");
+  const [ok, setOk]   = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function doReset() {
+    const pwErr = validatePassword(pw);
+    if (pwErr) { setErr(pwErr); return; }
+    if (pw !== pw2) { setErr("Les mots de passe ne correspondent pas."); return; }
+    setErr(""); setLoading(true);
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    setLoading(false);
+    if (error) { setErr("Erreur : " + error.message); return; }
+    setOk("✅ Mot de passe mis à jour !");
+    setTimeout(onDone, 2000);
+  }
+
+  return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:"#F8F2FF",fontFamily:"Nunito,sans-serif"}}>
+      <div style={{background:"#fff",borderRadius:20,padding:32,maxWidth:380,width:"100%",boxShadow:"0 8px 32px rgba(123,124,245,.15)"}}>
+        <div style={{textAlign:"center",marginBottom:24}}>
+          <div style={{fontSize:40,marginBottom:8}}>🔐</div>
+          <div style={{fontSize:18,fontWeight:900,color:"#17103A"}}>Nouveau mot de passe</div>
+          <div style={{fontSize:13,color:"#888",marginTop:4}}>Choisissez un mot de passe sécurisé</div>
+        </div>
+        <div style={{marginBottom:12}}>
+          <label style={{fontSize:12,fontWeight:700,color:"#17103A",display:"block",marginBottom:4}}>Nouveau mot de passe</label>
+          <input type="password" value={pw} onChange={e=>setPw(e.target.value)}
+            placeholder="8 car. min · 1 majuscule · 1 caractère spécial"
+            style={{width:"100%",height:44,borderRadius:10,border:"1.5px solid #e0d9f5",padding:"0 12px",fontSize:14,boxSizing:"border-box",fontFamily:"inherit"}} />
+        </div>
+        <div style={{marginBottom:20}}>
+          <label style={{fontSize:12,fontWeight:700,color:"#17103A",display:"block",marginBottom:4}}>Confirmer le mot de passe</label>
+          <input type="password" value={pw2} onChange={e=>setPw2(e.target.value)}
+            placeholder="Répétez le mot de passe"
+            style={{width:"100%",height:44,borderRadius:10,border:"1.5px solid #e0d9f5",padding:"0 12px",fontSize:14,boxSizing:"border-box",fontFamily:"inherit"}} />
+        </div>
+        {err && <div style={{color:"#ef4444",fontSize:12,fontWeight:700,marginBottom:12,padding:"8px 12px",background:"#fef2f2",borderRadius:8}}>{err}</div>}
+        {ok  && <div style={{color:"#22c55e",fontSize:12,fontWeight:700,marginBottom:12,padding:"8px 12px",background:"#f0fdf4",borderRadius:8}}>{ok}</div>}
+        <button onClick={doReset} disabled={loading}
+          style={{width:"100%",height:48,background:"linear-gradient(135deg,#7B7CF5,#7BA8F5)",color:"#fff",borderRadius:12,fontSize:15,fontWeight:800,border:"none",cursor:loading?"not-allowed":"pointer",opacity:loading?.6:1}}>
+          {loading ? "Mise à jour…" : "Confirmer le nouveau mot de passe"}
+        </button>
       </div>
     </div>
   );
@@ -8417,12 +8531,20 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
           {!isObs && !isChild && (
-            <button onClick={()=>{ if(!premFull){ onUpgrade(); return; } generateCalendarPDF(); }}
-              title={premFull ? "Exporter le planning annuel en PDF" : "Réservé aux membres Premium abonnés"}
-              style={{display:"flex",alignItems:"center",gap:3,padding:"3px 7px",background:premFull?`${C.vio}15`:`${C.mut}15`,border:`1px solid ${premFull?C.vio:C.mut}44`,borderRadius:6,cursor:"pointer",transition:"all .15s",opacity:premFull?1:.6}}>
-              <span style={{fontSize:10}}>{premFull?"📄":"🔒"}</span>
-              <span style={{fontSize:9,color:premFull?C.vio:C.mut,fontWeight:800}}>PDF</span>
-            </button>
+            <>
+              <button onClick={()=>downloadICS(cfg)}
+                title="Exporter dans Google Calendar / Apple Calendar"
+                style={{display:"flex",alignItems:"center",gap:3,padding:"3px 7px",background:`${C.grn}15`,border:`1px solid ${C.grn}44`,borderRadius:6,cursor:"pointer",transition:"all .15s"}}>
+                <span style={{fontSize:10}}>📅</span>
+                <span style={{fontSize:9,color:C.grn,fontWeight:800}}>iCal</span>
+              </button>
+              <button onClick={()=>{ if(!premFull){ onUpgrade(); return; } generateCalendarPDF(); }}
+                title={premFull ? "Exporter le planning annuel en PDF" : "Réservé aux membres Premium abonnés"}
+                style={{display:"flex",alignItems:"center",gap:3,padding:"3px 7px",background:premFull?`${C.vio}15`:`${C.mut}15`,border:`1px solid ${premFull?C.vio:C.mut}44`,borderRadius:6,cursor:"pointer",transition:"all .15s",opacity:premFull?1:.6}}>
+                <span style={{fontSize:10}}>{premFull?"📄":"🔒"}</span>
+                <span style={{fontSize:9,color:premFull?C.vio:C.mut,fontWeight:800}}>PDF</span>
+              </button>
+            </>
           )}
           <InfoBubble C={C} tipKey={`duvia_caltip_${user?.id||"x"}`} title={t.tabCal||"Calendrier"} autoOpen={false}>
             {t.calTipBody||"Visualisez et gérez le planning de garde mensuel. Il est visible par tous les membres de la famille."}
