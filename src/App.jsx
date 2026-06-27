@@ -5592,7 +5592,11 @@ function PrefsTab() {
   const [emailExp,    setEmailExp]    = useState(true);
   const [emailVault,  setEmailVault]  = useState(true);
   const [pwMode,      setPwMode]      = useState(false);
+  const [pwOld,setPwOld] = useState("");
   const [pw,setPw]   = useState(""); const [pw2,setPw2] = useState("");
+  const [showPwOld,setShowPwOld] = useState(false);
+  const [showPw,setShowPw]       = useState(false);
+  const [showPw2,setShowPw2]     = useState(false);
   const [pwErr,setPwErr] = useState(""); const [pwOk,setPwOk] = useState("");
   const [saving,setSaving] = useState(false);
 
@@ -5635,14 +5639,20 @@ function PrefsTab() {
   }
 
   async function changePassword(){
+    if(!pwOld){ setPwErr("Veuillez saisir votre mot de passe actuel."); return; }
     const err = validatePassword(pw);
     if(err){ setPwErr(err); return; }
     if(pw !== pw2){ setPwErr("Les mots de passe ne correspondent pas."); return; }
     setSaving(true); setPwErr("");
+    // Vérifier l'ancien mot de passe
+    const {error:signInErr} = await supabase.auth.signInWithPassword({
+      email: user?.email || "", password: pwOld,
+    });
+    if(signInErr){ setSaving(false); setPwErr("Mot de passe actuel incorrect."); return; }
     const {error} = await supabase.auth.updateUser({password:pw});
     setSaving(false);
     if(error){ setPwErr("Erreur : "+error.message); return; }
-    // Envoie l'email de confirmation via Edge Function (JWT de l'utilisateur)
+    // Email de confirmation
     try{
       const {data:{session}} = await supabase.auth.getSession();
       if(session?.access_token){
@@ -5653,7 +5663,8 @@ function PrefsTab() {
         }).catch(()=>{});
       }
     }catch{}
-    setPwOk("✅ Mot de passe mis à jour !"); setPwMode(false); setPw(""); setPw2("");
+    setPwOld(""); setPwOk("✅ Mot de passe mis à jour !"); setPwMode(false); setPw(""); setPw2("");
+    setShowPwOld(false); setShowPw(false); setShowPw2(false);
     setTimeout(()=>setPwOk(""),3000);
   }
 
@@ -5727,18 +5738,29 @@ function PrefsTab() {
           </button>
         ) : (
           <div style={{background:C.sur,borderRadius:12,padding:16,border:`1px solid ${C.bor}`}}>
-            <input type="password" value={pw} onChange={e=>setPw(e.target.value)}
-              placeholder="Nouveau mot de passe (8 car. min · majuscule · spécial)"
-              style={{width:"100%",height:42,borderRadius:8,border:`1.5px solid ${C.bor}`,padding:"0 12px",fontSize:13,marginBottom:8,boxSizing:"border-box",fontFamily:"inherit"}} />
-            <input type="password" value={pw2} onChange={e=>setPw2(e.target.value)}
-              placeholder="Confirmer"
-              style={{width:"100%",height:42,borderRadius:8,border:`1.5px solid ${C.bor}`,padding:"0 12px",fontSize:13,marginBottom:8,boxSizing:"border-box",fontFamily:"inherit"}} />
+            {/* Champ œil helper */}
+            {[
+              {val:pwOld,set:setPwOld,show:showPwOld,setShow:setShowPwOld,ph:"Mot de passe actuel"},
+              {val:pw,   set:setPw,   show:showPw,   setShow:setShowPw,   ph:"Nouveau mot de passe (8 car. · majuscule · spécial)"},
+              {val:pw2,  set:setPw2,  show:showPw2,  setShow:setShowPw2,  ph:"Confirmer le nouveau mot de passe"},
+            ].map(({val,set,show,setShow,ph},i)=>(
+              <div key={i} style={{position:"relative",marginBottom:8}}>
+                {i===1&&<div style={{height:1,background:C.bor,margin:"4px 0 12px"}}/>}
+                <input type={show?"text":"password"} value={val} onChange={e=>set(e.target.value)}
+                  placeholder={ph}
+                  style={{width:"100%",height:42,borderRadius:8,border:`1.5px solid ${C.bor}`,padding:"0 40px 0 12px",fontSize:13,boxSizing:"border-box",fontFamily:"inherit"}} />
+                <button onClick={()=>setShow(s=>!s)} type="button"
+                  style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:15,color:C.mut,padding:0,lineHeight:1}}>
+                  {show?"🙈":"👁️"}
+                </button>
+              </div>
+            ))}
             {pwErr && <div style={{color:C.red,fontSize:12,marginBottom:8,padding:"6px 10px",background:`${C.red}10`,borderRadius:8}}>{pwErr}</div>}
             <div style={{display:"flex",gap:8}}>
               <button onClick={changePassword} disabled={saving} style={{flex:1,height:38,background:C.vio,color:"#fff",borderRadius:8,fontSize:13,fontWeight:800,border:"none",cursor:"pointer",opacity:saving?.6:1}}>
                 {saving?"…":"Confirmer"}
               </button>
-              <button onClick={()=>{setPwMode(false);setPw("");setPw2("");setPwErr("");}} style={{height:38,padding:"0 16px",background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",fontSize:13,color:C.txt}}>
+              <button onClick={()=>{setPwMode(false);setPwOld("");setPw("");setPw2("");setPwErr("");setShowPwOld(false);setShowPw(false);setShowPw2(false);}} style={{height:38,padding:"0 16px",background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",fontSize:13,color:C.txt}}>
                 Annuler
               </button>
             </div>
