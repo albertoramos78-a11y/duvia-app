@@ -2992,12 +2992,19 @@ export default function App() {
             sub: u.user_metadata?.sub || undefined,
             accountCreatedAt: new Date().toISOString(),
           };
-          // 🔧 Sauvegarder le token d'invitation si présent dans l'URL (Google OAuth + invite)
+          // 🔧 Invitation dans l'URL (Google OAuth + lien d'invitation)
+          // On traite le join AVANT handleSetUser pour que l'app charge
+          // directement dans la bonne famille, sans reload.
           const urlInvParam = new URLSearchParams(window.location.search).get("inv");
           if (urlInvParam) {
-            let joinToken = urlInvParam;
-            try { const d=JSON.parse(atob(urlInvParam)); joinToken=d.code||urlInvParam; } catch{}
-            try{ window.localStorage.setItem("duvia_pending_join", joinToken); }catch{}
+            try {
+              let joinToken = urlInvParam;
+              try { const d=JSON.parse(atob(urlInvParam)); joinToken=d.code||urlInvParam; } catch{}
+              const joinRes = await familySync.joinFamilyByToken(joinToken, { name: googleUser.name, gender: "M" });
+              if (joinRes?.ok) {
+                try{ window.localStorage.setItem("duvia_family_id", joinRes.familyId); }catch{}
+              }
+            } catch(e) { console.warn("[Duvia] Google OAuth invite join failed:", e); }
           }
           handleSetUser(googleUser);
         }
@@ -3006,23 +3013,6 @@ export default function App() {
     return () => subscription.unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // ── Google OAuth + invitation : rejoindre la famille après connexion ──────
-  useEffect(() => {
-    if (!user || user.role !== "parent") return;
-    const pendingJoin = window.localStorage.getItem("duvia_pending_join");
-    if (!pendingJoin) return;
-    window.localStorage.removeItem("duvia_pending_join");
-    familySync.joinFamilyByToken(pendingJoin, { name: user.name, gender: "M" })
-      .then(res => {
-        if (res?.ok) {
-          try{ window.localStorage.setItem("duvia_family_id", res.familyId); }catch{}
-          window.location.reload(); // recharge pour afficher la famille en attente d'approbation
-        }
-      })
-      .catch(e => console.warn("[Duvia] Google OAuth family join failed:", e));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
 
   // ── Sync automatique des infos du parent connecté → cfg.parents ──────────
   // Découplé de handleSetUser : doit aussi s'exécuter après un rechargement
