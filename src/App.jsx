@@ -3826,7 +3826,10 @@ export default function App() {
                     </button>
                   )}
                   <button onClick={()=>{setMenuTab("config");setConfigStep(0);setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
-                    <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>⚙️</span><span style={{flex:1,textAlign:"left"}}>{t.tabConfig}</span>
+                    <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🏠</span><span style={{flex:1,textAlign:"left"}}>{t.tabConfig||"Configuration"} famille</span>
+                  </button>
+                  <button onClick={()=>{setMenuTab("prefs");setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                    <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>⚙️</span><span style={{flex:1,textAlign:"left"}}>Préférences</span>
                   </button>
                   <button onClick={()=>{setMenuTab("notifs");setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
                     <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🔔</span><span style={{flex:1,textAlign:"left"}}>{t.tabNotifs}</span>
@@ -4039,7 +4042,7 @@ Date d'entrée en vigueur : 14 juin 2026
               {/* Barre retour + titre */}
               <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px 6px"}}>
                 <button onClick={()=>{setMenuTab(null);setConfigStep(0);}} style={{width:34,height:34,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:18,borderRadius:8,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>🔙</button>
-                <div style={{fontSize:14,fontWeight:900,flex:1}}>⚙️ {t.tabConfig}</div>
+                <div style={{fontSize:14,fontWeight:900,flex:1}}>🏠 {t.tabConfig||"Configuration"} famille</div>
                 {configStep===0 && <StepIdInfoButton C={C} t={t} />}
                 {configStep===1 && <StepAccessInfoButton C={C} t={t} />}
                 {configStep===2 && <StepDatesInfoButton C={C} t={t} />}
@@ -4139,6 +4142,14 @@ Date d'entrée en vigueur : 14 juin 2026
           </div>
         ) : (
           <div>
+            {menuTab==="prefs" && (
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18,paddingBottom:14,borderBottom:`1.5px solid ${C.bor}`}}>
+                  <div style={{fontSize:15,fontWeight:900}}>⚙️ Préférences</div>
+                </div>
+                <PrefsTab />
+              </div>
+            )}
             {menuTab==="config" && (
               <div>
                 {configStep===0&&![...cfg.parents,...cfg.children].every(x=>x.name.trim())&&(
@@ -5559,6 +5570,131 @@ function StepLang({lang,setLang}) {
       </div>
       <div style={{marginTop:16,padding:"12px 14px",background:`${C.vio}08`,borderRadius:12,border:`1px solid ${C.vio}22`,fontSize:12,color:C.mut,lineHeight:1.5}}>
         {t.langAppDesc}
+      </div>
+    </div>
+  );
+}
+
+// ─── PRÉFÉRENCES ──────────────────────────────────────────────────────────────
+function PrefsTab() {
+  const {C,t,lang,setLang,sub,setConfirmDeleteAccount,user} = useApp();
+  const [emailNotifs,setEmailNotifs] = useState(true);
+  const [pwMode,setPwMode]           = useState(false);
+  const [pw,setPw]     = useState(""); const [pw2,setPw2]   = useState("");
+  const [pwErr,setPwErr] = useState(""); const [pwOk,setPwOk] = useState("");
+  const [saving,setSaving] = useState(false);
+
+  useEffect(()=>{
+    supabase.auth.getUser().then(({data})=>{
+      const v = data?.user?.user_metadata?.email_notifs;
+      setEmailNotifs(v !== false); // défaut : activé
+    });
+  },[]);
+
+  async function toggleEmailNotifs(){
+    const v = !emailNotifs; setEmailNotifs(v);
+    try{ await supabase.auth.updateUser({data:{email_notifs:v}}); }
+    catch(e){ console.warn("email_notifs save failed",e); }
+  }
+
+  async function changePassword(){
+    const err = validatePassword(pw);
+    if(err){ setPwErr(err); return; }
+    if(pw !== pw2){ setPwErr("Les mots de passe ne correspondent pas."); return; }
+    setSaving(true); setPwErr("");
+    const {error} = await supabase.auth.updateUser({password:pw});
+    setSaving(false);
+    if(error){ setPwErr("Erreur : "+error.message); return; }
+    setPwOk("✅ Mot de passe mis à jour !"); setPwMode(false); setPw(""); setPw2("");
+    setTimeout(()=>setPwOk(""),3000);
+  }
+
+  function exportRGPD(){
+    const data = {
+      export_date: new Date().toISOString(),
+      compte: {nom:user?.name, email:user?.email},
+      preferences: {langue:lang, emails_notifications:emailNotifs},
+      abonnement: {plan:sub?.plan, depuis:sub?.premiumSince},
+    };
+    const blob = new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href=url; a.download="duvia-mes-donnees.json"; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const row = {display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`,cursor:"pointer",width:"100%",textAlign:"left"};
+
+  return (
+    <div>
+      {/* ── Langue ── */}
+      <div style={{marginBottom:28}}>
+        <div className="sec">🌐 {t.langAppTitle||"Langue de l'interface"}</div>
+        <StepLang lang={lang} setLang={setLang} />
+      </div>
+
+      {/* ── Notifications email ── */}
+      <div style={{marginBottom:28}}>
+        <div className="sec">📧 Notifications email</div>
+        <div style={{...row,cursor:"default"}}>
+          <div style={{flex:1,marginRight:12}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.txt}}>Nouveau message reçu</div>
+            <div style={{fontSize:11,color:C.mut,marginTop:2}}>Recevoir un email quand l'autre parent vous écrit</div>
+          </div>
+          <button onClick={toggleEmailNotifs} style={{width:44,height:24,borderRadius:12,background:emailNotifs?C.grn:"#ccc",border:"none",cursor:"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
+            <div style={{position:"absolute",top:2,left:emailNotifs?22:2,width:20,height:20,borderRadius:10,background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.25)"}} />
+          </button>
+        </div>
+      </div>
+
+      {/* ── Changer mot de passe ── */}
+      <div style={{marginBottom:28}}>
+        <div className="sec">🔒 Sécurité</div>
+        {pwOk && <div style={{color:C.grn,fontSize:12,fontWeight:700,marginBottom:8,padding:"7px 12px",background:`${C.grn}12`,borderRadius:8}}>{pwOk}</div>}
+        {!pwMode ? (
+          <button onClick={()=>setPwMode(true)} style={{...row}}>
+            <span style={{fontSize:13,fontWeight:700,color:C.txt}}>🔒 Changer mon mot de passe</span>
+            <span style={{color:C.mut}}>→</span>
+          </button>
+        ) : (
+          <div style={{background:C.sur,borderRadius:12,padding:16,border:`1px solid ${C.bor}`}}>
+            <input type="password" value={pw} onChange={e=>setPw(e.target.value)}
+              placeholder="Nouveau mot de passe (8 car. min · majuscule · spécial)"
+              style={{width:"100%",height:42,borderRadius:8,border:`1.5px solid ${C.bor}`,padding:"0 12px",fontSize:13,marginBottom:8,boxSizing:"border-box",fontFamily:"inherit"}} />
+            <input type="password" value={pw2} onChange={e=>setPw2(e.target.value)}
+              placeholder="Confirmer"
+              style={{width:"100%",height:42,borderRadius:8,border:`1.5px solid ${C.bor}`,padding:"0 12px",fontSize:13,marginBottom:8,boxSizing:"border-box",fontFamily:"inherit"}} />
+            {pwErr && <div style={{color:C.red,fontSize:12,marginBottom:8,padding:"6px 10px",background:`${C.red}10`,borderRadius:8}}>{pwErr}</div>}
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={changePassword} disabled={saving} style={{flex:1,height:38,background:C.vio,color:"#fff",borderRadius:8,fontSize:13,fontWeight:800,border:"none",cursor:"pointer",opacity:saving?.6:1}}>
+                {saving?"…":"Confirmer"}
+              </button>
+              <button onClick={()=>{setPwMode(false);setPw("");setPw2("");setPwErr("");}} style={{height:38,padding:"0 16px",background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",fontSize:13,color:C.txt}}>
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Export RGPD ── */}
+      <div style={{marginBottom:28}}>
+        <div className="sec">📋 Mes données (RGPD)</div>
+        <button onClick={exportRGPD} style={{...row}}>
+          <span style={{fontSize:13,fontWeight:700,color:C.txt}}>📤 Télécharger mes données</span>
+          <span style={{color:C.mut}}>→</span>
+        </button>
+        <div style={{fontSize:11,color:C.mut,marginTop:6,paddingLeft:4}}>Format JSON · Vos données personnelles uniquement</div>
+      </div>
+
+      {/* ── Supprimer le compte ── */}
+      <div style={{marginBottom:8}}>
+        <div className="sec" style={{color:C.red}}>⚠️ Zone de danger</div>
+        <button onClick={()=>setConfirmDeleteAccount(true)} style={{...row,background:`${C.red}10`,border:`1px solid ${C.red}33`,color:C.red}}>
+          <span style={{fontSize:13,fontWeight:700}}>🗑️ Supprimer mon compte</span>
+          <span>→</span>
+        </button>
+        <div style={{fontSize:11,color:C.mut,marginTop:6,paddingLeft:4}}>Action définitive · Toutes vos données seront effacées</div>
       </div>
     </div>
   );
