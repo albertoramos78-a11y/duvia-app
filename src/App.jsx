@@ -3391,6 +3391,8 @@ export default function App() {
     // ── 1. Suppression réelle en base via Edge Function Supabase ──────────────
     if(_supaReady){
       try {
+        // Nettoyage table subscriptions avant suppression du compte
+        if(myUid) await supabase.from("subscriptions").delete().eq("user_id", myUid);
         await _supaFunction("delete-account", {
           userId:   String(myId),
           email:    myEmail,
@@ -4036,7 +4038,7 @@ Date d'entrée en vigueur : 14 juin 2026
       {/* NAV — en haut. En config : remplacée par les étapes au même endroit */}
       {menuTab==="config" ? (
         (() => {
-          const STEPS=[{i:"👤",l:t.stepId},{i:"👥",l:t.stepAccess},{i:"🗓️",l:t.stepDates},{i:"📆",l:t.stepGarde},{i:"🌐",l:t.stepLang||"Langue"}];
+          const STEPS=[{i:"👤",l:t.stepId},{i:"👥",l:t.stepAccess},{i:"🗓️",l:t.stepDates},{i:"📆",l:t.stepGarde}];
           return (
             <div style={{flexShrink:0,background:C.card,borderBottom:`1.5px solid ${C.bor}`,boxShadow:"0 1px 6px rgba(0,0,0,.05)"}}>
               {/* Barre retour + titre */}
@@ -4239,6 +4241,12 @@ Date d'entrée en vigueur : 14 juin 2026
               {["👤 Votre compte sera supprimé","🗓️ Le planning de garde sera réinitialisé si nécessaire","💰 Les dépenses partagées seront remises à zéro","📞 Vous serez retiré(e) des contacts de la famille","💬 Vos messages resteront visibles (marqués « compte supprimé »)"].map((l,i)=>(
                 <div key={i} style={{fontSize:11,color:C.mut,marginBottom:3}}>{l}</div>
               ))}
+              {sub?.plan==="premium" && (
+                <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${C.red}33`}}>
+                  <div style={{fontSize:11,fontWeight:800,color:C.red,marginBottom:4}}>⭐ Abonnement Premium</div>
+                  <div style={{fontSize:11,color:C.mut}}>Votre abonnement sera annulé. Pensez à le résilier manuellement depuis votre gestionnaire de paiement pour éviter toute facturation future.</div>
+                </div>
+              )}
             </div>
             {deleteAccountError && (
               <div style={{background:`${C.red}10`,border:`1px solid ${C.red}44`,borderRadius:10,padding:"10px 12px",marginBottom:16,fontSize:12,color:C.red,textAlign:"left"}}>
@@ -5025,9 +5033,6 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
               </div>
             )}
           </div>
-          <button onClick={cycleTheme} title={themeMode==="palette"?"→ Clair":themeMode==="clair"?"→ Sombre":"→ Palette"} style={{height:36,padding:"0 12px",background:themeMode==="palette"?`${C.vio}18`:C.card,border:`1.5px solid ${themeMode==="palette"?C.vio:C.bor}`,color:themeMode==="palette"?C.vio:C.txt,fontSize:13,fontWeight:700,borderRadius:8}}>
-            {themeMode==="sombre"?"🌙":themeMode==="clair"?"☀️":"🎨"}
-          </button>
         </div>
         <div style={{textAlign:"center",marginBottom:22}}>
           <div style={{width:160,height:160,margin:"0 auto 2px",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -5629,7 +5634,6 @@ function PrefsTab() {
     <div>
       {/* ── Langue ── */}
       <div style={{marginBottom:28}}>
-        <div className="sec">🌐 {t.langAppTitle||"Langue de l'interface"}</div>
         <StepLang lang={lang} setLang={setLang} />
       </div>
 
@@ -5654,7 +5658,6 @@ function PrefsTab() {
         {!pwMode ? (
           <button onClick={()=>setPwMode(true)} style={{...row}}>
             <span style={{fontSize:13,fontWeight:700,color:C.txt}}>🔒 Changer mon mot de passe</span>
-            <span style={{color:C.mut}}>→</span>
           </button>
         ) : (
           <div style={{background:C.sur,borderRadius:12,padding:16,border:`1px solid ${C.bor}`}}>
@@ -5682,7 +5685,6 @@ function PrefsTab() {
         <div className="sec">📋 Mes données (RGPD)</div>
         <button onClick={exportRGPD} style={{...row}}>
           <span style={{fontSize:13,fontWeight:700,color:C.txt}}>📤 Télécharger mes données</span>
-          <span style={{color:C.mut}}>→</span>
         </button>
         <div style={{fontSize:11,color:C.mut,marginTop:6,paddingLeft:4}}>Format JSON · Vos données personnelles uniquement</div>
       </div>
@@ -5692,7 +5694,6 @@ function PrefsTab() {
         <div className="sec" style={{color:C.red}}>⚠️ Zone de danger</div>
         <button onClick={()=>setConfirmDeleteAccount(true)} style={{...row,background:`${C.red}10`,border:`1px solid ${C.red}33`,color:C.red}}>
           <span style={{fontSize:13,fontWeight:700}}>🗑️ Supprimer mon compte</span>
-          <span>→</span>
         </button>
         <div style={{fontSize:11,color:C.mut,marginTop:6,paddingLeft:4}}>Action définitive · Toutes vos données seront effacées</div>
       </div>
@@ -5702,7 +5703,7 @@ function PrefsTab() {
 
 function ConfigTab() {
   const {C,t,cfg,setCfg,addHist,pushNotif,prem,perms,onUpgrade,apiData,apiLoading,sub,setSub,lang,setLang,msgs,setMsgs,setUsers,user,familySync,configStep:step,setConfigStep:setStep} = useApp();
-  const STEPS=[{i:"👤",l:t.stepId},{i:"👥",l:t.stepAccess},{i:"🗓️",l:t.stepDates},{i:"📆",l:t.stepGarde},{i:"🌐",l:t.stepLang||"Langue"}];
+  const STEPS=[{i:"👤",l:t.stepId},{i:"👥",l:t.stepAccess},{i:"🗓️",l:t.stepDates},{i:"📆",l:t.stepGarde}];
 
   // ── Invite modal state ─────────────────────────────────────────────────────
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -6043,11 +6044,10 @@ function ConfigTab() {
         {step===1 && <StepAccess />}
         {step===2 && <StepDates />}
         {step===3 && <StepGarde />}
-        {step===4 && <StepLang lang={lang} setLang={setLang} />}
       </div>
       <div style={{display:"flex",justifyContent:"flex-end",marginTop:18,gap:10,paddingTop:14}}>
         {step>0&&<button onClick={()=>setStep(s=>s-1)} style={{height:44,padding:"0 20px",background:C.sur,color:C.txt,border:`1.5px solid ${C.bor}`,borderRadius:10,fontWeight:700}}>{t.prev}</button>}
-        {step<4&&(()=>{
+        {step<3&&(()=>{
           const namesOk=step!==0||([...cfg.parents,...cfg.children].every(x=>x.name.trim()));
           return <button onClick={()=>namesOk&&setStep(s=>s+1)} style={{height:44,padding:"0 20px",background:namesOk?C.vio:`${C.vio}55`,color:"#fff",cursor:namesOk?"pointer":"not-allowed",opacity:namesOk?1:0.6,borderRadius:10}} title={!namesOk?(t.nameRequired||"Le nom est obligatoire."):undefined}>{t.next}</button>;
         })()}
