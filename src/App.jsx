@@ -2713,6 +2713,8 @@ export default function App() {
   function cycleTheme(){ setThemeMode(m=>m==="palette"?"clair":m==="clair"?"sombre":"palette"); }
   const dark = themeMode==="sombre";
   const [lang,setLang]   = useLocalStorage("duvia_lang", "fr");
+  const [currency,setCurrency] = useLocalStorage("duvia_currency", "€");
+  const [weekStart,setWeekStart] = useLocalStorage("duvia_week_start", "lundi");
   const [summerActive,setSummerActive] = useLocalStorage("duvia_summer", false);
   const [rgActive,setRgActive]         = useLocalStorage("duvia_rg", false);
   const [wcActive,setWcActive]         = useLocalStorage("duvia_wc", false);
@@ -3536,6 +3538,7 @@ export default function App() {
   const onUpgrade = () => { setMenuTab("premium"); setShowMenu(false); };
   const ctxValue = {
     C, t, lang, setLang, dark, themeMode, cycleTheme,
+    currency, setCurrency, weekStart, setWeekStart,
     cfg, setCfg, sub, setSub, user, users, setUsers,
     prem, perms, st, days, isAdm, isObs, isChild, unread,
     addHist, pushNotif, updateCal, onUpgrade, handleObsJoin,
@@ -5582,14 +5585,12 @@ function StepLang({lang,setLang}) {
 
 // ─── PRÉFÉRENCES ──────────────────────────────────────────────────────────────
 function PrefsTab() {
-  const {C,t,lang,setLang,sub,setConfirmDeleteAccount,user} = useApp();
+  const {C,t,lang,setLang,sub,setConfirmDeleteAccount,user,currency,setCurrency,weekStart,setWeekStart} = useApp();
 
   // ── Prefs state (chargé depuis user_metadata) ─────────────────────────────
   const [emailMsg,    setEmailMsg]    = useState(true);
   const [emailExp,    setEmailExp]    = useState(true);
   const [emailVault,  setEmailVault]  = useState(true);
-  const [currency,    setCurrency]    = useState("€");
-  const [weekStart,   setWeekStart]   = useState("lundi");
   const [pwMode,      setPwMode]      = useState(false);
   const [pw,setPw]   = useState(""); const [pw2,setPw2] = useState("");
   const [pwErr,setPwErr] = useState(""); const [pwOk,setPwOk] = useState("");
@@ -5601,9 +5602,10 @@ function PrefsTab() {
       setEmailMsg(m.email_notifs    !== false);
       setEmailExp(m.email_expenses  !== false);
       setEmailVault(m.email_vault   !== false);
-      setCurrency(m.currency  || "€");
-      setWeekStart(m.week_start || "lundi");
+      if(m.currency)   setCurrency(m.currency);
+      if(m.week_start) setWeekStart(m.week_start);
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
   async function savePref(key, val){
@@ -8968,13 +8970,17 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
 // VUE GRILLE MENSUELLE (calendrier "façon papier" — cases colorées par parent)
 // ═══════════════════════════════════════════════════════════════════════════════
 function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,readOnly,editBlocked,inlineDs,setInlineDs,setFullDs}) {
+  const {weekStart="lundi"} = useApp();
+  const sunFirst = weekStart === "dimanche";
   const activeCountry = (multiChild && activeChildId && cfg.childrenCountry?.[activeChildId]) || cfg.country || "FR";
   const activeZoneData = (multiChild && activeChildId && cfg.childrenZones?.[activeChildId]) || {subdivisionCode:cfg.subdivisionCode||"",zone:cfg.zone||""};
   const scoZone = activeZoneData.subdivisionCode || activeZoneData.zone;
   const todayStr = toStr(new Date());
 
-  // Lundi=0 ... Dimanche=6 — nombre de cases vides avant le 1er du mois
-  const firstDow = dow(y,m,1);
+  // Nombre de cases vides avant le 1er du mois (selon premier jour de semaine)
+  const firstDow = sunFirst
+    ? new Date(y,m,1).getDay()     // Sun=0, Mon=1, ..., Sat=6
+    : dow(y,m,1);                  // Mon=0, ..., Sun=6 (ISO)
 
   // Pré-calcule la garde + infos de chaque jour du mois
   const days = Array.from({length:dc},(_,i)=>{
@@ -9052,8 +9058,12 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
     return "";
   }
 
-  const dayLetters = (t.dayNames||["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"])
+  const dayLettersBase = (t.dayNames||["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"])
     .map(n=>(n.slice(0,3)+".").toUpperCase());
+  // Si dimanche en premier : [DIM., LUN., MAR., MER., JEU., VEN., SAM.]
+  const dayLetters = sunFirst
+    ? [dayLettersBase[6], ...dayLettersBase.slice(0,6)]
+    : dayLettersBase;
 
   function openDay(ds){
     if(readOnly) return;
@@ -9474,7 +9484,7 @@ function HistTab() {
 
 // ─── EXPENSES ─────────────────────────────────────────────────────────────────
 function ExpTab() {
-  const {C,t,cfg,setCfg,addHist,pushNotif,user,prem,perms,onUpgrade,isAdm,setActivity,sub,simDate,setExpSubmittedPopup,addRefAction} = useApp();
+  const {C,t,cfg,setCfg,addHist,pushNotif,user,prem,perms,onUpgrade,isAdm,setActivity,sub,simDate,setExpSubmittedPopup,addRefAction,currency="€"} = useApp();
   const premFull = isPremFull(sub); // PDF réservé full premium uniquement
   const now = simDate ? new Date(simDate) : new Date();
   const todayStr = toStr(now);
@@ -9651,8 +9661,8 @@ function ExpTab() {
     if(!form.amount||isNaN(parseFloat(form.amount))){setFormErr(t.expErrAmount||"⚠️ Le montant est obligatoire.");return;}
     // ── Validations sécurité ────────────────────────────────────────
     const amt = parseFloat(form.amount);
-    if(amt < LIMITS.AMOUNT_MIN){ setFormErr(`⚠️ Montant minimum : ${LIMITS.AMOUNT_MIN}€`); return; }
-    if(amt > LIMITS.AMOUNT_MAX){ setFormErr(`⚠️ Montant maximum : ${LIMITS.AMOUNT_MAX}€`); return; }
+    if(amt < LIMITS.AMOUNT_MIN){ setFormErr(`⚠️ Montant minimum : ${LIMITS.AMOUNT_MIN}${currency}`); return; }
+    if(amt > LIMITS.AMOUNT_MAX){ setFormErr(`⚠️ Montant maximum : ${LIMITS.AMOUNT_MAX}${currency}`); return; }
     const cleanLabel = sanitize(form.label).slice(0, LIMITS.LABEL_MAX);
     if(!cleanLabel){ setFormErr("⚠️ La description contient des caractères invalides."); return; }
     if(!isCleanText(cleanLabel)){ _triggerShakeLabel(); setFormErr("⚠️ La description contient des mots inappropriés."); return; }
@@ -9681,13 +9691,13 @@ function ExpTab() {
         } else {
           // Fallback: single
           setCfg(c=>({...c,expenses:c.expenses.map(e=>e.id===editId?{...payload,id:editId,status:"pending",createdBy:user?.parentIdx??0}:e)}));
-          addHist(t.expModified||"Dépense modifiée",`${form.label} — ${form.amount}€`,"exp");
-          pushNotif(`✏️ ${form.label} (${form.amount}€) modifiée — revalidation requise`,"exp");
+          addHist(t.expModified||"Dépense modifiée",`${form.label} — ${form.amount}${currency}`,"exp");
+          pushNotif(`✏️ ${form.label} (${form.amount}${currency}) modifiée — revalidation requise`,"exp");
         }
       } else {
         setCfg(c=>({...c,expenses:c.expenses.map(e=>e.id===editId?{...payload,id:editId,status:"pending",createdBy:user?.parentIdx??0}:e)}));
-        addHist(t.expModified||"Dépense modifiée",`${form.label} — ${form.amount}€`,"exp");
-        pushNotif(`✏️ ${form.label} (${form.amount}€) modifiée — revalidation requise`,"exp");
+        addHist(t.expModified||"Dépense modifiée",`${form.label} — ${form.amount}${currency}`,"exp");
+        pushNotif(`✏️ ${form.label} (${form.amount}${currency}) modifiée — revalidation requise`,"exp");
       }
     } else if(form.recurring) {
       const occurrences = getOccurrences(form.date, form.recurringEnd, form.recurringFreq);
@@ -9706,8 +9716,8 @@ function ExpTab() {
     } else {
       const e={...payload,id:Date.now(),status:"pending",createdBy:user?.parentIdx??0};
       setCfg(c=>({...c,expenses:[e,...(c.expenses||[])]}));
-      addHist(t.newExpense,`${form.label} — ${form.amount}€`,"exp");
-      pushNotif(`💰 ${form.label} (${form.amount}€)`,"exp");
+      addHist(t.newExpense,`${form.label} — ${form.amount}${currency}`,"exp");
+      pushNotif(`💰 ${form.label} (${form.amount}${currency})`,"exp");
       setActivity(a=>({...a,expenses:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
       addRefAction("ADD_EXPENSE");
       if((expenses||[]).length===0 && !sub?.refUsed) setTimeout(()=>{ try{ window.__setShowRefPrompt && window.__setShowRefPrompt(true); }catch(e){} },1200);
@@ -9788,14 +9798,14 @@ function ExpTab() {
     const toName=cfg.parents[reimForm.to]?.name||`P${reimForm.to+1}`;
     if(editReimId){
       setCfg(c=>({...c,reimbursements:(c.reimbursements||[]).map(r=>r.id===editReimId?{...r,...reimForm,amount:parseFloat(reimForm.amount),status:"pending"}:r)}));
-      addHist(t.expReimTitle||"Remboursement",`Modifié · ${fromName} → ${toName} · ${reimForm.amount}€`,"exp");
-      pushNotif(`✏️ Remboursement de ${fromName} modifié (${reimForm.amount}€) — revalidation requise`,"exp");
+      addHist(t.expReimTitle||"Remboursement",`Modifié · ${fromName} → ${toName} · ${reimForm.amount}${currency}`,"exp");
+      pushNotif(`✏️ Remboursement de ${fromName} modifié (${reimForm.amount}${currency}) — revalidation requise`,"exp");
       setEditReimId(null);
     } else {
       const r={...reimForm,id:Date.now(),amount:parseFloat(reimForm.amount),_type:"reim",status:"pending"};
       setCfg(c=>({...c,reimbursements:[r,...(c.reimbursements||[])]}));
-      addHist(t.expReimTitle||"Remboursement",`${fromName} → ${toName} · ${reimForm.amount}€`,"exp");
-      pushNotif(`💸 ${fromName} ${t.expReimAdded||"a remboursé"} ${toName} (${reimForm.amount}€)`,"exp");
+      addHist(t.expReimTitle||"Remboursement",`${fromName} → ${toName} · ${reimForm.amount}${currency}`,"exp");
+      pushNotif(`💸 ${fromName} ${t.expReimAdded||"a remboursé"} ${toName} (${reimForm.amount}${currency})`,"exp");
     }
     setShowReim(false);
     setReimForm(emptyReim);
@@ -9804,23 +9814,23 @@ function ExpTab() {
   function confirmReim(id){
     setCfg(c=>({...c,reimbursements:(c.reimbursements||[]).map(r=>r.id===id?{...r,status:"confirmed"}:r)}));
     const r=(cfg.reimbursements||[]).find(x=>x.id===id);
-    if(r){ const fromName=cfg.parents[r.from]?.name||`P${r.from+1}`; pushNotif(`✅ Remboursement de ${fromName} (${r.amount}€) confirmé`,"exp"); addHist("Remboursement confirmé",`${fromName} → ${r.amount}€`,"exp"); }
+    if(r){ const fromName=cfg.parents[r.from]?.name||`P${r.from+1}`; pushNotif(`✅ Remboursement de ${fromName} (${r.amount}${currency}) confirmé`,"exp"); addHist("Remboursement confirmé",`${fromName} → ${r.amount}${currency}`,"exp"); }
   }
   function rejectReim(id){
     setCfg(c=>({...c,reimbursements:(c.reimbursements||[]).map(r=>r.id===id?{...r,status:"rejected"}:r)}));
     const r=(cfg.reimbursements||[]).find(x=>x.id===id);
-    if(r){ const fromName=cfg.parents[r.from]?.name||`P${r.from+1}`; pushNotif(`❌ Remboursement de ${fromName} (${r.amount}€) refusé`,"exp"); }
+    if(r){ const fromName=cfg.parents[r.from]?.name||`P${r.from+1}`; pushNotif(`❌ Remboursement de ${fromName} (${r.amount}${currency}) refusé`,"exp"); }
   }
 
   function confirmExp(id){
     setCfg(c=>({...c,expenses:(c.expenses||[]).map(e=>e.id===id?{...e,status:"confirmed"}:e)}));
     const e=(cfg.expenses||[]).find(x=>x.id===id);
-    if(e){ const pName=cfg.parents[e.createdBy]?.name||`P${(e.createdBy||0)+1}`; pushNotif(`${t.expConfirmedNotif||"✅ Dépense confirmée"} : ${e.label} (${e.amount}€)`,"exp"); addHist(t.expConfirmedNotif||"Dépense confirmée",`${e.label} · ${e.amount}€`,"exp"); }
+    if(e){ const pName=cfg.parents[e.createdBy]?.name||`P${(e.createdBy||0)+1}`; pushNotif(`${t.expConfirmedNotif||"✅ Dépense confirmée"} : ${e.label} (${e.amount}${currency})`,"exp"); addHist(t.expConfirmedNotif||"Dépense confirmée",`${e.label} · ${e.amount}${currency}`,"exp"); }
   }
   function rejectExp(id){
     setCfg(c=>({...c,expenses:(c.expenses||[]).map(e=>e.id===id?{...e,status:"rejected"}:e)}));
     const e=(cfg.expenses||[]).find(x=>x.id===id);
-    if(e){ pushNotif(`${t.expRejectedNotif||"❌ Dépense refusée"} : ${e.label}`,"exp"); addHist(t.expRejectedNotif||"Dépense refusée",`${e.label} · ${e.amount}€`,"exp"); }
+    if(e){ pushNotif(`${t.expRejectedNotif||"❌ Dépense refusée"} : ${e.label}`,"exp"); addHist(t.expRejectedNotif||"Dépense refusée",`${e.label} · ${e.amount}${currency}`,"exp"); }
   }
 
   const filtered=catF==="all"?expenses:expenses.filter(e=>e.category===catF);
@@ -9870,7 +9880,7 @@ function ExpTab() {
         attachmentsHtml=`<div class="page-break"></div><div class="doc-header"><div class="doc-header-left">Duvia — Rapport de dépenses partagées</div><div class="doc-header-right">Période : ${periodLabel} · Export : ${exportDateStr}</div></div><div class="section-title">4. Justificatifs (${expWithAtt.length} dépenses avec pièce jointe)</div><p style="color:#666;font-size:10px;margin-bottom:16px;">Pièces jointes aux dépenses enregistrées sur la période sélectionnée.</p>`;
         expWithAtt.forEach(e=>{
           const pName=cfg.parents[e.paidBy]?.name||`Parent ${e.paidBy+1}`;
-          attachmentsHtml+=`<div style="margin-bottom:24px;page-break-inside:avoid;"><div style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:6px;padding:8px 14px;margin-bottom:8px;font-size:10px;"><strong>${e.label||"—"}</strong> — ${pName} — ${fmtDate(e.date)} — ${(e.amount||0).toFixed(2)} €</div><div style="display:flex;flex-wrap:wrap;gap:10px;">`;
+          attachmentsHtml+=`<div style="margin-bottom:24px;page-break-inside:avoid;"><div style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:6px;padding:8px 14px;margin-bottom:8px;font-size:10px;"><strong>${e.label||"—"}</strong> — ${pName} — ${fmtDate(e.date)} — ${(e.amount||0).toFixed(2)} ${currency}</div><div style="display:flex;flex-wrap:wrap;gap:10px;">`;
           (e.attachments||[]).forEach(a=>{
             if(a.data&&a.type&&a.type.startsWith("image/")) attachmentsHtml+=`<img src="${a.data}" style="max-width:200px;max-height:160px;border:1px solid #dee2e6;border-radius:4px;object-fit:contain;" alt="${a.name||"pièce jointe"}">`;
             else if(a.data&&a.type==="application/pdf") attachmentsHtml+=`<div style="width:110px;height:80px;border:1px solid #dee2e6;border-radius:4px;display:flex;align-items:center;justify-content:center;background:#f8f9fa;font-size:10px;color:#666;text-align:center;padding:6px;">📄 PDF<br><span style="font-size:8px;">${(a.name||"").slice(0,18)}</span></div>`;
@@ -9886,7 +9896,7 @@ function ExpTab() {
         const heureSaisie=idTs&&!isNaN(idTs)?idTs.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"—";
         const sp=e.split||50;
         const hasAtt=(e.attachments||[]).length>0;
-        return `<tr><td>${fmtDate(e.date)}</td><td>${dateSaisie}<br><span style="font-size:8px;color:#888;">${heureSaisie}</span></td><td>${e.category||"—"}</td><td><strong>${(e.label||"—").replace(/</g,"&lt;")}</strong>${e.note?`<br><span style="font-size:8px;color:#888;">${e.note.replace(/</g,"&lt;")}</span>`:""}</td><td style="text-align:right;font-weight:700;">${(e.amount||0).toFixed(2)} €</td><td>${pName}</td><td style="text-align:center;font-size:9px;">${sp}%/${100-sp}%</td><td>${statusBadge(e.status)}</td><td style="font-size:9px;">${creatorName}${hasAtt?" 📎":""}</td></tr>`;
+        return `<tr><td>${fmtDate(e.date)}</td><td>${dateSaisie}<br><span style="font-size:8px;color:#888;">${heureSaisie}</span></td><td>${e.category||"—"}</td><td><strong>${(e.label||"—").replace(/</g,"&lt;")}</strong>${e.note?`<br><span style="font-size:8px;color:#888;">${e.note.replace(/</g,"&lt;")}</span>`:""}</td><td style="text-align:right;font-weight:700;">${(e.amount||0).toFixed(2)} ${currency}</td><td>${pName}</td><td style="text-align:center;font-size:9px;">${sp}%/${100-sp}%</td><td>${statusBadge(e.status)}</td><td style="font-size:9px;">${creatorName}${hasAtt?" 📎":""}</td></tr>`;
       }).join("");
       const reimRows=filteredReims.slice().sort((a,b)=>new Date(a.date||0)-new Date(b.date||0)).map(r=>{
         const fromName=cfg.parents[r.from]?.name||`Parent ${r.from+1}`;
@@ -9894,7 +9904,7 @@ function ExpTab() {
         const idTs=r.id?new Date(r.id):null;
         const dateSaisie=idTs&&!isNaN(idTs)?idTs.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}):"—";
         const heureSaisie=idTs&&!isNaN(idTs)?idTs.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"—";
-        return `<tr><td>${fmtDate(r.date)}</td><td>${dateSaisie}<br><span style="font-size:8px;color:#888;">${heureSaisie}</span></td><td>${fromName}</td><td>${toName}</td><td style="text-align:right;font-weight:700;">${(r.amount||0).toFixed(2)} €</td><td style="font-size:9px;">${(r.note||"—").replace(/</g,"&lt;")}</td><td>${statusBadge(r.status)}</td></tr>`;
+        return `<tr><td>${fmtDate(r.date)}</td><td>${dateSaisie}<br><span style="font-size:8px;color:#888;">${heureSaisie}</span></td><td>${fromName}</td><td>${toName}</td><td style="text-align:right;font-weight:700;">${(r.amount||0).toFixed(2)} ${currency}</td><td style="font-size:9px;">${(r.note||"—").replace(/</g,"&lt;")}</td><td>${statusBadge(r.status)}</td></tr>`;
       }).join("");
       const histRows=filteredHistory.slice().sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)).map(h=>`<tr><td>${fmtDateTime(h.date)}</td><td>${(h.who||"Système").replace(/</g,"&lt;")}</td><td>${(h.action||"—").replace(/</g,"&lt;")}</td><td style="font-size:9px;">${(h.detail||"—").replace(/</g,"&lt;")}</td></tr>`).join("");
       const exportId=Date.now().toString(36).toUpperCase()+"-DUVIA";
@@ -9978,8 +9988,8 @@ tfoot td{padding:6px 8px;font-size:9.5px;}
     <div class="cover-meta-row"><div class="cml">📅 Période couverte&nbsp;:</div><div class="cmv">${periodLabel}</div></div>
     <div class="cover-meta-row"><div class="cml">🗓️ Date d'export&nbsp;:</div><div class="cmv">${exportDateStr} à ${exportTimeStr}</div></div>
     <div class="cover-meta-row"><div class="cml">👨‍👩‍👧 Famille&nbsp;:</div><div class="cmv">${cfg.parents.map(p=>(p.name||"—").replace(/</g,"&lt;")).join(" / ")}</div></div>
-    <div class="cover-meta-row"><div class="cml">📊 Dépenses&nbsp;:</div><div class="cmv">${filteredExpenses.length} entrée${filteredExpenses.length!==1?"s":""} · Total confirmé ${totalConfirmed.toFixed(2)} €</div></div>
-    <div class="cover-meta-row"><div class="cml">💸 Remboursements&nbsp;:</div><div class="cmv">${filteredReims.length} entrée${filteredReims.length!==1?"s":""} · Total confirmé ${totalReims.toFixed(2)} €</div></div>
+    <div class="cover-meta-row"><div class="cml">📊 Dépenses&nbsp;:</div><div class="cmv">${filteredExpenses.length} entrée${filteredExpenses.length!==1?"s":""} · Total confirmé ${totalConfirmed.toFixed(2)} ${currency}</div></div>
+    <div class="cover-meta-row"><div class="cml">💸 Remboursements&nbsp;:</div><div class="cmv">${filteredReims.length} entrée${filteredReims.length!==1?"s":""} · Total confirmé ${totalReims.toFixed(2)} ${currency}</div></div>
     <div class="cover-meta-row"><div class="cml">🔑 ID Export&nbsp;:</div><div class="cmv" style="font-family:monospace;font-size:9px;">${exportId}</div></div>
   </div>
 </div>
@@ -9991,8 +10001,8 @@ tfoot td{padding:6px 8px;font-size:9.5px;}
 <div class="doc-header"><div class="doc-header-left">Duvia — Rapport de dépenses partagées</div><div class="doc-header-right">Période : ${periodLabel} · Export : ${exportDateStr}</div></div>
 <div class="section-title">1. Résumé exécutif</div>
 <div class="summary-grid">
-  <div class="sc"><div class="sl">Total confirmé</div><div class="sv">${totalConfirmed.toFixed(2)} €</div><div class="ss">${confirmedExp.length} dépense${confirmedExp.length!==1?"s":""}</div></div>
-  <div class="sc"><div class="sl">Remboursements</div><div class="sv">${totalReims.toFixed(2)} €</div><div class="ss">${confirmedReims.length} confirmé${confirmedReims.length!==1?"s":""}</div></div>
+  <div class="sc"><div class="sl">Total confirmé</div><div class="sv">${totalConfirmed.toFixed(2)} ${currency}</div><div class="ss">${confirmedExp.length} dépense${confirmedExp.length!==1?"s":""}</div></div>
+  <div class="sc"><div class="sl">Remboursements</div><div class="sv">${totalReims.toFixed(2)} ${currency}</div><div class="ss">${confirmedReims.length} confirmé${confirmedReims.length!==1?"s":""}</div></div>
   <div class="sc"><div class="sl">En attente</div><div class="sv">${pendingExp.length}</div><div class="ss">Non validées</div></div>
   <div class="sc"><div class="sl">Refusées</div><div class="sv">${rejectedExp.length}</div><div class="ss">Sur la période</div></div>
   <div class="sc"><div class="sl">Total enregistrements</div><div class="sv">${totalRecords}</div><div class="ss">Dépenses + remb.</div></div>
@@ -10001,7 +10011,7 @@ tfoot td{padding:6px 8px;font-size:9.5px;}
 <div class="subsection-title">Soldes par parent</div>
 <table>
   <thead><tr><th>Parent</th><th style="text-align:right;">Total payé</th><th style="text-align:right;">Quote-part due</th><th style="text-align:right;">Remb. envoyés</th><th style="text-align:right;">Remb. reçus</th><th style="text-align:right;">Solde net</th></tr></thead>
-  <tbody>${cfg.parents.map((p,i)=>`<tr><td style="font-weight:700;">${(p.name||`Parent ${i+1}`).replace(/</g,"&lt;")}</td><td style="text-align:right;">${(totalsPerParent[i]||0).toFixed(2)} €</td><td style="text-align:right;">${(owedPerParent[i]||0).toFixed(2)} €</td><td style="text-align:right;">${(reimSent2[i]||0).toFixed(2)} €</td><td style="text-align:right;">${(reimReceived2[i]||0).toFixed(2)} €</td><td style="text-align:right;font-weight:800;color:${balances[i]>0.01?"#166534":balances[i]<-0.01?"#991b1b":"#374151"};">${balances[i]>0?"+":" "}${(balances[i]||0).toFixed(2)} €</td></tr>`).join("")}</tbody>
+  <tbody>${cfg.parents.map((p,i)=>`<tr><td style="font-weight:700;">${(p.name||`Parent ${i+1}`).replace(/</g,"&lt;")}</td><td style="text-align:right;">${(totalsPerParent[i]||0).toFixed(2)} ${currency}</td><td style="text-align:right;">${(owedPerParent[i]||0).toFixed(2)} ${currency}</td><td style="text-align:right;">${(reimSent2[i]||0).toFixed(2)} ${currency}</td><td style="text-align:right;">${(reimReceived2[i]||0).toFixed(2)} ${currency}</td><td style="text-align:right;font-weight:800;color:${balances[i]>0.01?"#166534":balances[i]<-0.01?"#991b1b":"#374151"};">${balances[i]>0?"+":" "}${(balances[i]||0).toFixed(2)} ${currency}</td></tr>`).join("")}</tbody>
 </table>
 
 <!-- ═══════════════ PARTIES ═══════════════ -->
@@ -10018,9 +10028,9 @@ ${(cfg.children||[]).length===0?'<p style="color:#9ca3af;font-style:italic;font-
 <div class="doc-header"><div class="doc-header-left">Duvia — Rapport de dépenses partagées</div><div class="doc-header-right">Période : ${periodLabel} · Export : ${exportDateStr}</div></div>
 <div class="section-title">3. Détail des dépenses et remboursements</div>
 <div class="subsection-title">3.1 Dépenses (${filteredExpenses.length})</div>
-${filteredExpenses.length===0?'<div class="no-data">Aucune dépense sur cette période.</div>':`<table><thead><tr><th>Date</th><th>Saisie / Heure</th><th>Catégorie</th><th>Description</th><th style="text-align:right;">Montant</th><th>Payé par</th><th>Répart.</th><th>Statut</th><th>Créé par</th></tr></thead><tbody>${expRows}</tbody><tfoot><tr style="background:#17103A;color:white;"><td colspan="4" style="font-weight:800;padding:6px 8px;">TOTAL CONFIRMÉ</td><td style="text-align:right;font-weight:800;padding:6px 8px;">${totalConfirmed.toFixed(2)} €</td><td colspan="4"></td></tr></tfoot></table>`}
+${filteredExpenses.length===0?'<div class="no-data">Aucune dépense sur cette période.</div>':`<table><thead><tr><th>Date</th><th>Saisie / Heure</th><th>Catégorie</th><th>Description</th><th style="text-align:right;">Montant</th><th>Payé par</th><th>Répart.</th><th>Statut</th><th>Créé par</th></tr></thead><tbody>${expRows}</tbody><tfoot><tr style="background:#17103A;color:white;"><td colspan="4" style="font-weight:800;padding:6px 8px;">TOTAL CONFIRMÉ</td><td style="text-align:right;font-weight:800;padding:6px 8px;">${totalConfirmed.toFixed(2)} ${currency}</td><td colspan="4"></td></tr></tfoot></table>`}
 <div class="subsection-title" style="margin-top:20px;">3.2 Remboursements (${filteredReims.length})</div>
-${filteredReims.length===0?'<div class="no-data">Aucun remboursement sur cette période.</div>':`<table><thead><tr><th>Date</th><th>Saisie / Heure</th><th>De (rembourseur)</th><th>À (bénéficiaire)</th><th style="text-align:right;">Montant</th><th>Note</th><th>Statut</th></tr></thead><tbody>${reimRows}</tbody><tfoot><tr style="background:#17103A;color:white;"><td colspan="4" style="font-weight:800;padding:6px 8px;">TOTAL CONFIRMÉ</td><td style="text-align:right;font-weight:800;padding:6px 8px;">${totalReims.toFixed(2)} €</td><td colspan="2"></td></tr></tfoot></table>`}
+${filteredReims.length===0?'<div class="no-data">Aucun remboursement sur cette période.</div>':`<table><thead><tr><th>Date</th><th>Saisie / Heure</th><th>De (rembourseur)</th><th>À (bénéficiaire)</th><th style="text-align:right;">Montant</th><th>Note</th><th>Statut</th></tr></thead><tbody>${reimRows}</tbody><tfoot><tr style="background:#17103A;color:white;"><td colspan="4" style="font-weight:800;padding:6px 8px;">TOTAL CONFIRMÉ</td><td style="text-align:right;font-weight:800;padding:6px 8px;">${totalReims.toFixed(2)} ${currency}</td><td colspan="2"></td></tr></tfoot></table>`}
 
 ${attachmentsHtml}
 
@@ -10261,16 +10271,16 @@ window.addEventListener('message',function(e){
         {cfg.parents.map((p,i)=>(
           <div key={i} className="card" style={{borderColor:p.color,textAlign:"center",padding:12}}>
             <div style={{fontSize:10,color:C.mut,textTransform:"uppercase",marginBottom:4,fontWeight:800}}>{p.name||`P${i+1}`}</div>
-            <div style={{fontSize:18,fontWeight:900,color:p.color}}>{(totals[i]||0).toFixed(2)}€</div>
-            <div style={{fontSize:10,color:C.mut,marginTop:2}}>{t.expPaid||"payé"}: {(totals[i]||0).toFixed(2)}€</div>
+            <div style={{fontSize:18,fontWeight:900,color:p.color}}>{(totals[i]||0).toFixed(2)}{currency}</div>
+            <div style={{fontSize:10,color:C.mut,marginTop:2}}>{t.expPaid||"payé"}: {(totals[i]||0).toFixed(2)}{currency}</div>
             <div style={{fontSize:10,color:balance[i]>0.01?C.grn:balance[i]<-0.01?C.red:C.mut,fontWeight:700,filter:!perms?.balanceVisible?"blur(5px)":"none",userSelect:!perms?.balanceVisible?"none":"auto"}}>
-              {balance[i]>0.01?`+${balance[i].toFixed(2)}€`:balance[i]<-0.01?`${balance[i].toFixed(2)}€`:t.even}
+              {balance[i]>0.01?`+${balance[i].toFixed(2)}${currency}`:balance[i]<-0.01?`${balance[i].toFixed(2)}${currency}`:t.even}
             </div>
           </div>
         ))}
         <div className="card" style={{textAlign:"center",padding:12}}>
           <div style={{fontSize:10,color:C.mut,textTransform:"uppercase",marginBottom:4,fontWeight:800}}>{t.total}</div>
-          <div style={{fontSize:18,fontWeight:900,color:C.blu}}>{total.toFixed(2)}€</div>
+          <div style={{fontSize:18,fontWeight:900,color:C.blu}}>{total.toFixed(2)}{currency}</div>
           <div style={{fontSize:10,color:C.mut}}>{expenses.length} {expenses.length!==1?(t.expCountPlural||"dépenses"):(t.expCount||"dépense")}</div>
         </div>
       </div>
@@ -10293,7 +10303,7 @@ window.addEventListener('message',function(e){
                   {" "}{t.expOwes||"doit"}{" "}
                   {balBlur
                     ? <span onClick={onUpgrade} style={{fontFamily:"JetBrains Mono",fontWeight:900,color:C.ora,filter:"blur(5px)",cursor:"pointer",userSelect:"none",background:`${C.ora}18`,borderRadius:6,padding:"1px 6px"}}>99,99€</span>
-                    : <span style={{fontFamily:"JetBrains Mono",fontWeight:900,color:C.ora}}>{(diff/2).toFixed(2)}€</span>
+                    : <span style={{fontFamily:"JetBrains Mono",fontWeight:900,color:C.ora}}>{(diff/2).toFixed(2)}{currency}</span>
                   }
                   {" "}{t.expTo||"à"}{" "}
                   <span style={{color:cfg.parents[creditor]?.color,fontWeight:900}}>{cfg.parents[creditor]?.name||`P${creditor+1}`}</span>
@@ -10431,7 +10441,7 @@ window.addEventListener('message',function(e){
                         <span style={{fontSize:16}}>📊</span>
                         <div style={{fontSize:12,color:C.txt}}>
                           <strong>{n} occurrence{n>1?"s":""}</strong> générée{n>1?"s":""}
-                          {amt>0 && <> · Total <strong style={{color:C.grn}}>{(n*amt).toFixed(2)} €</strong></>}
+                          {amt>0 && <> · Total <strong style={{color:C.grn}}>{(n*amt).toFixed(2)} ${currency}</strong></>}
                         </div>
                       </div>
                     );
@@ -10465,14 +10475,14 @@ window.addEventListener('message',function(e){
                   <div style={{flex:1,background:`${payerColor}14`,border:`1px solid ${payerColor}44`,borderRadius:8,padding:"6px 10px",textAlign:"center"}}>
                     <div style={{fontSize:10,color:payerColor,fontWeight:800,marginBottom:2}}>{payerName}</div>
                     <div style={{fontSize:15,fontWeight:900,color:payerColor,fontFamily:"JetBrains Mono"}}>
-                      {amt>0?payerAmt.toFixed(2):"–"}€
+                      {amt>0?payerAmt.toFixed(2):"–"}${currency}
                     </div>
                     <div style={{fontSize:9,color:C.mut}}>{100-sp}% · {t.expSharePayer||"part payeur"}</div>
                   </div>
                   <div style={{flex:1,background:`${C.bor}55`,border:`1px solid ${C.bor}`,borderRadius:8,padding:"6px 10px",textAlign:"center"}}>
                     <div style={{fontSize:10,color:C.mut,fontWeight:800,marginBottom:2}}>{otherName}</div>
                     <div style={{fontSize:15,fontWeight:900,color:C.txt,fontFamily:"JetBrains Mono"}}>
-                      {amt>0?otherAmt.toFixed(2):"–"}€
+                      {amt>0?otherAmt.toFixed(2):"–"}${currency}
                     </div>
                     <div style={{fontSize:9,color:C.mut}}>{sp}% · {t.expShareDue||"part due"}</div>
                   </div>
@@ -10551,7 +10561,7 @@ window.addEventListener('message',function(e){
                   {iAmReceiver && st==="pending" && (
                     <div style={{marginTop:12,padding:"12px 14px",background:`${C.yel}0d`,border:`1px solid ${C.yel}44`,borderRadius:10}}>
                       <div style={{fontSize:13,color:C.txt,marginBottom:10,lineHeight:1.5}}>
-                        <strong style={{color:fromP?.color||C.grn}}>{fromP?.name||`P${item.from+1}`}</strong> vous a envoyé un remboursement de <strong>{item.amount.toFixed(2)} €</strong> le {(item.date||"").split("-").reverse().join("/")}.<br/>
+                        <strong style={{color:fromP?.color||C.grn}}>{fromP?.name||`P${item.from+1}`}</strong> vous a envoyé un remboursement de <strong>{item.amount.toFixed(2)} ${currency}</strong> le {(item.date||"").split("-").reverse().join("/")}.<br/>
                         Pouvez-vous confirmer la réception ?
                       </div>
                       <div style={{display:"flex",gap:8}}>
@@ -10627,7 +10637,7 @@ window.addEventListener('message',function(e){
                     <div style={{fontSize:13,color:C.txt,marginBottom:10,lineHeight:1.5}}>
                       <strong style={{color:cfg.parents[e.createdBy]?.color||C.blu}}>{cfg.parents[e.createdBy]?.name||`P${(e.createdBy||0)+1}`}</strong>{" "}
                       {t.expPendingConfirmMsg||"a ajouté une dépense de"}{" "}
-                      <strong>{e.amount.toFixed(2)} €</strong> ({e.label}).{" "}
+                      <strong>{e.amount.toFixed(2)} ${currency}</strong> ({e.label}).{" "}
                       {t.expPendingConfirmQ||"Pouvez-vous confirmer ?"}
                     </div>
                     <div style={{display:"flex",gap:8}}>
