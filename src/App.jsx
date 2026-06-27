@@ -4146,7 +4146,7 @@ Date d'entrée en vigueur : 14 juin 2026
           <div>
             {menuTab==="prefs" && (
               <div>
-                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18,paddingBottom:14,borderBottom:`1.5px solid ${C.bor}`}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
                   <div style={{fontSize:15,fontWeight:900}}>⚙️ Préférences</div>
                 </div>
                 <PrefsTab />
@@ -5583,23 +5583,53 @@ function StepLang({lang,setLang}) {
 // ─── PRÉFÉRENCES ──────────────────────────────────────────────────────────────
 function PrefsTab() {
   const {C,t,lang,setLang,sub,setConfirmDeleteAccount,user} = useApp();
-  const [emailNotifs,setEmailNotifs] = useState(true);
-  const [pwMode,setPwMode]           = useState(false);
-  const [pw,setPw]     = useState(""); const [pw2,setPw2]   = useState("");
+
+  // ── Prefs state (chargé depuis user_metadata) ─────────────────────────────
+  const [emailMsg,    setEmailMsg]    = useState(true);
+  const [emailExp,    setEmailExp]    = useState(true);
+  const [emailVault,  setEmailVault]  = useState(true);
+  const [currency,    setCurrency]    = useState("€");
+  const [weekStart,   setWeekStart]   = useState("lundi");
+  const [pwMode,      setPwMode]      = useState(false);
+  const [pw,setPw]   = useState(""); const [pw2,setPw2] = useState("");
   const [pwErr,setPwErr] = useState(""); const [pwOk,setPwOk] = useState("");
   const [saving,setSaving] = useState(false);
 
   useEffect(()=>{
     supabase.auth.getUser().then(({data})=>{
-      const v = data?.user?.user_metadata?.email_notifs;
-      setEmailNotifs(v !== false); // défaut : activé
+      const m = data?.user?.user_metadata || {};
+      setEmailMsg(m.email_notifs    !== false);
+      setEmailExp(m.email_expenses  !== false);
+      setEmailVault(m.email_vault   !== false);
+      setCurrency(m.currency  || "€");
+      setWeekStart(m.week_start || "lundi");
     });
   },[]);
 
-  async function toggleEmailNotifs(){
-    const v = !emailNotifs; setEmailNotifs(v);
-    try{ await supabase.auth.updateUser({data:{email_notifs:v}}); }
-    catch(e){ console.warn("email_notifs save failed",e); }
+  async function savePref(key, val){
+    try{ await supabase.auth.updateUser({data:{[key]:val}}); }
+    catch(e){ console.warn("pref save failed",e); }
+  }
+
+  function Toggle({val,onToggle}){
+    return (
+      <button onClick={onToggle} style={{width:44,height:24,borderRadius:12,background:val?C.grn:"#ccc",border:"none",cursor:"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
+        <div style={{position:"absolute",top:2,left:val?22:2,width:20,height:20,borderRadius:10,background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.25)"}} />
+      </button>
+    );
+  }
+
+  function NotifRow({label,desc,val,onToggle}){
+    const row={display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`,marginBottom:8};
+    return (
+      <div style={row}>
+        <div style={{flex:1,marginRight:12}}>
+          <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{label}</div>
+          <div style={{fontSize:11,color:C.mut,marginTop:2}}>{desc}</div>
+        </div>
+        <Toggle val={val} onToggle={onToggle} />
+      </div>
+    );
   }
 
   async function changePassword(){
@@ -5618,7 +5648,7 @@ function PrefsTab() {
     const data = {
       export_date: new Date().toISOString(),
       compte: {nom:user?.name, email:user?.email},
-      preferences: {langue:lang, emails_notifications:emailNotifs},
+      preferences: {langue:lang, devise:currency, premier_jour:weekStart, emails_messages:emailMsg, emails_depenses:emailExp, emails_coffre:emailVault},
       abonnement: {plan:sub?.plan, depuis:sub?.premiumSince},
     };
     const blob = new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
@@ -5640,18 +5670,41 @@ function PrefsTab() {
       {/* ── Notifications email ── */}
       <div style={{marginBottom:28}}>
         <div className="sec">📧 Notifications email</div>
-        <div style={{...row,cursor:"default"}}>
-          <div style={{flex:1,marginRight:12}}>
-            <div style={{fontSize:13,fontWeight:700,color:C.txt}}>Nouveau message reçu</div>
-            <div style={{fontSize:11,color:C.mut,marginTop:2}}>Recevoir un email quand l'autre parent vous écrit</div>
-          </div>
-          <button onClick={toggleEmailNotifs} style={{width:44,height:24,borderRadius:12,background:emailNotifs?C.grn:"#ccc",border:"none",cursor:"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
-            <div style={{position:"absolute",top:2,left:emailNotifs?22:2,width:20,height:20,borderRadius:10,background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.25)"}} />
-          </button>
+        <NotifRow label="Nouveau message reçu" desc="Email quand l'autre parent vous écrit"
+          val={emailMsg} onToggle={()=>{ const v=!emailMsg; setEmailMsg(v); savePref("email_notifs",v); }} />
+        <NotifRow label="Nouvelle dépense" desc="Email quand une dépense est ajoutée ou modifiée"
+          val={emailExp} onToggle={()=>{ const v=!emailExp; setEmailExp(v); savePref("email_expenses",v); }} />
+        <NotifRow label="Nouveau document (coffre)" desc="Email quand un document est ajouté au coffre-fort"
+          val={emailVault} onToggle={()=>{ const v=!emailVault; setEmailVault(v); savePref("email_vault",v); }} />
+      </div>
+
+      {/* ── Devise ── */}
+      <div style={{marginBottom:28}}>
+        <div className="sec">💰 Devise par défaut</div>
+        <div style={{display:"flex",gap:8}}>
+          {["€","CHF","£"].map(c=>(
+            <button key={c} onClick={()=>{ setCurrency(c); savePref("currency",c); }}
+              style={{flex:1,height:44,borderRadius:12,border:`2px solid ${currency===c?C.vio:C.bor}`,background:currency===c?`${C.vio}12`:C.sur,color:currency===c?C.vio:C.txt,fontSize:16,fontWeight:800,cursor:"pointer",transition:"all .15s"}}>
+              {c}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* ── Changer mot de passe ── */}
+      {/* ── Premier jour de la semaine ── */}
+      <div style={{marginBottom:28}}>
+        <div className="sec">📅 Premier jour de la semaine</div>
+        <div style={{display:"flex",gap:8}}>
+          {[{k:"lundi",l:"Lundi"},{k:"dimanche",l:"Dimanche"}].map(({k,l})=>(
+            <button key={k} onClick={()=>{ setWeekStart(k); savePref("week_start",k); }}
+              style={{flex:1,height:44,borderRadius:12,border:`2px solid ${weekStart===k?C.vio:C.bor}`,background:weekStart===k?`${C.vio}12`:C.sur,color:weekStart===k?C.vio:C.txt,fontSize:13,fontWeight:700,cursor:"pointer",transition:"all .15s"}}>
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Sécurité ── */}
       <div style={{marginBottom:28}}>
         <div className="sec">🔒 Sécurité</div>
         {pwOk && <div style={{color:C.grn,fontSize:12,fontWeight:700,marginBottom:8,padding:"7px 12px",background:`${C.grn}12`,borderRadius:8}}>{pwOk}</div>}
@@ -5689,7 +5742,7 @@ function PrefsTab() {
         <div style={{fontSize:11,color:C.mut,marginTop:6,paddingLeft:4}}>Format JSON · Vos données personnelles uniquement</div>
       </div>
 
-      {/* ── Supprimer le compte ── */}
+      {/* ── Zone de danger ── */}
       <div style={{marginBottom:8}}>
         <div className="sec" style={{color:C.red}}>⚠️ Zone de danger</div>
         <button onClick={()=>setConfirmDeleteAccount(true)} style={{...row,background:`${C.red}10`,border:`1px solid ${C.red}33`,color:C.red}}>
