@@ -3396,7 +3396,7 @@ export default function App() {
         // Nettoyage table subscriptions avant suppression du compte
         if(myUid) await supabase.from("subscriptions").delete().eq("user_id", myUid);
         await _supaFunction("delete-account", {
-          userId:   String(myId),
+          userId:   myUid || String(myId),
           email:    myEmail,
           familyId: familyId,
         });
