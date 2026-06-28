@@ -10871,15 +10871,16 @@ window.addEventListener('message',function(e){
       )}
 
       {/* ── Category filter — seulement les catégories avec des dépenses ── */}
-      { const activeCats=new Set((ctxExpenses||[]).map(e=>e.category).filter(Boolean));
+      {(()=>{ const activeCats=new Set((ctxExpenses||[]).map(e=>e.category).filter(Boolean));
         const visibleCats=[{k:"all",l:t.all||"Tous"},...(t.cats||[]).filter(c=>activeCats.has(c)).map(c=>({k:c,l:c}))];
-        return visibleCats.length>1&&(
+        if(visibleCats.length<=1) return null;
+        return(
         <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
           {visibleCats.map(({k,l})=>(
             <button key={k} onClick={()=>setCatF(k)} style={{padding:"4px 10px",background:catF===k?C.vio:C.sur,color:catF===k?"#fff":C.mut,border:`1.5px solid ${catF===k?C.vio:C.bor}`,borderRadius:20,fontSize:11,fontWeight:700}}>{l}</button>
           ))}
         </div>
-      );}
+      );})()}
 
       {/* ── Expense list ── */}
       {allItems.length===0
