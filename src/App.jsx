@@ -3265,7 +3265,11 @@ export default function App() {
   }, [activity, activityTick]); // ✅ recalculé uniquement si activity ou tick change
   const vaultDot   = liveActivity.vault?.by   && liveActivity.vault.by!==_myId   && liveActivity.vault.ts   >(_seen.vault  ||"");
   const contactsDot= liveActivity.contacts?.by && liveActivity.contacts.by!==_myId && liveActivity.contacts.ts>(_seen.contacts||"");
-  const expDot     = liveActivity.expenses?.by  && liveActivity.expenses.by!==_myId  && liveActivity.expenses.ts >(_seen.expenses||"");
+  // Vibration dépenses = dépenses EN ATTENTE créées par l'autre parent (source DB)
+  const expPendingDot = (allExpenses||[]).some(e =>
+    e.status==="pending" && user?.role==="parent" &&
+    e.createdBy!==undefined && e.createdBy!==(user?.parentIdx??-1)
+  );
   // Sync current user's sub into the users list (so admin can see all subscribers)
   useEffect(()=>{
     if(!user || user.role==="admin") return;
@@ -3545,7 +3549,7 @@ export default function App() {
         {icon:"📞",label:t.tabContacts||"Contacts"},
         {icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},
       ]
-    : [{icon:"📅",label:t.tabCal},{icon:"🎒",label:t.tabSchedule||"EDT"},{icon:"💰",label:t.tabExp,badge:expDot?1:0},{icon:"📞",label:t.tabContacts||"Contacts",badge:contactsDot?1:0},{icon:"🗄️",label:t.tabVault||"Coffre",badge:vaultDot?1:0},{icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},{icon:"🎡",label:t.tabGame||"Jeu"}];
+    : [{icon:"📅",label:t.tabCal},{icon:"🎒",label:t.tabSchedule||"EDT"},{icon:"💰",label:t.tabExp,badge:expPendingDot?1:0,wobbleOnly:true},{icon:"📞",label:t.tabContacts||"Contacts",badge:contactsDot?1:0},{icon:"🗄️",label:t.tabVault||"Coffre",badge:vaultDot?1:0},{icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},{icon:"🎡",label:t.tabGame||"Jeu"}];
 
   // ── Context value ─────────────────────────────────────────────────────────
   const onUpgrade = () => { setMenuTab("premium"); setShowMenu(false); };
@@ -4084,7 +4088,7 @@ Date d'entrée en vigueur : 14 juin 2026
                   style={{flex:1,padding:"8px 4px 7px",background:configStep===i?C.sur:"transparent",color:configStep===i?C.vio:C.mut,borderBottom:configStep===i?`2.5px solid ${C.vio}`:"2.5px solid transparent",borderRadius:0,fontSize:16,height:"auto",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,transition:"all .15s",cursor:"pointer"}}>
                   <span style={{lineHeight:1,position:"relative"}}>
                     {s.i}
-                    {s.badge>0&&<span style={{position:"absolute",top:-4,right:-6,width:14,height:14,borderRadius:"50%",background:C.red,color:"#fff",fontSize:8,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{s.badge}</span>}
+                    {s.badge>0&&!s.wobbleOnly&&<span style={{position:"absolute",top:-4,right:-6,width:14,height:14,borderRadius:"50%",background:C.red,color:"#fff",fontSize:8,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{s.badge}</span>}
                   </span>
                   <span style={{fontSize:9,fontWeight:800,letterSpacing:".03em",textTransform:"uppercase"}}>{s.l}</span>
                 </button>
@@ -4098,7 +4102,7 @@ Date d'entrée en vigueur : 14 juin 2026
           {TABS.map((tb,i) => (
             <button key={i} onClick={()=>{ switchTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,padding:"10px 2px",background:tab===i&&!menuTab?C.sur:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,borderBottom:tab===i&&!menuTab?`2.5px solid ${C.vio}`:"2.5px solid transparent",borderRadius:0,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",transition:"all .15s"}}>
               <span style={{lineHeight:1,display:"inline-block",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}>{tb.icon}</span>
-              {tb.badge>0 && <span style={{position:"absolute",top:5,right:"10%",background:C.red,borderRadius:"50%",width:8,height:8,border:`2px solid ${C.card}`}}/>}
+              {tb.badge>0 && !tb.wobbleOnly && <span style={{position:"absolute",top:5,right:"10%",background:C.red,borderRadius:"50%",width:8,height:8,border:`2px solid ${C.card}`}}/>}
             </button>
           ))}
         </div>
@@ -9802,18 +9806,18 @@ function ExpTab() {
             status:"pending", createdBy: user?.parentIdx??0,
           }));
           await expMethods.updateExpensesBySeries(rid,newExpenses);
-          addHist(t.expModified||"Dépense modifiée",`🔄 ${form.label} — série (${occurrences.length} occ.)`,"exp");
+          { const sA=payload.split||50; const sB=100-sA; addHist(t.expModified||"Dépense modifiée",`🔄 ${cleanLabel} · série (${occurrences.length} occ.) — ${amt.toFixed(2)} ${currency} · ${sA}/${sB}`,"exp"); }
           pushNotif(`✏️ ${form.label} — série modifiée, revalidation requise`,"exp");
         } else {
           // Fallback: single
           await expMethods.updateExpense(editId,{...payload,status:"pending",createdBy:user?.parentIdx??0});
-          addHist(t.expModified||"Dépense modifiée",`${form.label} — ${form.amount}${currency}`,"exp");
-          pushNotif(`✏️ ${form.label} (${form.amount}${currency}) modifiée — revalidation requise`,"exp");
+          { const sA=payload.split||50; const sB=100-sA; addHist(t.expModified||"Dépense modifiée",`${cleanLabel} — ${amt.toFixed(2)} ${currency} · ${sA}/${sB}`,"exp"); }
+          pushNotif(`✏️ ${form.label} (${amt.toFixed(2)} ${currency}) modifiée — revalidation requise`,"exp");
         }
       } else {
         await expMethods.updateExpense(editId,{...payload,status:"pending",createdBy:user?.parentIdx??0});
-        addHist(t.expModified||"Dépense modifiée",`${form.label} — ${form.amount}${currency}`,"exp");
-        pushNotif(`✏️ ${form.label} (${form.amount}${currency}) modifiée — revalidation requise`,"exp");
+        { const sA=payload.split||50; const sB=100-sA; addHist(t.expModified||"Dépense modifiée",`${cleanLabel} — ${amt.toFixed(2)} ${currency} · ${sA}/${sB}`,"exp"); }
+        pushNotif(`✏️ ${form.label} (${amt.toFixed(2)} ${currency}) modifiée — revalidation requise`,"exp");
       }
     } else if(form.recurring) {
       const occurrences = getOccurrences(form.date, form.recurringEnd, form.recurringFreq);
@@ -9825,14 +9829,14 @@ function ExpTab() {
         status:"pending", createdBy: user?.parentIdx??0,
       }));
       await expMethods.addExpenses(newExpenses);
-      addHist(t.newExpense,`🔄 ${form.label} — ${occurrences.length} occurrences`,"exp");
+      { const sA=payload.split||50; const sB=100-sA; addHist(t.newExpense||"Nouvelle dépense",`🔄 ${cleanLabel} · ${occurrences.length} occ. — ${amt.toFixed(2)} ${currency} · ${sA}/${sB}`,"exp"); }
       pushNotif(`🔄 ${form.label} — ${occurrences.length} occurrence${occurrences.length>1?"s":""}` ,"exp");
       setActivity(a=>({...a,expenses:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
       setExpSubmittedPopup(true);
     } else {
       const e={...payload,status:"pending",createdBy:user?.parentIdx??0};
       await expMethods.addExpense(e);
-      addHist(t.newExpense,`${form.label} — ${form.amount}${currency}`,"exp");
+      { const sA=payload.split||50; const sB=100-sA; addHist(t.newExpense||"Nouvelle dépense",`${cleanLabel} — ${amt.toFixed(2)} ${currency} · ${sA}/${sB}`,"exp"); }
       pushNotif(`💰 ${form.label} (${form.amount}${currency})`,"exp");
       setActivity(a=>({...a,expenses:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
       addRefAction("ADD_EXPENSE");
@@ -9879,9 +9883,11 @@ function ExpTab() {
     const e=(ctxExpenses||[]).find(x=>x.id===id);
     if(scope==="series" && e?.recurringId){
       await expMethods.deleteExpensesBySeries(e.recurringId);
+      addHist("Dépense supprimée",`🔄 Série : ${e?.label||""} — ${(e?.amount||0).toFixed(2)} ${currency}`,"exp");
       pushNotif("🔄 Série supprimée","exp");
     } else {
       await expMethods.deleteExpense(id);
+      addHist("Dépense supprimée",`${e?.label||""} — ${(e?.amount||0).toFixed(2)} ${currency}`,"exp");
       pushNotif(t.expDeleted||"💰 Dépense supprimée","exp");
     }
     setRecurringDelModal(null);
@@ -9934,18 +9940,18 @@ function ExpTab() {
   function rejectReim(id){
     const r=reimbursements.find(x=>x.id===id);
     expMethods.rejectReim(id);
-    if(r){ const fromName=cfg.parents[r.from]?.name||`P${r.from+1}`; pushNotif(`❌ Remboursement de ${fromName} (${r.amount}${currency}) refusé`,"exp"); }
+    if(r){ const fromName=cfg.parents[r.from]?.name||`P${r.from+1}`; pushNotif(`❌ Remboursement de ${fromName} (${r.amount}${currency}) refusé`,"exp"); addHist("Remboursement refusé",`${fromName} → ${r.amount} ${currency}`,"exp"); }
   }
 
   function confirmExp(id){
     const e=(ctxExpenses||[]).find(x=>x.id===id);
     expMethods.confirmExp(id);
-    if(e){ pushNotif(`${t.expConfirmedNotif||"✅ Dépense confirmée"} : ${e.label} (${e.amount}${currency})`,"exp"); addHist(t.expConfirmedNotif||"Dépense confirmée",`${e.label} · ${e.amount}${currency}`,"exp"); }
+    if(e){ const sA=e.split||50; const sB=100-sA; pushNotif(`${t.expConfirmedNotif||"✅ Dépense confirmée"} : ${e.label} (${e.amount} ${currency})`,"exp"); addHist(t.expConfirmedNotif||"Dépense confirmée",`${e.label} — ${Number(e.amount).toFixed(2)} ${currency} · ${sA}/${sB}`,"exp"); }
   }
   function rejectExp(id){
     const e=(ctxExpenses||[]).find(x=>x.id===id);
     expMethods.rejectExp(id);
-    if(e){ pushNotif(`${t.expRejectedNotif||"❌ Dépense refusée"} : ${e.label}`,"exp"); addHist(t.expRejectedNotif||"Dépense refusée",`${e.label} · ${e.amount}${currency}`,"exp"); }
+    if(e){ const sA=e.split||50; const sB=100-sA; pushNotif(`${t.expRejectedNotif||"❌ Dépense refusée"} : ${e.label}`,"exp"); addHist(t.expRejectedNotif||"Dépense refusée",`${e.label} — ${Number(e.amount).toFixed(2)} ${currency} · ${sA}/${sB}`,"exp"); }
   }
 
   const filtered=catF==="all"?expenses:expenses.filter(e=>e.category===catF);
