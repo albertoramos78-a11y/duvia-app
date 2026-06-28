@@ -5,6 +5,7 @@ import { initDiagnostics, retryPendingReport, submitBugReport } from "./services
 import { useVault } from "./hooks/useVault";
 import { useMessages } from "./hooks/useMessages";
 import { useIdLinks } from "./hooks/useIdLinks";
+import { useExpenses } from "./hooks/useExpenses";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, PRIVACY_URL, CGU_URL, RGPD_NOTICE_VERSION } from './config.js';
 import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx } from './utils/core.js';
@@ -2651,6 +2652,16 @@ export default function App() {
   const [sub,setSub]     = useLocalStorage("duvia_sub", makeSub);
   const { msgs: cloudMsgs, send: _sendCloudMsg, markRead: markCloudMessageRead } = useMessages(familySync.familyId);
   const { localToUid, uidToLocal } = useIdLinks(familySync.familyId);
+  const {
+    expenses: allExpenses,
+    reimbursements: allReimbursements,
+    addExpense, addExpenses,
+    updateExpense, updateExpensesBySeries,
+    deleteExpense, deleteExpensesBySeries,
+    confirmExp: dbConfirmExp, rejectExp: dbRejectExp,
+    addReimbursement, updateReimbursement, deleteReimbursement,
+    confirmReim: dbConfirmReim, rejectReim: dbRejectReim,
+  } = useExpenses(familySync.familyId);
   const [myUid, setMyUid] = useState(null);
   const [pendingUser,setPendingUser] = useState(null); // parent en attente d'accepter la charte d'engagement
   // 🔧 Traduit les messages du nuage (uuid Supabase) vers le format local
@@ -3093,7 +3104,7 @@ export default function App() {
     if(!user || user.role!=="parent") return;
     const idx = user.parentIdx;
     if(idx===undefined||idx===null) return;
-    const pending=(cfg.reimbursements||[]).filter(r=>r.to===idx && r.status==="pending");
+    const pending=(allReimbursements||[]).filter(r=>r.to===idx && r.status==="pending");
     if(pending.length>0) setPendingReimPopup(pending[0]);
   },[user?.id]);
 
@@ -3102,7 +3113,7 @@ export default function App() {
     if(!user || user.role!=="parent") return;
     const idx = user.parentIdx;
     if(idx===undefined||idx===null) return;
-    const pending=(cfg.expenses||[]).filter(e=>e.status==="pending" && e.createdBy!==undefined && e.createdBy!==idx);
+    const pending=(allExpenses||[]).filter(e=>e.status==="pending" && e.createdBy!==undefined && e.createdBy!==idx);
     if(pending.length>0) setPendingExpPopup(pending[0]);
   },[user?.id]);
 
@@ -3562,6 +3573,17 @@ export default function App() {
     uidToLocal,
     localToUid,
     emailToUid,
+    // ── Expenses (Sprint 1 — données SQL) ──────────────────────────────────
+    expenses: allExpenses,
+    reimbursements: allReimbursements,
+    expMethods: {
+      addExpense, addExpenses,
+      updateExpense, updateExpensesBySeries,
+      deleteExpense, deleteExpensesBySeries,
+      confirmExp: dbConfirmExp, rejectExp: dbRejectExp,
+      addReimbursement, updateReimbursement, deleteReimbursement,
+      confirmReim: dbConfirmReim, rejectReim: dbRejectReim,
+    },
   };
 
   return (
@@ -3617,8 +3639,8 @@ export default function App() {
         const r=pendingReimPopup;
         const fromP=cfg.parents[r.from];
         const dateStr=(r.date||"").split("-").reverse().join("/");
-        const doConfirm=()=>{ setCfg(c=>({...c,reimbursements:(c.reimbursements||[]).map(x=>x.id===r.id?{...x,status:"confirmed"}:x)})); setPendingReimPopup(null); };
-        const doReject=()=>{ setCfg(c=>({...c,reimbursements:(c.reimbursements||[]).map(x=>x.id===r.id?{...x,status:"rejected"}:x)})); setPendingReimPopup(null); };
+        const doConfirm=()=>{ dbConfirmReim(r.id); setPendingReimPopup(null); };
+        const doReject=()=>{ dbRejectReim(r.id); setPendingReimPopup(null); };
         return (
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
             <div style={{background:C.card,borderRadius:22,padding:"28px 24px",maxWidth:340,width:"100%",border:`1.5px solid ${C.yel}`,boxShadow:"0 16px 48px rgba(0,0,0,.28)",animation:"popIn .35s cubic-bezier(.34,1.56,.64,1)"}}>
@@ -3646,8 +3668,8 @@ export default function App() {
         const e=pendingExpPopup;
         const creatorP=cfg.parents[e.createdBy];
         const dateStr=(e.date||"").split("-").reverse().join("/");
-        const doConfirmE=()=>{ setCfg(c=>({...c,expenses:(c.expenses||[]).map(x=>x.id===e.id?{...x,status:"confirmed"}:x)})); setPendingExpPopup(null); };
-        const doRejectE=()=>{ setCfg(c=>({...c,expenses:(c.expenses||[]).map(x=>x.id===e.id?{...x,status:"rejected"}:x)})); setPendingExpPopup(null); };
+        const doConfirmE=()=>{ dbConfirmExp(e.id); setPendingExpPopup(null); };
+        const doRejectE=()=>{ dbRejectExp(e.id); setPendingExpPopup(null); };
         return (
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
             <div style={{background:C.card,borderRadius:22,padding:"28px 24px",maxWidth:340,width:"100%",border:`1.5px solid ${C.yel}`,boxShadow:"0 16px 48px rgba(0,0,0,.28)",animation:"popIn .35s cubic-bezier(.34,1.56,.64,1)"}}>
@@ -9577,7 +9599,7 @@ function HistTab() {
 
 // ─── EXPENSES ─────────────────────────────────────────────────────────────────
 function ExpTab() {
-  const {C,t,cfg,setCfg,addHist,pushNotif,user,prem,perms,onUpgrade,isAdm,setActivity,sub,simDate,setExpSubmittedPopup,addRefAction,currency="€"} = useApp();
+  const {C,t,cfg,setCfg,addHist,pushNotif,user,prem,perms,onUpgrade,isAdm,setActivity,sub,simDate,setExpSubmittedPopup,addRefAction,currency="€",expenses:ctxExpenses,reimbursements:ctxReimbursements,expMethods} = useApp();
   const premFull = isPremFull(sub); // PDF réservé full premium uniquement
   const now = simDate ? new Date(simDate) : new Date();
   const todayStr = toStr(now);
@@ -9613,7 +9635,7 @@ function ExpTab() {
 
   const emptyForm={label:"",amount:"",paidBy:myIdx,split:50,category:t.cats[0],date:toStr(new Date()),note:"",attachments:[],recurring:false,recurringFreq:"monthly",recurringEnd:""};
   const [form,setForm]=useState(emptyForm);
-  const expenses=(cfg.expenses||[]).filter(e => !e.date || e.date <= todayStr);
+  const expenses=(ctxExpenses||[]).filter(e => !e.date || e.date <= todayStr);
 
   // ── Attachment helpers ────────────────────────────────────────────────────
   const MAX_MB=2; const MAX_BYTES=MAX_MB*1024*1024; const MAX_ATT=3;
@@ -9749,7 +9771,7 @@ function ExpTab() {
     return dates;
   }
 
-  function add(){
+  async function add(){
     if(!form.label){setFormErr(t.expErrDesc||"⚠️ La description est obligatoire.");return;}
     if(!form.amount||isNaN(parseFloat(form.amount))){setFormErr(t.expErrAmount||"⚠️ Le montant est obligatoire.");return;}
     // ── Validations sécurité ────────────────────────────────────────
@@ -9768,52 +9790,52 @@ function ExpTab() {
     if(editId){
       if(editScope==="series"){
         // Modifier toute la série : recalculer les occurrences et remplacer
-        const existing=(cfg.expenses||[]).find(x=>x.id===editId);
+        const existing=(ctxExpenses||[]).find(x=>x.id===editId);
         const rid=existing?.recurringId;
         if(rid && form.recurring && form.recurringEnd){
           const occurrences=getOccurrences(form.date,form.recurringEnd,form.recurringFreq);
-          const newExpenses=occurrences.map((d,i)=>({
-            ...payload,id:rid+i+(Date.now()%10000),date:d,
+          const newExpenses=occurrences.map((d)=>({
+            ...payload,date:d,
             recurringId:rid,recurringFreq:form.recurringFreq,
             recurringStart:form.date,recurringEnd:form.recurringEnd,
             status:"pending", createdBy: user?.parentIdx??0,
           }));
-          setCfg(c=>({...c,expenses:[...newExpenses,...(c.expenses||[]).filter(x=>x.recurringId!==rid)]}));
+          await expMethods.updateExpensesBySeries(rid,newExpenses);
           addHist(t.expModified||"Dépense modifiée",`🔄 ${form.label} — série (${occurrences.length} occ.)`,"exp");
           pushNotif(`✏️ ${form.label} — série modifiée, revalidation requise`,"exp");
         } else {
           // Fallback: single
-          setCfg(c=>({...c,expenses:c.expenses.map(e=>e.id===editId?{...payload,id:editId,status:"pending",createdBy:user?.parentIdx??0}:e)}));
+          await expMethods.updateExpense(editId,{...payload,status:"pending",createdBy:user?.parentIdx??0});
           addHist(t.expModified||"Dépense modifiée",`${form.label} — ${form.amount}${currency}`,"exp");
           pushNotif(`✏️ ${form.label} (${form.amount}${currency}) modifiée — revalidation requise`,"exp");
         }
       } else {
-        setCfg(c=>({...c,expenses:c.expenses.map(e=>e.id===editId?{...payload,id:editId,status:"pending",createdBy:user?.parentIdx??0}:e)}));
+        await expMethods.updateExpense(editId,{...payload,status:"pending",createdBy:user?.parentIdx??0});
         addHist(t.expModified||"Dépense modifiée",`${form.label} — ${form.amount}${currency}`,"exp");
         pushNotif(`✏️ ${form.label} (${form.amount}${currency}) modifiée — revalidation requise`,"exp");
       }
     } else if(form.recurring) {
       const occurrences = getOccurrences(form.date, form.recurringEnd, form.recurringFreq);
-      const recurringId = Date.now();
-      const newExpenses = occurrences.map((d, i) => ({
-        ...payload, id: recurringId + i, date: d,
+      const recurringId = String(Date.now());
+      const newExpenses = occurrences.map((d) => ({
+        ...payload, date: d,
         recurringId, recurringFreq: form.recurringFreq,
         recurringStart: form.date, recurringEnd: form.recurringEnd,
         status:"pending", createdBy: user?.parentIdx??0,
       }));
-      setCfg(c=>({...c,expenses:[...newExpenses,...(c.expenses||[])]}));
+      await expMethods.addExpenses(newExpenses);
       addHist(t.newExpense,`🔄 ${form.label} — ${occurrences.length} occurrences`,"exp");
       pushNotif(`🔄 ${form.label} — ${occurrences.length} occurrence${occurrences.length>1?"s":""}` ,"exp");
       setActivity(a=>({...a,expenses:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
       setExpSubmittedPopup(true);
     } else {
-      const e={...payload,id:Date.now(),status:"pending",createdBy:user?.parentIdx??0};
-      setCfg(c=>({...c,expenses:[e,...(c.expenses||[])]}));
+      const e={...payload,status:"pending",createdBy:user?.parentIdx??0};
+      await expMethods.addExpense(e);
       addHist(t.newExpense,`${form.label} — ${form.amount}${currency}`,"exp");
       pushNotif(`💰 ${form.label} (${form.amount}${currency})`,"exp");
       setActivity(a=>({...a,expenses:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
       addRefAction("ADD_EXPENSE");
-      if((expenses||[]).length===0 && !sub?.refUsed) setTimeout(()=>{ try{ window.__setShowRefPrompt && window.__setShowRefPrompt(true); }catch(e){} },1200);
+      if((ctxExpenses||[]).length===0 && !sub?.refUsed) setTimeout(()=>{ try{ window.__setShowRefPrompt && window.__setShowRefPrompt(true); }catch(e){} },1200);
       setExpSubmittedPopup(true);
     }
     setShowAdd(false); setEditId(null); setEditScope(null); setForm(emptyForm); setAttErr(""); setFormErr("");
@@ -9829,7 +9851,7 @@ function ExpTab() {
   function openEditForm(e, scope){
     setEditScope(scope);
     if(scope==="series"){
-      const seriesItems=(cfg.expenses||[]).filter(x=>x.recurringId===e.recurringId);
+      const seriesItems=(ctxExpenses||[]).filter(x=>x.recurringId===e.recurringId);
       const first=seriesItems.reduce((a,b)=>a.date<=b.date?a:b,seriesItems[0]);
       const last=seriesItems.reduce((a,b)=>a.date>=b.date?a:b,seriesItems[0]);
       setForm({label:e.label,amount:String(e.amount),paidBy:e.paidBy,split:e.split||50,category:e.category,
@@ -9847,25 +9869,25 @@ function ExpTab() {
   function cancelForm(){setShowAdd(false);setEditId(null);setEditScope(null);setForm(emptyForm);setAttErr("");}
 
   function del(id){
-    const e=(cfg.expenses||[]).find(x=>x.id===id);
+    const e=(ctxExpenses||[]).find(x=>x.id===id);
     if(e?.recurringId){ setRecurringDelModal(e); return; }
     doDelete(id,"single");
   }
 
-  function doDelete(id, scope){
-    const e=(cfg.expenses||[]).find(x=>x.id===id);
+  async function doDelete(id, scope){
+    const e=(ctxExpenses||[]).find(x=>x.id===id);
     if(scope==="series" && e?.recurringId){
-      setCfg(c=>({...c,expenses:c.expenses.filter(x=>x.recurringId!==e.recurringId)}));
-      pushNotif("\uD83D\uDD04 Série supprimée","exp");
+      await expMethods.deleteExpensesBySeries(e.recurringId);
+      pushNotif("🔄 Série supprimée","exp");
     } else {
-      setCfg(c=>({...c,expenses:c.expenses.filter(x=>x.id!==id)}));
+      await expMethods.deleteExpense(id);
       pushNotif(t.expDeleted||"💰 Dépense supprimée","exp");
     }
     setRecurringDelModal(null);
   }
 
   // ── Totals ────────────────────────────────────────────────────────────────
-  const reimbursements=cfg.reimbursements||[];
+  const reimbursements=ctxReimbursements||[];
   // Backward compat: expenses without status are treated as confirmed
   const confirmedExpenses=expenses.filter(e=>!e.status||e.status==="confirmed");
   const total=confirmedExpenses.reduce((s,e)=>s+e.amount,0);
@@ -9881,7 +9903,7 @@ function ExpTab() {
   const balance=cfg.parents.map((_,i)=>(totals[i]||0)-(owed[i]||0)+(reimSent[i]||0)-(reimReceived[i]||0));
 
   // ── Reimbursement CRUD ────────────────────────────────────────────────────
-  function addReim(){
+  async function addReim(){
     if(!reimForm.amount||isNaN(parseFloat(reimForm.amount))||parseFloat(reimForm.amount)<=0){
       setReimErr(t.expErrReimAmount||"⚠️ Montant invalide.");return;
     }
@@ -9890,39 +9912,38 @@ function ExpTab() {
     const fromName=cfg.parents[reimForm.from]?.name||`P${reimForm.from+1}`;
     const toName=cfg.parents[reimForm.to]?.name||`P${reimForm.to+1}`;
     if(editReimId){
-      setCfg(c=>({...c,reimbursements:(c.reimbursements||[]).map(r=>r.id===editReimId?{...r,...reimForm,amount:parseFloat(reimForm.amount),status:"pending"}:r)}));
+      await expMethods.updateReimbursement(editReimId,{...reimForm,amount:parseFloat(reimForm.amount),status:"pending"});
       addHist(t.expReimTitle||"Remboursement",`Modifié · ${fromName} → ${toName} · ${reimForm.amount}${currency}`,"exp");
       pushNotif(`✏️ Remboursement de ${fromName} modifié (${reimForm.amount}${currency}) — revalidation requise`,"exp");
       setEditReimId(null);
     } else {
-      const r={...reimForm,id:Date.now(),amount:parseFloat(reimForm.amount),_type:"reim",status:"pending"};
-      setCfg(c=>({...c,reimbursements:[r,...(c.reimbursements||[])]}));
+      await expMethods.addReimbursement({...reimForm,amount:parseFloat(reimForm.amount),status:"pending"});
       addHist(t.expReimTitle||"Remboursement",`${fromName} → ${toName} · ${reimForm.amount}${currency}`,"exp");
       pushNotif(`💸 ${fromName} ${t.expReimAdded||"a remboursé"} ${toName} (${reimForm.amount}${currency})`,"exp");
     }
     setShowReim(false);
     setReimForm(emptyReim);
   }
-  function delReim(id){setCfg(c=>({...c,reimbursements:(c.reimbursements||[]).filter(r=>r.id!==id)}));}
+  function delReim(id){ expMethods.deleteReimbursement(id); }
   function confirmReim(id){
-    setCfg(c=>({...c,reimbursements:(c.reimbursements||[]).map(r=>r.id===id?{...r,status:"confirmed"}:r)}));
-    const r=(cfg.reimbursements||[]).find(x=>x.id===id);
+    const r=reimbursements.find(x=>x.id===id);
+    expMethods.confirmReim(id);
     if(r){ const fromName=cfg.parents[r.from]?.name||`P${r.from+1}`; pushNotif(`✅ Remboursement de ${fromName} (${r.amount}${currency}) confirmé`,"exp"); addHist("Remboursement confirmé",`${fromName} → ${r.amount}${currency}`,"exp"); }
   }
   function rejectReim(id){
-    setCfg(c=>({...c,reimbursements:(c.reimbursements||[]).map(r=>r.id===id?{...r,status:"rejected"}:r)}));
-    const r=(cfg.reimbursements||[]).find(x=>x.id===id);
+    const r=reimbursements.find(x=>x.id===id);
+    expMethods.rejectReim(id);
     if(r){ const fromName=cfg.parents[r.from]?.name||`P${r.from+1}`; pushNotif(`❌ Remboursement de ${fromName} (${r.amount}${currency}) refusé`,"exp"); }
   }
 
   function confirmExp(id){
-    setCfg(c=>({...c,expenses:(c.expenses||[]).map(e=>e.id===id?{...e,status:"confirmed"}:e)}));
-    const e=(cfg.expenses||[]).find(x=>x.id===id);
-    if(e){ const pName=cfg.parents[e.createdBy]?.name||`P${(e.createdBy||0)+1}`; pushNotif(`${t.expConfirmedNotif||"✅ Dépense confirmée"} : ${e.label} (${e.amount}${currency})`,"exp"); addHist(t.expConfirmedNotif||"Dépense confirmée",`${e.label} · ${e.amount}${currency}`,"exp"); }
+    const e=(ctxExpenses||[]).find(x=>x.id===id);
+    expMethods.confirmExp(id);
+    if(e){ pushNotif(`${t.expConfirmedNotif||"✅ Dépense confirmée"} : ${e.label} (${e.amount}${currency})`,"exp"); addHist(t.expConfirmedNotif||"Dépense confirmée",`${e.label} · ${e.amount}${currency}`,"exp"); }
   }
   function rejectExp(id){
-    setCfg(c=>({...c,expenses:(c.expenses||[]).map(e=>e.id===id?{...e,status:"rejected"}:e)}));
-    const e=(cfg.expenses||[]).find(x=>x.id===id);
+    const e=(ctxExpenses||[]).find(x=>x.id===id);
+    expMethods.rejectExp(id);
     if(e){ pushNotif(`${t.expRejectedNotif||"❌ Dépense refusée"} : ${e.label}`,"exp"); addHist(t.expRejectedNotif||"Dépense refusée",`${e.label} · ${e.amount}${currency}`,"exp"); }
   }
 
@@ -9939,8 +9960,8 @@ function ExpTab() {
     setExportGenerating(true);
     try{
       const from=exportFrom; const to=exportTo;
-      const filteredExpenses=(cfg.expenses||[]).filter(e=>{const d=e.date||"";return(!from||d>=from)&&(!to||d<=to);});
-      const filteredReims=(cfg.reimbursements||[]).filter(r=>{const d=r.date||"";return(!from||d>=from)&&(!to||d<=to);});
+      const filteredExpenses=(ctxExpenses||[]).filter(e=>{const d=e.date||"";return(!from||d>=from)&&(!to||d<=to);});
+      const filteredReims=(ctxReimbursements||[]).filter(r=>{const d=r.date||"";return(!from||d>=from)&&(!to||d<=to);});
       const filteredHistory=(cfg.history||[]).filter(h=>{const d=(h.date||"").slice(0,10);return(!from||d>=from)&&(!to||d<=to);});
       const now2=new Date();
       const fmtDate=d=>d?new Date(d+"T12:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}):"—";
