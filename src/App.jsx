@@ -346,7 +346,8 @@ function getPerms(sub) {
     balanceVisible:!isFree,
     contactAdd:    !isFree,
     maxVaultDocs:  (isPremium||isTrial) ? Infinity : 0,   // Coffre-fort : Premium + Bêta/trial
-    maxVaultSizeGB: isPremium ? 1 : isTrial ? 0.05 : 0,   // Premium: 1 GB · Trial/bêta: 50 MB · Freemium: 0
+    maxStorageMB:   isPremium ? 500 : isTrial ? 50 : 5,   // Stockage total : Premium 500 Mo · Trial 50 Mo · Freemium 5 Mo
+    maxVaultSizeGB: isPremium ? 500/1024 : isTrial ? 50/1024 : 5/1024, // dérivé de maxStorageMB
     canSpin:       !isFree,
     spinWinSub:    isPremium,
   };
@@ -4216,7 +4217,7 @@ Date d'entrée en vigueur : 14 juin 2026
             )}
             {menuTab==="hist" && (
               <div>
-                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18,paddingBottom:14,borderBottom:`1.5px solid ${C.bor}`}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
                   <div style={{fontSize:15,fontWeight:900}}>📋 {t.tabHist}</div>
                 </div>
                 <HistTab />
@@ -5296,13 +5297,14 @@ function BellPanel({onClose}) {
         <div style={{overflowY:"auto",maxHeight:300}}>
           {notifs.length===0?<div style={{padding:20,textAlign:"center",color:C.mut,fontSize:13}}>{t.noNotifs}</div>:
             notifs.slice(0,15).map(n=>(
-              <div key={n.id} style={{padding:"9px 14px",borderBottom:`1px solid ${C.bor}`,background:n.read?"transparent":`${C.vio}11`,display:"flex",gap:8}}>
+              <div key={n.id} style={{padding:"9px 14px",borderBottom:`1px solid ${C.bor}`,background:n.read?"transparent":`${C.vio}11`,display:"flex",gap:8,alignItems:"flex-start"}}>
                 <span style={{fontSize:14,flexShrink:0}}>{n.type==="cal"?"📅":n.type==="exp"?"💰":"👋"}</span>
                 <div style={{flex:1}}>
                   <div style={{fontSize:12,color:n.read?C.mut:C.txt}}>{n.msg}</div>
                   <div style={{fontSize:10,color:C.mut,marginTop:2,fontFamily:"JetBrains Mono"}}>{new Date(n.date).toLocaleString([],{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</div>
                 </div>
                 {!n.read&&<div style={{width:6,height:6,borderRadius:"50%",background:C.vio,flexShrink:0,marginTop:4}} />}
+                <button onClick={e=>{e.stopPropagation();setCfg(c=>({...c,notifs:(c.notifs||[]).filter(x=>x.id!==n.id)}));}} style={{background:"transparent",border:"none",color:C.mut,fontSize:13,cursor:"pointer",padding:"0 2px",marginTop:2}}>✕</button>
               </div>
             ))}
         </div>
@@ -5363,18 +5365,18 @@ function NotifTab({prem: premProp}) {
           const idx = getTabIndex(n.type);
           const isClickable = idx !== null;
           return (
-            <div key={n.id} onClick={()=>handleNotifClick(n)}
+            <div key={n.id}
               className="card"
-              style={{marginBottom:10,border:`1.5px solid ${n.read?C.bor:C.vio}`,display:"flex",gap:12,cursor:isClickable?"pointer":"default",transition:"opacity .15s"}}
+              style={{marginBottom:10,border:`1.5px solid ${n.read?C.bor:C.vio}`,display:"flex",gap:12,cursor:isClickable?"pointer":"default",transition:"opacity .15s",alignItems:"flex-start"}}
             >
-              <span style={{fontSize:18,flexShrink:0}}>{n.type==="cal"?"📅":n.type==="schedule"?"🏫":n.type==="exp"?"💰":n.type==="msg"?"💬":n.type==="obs"?"👥":"👋"}</span>
-              <div style={{flex:1}}>
+              <span onClick={()=>handleNotifClick(n)} style={{fontSize:18,flexShrink:0,cursor:isClickable?"pointer":"default"}}>{n.type==="cal"?"📅":n.type==="schedule"?"🏫":n.type==="exp"?"💰":n.type==="msg"?"💬":n.type==="obs"?"👥":"👋"}</span>
+              <div style={{flex:1}} onClick={()=>handleNotifClick(n)}>
                 <div style={{fontSize:14,color:n.read?C.mut:C.txt,fontWeight:n.read?400:700}}>{n.msg}</div>
                 <div style={{fontSize:11,color:C.mut,marginTop:4,fontFamily:"JetBrains Mono"}}>{new Date(n.date).toLocaleString()}</div>
               </div>
-              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0}}>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,flexShrink:0}}>
                 {!n.read&&<span className="badge" style={{background:`${C.vio}22`,color:C.vio}}>{t.newBadge}</span>}
-                {isClickable&&<span style={{fontSize:10,color:C.mut}}>→</span>}
+                <button onClick={e=>{e.stopPropagation();setCfg(c=>({...c,notifs:(c.notifs||[]).filter(x=>x.id!==n.id)}));}} style={{background:"transparent",border:`1px solid ${C.bor}`,color:C.mut,fontSize:11,borderRadius:6,padding:"2px 7px",cursor:"pointer"}}>🗑</button>
               </div>
             </div>
           );
@@ -9560,7 +9562,9 @@ function HistTab() {
   const TYPE_ICON  = {"cal":"📅","schedule":"🏫","exp":"💰","contacts":"📞","vault":"🗄️","msg":"💬"};
   const TYPE_LABEL = {"cal":"Calendrier","schedule":"EDT","exp":"Dépenses","contacts":"Contacts","vault":"Coffre","msg":"Messages"};
 
-  const filtered = history;
+  const [filterType,setFilterType] = useState("all");
+  const presentTypes = [...new Set(history.map(h=>h.type).filter(Boolean))];
+  const filtered = filterType==="all" ? history : history.filter(h=>h.type===filterType);
 
   function handleClick(h) {
     const idx = TYPE_MAP[h.type];
@@ -9582,6 +9586,18 @@ function HistTab() {
       </div>
 
 
+
+      {/* ── Filtres (uniquement si plusieurs types présents) ── */}
+      {presentTypes.length>1&&(
+        <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+          <button onClick={()=>setFilterType("all")} style={{padding:"4px 10px",background:filterType==="all"?C.vio:C.sur,color:filterType==="all"?"#fff":C.mut,border:`1.5px solid ${filterType==="all"?C.vio:C.bor}`,borderRadius:20,fontSize:11,fontWeight:700}}>Tous</button>
+          {presentTypes.map(type=>(
+            <button key={type} onClick={()=>setFilterType(type)} style={{padding:"4px 10px",background:filterType===type?C.vio:C.sur,color:filterType===type?"#fff":C.mut,border:`1.5px solid ${filterType===type?C.vio:C.bor}`,borderRadius:20,fontSize:11,fontWeight:700}}>
+              {TYPE_ICON[type]} {TYPE_LABEL[type]||type}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── Liste ── */}
       {filtered.length===0
@@ -9750,11 +9766,22 @@ function ExpTab() {
         continue;
       }
       try{
+        // Vérification quota stockage avant upload
+        const { data: usedBytes, error: quotaErr } = await supabase.rpc("get_family_storage_bytes", { fid });
+        if(!quotaErr){
+          const limitBytes = (perms.maxStorageMB||50) * 1024 * 1024;
+          const remaining  = limitBytes - (usedBytes||0);
+          if(file.size > remaining){
+            const usedMB = ((usedBytes||0)/1024/1024).toFixed(1);
+            setAttErr(`Quota atteint (${usedMB} Mo / ${perms.maxStorageMB} Mo). ${!prem?"Passez en Premium pour 500 Mo.":"Supprimez des fichiers pour libérer de l'espace."}`);
+            break;
+          }
+        }
         let uploadFile=file;
         let thumb=null;
         if(isImage){
           // Compresse avant upload (réduit la bande passante et le stockage)
-          const blob=await compressImageToBlob(file,1200,0.82);
+          const blob=await compressImageToBlob(file,1000,0.72);
           if(blob) uploadFile=new File([blob],file.name,{type:"image/jpeg"});
           thumb=await compressImage(file,96,0.65); // miniature base64 pour affichage rapide
         }
@@ -13961,12 +13988,11 @@ function VaultTab() {
   const totalSizeBytes = useMemo(() =>
     docs.reduce((sum, d) => sum + (d.file_size || 0), 0),
   [docs]);
-  const VAULT_MAX_BYTES = getPerms(sub).maxVaultSizeGB * 1024 * 1024 * 1024;
-  const VAULT_MAX_LABEL = getPerms(sub).maxVaultSizeGB >= 1
-    ? `${getPerms(sub).maxVaultSizeGB} Go`
-    : `${Math.round(getPerms(sub).maxVaultSizeGB * 1024)} Mo`;
+  const VAULT_MAX_MB    = getPerms(sub).maxStorageMB || 50;
+  const VAULT_MAX_BYTES = VAULT_MAX_MB * 1024 * 1024;
+  const VAULT_MAX_LABEL = `${VAULT_MAX_MB} Mo`;
   const totalSizeMB = (totalSizeBytes / (1024 * 1024)).toFixed(1);
-  const totalSizeGB = (totalSizeBytes / (1024 * 1024 * 1024)).toFixed(2);
+  const totalSizeGB = (totalSizeBytes / (1024 * 1024 * 1024)).toFixed(2); // gardé pour compat
 
   // Helper : si le doc a été ajouté par un parent supprimé
   function resolveAddedBy(name) {
@@ -14035,7 +14061,7 @@ function VaultTab() {
   function openAdd() {
     if (!prem) { onUpgrade(); return; } // Coffre-fort : Premium (y compris Bêta/trial)
     if (totalSizeBytes >= VAULT_MAX_BYTES) {
-      alert(`⚠️ Limite de ${VAULT_MAX_LABEL} atteinte (${totalSizeGB} Go utilisés). Supprimez des fichiers pour en ajouter.`);
+      alert(`⚠️ Limite de ${VAULT_MAX_LABEL} atteinte (${totalSizeMB} Mo utilisés). Supprimez des fichiers pour en ajouter.`);
       return;
     }
     setEditDoc(null);
@@ -14054,14 +14080,16 @@ function VaultTab() {
     setShowForm(true);
   }
 
-  function handleFile(e) {
+  async function handleFile(e) {
     const f = e.target.files?.[0];
     if (!f) return;
     const fileErr = validateVaultFile(f);
     if (fileErr) { alert(fileErr); e.target.value = ""; return; }
-    // Vérification limite 1 Go total
-    if (totalSizeBytes + f.size > VAULT_MAX_BYTES) {
-      alert(`⚠️ Limite de stockage atteinte (${VAULT_MAX_LABEL} max).\nUtilisé : ${totalSizeGB} Go · Fichier : ${(f.size/1024/1024).toFixed(1)} Mo`);
+    // Vérification quota stockage total (vault + dépenses)
+    const { data: usedBytes } = await supabase.rpc("get_family_storage_bytes", { fid: familySync?.familyId }).catch(()=>({data:null}));
+    const effectiveUsed = usedBytes ?? totalSizeBytes;
+    if (effectiveUsed + f.size > VAULT_MAX_BYTES) {
+      alert(`⚠️ Limite de stockage atteinte (${VAULT_MAX_LABEL} max).\nUtilisé : ${(effectiveUsed/1024/1024).toFixed(1)} Mo · Fichier : ${(f.size/1024/1024).toFixed(1)} Mo`);
       e.target.value = "";
       return;
     }
@@ -14376,7 +14404,7 @@ function VaultTab() {
         <div style={{marginBottom:14}}>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.mut,fontWeight:700,marginBottom:4}}>
             <span>Stockage utilisé</span>
-            <span>{totalSizeBytes < 1024*1024 ? `${(totalSizeBytes/1024).toFixed(0)} Ko` : totalSizeGB + " Go"} / {VAULT_MAX_LABEL}</span>
+            <span>{totalSizeBytes < 1024*1024 ? `${(totalSizeBytes/1024).toFixed(0)} Ko` : totalSizeMB + " Mo"} / {VAULT_MAX_LABEL}</span>
           </div>
           <div style={{height:6,background:C.bor,borderRadius:4,overflow:"hidden"}}>
             <div style={{
