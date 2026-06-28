@@ -10386,16 +10386,16 @@ window.addEventListener('message',function(e){
         {cfg.parents.map((p,i)=>(
           <div key={i} className="card" style={{borderColor:p.color,textAlign:"center",padding:12}}>
             <div style={{fontSize:10,color:C.mut,textTransform:"uppercase",marginBottom:4,fontWeight:800}}>{p.name||`P${i+1}`}</div>
-            <div style={{fontSize:18,fontWeight:900,color:p.color}}>{(totals[i]||0).toFixed(2)}{currency}</div>
-            <div style={{fontSize:10,color:C.mut,marginTop:2}}>{t.expPaid||"payé"}: {(totals[i]||0).toFixed(2)}{currency}</div>
+            <div style={{fontSize:18,fontWeight:900,color:p.color}}>{(totals[i]||0).toFixed(2)} {currency}</div>
+            <div style={{fontSize:10,color:C.mut,marginTop:2}}>{t.expPaid||"payé"}: {(totals[i]||0).toFixed(2)} {currency}</div>
             <div style={{fontSize:10,color:balance[i]>0.01?C.grn:balance[i]<-0.01?C.red:C.mut,fontWeight:700,filter:!perms?.balanceVisible?"blur(5px)":"none",userSelect:!perms?.balanceVisible?"none":"auto"}}>
-              {balance[i]>0.01?`+${balance[i].toFixed(2)}${currency}`:balance[i]<-0.01?`${balance[i].toFixed(2)}${currency}`:t.even}
+              {balance[i]>0.01?`+${balance[i].toFixed(2)} ${currency}`:balance[i]<-0.01?`${balance[i].toFixed(2)} ${currency}`:t.even}
             </div>
           </div>
         ))}
         <div className="card" style={{textAlign:"center",padding:12}}>
           <div style={{fontSize:10,color:C.mut,textTransform:"uppercase",marginBottom:4,fontWeight:800}}>{t.total}</div>
-          <div style={{fontSize:18,fontWeight:900,color:C.blu}}>{total.toFixed(2)}{currency}</div>
+          <div style={{fontSize:18,fontWeight:900,color:C.blu}}>{total.toFixed(2)} {currency}</div>
           <div style={{fontSize:10,color:C.mut}}>{expenses.length} {expenses.length!==1?(t.expCountPlural||"dépenses"):(t.expCount||"dépense")}</div>
         </div>
       </div>
@@ -10418,7 +10418,7 @@ window.addEventListener('message',function(e){
                   {" "}{t.expOwes||"doit"}{" "}
                   {balBlur
                     ? <span onClick={onUpgrade} style={{fontFamily:"JetBrains Mono",fontWeight:900,color:C.ora,filter:"blur(5px)",cursor:"pointer",userSelect:"none",background:`${C.ora}18`,borderRadius:6,padding:"1px 6px"}}>99,99€</span>
-                    : <span style={{fontFamily:"JetBrains Mono",fontWeight:900,color:C.ora}}>{(diff/2).toFixed(2)}{currency}</span>
+                    : <span style={{fontFamily:"JetBrains Mono",fontWeight:900,color:C.ora}}>{(diff/2).toFixed(2)} {currency}</span>
                   }
                   {" "}{t.expTo||"à"}{" "}
                   <span style={{color:cfg.parents[creditor]?.color,fontWeight:900}}>{cfg.parents[creditor]?.name||`P${creditor+1}`}</span>
@@ -10647,7 +10647,7 @@ window.addEventListener('message',function(e){
                   <div style={{display:"flex",alignItems:"center",gap:11}}>
                     <div style={{background:st==="rejected"?`${C.red}18`:`${C.grn}18`,borderRadius:10,padding:"7px 9px",textAlign:"center",minWidth:58,flexShrink:0}}>
                       <div style={{fontFamily:"JetBrains Mono",fontSize:14,fontWeight:700,color:st==="rejected"?C.red:C.grn}}>{item.amount.toFixed(2)}</div>
-                      <div style={{fontSize:9,color:C.mut}}>EUR</div>
+                      <div style={{fontSize:9,color:C.mut}}>{currency}</div>
                     </div>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontWeight:700,fontSize:14,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
@@ -10706,7 +10706,7 @@ window.addEventListener('message',function(e){
                 <div style={{display:"flex",alignItems:"center",gap:11}}>
                   <div style={{background:C.sur,borderRadius:10,padding:"7px 9px",textAlign:"center",minWidth:58,flexShrink:0}}>
                     <div style={{fontFamily:"JetBrains Mono",fontSize:14,fontWeight:700,color:expSt==="rejected"?C.red:C.blu}}>{e.amount.toFixed(2)}</div>
-                    <div style={{fontSize:9,color:C.mut}}>EUR</div>
+                    <div style={{fontSize:9,color:C.mut}}>{currency}</div>
                   </div>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontWeight:700,fontSize:14,display:"flex",alignItems:"center",gap:6}}>
