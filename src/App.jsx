@@ -4212,41 +4212,10 @@ Date d'entrée en vigueur : 14 juin 2026
                 <PremiumTab />
               </div>
             )}
-            {menuTab==="hist" && (
-              <div>
-                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
-                  <div style={{fontSize:15,fontWeight:900}}>📋 {t.tabHist}</div>
-                </div>
-                <HistTab />
-              </div>
-            )}
-            {menuTab==="parrainage" && (
-              <div>
-                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18,paddingBottom:14,borderBottom:`1.5px solid ${C.bor}`}}>
-                  <button onClick={()=>setMenuTab(null)} style={{padding:"0 14px",height:36,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:12,borderRadius:8}}>← Retour</button>
-                  <div style={{fontSize:15,fontWeight:900}}>🎁 {t.parrainage||"Parrainage"}</div>
-                </div>
-                <ParrainageSection />
-              </div>
-            )}
-            {menuTab==="rating" && (
-              <div>
-                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18,paddingBottom:14,borderBottom:`1.5px solid ${C.bor}`}}>
-                  <button onClick={()=>setMenuTab(null)} style={{padding:"0 14px",height:36,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:12,borderRadius:8}}>← Retour</button>
-                  <div style={{fontSize:15,fontWeight:900}}>⭐ {t.rateAppMenu||"Donner mon avis"}</div>
-                </div>
-                <RatingTab />
-              </div>
-            )}
-            {menuTab==="admin" && isAdm && (
-              <div>
-                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18,paddingBottom:14,borderBottom:`1.5px solid ${C.bor}`}}>
-                  <button onClick={()=>setMenuTab(null)} style={{padding:"0 14px",height:36,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:12,borderRadius:8}}>← Retour</button>
-                  <div style={{fontSize:15,fontWeight:900}}>👑 Administration</div>
-                </div>
-                <AdminTab />
-              </div>
-            )}
+            {menuTab==="hist" && <HistTab />}
+            {menuTab==="parrainage" && <ParrainageSection />}
+            {menuTab==="rating" && <RatingTab />}
+            {menuTab==="admin" && isAdm && <AdminTab />}
             {!menuTab && tab===0 && <div key="t0" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><CalTab readOnly={false} canEdit={!isFreemiumPlan(sub)} /></div>}
             {!menuTab && tab===1 && <div key="t1" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><ScheduleTab /></div>}
             {!menuTab && tab===2 && <div key="t2" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><ExpTab /></div>}
@@ -5322,8 +5291,8 @@ function NotifTab({prem: premProp}) {
   const storageKey = `duvia_deleted_notifs_${user?.id||"guest"}`;
   const [deletedIds,setDeletedIds] = useLocalStorage(storageKey,[]);
   const notifs = allNotifs.filter(n=>!deletedIds.includes(n.id));
-  function deleteNotif(id){ setDeletedIds(ids=>[...ids,id]); }
-  function deleteAll(){ setDeletedIds(ids=>[...ids,...allNotifs.map(n=>n.id)]); }
+  function deleteNotif(id){ if(window.confirm("Supprimer cette notification ?")) setDeletedIds(ids=>[...ids,id]); }
+  function deleteAll(){ if(window.confirm(`Supprimer toutes les notifications (${notifs.length}) ?`)) setDeletedIds(ids=>[...ids,...allNotifs.map(n=>n.id)]); }
   function markAll(){setCfg(c=>({...c,notifs:c.notifs.map(n=>({...n,read:true}))}));}
 
   // Map notif type → tab index (parent layout: 0=Cal, 1=Schedule, 2=Exp, 3=Contacts, 4=Vault, 5=Msg)
@@ -10449,7 +10418,7 @@ window.addEventListener('message',function(e){
               </div>
 
               {/* Montant */}
-              <div style={{background:C.sur,borderRadius:12,padding:"14px 16px",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{background:C.sur,borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                 <div>
                   <div style={{fontSize:28,fontWeight:900,color:C.blu,fontFamily:"JetBrains Mono"}}>{Number(e.amount).toFixed(2)} <span style={{fontSize:16}}>{currency}</span></div>
                   <div style={{fontSize:12,color:C.mut,marginTop:2}}>{t.expPaidBy||"Payé par"} <strong style={{color:payer?.color||C.grn}}>{payer?.name||`P${e.paidBy+1}`}</strong></div>
@@ -10458,6 +10427,20 @@ window.addEventListener('message',function(e){
                   <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{sA}/{sB}</div>
                   <div style={{fontSize:11,color:C.mut}}>répartition</div>
                 </div>
+              </div>
+              {/* Part de chaque parent */}
+              <div style={{display:"flex",gap:8,marginBottom:12}}>
+                {cfg.parents.map((p,i)=>{
+                  const pct = i===0?sA:sB;
+                  const amt = (Number(e.amount)*pct/100).toFixed(2);
+                  return(
+                    <div key={i} style={{flex:1,background:C.sur,borderRadius:10,padding:"8px 10px",textAlign:"center",border:`1.5px solid ${i===e.paidBy?p.color||C.grn:C.bor}`}}>
+                      <div style={{fontSize:11,color:C.mut,marginBottom:2}}>{p.name||`P${i+1}`}</div>
+                      <div style={{fontSize:17,fontWeight:900,color:p.color||C.txt}}>{amt} {currency}</div>
+                      <div style={{fontSize:10,color:C.mut}}>{pct}%{i===e.paidBy?" · a payé":""}</div>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Infos */}
@@ -12011,6 +11994,9 @@ function MessagingTab(){
   const [picked,setPicked]=useState([]);
   const [showProof,setShowProof]=useState(null);
   const [shakeDraft,setShakeDraft]=useState(false);
+  // Épinglage de messages — par compte (localStorage)
+  const [pinnedMsgIds,setPinnedMsgIds]=useLocalStorage(`duvia_pinned_msgs_${user?.id||"x"}`,[]); 
+  function toggleMsgPin(id){setPinnedMsgIds(ids=>ids.includes(id)?ids.filter(x=>x!==id):[...ids,id]);}
   const [pendingFile,setPendingFile]=useState(null); // {file,name,type,size,previewUrl}
   const [uploadingFile,setUploadingFile]=useState(false);
   const fileInputRef=useRef(null);
@@ -12368,6 +12354,22 @@ function MessagingTab(){
           {currentMsgs.length===0&&(
             <div style={{textAlign:"center",padding:40,color:C.mut,fontSize:13}}>{t.msgStartConv||"Démarrez la conversation"}</div>
           )}
+          {/* ── Messages épinglés ── */}
+          {(()=>{
+            const pinned=currentMsgs.filter(m=>pinnedMsgIds.includes(m.id));
+            if(!pinned.length) return null;
+            return(
+              <div style={{background:`${C.vio}0a`,border:`1px solid ${C.vio}33`,borderRadius:10,padding:"8px 10px",marginBottom:10}}>
+                <div style={{fontSize:10,fontWeight:800,color:C.vio,marginBottom:6}}>📌 MESSAGES ÉPINGLÉS ({pinned.length})</div>
+                {pinned.map(m=>(
+                  <div key={m.id} style={{fontSize:12,color:C.txt,padding:"4px 0",borderBottom:`1px solid ${C.bor}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{parseMsgAttachment(m.content)?`📄 ${parseMsgAttachment(m.content)?.name||"Fichier"}`:m.content}</span>
+                    <button onClick={()=>toggleMsgPin(m.id)} style={{background:"transparent",border:"none",color:C.mut,fontSize:11,cursor:"pointer",flexShrink:0}}>✕</button>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
           {currentMsgs.map((m,idx)=>{
             const isMe=String(m.from)===String(myUid);
             const verified=verifyMsg(m);
@@ -12389,7 +12391,7 @@ function MessagingTab(){
                   )}
                   <div style={{maxWidth:"78%"}}>
                     {!isMe&&isGroup&&<div style={{fontSize:10,color:C.mut,marginBottom:2,fontWeight:700}}>{m.fromName}</div>}
-                    <div onClick={()=>setShowProof(showProof===m.id?null:m.id)} style={{
+                    <div onDoubleClick={()=>toggleMsgPin(m.id)} onClick={()=>setShowProof(showProof===m.id?null:m.id)} style={{
                       padding:att&&attIsImg?6:"10px 13px",
                       background:isMe?`linear-gradient(135deg,${col},${col}cc)`:C.sur,
                       color:isMe?"#fff":C.txt,
@@ -12398,7 +12400,7 @@ function MessagingTab(){
                       border:isMe?"none":`1px solid ${C.bor}`,
                       boxShadow:"0 1px 4px rgba(0,0,0,.08)",wordBreak:"break-word"
                     }}>
-                      {!att ? m.content : (
+                      {!att ? (typeof m.content==="string"&&m.content.startsWith("§DUVIA_ATTACH§") ? <span style={{opacity:.6,fontSize:12}}>📄 Fichier (non disponible)</span> : m.content) : (
                         <>
                           {attIsImg ? (
                             attUrls[att.path]?.url ? (
@@ -12433,6 +12435,7 @@ function MessagingTab(){
                         </>
                       )}
                     </div>
+                    {pinnedMsgIds.includes(m.id)&&<div style={{fontSize:9,color:C.mut,marginTop:2,textAlign:isMe?"right":"left"}}>📌 Épinglé</div>}
                     {showProof===m.id&&(
                       <div style={{marginTop:4,padding:"7px 10px",background:verified?`${C.grn}15`:`${C.red}15`,borderRadius:8,border:`1px solid ${verified?C.grn:C.red}`,fontSize:10}}>
                         <div style={{fontWeight:800,color:verified?C.grn:C.red,marginBottom:2}}>
@@ -14000,7 +14003,7 @@ function VaultTab() {
     supabase.auth.getUser().then(({ data }) => setUid(data?.user?.id || null));
   }, []);
 
-  const { docs, loading: vaultLoading, error: vaultError, addDoc, updateDoc, togglePin: toggleVaultPin, removeDoc, openDoc } =
+  const { docs: rawDocs, loading: vaultLoading, error: vaultError, addDoc, updateDoc, togglePin: toggleVaultPin, removeDoc, openDoc } =
     useVault(familySync.familyId, uid);
 
   // Taille totale utilisée (en octets)
@@ -14163,8 +14166,14 @@ function VaultTab() {
     if (previewDoc?.id === id) setPreviewDoc(null);
   }
 
+  // Épinglage par compte (localStorage) — chaque parent gère ses épingles
+  const [pinnedDocIds, setPinnedDocIds] = useLocalStorage(`duvia_pinned_${user?.id||"x"}`, []);
+  const docs = rawDocs.map(d=>({...d, pinned: pinnedDocIds.includes(d.id)}));
+
   function togglePin(id) {
-    toggleVaultPin(id).catch(e => alert("⚠️ Erreur : " + (e?.message || e)));
+    setPinnedDocIds(ids =>
+      ids.includes(id) ? ids.filter(x=>x!==id) : [...ids, id]
+    );
   }
 
   function formatSize(bytes) {
@@ -14395,10 +14404,12 @@ function VaultTab() {
           <div style={{fontSize:11,color:C.mut,marginTop:2}}>{catLabel(doc.category_idx)}{doc.doc_date ? " · " + doc.doc_date : ""}</div>
           {doc.notes && <div style={{fontSize:11,color:C.mut,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{doc.notes}</div>}
         </div>
-        <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"center",flexShrink:0}}>
-          {doc.file_name && <span style={{fontSize:14}}>{doc.mime_type?.includes("pdf")?"📄":"🖼️"}</span>}
-          {doc.shared && <span style={{fontSize:11,color:C.mut}}>👥</span>}
-        </div>
+        {!doc.pinned && (
+          <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"center",flexShrink:0}}>
+            {doc.file_name && <span style={{fontSize:14}}>{doc.mime_type?.includes("pdf")?"📄":"🖼️"}</span>}
+            {doc.shared && <span style={{fontSize:11,color:C.mut}}>👥</span>}
+          </div>
+        )}
       </div>
     </div>
   );
