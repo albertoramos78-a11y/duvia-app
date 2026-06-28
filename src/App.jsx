@@ -4474,7 +4474,7 @@ function PasswordResetScreen({ onDone }) {
 function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLogin,onObsJoin,familySync,cfg,setCfg}) {
   const [mode,setMode]=useState("login");
   const [avgRating,setAvgRating]=useState(null);
-  useEffect(()=>{ supabase.from("ratings_summary").select("*").single().then(({data})=>{ if(data?.total_count>0) setAvgRating(data); }).catch(()=>{}); },[]);
+  useEffect(()=>{ supabase.rpc("get_ratings_summary").then(({data})=>{ if(data?.total_count>0) setAvgRating(data); }).catch(()=>{}); },[]);
   const [email,setEmail]=useState(()=>{ try{return window.localStorage.getItem("duvia_last_email")||"";}catch{return "";} }); const [pw,setPw]=useState("");
   const [name,setName]=useState(""); const [role,setRole]=useState("parent");
   const [showInstallModal,setShowInstallModal]=useState(false);
@@ -9472,7 +9472,7 @@ function RatingTab() {
 
   useEffect(()=>{
     // Charge la moyenne globale
-    supabase.from("ratings_summary").select("*").single()
+    supabase.rpc("get_ratings_summary")
       .then(({data})=>{ if(data?.total_count>0) setAvgStats(data); })
       .catch(()=>{});
 
