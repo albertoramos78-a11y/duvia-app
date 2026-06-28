@@ -3925,6 +3925,29 @@ export default function App() {
       </div>
 
       {/* Modale "Installer l'application" */}
+      {/* Note moyenne + avis — sous le formulaire */}
+      {avgRating && (
+        <div style={{marginTop:16}}>
+          <div style={{textAlign:"center",marginBottom:10}}>
+            <span style={{color:"#FFB800",fontSize:14}}>{"★".repeat(Math.round(avgRating.avg_stars))}{"☆".repeat(5-Math.round(avgRating.avg_stars))}</span>
+            <span style={{fontSize:12,color:"#888",fontWeight:700,marginLeft:6}}>{avgRating.avg_stars}/5</span>
+            <span style={{fontSize:11,color:"#aaa"}}> · {avgRating.total_count} avis</span>
+          </div>
+          {publicReviews.length>0 && (
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {publicReviews.map((r,i)=>(
+                <div key={i} style={{background:"rgba(255,255,255,0.6)",borderRadius:12,padding:"10px 14px",backdropFilter:"blur(4px)"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                    <span style={{color:"#FFB800",fontSize:12}}>{"★".repeat(r.stars)}{"☆".repeat(5-r.stars)}</span>
+                    <span style={{fontSize:11,fontWeight:700,color:"#555"}}>{r.display_name}</span>
+                  </div>
+                  <div style={{fontSize:12,color:"#666",fontStyle:"italic",lineHeight:1.4}}>"{r.comment}"</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {showInstallModal && <InstallAppModal C={C} t={t} onClose={()=>setShowInstallModal(false)} />}
 
       {/* Modale "Signaler un problème" (diagnostic) */}
@@ -5246,29 +5269,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
         </div>
       </div>
       {showInstallModal && <InstallAppModal C={C} t={t} onClose={()=>setShowInstallModal(false)} />}
-      {/* Note moyenne + avis publics — bas de page */}
-      {avgRating && (
-        <div style={{marginTop:16,paddingBottom:8}}>
-          <div style={{textAlign:"center",marginBottom:12}}>
-            <span style={{color:"#FFB800",fontSize:14}}>{"★".repeat(Math.round(avgRating.avg_stars))}{"☆".repeat(5-Math.round(avgRating.avg_stars))}</span>
-            <span style={{fontSize:12,color:"#888",fontWeight:700,marginLeft:6}}>{avgRating.avg_stars}/5</span>
-            <span style={{fontSize:11,color:"#aaa"}}> · {avgRating.total_count} avis</span>
-          </div>
-          {publicReviews.length>0 && (
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {publicReviews.map((r,i)=>(
-                <div key={i} style={{background:"rgba(255,255,255,0.6)",borderRadius:12,padding:"10px 14px",backdropFilter:"blur(4px)"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
-                    <span style={{color:"#FFB800",fontSize:12}}>{"★".repeat(r.stars)}{"☆".repeat(5-r.stars)}</span>
-                    <span style={{fontSize:11,fontWeight:700,color:"#555"}}>{r.display_name}</span>
-                  </div>
-                  <div style={{fontSize:12,color:"#666",fontStyle:"italic",lineHeight:1.4}}>"{r.comment}"</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+
     </div>
   );
 }
