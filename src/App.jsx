@@ -6,6 +6,7 @@ import { useVault } from "./hooks/useVault";
 import { useMessages } from "./hooks/useMessages";
 import { useIdLinks } from "./hooks/useIdLinks";
 import { useExpenses } from "./hooks/useExpenses";
+import { useHistory } from "./hooks/useHistory";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, PRIVACY_URL, CGU_URL, RGPD_NOTICE_VERSION } from './config.js';
 import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx } from './utils/core.js';
@@ -2662,6 +2663,7 @@ export default function App() {
     addReimbursement, updateReimbursement, deleteReimbursement,
     confirmReim: dbConfirmReim, rejectReim: dbRejectReim,
   } = useExpenses(familySync.familyId);
+  const { history: historyData, addHistEntry } = useHistory(familySync.familyId);
   const [myUid, setMyUid] = useState(null);
   const [pendingUser,setPendingUser] = useState(null); // parent en attente d'accepter la charte d'engagement
   // 🔧 Traduit les messages du nuage (uuid Supabase) vers le format local
@@ -3387,8 +3389,8 @@ export default function App() {
     });
     pushNotif(`👥 ${obsData.name} — ${t.obsPendingInfo||"demande à rejoindre la famille"}`, "info");
   }
-  function addHist(action,detail,type="") {
-    setCfg(c=>({...c,history:[{id:Date.now(),date:new Date().toISOString(),who:user?.name||"Système",action,detail,type},...(c.history||[])]}));
+  function addHist(action,detail="",type="") {
+    addHistEntry(action, detail, type, user?.name||"Système", myUid||null);
   }
   function updateCal(ds,data) {
     setCfg(c=>({...c,overrides:{...c.overrides,[ds]:{...(c.overrides[ds]||{}),...data}}}));
@@ -3582,6 +3584,7 @@ export default function App() {
     // ── Expenses (Sprint 1 — données SQL) ──────────────────────────────────
     expenses: allExpenses,
     reimbursements: allReimbursements,
+    history: historyData,
     expMethods: {
       addExpense, addExpenses,
       updateExpense, updateExpensesBySeries,
@@ -9551,8 +9554,8 @@ function RatingTab() {
 
 // ─── HISTORY ─────────────────────────────────────────────────────────────────
 function HistTab() {
-  const {C,t,cfg,setTab,setMenuTab} = useApp();
-  const history = cfg.history || [];
+  const {C,t,cfg,setTab,setMenuTab,history:ctxHistory} = useApp();
+  const history = ctxHistory || [];
 
   const TYPE_MAP = {"cal":0,"schedule":1,"exp":2,"contacts":3,"vault":4,"msg":5};
   const TYPE_ICON = {"cal":"📅","schedule":"🏫","exp":"💰","contacts":"📞","vault":"🗄️","msg":"💬"};
@@ -9580,7 +9583,7 @@ function HistTab() {
       </div>
       <div className="sec">{t.historyTitle} ({history.length})</div>
       {history.map((h,i)=>{
-        const d=new Date(h.date);
+        const d=new Date(h.createdAt||h.date);
         const isClickable = h.type && TYPE_MAP[h.type] !== undefined;
         return (
           <div key={i} onClick={isClickable?()=>handleClick(h):undefined}
@@ -9604,7 +9607,7 @@ function HistTab() {
 
 // ─── EXPENSES ─────────────────────────────────────────────────────────────────
 function ExpTab() {
-  const {C,t,cfg,setCfg,addHist,pushNotif,user,prem,perms,onUpgrade,isAdm,setActivity,sub,simDate,setExpSubmittedPopup,addRefAction,currency="€",expenses:ctxExpenses,reimbursements:ctxReimbursements,expMethods} = useApp();
+  const {C,t,cfg,setCfg,addHist,pushNotif,user,prem,perms,onUpgrade,isAdm,setActivity,sub,simDate,setExpSubmittedPopup,addRefAction,currency="€",expenses:ctxExpenses,reimbursements:ctxReimbursements,expMethods,history:ctxHistory} = useApp();
   const premFull = isPremFull(sub); // PDF réservé full premium uniquement
   const now = simDate ? new Date(simDate) : new Date();
   const todayStr = toStr(now);
@@ -9969,7 +9972,7 @@ function ExpTab() {
       const from=exportFrom; const to=exportTo;
       const filteredExpenses=(ctxExpenses||[]).filter(e=>{const d=e.date||"";return(!from||d>=from)&&(!to||d<=to);});
       const filteredReims=(ctxReimbursements||[]).filter(r=>{const d=r.date||"";return(!from||d>=from)&&(!to||d<=to);});
-      const filteredHistory=(cfg.history||[]).filter(h=>{const d=(h.date||"").slice(0,10);return(!from||d>=from)&&(!to||d<=to);});
+      const filteredHistory=(ctxHistory||[]).filter(h=>{const d=(h.createdAt||h.date||"").slice(0,10);return(!from||d>=from)&&(!to||d<=to);});
       const now2=new Date();
       const fmtDate=d=>d?new Date(d+"T12:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}):"—";
       const fmtDateTime=d=>d?new Date(d).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}):"—";
@@ -10027,7 +10030,7 @@ function ExpTab() {
         const heureSaisie=idTs&&!isNaN(idTs)?idTs.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"—";
         return `<tr><td>${fmtDate(r.date)}</td><td>${dateSaisie}<br><span style="font-size:8px;color:#888;">${heureSaisie}</span></td><td>${fromName}</td><td>${toName}</td><td style="text-align:right;font-weight:700;">${(r.amount||0).toFixed(2)} ${currency}</td><td style="font-size:9px;">${(r.note||"—").replace(/</g,"&lt;")}</td><td>${statusBadge(r.status)}</td></tr>`;
       }).join("");
-      const histRows=filteredHistory.slice().sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)).map(h=>`<tr><td>${fmtDateTime(h.date)}</td><td>${(h.who||"Système").replace(/</g,"&lt;")}</td><td>${(h.action||"—").replace(/</g,"&lt;")}</td><td style="font-size:9px;">${(h.detail||"—").replace(/</g,"&lt;")}</td></tr>`).join("");
+      const histRows=filteredHistory.slice().sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)).map(h=>`<tr><td>${fmtDateTime(h.createdAt||h.date)}</td><td>${(h.who||"Système").replace(/</g,"&lt;")}</td><td>${(h.action||"—").replace(/</g,"&lt;")}</td><td style="font-size:9px;">${(h.detail||"—").replace(/</g,"&lt;")}</td></tr>`).join("");
       const exportId=Date.now().toString(36).toUpperCase()+"-DUVIA";
 
       const html=`<!DOCTYPE html>
