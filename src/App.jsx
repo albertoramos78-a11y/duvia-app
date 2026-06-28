@@ -10042,56 +10042,61 @@ function ExpTab() {
     if(!prem&&!editId&&expenses.length>=1){} // no limit
     const payload={...form,label:cleanLabel,amount:amt,split:form.split||50,attachments:form.attachments||[]};
 
-    if(editId){
-      if(editScope==="series"){
-        // Modifier toute la série : recalculer les occurrences et remplacer
-        const existing=(ctxExpenses||[]).find(x=>x.id===editId);
-        const rid=existing?.recurringId;
-        if(rid && form.recurring && form.recurringEnd){
-          const occurrences=getOccurrences(form.date,form.recurringEnd,form.recurringFreq);
-          const newExpenses=occurrences.map((d)=>({
-            ...payload,date:d,
-            recurringId:rid,recurringFreq:form.recurringFreq,
-            recurringStart:form.date,recurringEnd:form.recurringEnd,
-            status:"pending", createdBy: user?.parentIdx??0,
-          }));
-          await expMethods.updateExpensesBySeries(rid,newExpenses);
-          { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`🔄 ${cleanLabel} · série (${occurrences.length} occ.) — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
-          pushNotif(`✏️ ${form.label} — série modifiée, revalidation requise`,"exp");
+    try {
+      if(editId){
+        if(editScope==="series"){
+          // Modifier toute la série : recalculer les occurrences et remplacer
+          const existing=(ctxExpenses||[]).find(x=>x.id===editId);
+          const rid=existing?.recurringId;
+          if(rid && form.recurring && form.recurringEnd){
+            const occurrences=getOccurrences(form.date,form.recurringEnd,form.recurringFreq);
+            const newExpenses=occurrences.map((d)=>({
+              ...payload,date:d,
+              recurringId:rid,recurringFreq:form.recurringFreq,
+              recurringStart:form.date,recurringEnd:form.recurringEnd,
+              status:"pending", createdBy: user?.parentIdx??0,
+            }));
+            await expMethods.updateExpensesBySeries(rid,newExpenses);
+            { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`🔄 ${cleanLabel} · série (${occurrences.length} occ.) — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
+            pushNotif(`✏️ ${form.label} — série modifiée, revalidation requise`,"exp");
+          } else {
+            // Fallback: single
+            await expMethods.updateExpense(editId,{...payload,status:"pending",createdBy:user?.parentIdx??0});
+            { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
+            pushNotif(`✏️ ${form.label} (${amt.toFixed(2)} ${currency}) modifiée — revalidation requise`,"exp");
+          }
         } else {
-          // Fallback: single
           await expMethods.updateExpense(editId,{...payload,status:"pending",createdBy:user?.parentIdx??0});
           { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
           pushNotif(`✏️ ${form.label} (${amt.toFixed(2)} ${currency}) modifiée — revalidation requise`,"exp");
         }
+      } else if(form.recurring) {
+        const occurrences = getOccurrences(form.date, form.recurringEnd, form.recurringFreq);
+        const recurringId = String(Date.now());
+        const newExpenses = occurrences.map((d) => ({
+          ...payload, date: d,
+          recurringId, recurringFreq: form.recurringFreq,
+          recurringStart: form.date, recurringEnd: form.recurringEnd,
+          status:"pending", createdBy: user?.parentIdx??0,
+        }));
+        await expMethods.addExpenses(newExpenses);
+        { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.newExpense||"Nouvelle dépense",`🔄 ${cleanLabel} · ${occurrences.length} occ. — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
+        pushNotif(`🔄 ${form.label} — ${occurrences.length} occurrence${occurrences.length>1?"s":""}` ,"exp");
+        setActivity(a=>({...a,expenses:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
+        setExpSubmittedPopup(true);
       } else {
-        await expMethods.updateExpense(editId,{...payload,status:"pending",createdBy:user?.parentIdx??0});
-        { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
-        pushNotif(`✏️ ${form.label} (${amt.toFixed(2)} ${currency}) modifiée — revalidation requise`,"exp");
+        const e={...payload,status:"pending",createdBy:user?.parentIdx??0};
+        await expMethods.addExpense(e);
+        { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.newExpense||"Nouvelle dépense",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
+        pushNotif(`💰 ${form.label} (${form.amount}${currency})`,"exp");
+        setActivity(a=>({...a,expenses:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
+        addRefAction("ADD_EXPENSE");
+        if((ctxExpenses||[]).length===0 && !sub?.refUsed) setTimeout(()=>{ try{ window.__setShowRefPrompt && window.__setShowRefPrompt(true); }catch(e){} },1200);
+        setExpSubmittedPopup(true);
       }
-    } else if(form.recurring) {
-      const occurrences = getOccurrences(form.date, form.recurringEnd, form.recurringFreq);
-      const recurringId = String(Date.now());
-      const newExpenses = occurrences.map((d) => ({
-        ...payload, date: d,
-        recurringId, recurringFreq: form.recurringFreq,
-        recurringStart: form.date, recurringEnd: form.recurringEnd,
-        status:"pending", createdBy: user?.parentIdx??0,
-      }));
-      await expMethods.addExpenses(newExpenses);
-      { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.newExpense||"Nouvelle dépense",`🔄 ${cleanLabel} · ${occurrences.length} occ. — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
-      pushNotif(`🔄 ${form.label} — ${occurrences.length} occurrence${occurrences.length>1?"s":""}` ,"exp");
-      setActivity(a=>({...a,expenses:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
-      setExpSubmittedPopup(true);
-    } else {
-      const e={...payload,status:"pending",createdBy:user?.parentIdx??0};
-      await expMethods.addExpense(e);
-      { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.newExpense||"Nouvelle dépense",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
-      pushNotif(`💰 ${form.label} (${form.amount}${currency})`,"exp");
-      setActivity(a=>({...a,expenses:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
-      addRefAction("ADD_EXPENSE");
-      if((ctxExpenses||[]).length===0 && !sub?.refUsed) setTimeout(()=>{ try{ window.__setShowRefPrompt && window.__setShowRefPrompt(true); }catch(e){} },1200);
-      setExpSubmittedPopup(true);
+    } catch(err) {
+      setFormErr(`⚠️ Erreur lors de l'enregistrement : ${err?.message||"Veuillez réessayer."}`);
+      return false;
     }
     setShowAdd(false); setEditId(null); setEditScope(null); setForm(emptyForm); setAttErr(""); setFormErr("");
     setTimeout(()=>{ try{ document.getElementById("duvia-scroll")?.scrollTo({top:0,behavior:"smooth"}); }catch(e){} }, 60);
@@ -11015,7 +11020,7 @@ window.addEventListener('message',function(e){
             {editId && (
               <button onClick={cancelForm} style={{flex:1,padding:"10px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontWeight:700}}>{t.cancel||"Annuler"}</button>
             )}
-            <button onClick={()=>{ add(); }} style={{flex:2,padding:"10px",background:editId?C.ora:C.grn,color:"#fff",fontWeight:700,borderRadius:10}}>{editId?(t.expEditSave||"💾 Enregistrer les modifications"):(t.saveDay||"Enregistrer")}</button>
+            <button onClick={async()=>{ await add(); }} style={{flex:2,padding:"10px",background:editId?C.ora:C.grn,color:"#fff",fontWeight:700,borderRadius:10}}>{editId?(t.expEditSave||"💾 Enregistrer les modifications"):(t.saveDay||"Enregistrer")}</button>
           </div>
         </div>
       )}
