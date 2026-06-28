@@ -4473,6 +4473,8 @@ function PasswordResetScreen({ onDone }) {
 
 function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLogin,onObsJoin,familySync,cfg,setCfg}) {
   const [mode,setMode]=useState("login");
+  const [avgRating,setAvgRating]=useState(null);
+  useEffect(()=>{ supabase.from("ratings_summary").select("*").single().then(({data})=>{ if(data?.total_count>0) setAvgRating(data); }).catch(()=>{}); },[]);
   const [email,setEmail]=useState(()=>{ try{return window.localStorage.getItem("duvia_last_email")||"";}catch{return "";} }); const [pw,setPw]=useState("");
   const [name,setName]=useState(""); const [role,setRole]=useState("parent");
   const [showInstallModal,setShowInstallModal]=useState(false);
@@ -5040,6 +5042,13 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
             <img src="/logo.png" alt="Duvia" style={{width:"100%",height:"100%",objectFit:"contain"}} />
           </div>
           <div style={{fontSize:13,color:C.mut,fontStyle:"italic"}}>{t.appSub}</div>
+          {avgRating && (
+            <div style={{marginTop:8,display:"flex",justifyContent:"center",alignItems:"center",gap:6}}>
+              <span style={{color:"#FFB800",fontSize:13}}>{"★".repeat(Math.round(avgRating.avg_stars))}{"☆".repeat(5-Math.round(avgRating.avg_stars))}</span>
+              <span style={{fontSize:12,color:C.mut,fontWeight:700}}>{avgRating.avg_stars}/5</span>
+              <span style={{fontSize:11,color:C.mut}}>· {avgRating.total_count} avis</span>
+            </div>
+          )}
         </div>
         <div className="card" style={C._brand?{background:`linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`}:undefined}>
           {isExpiredInvite && (
