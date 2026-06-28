@@ -3353,6 +3353,35 @@ export default function App() {
     }
   }, [setCfg, t]); // ✅ référence stable
 
+  // ── Notifications OS pour l'autre parent (reçues via Realtime Supabase) ──
+  // cfg.notifs est partagé entre les deux parents via la DB.
+  // Quand Parent B reçoit une mise à jour Realtime, on détecte les nouvelles
+  // notifs (id > dernière connue) et on déclenche la notification OS locale.
+  const lastNotifIdRef = useRef(null);
+  useEffect(() => {
+    const notifs = cfg.notifs || [];
+    if (notifs.length === 0) return;
+    const latestId = notifs[0]?.id; // notifs triées par date desc (plus récente en premier)
+    if (lastNotifIdRef.current === null) {
+      // Premier chargement — on mémorise sans notifier
+      lastNotifIdRef.current = latestId;
+      return;
+    }
+    if (latestId === lastNotifIdRef.current) return; // pas de changement
+    // Nouvelles notifs arrivées depuis le dernier render
+    const newOnes = notifs.filter(n => n.id > lastNotifIdRef.current);
+    lastNotifIdRef.current = latestId;
+    if (newOnes.length === 0) return;
+    if (!window.Notification || Notification.permission !== "granted") return;
+    newOnes.forEach(n => {
+      if(navigator.serviceWorker?.controller){
+        navigator.serviceWorker.ready.then(reg=>reg.showNotification(t.appName,{body:n.msg})).catch(()=>{});
+      } else {
+        try{ new Notification(t.appName,{body:n.msg}); }catch(e){}
+      }
+    });
+  }, [cfg.notifs, t]);
+
   // Called when an observer registers via invite link — adds them as pending + notifies parents
   function handleObsJoin(obsData){
     if(obsData.role === "child"){
