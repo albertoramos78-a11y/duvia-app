@@ -4201,9 +4201,6 @@ Date d'entrée en vigueur : 14 juin 2026
             )}
             {menuTab==="notifs" && (
               <div>
-                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18,paddingBottom:14,borderBottom:`1.5px solid ${C.bor}`}}>
-                  <div style={{fontSize:15,fontWeight:900}}>🔔 {t.tabNotifs}</div>
-                </div>
                 <NotifTab />
               </div>
             )}
@@ -5280,8 +5277,12 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
 
 // ─── BELL PANEL ───────────────────────────────────────────────────────────────
 function BellPanel({onClose}) {
-  const {C,t,cfg,setCfg} = useApp();
-  const notifs=cfg.notifs||[];
+  const {C,t,cfg,setCfg,user} = useApp();
+  const allNotifs=cfg.notifs||[];
+  const storageKey = `duvia_deleted_notifs_${user?.id||"guest"}`;
+  const [deletedIds,setDeletedIds] = useLocalStorage(storageKey,[]);
+  const notifs = allNotifs.filter(n=>!deletedIds.includes(n.id));
+  function deleteNotif(id){ setDeletedIds(ids=>[...ids,id]); }
   function markAll(){setCfg(c=>({...c,notifs:c.notifs.map(n=>({...n,read:true}))}));}
   return (
     <div style={{position:"relative",zIndex:200}}>
@@ -5304,7 +5305,7 @@ function BellPanel({onClose}) {
                   <div style={{fontSize:10,color:C.mut,marginTop:2,fontFamily:"JetBrains Mono"}}>{new Date(n.date).toLocaleString([],{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</div>
                 </div>
                 {!n.read&&<div style={{width:6,height:6,borderRadius:"50%",background:C.vio,flexShrink:0,marginTop:4}} />}
-                <button onClick={e=>{e.stopPropagation();setCfg(c=>({...c,notifs:(c.notifs||[]).filter(x=>x.id!==n.id)}));}} style={{background:"transparent",border:"none",color:C.mut,fontSize:13,cursor:"pointer",padding:"0 2px",marginTop:2}}>✕</button>
+                <button onClick={e=>{e.stopPropagation();deleteNotif(n.id);}} style={{background:"transparent",border:"none",color:C.mut,fontSize:13,cursor:"pointer",padding:"0 2px",marginTop:2}}>✕</button>
               </div>
             ))}
         </div>
@@ -5316,7 +5317,13 @@ function BellPanel({onClose}) {
 function NotifTab({prem: premProp}) {
   const {C,t,cfg,setCfg,prem: ctxPrem,onUpgrade,setActivity,user,setTab,setMenuTab,isObs,isChild} = useApp();
   const prem = premProp !== undefined ? premProp : ctxPrem;
-  const notifs=cfg.notifs||[];
+  const allNotifs = cfg.notifs||[];
+  // Suppression locale uniquement — chaque parent gère ses propres notifs
+  const storageKey = `duvia_deleted_notifs_${user?.id||"guest"}`;
+  const [deletedIds,setDeletedIds] = useLocalStorage(storageKey,[]);
+  const notifs = allNotifs.filter(n=>!deletedIds.includes(n.id));
+  function deleteNotif(id){ setDeletedIds(ids=>[...ids,id]); }
+  function deleteAll(){ setDeletedIds(ids=>[...ids,...allNotifs.map(n=>n.id)]); }
   function markAll(){setCfg(c=>({...c,notifs:c.notifs.map(n=>({...n,read:true}))}));}
 
   // Map notif type → tab index (parent layout: 0=Cal, 1=Schedule, 2=Exp, 3=Contacts, 4=Vault, 5=Msg)
@@ -5356,9 +5363,16 @@ function NotifTab({prem: premProp}) {
   );
   return (
     <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-        <div className="sec" style={{margin:0}}>{t.notifsTitle} ({notifs.filter(n=>!n.read).length} {t.unread})</div>
-        <button onClick={markAll} style={{height:36,padding:"0 14px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:12,borderRadius:8}}>{t.markRead}</button>
+      {/* Titre style Calendrier */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+        <div>
+          <div style={{fontSize:16,fontWeight:900}}>🔔 {t.tabNotifs||"Notifications"}</div>
+          <div style={{fontSize:11,color:C.mut}}>{notifs.filter(n=>!n.read).length} non lue{notifs.filter(n=>!n.read).length!==1?"s":""} · {notifs.length} au total</div>
+        </div>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={markAll} style={{height:32,padding:"0 10px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:11,borderRadius:8}}>{t.markRead||"Tout lu"}</button>
+          {notifs.length>0&&<button onClick={deleteAll} style={{height:32,padding:"0 10px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,fontSize:11,borderRadius:8}}>🗑 Tout supprimer</button>}
+        </div>
       </div>
       {notifs.length===0?<div style={{textAlign:"center",padding:60,color:C.mut}}><div style={{fontSize:48,marginBottom:12}}>🔔</div>{t.noNotifs}</div>:
         notifs.map(n=>{
@@ -5376,7 +5390,7 @@ function NotifTab({prem: premProp}) {
               </div>
               <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,flexShrink:0}}>
                 {!n.read&&<span className="badge" style={{background:`${C.vio}22`,color:C.vio}}>{t.newBadge}</span>}
-                <button onClick={e=>{e.stopPropagation();setCfg(c=>({...c,notifs:(c.notifs||[]).filter(x=>x.id!==n.id)}));}} style={{background:"transparent",border:`1px solid ${C.bor}`,color:C.mut,fontSize:11,borderRadius:6,padding:"2px 7px",cursor:"pointer"}}>🗑</button>
+                <button onClick={e=>{e.stopPropagation();deleteNotif(n.id);}} style={{background:"transparent",border:`1px solid ${C.bor}`,color:C.mut,fontSize:11,borderRadius:6,padding:"2px 7px",cursor:"pointer"}}>🗑</button>
               </div>
             </div>
           );
@@ -9574,14 +9588,19 @@ function HistTab() {
 
   return (
     <div>
-      {/* ── Sous-titre uniquement (le titre "Historique" est affiché par le menu) ── */}
-      <div style={{fontSize:12,color:C.mut,marginBottom:12}}>{t.histSub||"Journal des modifications"} · {history.length} entrée{history.length!==1?"s":""}</div>
+      {/* ── Titre style Calendrier ── */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+        <div>
+          <div style={{fontSize:16,fontWeight:900}}>📋 {t.historyTitle||"Historique"}</div>
+          <div style={{fontSize:11,color:C.mut}}>{t.histSub||"Journal des modifications"} · {history.length} entrée{history.length!==1?"s":""}</div>
+        </div>
+      </div>
 
       {/* ── Bandeau info permanence ── */}
       <div style={{display:"flex",gap:8,alignItems:"flex-start",background:`${C.grn}0d`,border:`1px solid ${C.grn}33`,borderRadius:10,padding:"10px 12px",marginBottom:14}}>
         <span style={{fontSize:16,flexShrink:0}}>🔒</span>
         <div style={{fontSize:11,color:C.mut,lineHeight:1.5}}>
-          L'historique est <strong style={{color:C.txt}}>permanent et non modifiable</strong>. Il est conservé même si un parent quitte la famille et constitue une <strong style={{color:C.txt}}>preuve légale</strong> horodatée par le serveur.
+          L'historique est <strong style={{color:C.txt}}>permanent, non modifiable, horodaté par le serveur</strong>. Il est conservé même si un parent quitte la famille.
         </div>
       </div>
 
