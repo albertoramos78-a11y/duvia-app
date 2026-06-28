@@ -9496,6 +9496,7 @@ function RatingTab() {
   const [comment, setComment] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [sending, setSending] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
   const [avgStats, setAvgStats] = useState(null);
   const [existingRating, setExistingRating] = useState(null);
   const [publicReviews, setPublicReviews] = useState([]);
@@ -9530,13 +9531,14 @@ function RatingTab() {
   async function handleSubmit() {
     if (!canSend) return;
     setSending(true);
+    setSubmitError(null);
     try {
       if(!myUid) throw new Error("Non connecté");
       // Nom AFFICHÉ de la famille (ex. "Lea Durant"), pas le login du compte
       // (ex. "Sissi1") — voir RatingTab plus haut pour le même souci côté Coffre.
       const familyDisplayName = (cfg?.parents||[]).find(p=>p.email && p.email===user?.email)?.name
         || user?.name || user?.email || "Anonyme";
-      await supabase.from("ratings").upsert({
+      const { error: upsertError } = await supabase.from("ratings").upsert({
         family_id: familySync?.familyId || null,
         user_id:   myUid,
         stars:     selected,
@@ -9544,12 +9546,15 @@ function RatingTab() {
         user_name: formatPublicReviewName(familyDisplayName),
         plan:      sub?.plan || "unknown",
       }, { onConflict: "user_id" });
+      if (upsertError) throw upsertError; // supabase-js ne lève pas d'exception, il faut vérifier le champ error nous-mêmes
       setSubmitted(true);
       // Recharge les avis publics pour refléter immédiatement le nom corrigé
       supabase.rpc("get_public_ratings",{max_count:5}).then(({data})=>{ if(data?.length) setPublicReviews(data); }).catch(()=>{});
     } catch(e) {
       console.error("Rating submit error:", e);
-      setSubmitted(true);
+      setSubmitError(e?.message || "Échec de l'envoi. Réessayez.");
+      // On NE met plus submitted à true ici : on ne veut pas afficher
+      // "Merci !" alors que l'enregistrement a réellement échoué.
     }
     setSending(false);
   }
@@ -9636,6 +9641,13 @@ function RatingTab() {
               rows={3}
               style={{width:"100%",padding:"12px 14px",borderRadius:12,border:`1.5px solid ${C.bor}`,background:C.sur,color:C.txt,fontSize:14,lineHeight:1.5,resize:"none",fontFamily:"inherit",transition:"border-color .2s,box-shadow .2s"}}
             />
+          </div>
+        )}
+
+        {/* Erreur d'envoi */}
+        {submitError && (
+          <div style={{background:"#FF453A12",border:"1px solid #FF453A33",borderRadius:8,padding:"8px 12px",marginBottom:16,fontSize:12,color:"#FF453A",textAlign:"left"}}>
+            ⚠️ {submitError}
           </div>
         )}
 
