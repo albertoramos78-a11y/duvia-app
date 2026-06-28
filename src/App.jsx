@@ -4475,6 +4475,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
   const [mode,setMode]=useState("login");
   const [avgRating,setAvgRating]=useState(null);
   const [publicReviews,setPublicReviews]=useState([]);
+  const [reviewsOpen,setReviewsOpen]=useState(false); // accordéon avis publics — replié par défaut
   useEffect(()=>{
     supabase.rpc("get_ratings_summary").then(({data})=>{ if(data?.total_count>0) setAvgRating(data); }).catch(()=>{});
     supabase.rpc("get_public_ratings",{max_count:3}).then(({data})=>{ if(data?.length) setPublicReviews(data); }).catch(()=>{});
@@ -5244,16 +5245,26 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
             </div>
           )}
         </div>
-        {/* Note moyenne + avis — sous le formulaire, dans le conteneur */}
+        {/* Note moyenne + avis — sous le formulaire, dans le conteneur.
+            Repliée par défaut (accordéon) : seule la moyenne est visible,
+            les avis individuels n'apparaissent qu'au clic, pour ne pas
+            allonger l'écran de connexion par défaut. */}
         {avgRating && (
           <div style={{marginTop:14}}>
-            <div style={{textAlign:"center",marginBottom:10}}>
+            <style>{`@keyframes loginReviewFade{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}`}</style>
+            <div
+              onClick={()=>setReviewsOpen(o=>!o)}
+              role="button"
+              aria-expanded={reviewsOpen}
+              style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginBottom:reviewsOpen?10:0,cursor:"pointer",userSelect:"none"}}
+            >
               <span style={{color:"#FFB800",fontSize:14}}>{"★".repeat(Math.round(avgRating.avg_stars))}{"☆".repeat(5-Math.round(avgRating.avg_stars))}</span>
-              <span style={{fontSize:12,color:"#888",fontWeight:700,marginLeft:6}}>{avgRating.avg_stars}/5</span>
+              <span style={{fontSize:12,color:"#888",fontWeight:700}}>{avgRating.avg_stars}/5</span>
               <span style={{fontSize:11,color:"#aaa"}}> · {avgRating.total_count} avis</span>
+              <span style={{fontSize:10,color:"#999",marginLeft:2,display:"inline-block",transition:"transform .2s",transform:reviewsOpen?"rotate(180deg)":"rotate(0deg)"}}>▾</span>
             </div>
-            {publicReviews.map((r,i)=>(
-              <div key={i} style={{background:"rgba(255,255,255,0.65)",borderRadius:12,padding:"10px 14px",marginBottom:8,backdropFilter:"blur(4px)"}}>
+            {reviewsOpen && publicReviews.map((r,i)=>(
+              <div key={i} style={{background:"rgba(255,255,255,0.65)",borderRadius:12,padding:"10px 14px",marginBottom:8,backdropFilter:"blur(4px)",animation:"loginReviewFade .2s ease both"}}>
                 <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
                   <span style={{color:"#FFB800",fontSize:12}}>{"★".repeat(r.stars)}{"☆".repeat(5-r.stars)}</span>
                   <span style={{fontSize:11,fontWeight:700,color:"#555"}}>{r.display_name}</span>
