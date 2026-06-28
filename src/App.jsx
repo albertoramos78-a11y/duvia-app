@@ -3650,7 +3650,7 @@ export default function App() {
               <div style={{fontSize:16,fontWeight:800,marginBottom:6,textAlign:"center",color:C.txt}}>Remboursement reçu</div>
               <div style={{fontSize:13,color:C.mut,marginBottom:20,textAlign:"center",lineHeight:1.6}}>
                 <strong style={{color:fromP?.color||C.grn}}>{fromP?.name||`Parent ${r.from+1}`}</strong> vous a envoyé un remboursement de{" "}
-                <strong style={{color:C.txt}}>{r.amount.toFixed(2)} €</strong>{" "}le {dateStr}.
+                <strong style={{color:C.txt}}>{r.amount.toFixed(2)} {currency}</strong>{" "}le {dateStr}.
                 {r.note && <><br/><em>"{r.note}"</em></>}<br/><br/>
                 Pouvez-vous confirmer la réception ?
               </div>
@@ -3680,7 +3680,7 @@ export default function App() {
               <div style={{fontSize:13,color:C.mut,marginBottom:20,textAlign:"center",lineHeight:1.6}}>
                 <strong style={{color:creatorP?.color||C.blu}}>{creatorP?.name||`Parent ${(e.createdBy||0)+1}`}</strong>{" "}
                 {t.expPendingConfirmMsg||"a ajouté une dépense de"}{" "}
-                <strong style={{color:C.txt}}>{e.amount.toFixed(2)} €</strong>{" "}—{" "}
+                <strong style={{color:C.txt}}>{e.amount.toFixed(2)} {currency}</strong>{" "}—{" "}
                 <em>{e.label}</em>{" "}le {dateStr}.
                 {e.note && <><br/><em>"{e.note}"</em></>}<br/><br/>
                 {t.expPendingConfirmQ||"Pouvez-vous confirmer ?"}
@@ -10462,7 +10462,7 @@ window.addEventListener('message',function(e){
             </div>
           </div>
           <div className="row">
-            <div className="field" style={{flex:1}}><label className="lbl">{t.amount}</label><input type="number" step="0.01" min="0.01" value={reimForm.amount} onChange={e=>setReimForm(f=>({...f,amount:e.target.value}))} placeholder="0.00" /></div>
+            <div className="field" style={{flex:1}}><label className="lbl">{(t.amount||"Montant").replace("(€)",`(${currency})`)}</label><input type="number" step="0.01" min="0.01" value={reimForm.amount} onChange={e=>setReimForm(f=>({...f,amount:e.target.value}))} placeholder="0.00" /></div>
             <div className="field" style={{flex:1}}><label className="lbl">{t.date}</label><input type="date" value={reimForm.date} onChange={e=>setReimForm(f=>({...f,date:e.target.value}))} /></div>
           </div>
           <div className="field"><label className="lbl">{t.note}</label><input value={reimForm.note} onChange={e=>setReimForm(f=>({...f,note:e.target.value}))} /></div>
@@ -10480,7 +10480,7 @@ window.addEventListener('message',function(e){
           <div className="sec">{editId?(editScope==="series"?"🔄 Modifier toute la série":(t.expEditTitle||"✏️ Modifier la dépense")):t.newExpense}</div>
           <div className="field"><label className="lbl">{t.description}</label><input value={form.label} onChange={e=>setForm(f=>({...f,label:e.target.value}))} className={shakeLabel?"duvia-shake":""} /></div>
           <div className="row">
-            <div className="field" style={{flex:1}}><label className="lbl">{t.amount}</label><input type="number" step="0.01" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} /></div>
+            <div className="field" style={{flex:1}}><label className="lbl">{(t.amount||"Montant").replace("(€)",`(${currency})`)}</label><input type="number" step="0.01" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} /></div>
             <div className="field" style={{flex:1}}><label className="lbl">{t.paidBy}</label><select value={form.paidBy} onChange={e=>setForm(f=>({...f,paidBy:+e.target.value}))}>{cfg.parents.map((p,i)=><option key={i} value={i}>{p.name||`P${i+1}`}</option>)}</select></div>
           </div>
           <div className="row">
@@ -10590,14 +10590,14 @@ window.addEventListener('message',function(e){
                   <div style={{flex:1,background:`${payerColor}14`,border:`1px solid ${payerColor}44`,borderRadius:8,padding:"6px 10px",textAlign:"center"}}>
                     <div style={{fontSize:10,color:payerColor,fontWeight:800,marginBottom:2}}>{payerName}</div>
                     <div style={{fontSize:15,fontWeight:900,color:payerColor,fontFamily:"JetBrains Mono"}}>
-                      {amt>0?payerAmt.toFixed(2):"–"}{currency}
+                      {amt>0?`${payerAmt.toFixed(2)} ${currency}`:"–"}
                     </div>
                     <div style={{fontSize:9,color:C.mut}}>{100-sp}% · {t.expSharePayer||"part payeur"}</div>
                   </div>
                   <div style={{flex:1,background:`${C.bor}55`,border:`1px solid ${C.bor}`,borderRadius:8,padding:"6px 10px",textAlign:"center"}}>
                     <div style={{fontSize:10,color:C.mut,fontWeight:800,marginBottom:2}}>{otherName}</div>
                     <div style={{fontSize:15,fontWeight:900,color:C.txt,fontFamily:"JetBrains Mono"}}>
-                      {amt>0?otherAmt.toFixed(2):"–"}{currency}
+                      {amt>0?`${otherAmt.toFixed(2)} ${currency}`:"–"}
                     </div>
                     <div style={{fontSize:9,color:C.mut}}>{sp}% · {t.expShareDue||"part due"}</div>
                   </div>
