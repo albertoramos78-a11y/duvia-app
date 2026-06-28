@@ -5750,7 +5750,7 @@ function PrefsTab() {
       <div style={{marginBottom:28}}>
         <div className="sec">💰 Devise par défaut</div>
         <div style={{display:"flex",gap:8}}>
-          {["€","CHF","£"].map(c=>(
+          {["€","$","CHF","£"].map(c=>(
             <button key={c} onClick={()=>{ setCurrency(c); savePref("currency",c); }}
               style={{flex:1,height:44,borderRadius:12,border:`2px solid ${currency===c?C.vio:C.bor}`,background:currency===c?`${C.vio}12`:C.sur,color:currency===c?C.vio:C.txt,fontSize:16,fontWeight:800,cursor:"pointer",transition:"all .15s"}}>
               {c}
