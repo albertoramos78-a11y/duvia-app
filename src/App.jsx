@@ -9607,7 +9607,7 @@ function HistTab() {
 
 // ─── EXPENSES ─────────────────────────────────────────────────────────────────
 function ExpTab() {
-  const {C,t,cfg,setCfg,addHist,pushNotif,user,prem,perms,onUpgrade,isAdm,setActivity,sub,simDate,setExpSubmittedPopup,addRefAction,currency="€",expenses:ctxExpenses,reimbursements:ctxReimbursements,expMethods,history:ctxHistory} = useApp();
+  const {C,t,cfg,setCfg,addHist,pushNotif,user,prem,perms,onUpgrade,isAdm,setActivity,sub,simDate,setExpSubmittedPopup,addRefAction,currency="€",expenses:ctxExpenses,reimbursements:ctxReimbursements,expMethods,history:ctxHistory,familySync} = useApp();
   const premFull = isPremFull(sub); // PDF réservé full premium uniquement
   const now = simDate ? new Date(simDate) : new Date();
   const todayStr = toStr(now);
@@ -9615,6 +9615,7 @@ function ExpTab() {
   const [editId,setEditId]=useState(null);
   const [catF,setCatF]=useState("all");
   const [viewer,setViewer]=useState(null);
+  const [viewerUrl,setViewerUrl]=useState(null);
   const [formErr,setFormErr]=useState("");
   const [shakeLabel,setShakeLabel]=useState(false);
   function _triggerShakeLabel(){ setShakeLabel(true); setTimeout(()=>setShakeLabel(false),600); }
@@ -9716,6 +9717,8 @@ function ExpTab() {
   async function handleFiles(rawFiles){
     setAttErr(""); setAttLoading(true);
     const current=form.attachments||[];
+    const fid=familySync?.familyId;
+    if(!fid){ setAttErr("Famille non prête."); setAttLoading(false); return; }
     if(current.length>=MAX_ATT){
       setAttErr(`Max ${MAX_ATT} ${t.expAttErrMax||"pièces jointes par dépense."}`);
       setAttLoading(false); return;
@@ -9723,8 +9726,8 @@ function ExpTab() {
     const newAtts=[...current];
     for(const file of Array.from(rawFiles)){
       if(newAtts.length>=MAX_ATT){setAttErr(`Max ${MAX_ATT} ${t.expAttErrMaxShort||"pièces jointes."}`);break;}
-      const isImage=file.type.startsWith('image/');
-      const isPdf=file.type==='application/pdf';
+      const isImage=file.type.startsWith("image/");
+      const isPdf=file.type==="application/pdf";
       const extOk=ALLOWED_EXT.some(e=>file.name.toLowerCase().endsWith(e));
       if(!ALLOWED_TYPES.includes(file.type)&&!extOk){
         setAttErr(`${t.expAttErrFormat||"Format non supporté"} : ${file.name}. ${t.expAttErrAccepted||"Acceptés : JPG, PNG, WEBP, HEIC, PDF."}`);
@@ -9734,32 +9737,90 @@ function ExpTab() {
         setAttErr(`${file.name} ${t.expAttErrSize||"dépasse"} ${MAX_MB} Mo (${fmtSize(file.size)}).`);
         continue;
       }
-      let data=null, thumb=null;
-      if(isPdf){
-        data=await toBase64(file);
-      } else if(isImage&&(file.type==='image/heic'||file.type==='image/heif'||file.name.toLowerCase().endsWith('.heic')||file.name.toLowerCase().endsWith('.heif'))){
-        // HEIC — store as-is, no thumbnail
-        data=await toBase64(file);
-      } else if(isImage){
-        data=await compressImage(file,1200,0.82);
-        thumb=await compressImage(file,96,0.65);
-      }
-      if(data){
-        const compressed=Math.round(data.length*0.75);
-        newAtts.push({id:Date.now()+Math.random(),name:file.name,type:file.type||'application/octet-stream',data,thumb,originalSize:file.size,compressedSize:compressed});
+      try{
+        let uploadFile=file;
+        let thumb=null;
+        if(isImage){
+          // Compresse avant upload (réduit la bande passante et le stockage)
+          const blob=await compressImageToBlob(file,1200,0.82);
+          if(blob) uploadFile=new File([blob],file.name,{type:"image/jpeg"});
+          thumb=await compressImage(file,96,0.65); // miniature base64 pour affichage rapide
+        }
+        const storagePath=await uploadAttToStorage(uploadFile,fid);
+        newAtts.push({
+          id:String(Date.now()+Math.random()),
+          name:file.name,
+          type:isPdf?"application/pdf":(isImage?"image/jpeg":file.type),
+          storagePath,
+          thumb, // null pour les PDF
+          size:file.size,
+        });
+      }catch(err){
+        setAttErr(`Erreur upload : ${file.name}. ${err.message||""}`);
       }
     }
     setForm(f=>({...f,attachments:newAtts}));
     setAttLoading(false);
   }
 
-  function removeAtt(id){setForm(f=>({...f,attachments:(f.attachments||[]).filter(a=>a.id!==id)}));}
+  const ATT_BUCKET = "expense-attachments";
 
-  function openViewer(att){setViewer(att);}
+  async function getAttSignedUrl(storagePath) {
+    const { data, error } = await supabase.storage.from(ATT_BUCKET).createSignedUrl(storagePath, 3600);
+    if (error) throw error;
+    return data.signedUrl;
+  }
 
-  function downloadAtt(att){
-    const a=document.createElement('a');
-    a.href=att.data; a.download=att.name; a.click();
+  async function uploadAttToStorage(file, fid) {
+    const safeName = file.name.replace(/[^\w.\-]/g, "_").slice(0, 100);
+    const path = `${fid}/expenses/${Date.now()}-${safeName}`;
+    const { error } = await supabase.storage.from(ATT_BUCKET).upload(path, file, { contentType: file.type, upsert: false });
+    if (error) throw error;
+    return path;
+  }
+
+  async function compressImageToBlob(file, maxW=1200, quality=0.82) {
+    return new Promise(resolve => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const ratio = Math.min(1, maxW / Math.max(img.width, 1));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(blob => resolve(blob), "image/jpeg", quality);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+      img.src = url;
+    });
+  }
+
+  function removeAtt(id){
+    const att=(form.attachments||[]).find(a=>a.id===id);
+    if(att?.storagePath) supabase.storage.from(ATT_BUCKET).remove([att.storagePath]).catch(console.error);
+    setForm(f=>({...f,attachments:(f.attachments||[]).filter(a=>a.id!==id)}));
+  }
+
+  async function openViewer(att){
+    setViewer(att);
+    setViewerUrl(null);
+    if(att.storagePath){
+      try { setViewerUrl(await getAttSignedUrl(att.storagePath)); } catch(e){ console.error(e); }
+    } else {
+      setViewerUrl(att.data||null);
+    }
+  }
+
+  async function downloadAtt(att){
+    try{
+      let url = att.data || null;
+      if(att.storagePath) url = await getAttSignedUrl(att.storagePath);
+      if(!url) return;
+      const a=document.createElement("a");
+      a.href=url; a.download=att.name; a.target="_blank"; a.click();
+    }catch(e){ console.error("Download error:",e); }
   }
 
   // ── Expense CRUD ──────────────────────────────────────────────────────────
@@ -9882,13 +9943,21 @@ function ExpTab() {
     doDelete(id,"single");
   }
 
+  async function deleteAttFiles(items){
+    const paths=(items||[]).flatMap(it=>(it.attachments||[]).filter(a=>a.storagePath).map(a=>a.storagePath));
+    if(paths.length>0) await supabase.storage.from(ATT_BUCKET).remove(paths).catch(console.error);
+  }
+
   async function doDelete(id, scope){
     const e=(ctxExpenses||[]).find(x=>x.id===id);
     if(scope==="series" && e?.recurringId){
+      const seriesItems=(ctxExpenses||[]).filter(x=>x.recurringId===e.recurringId);
+      await deleteAttFiles(seriesItems);
       await expMethods.deleteExpensesBySeries(e.recurringId);
       addHist("Dépense supprimée",`🔄 Série : ${e?.label||""} — ${(e?.amount||0).toFixed(2)} ${currency}`,"exp");
       pushNotif("🔄 Série supprimée","exp");
     } else {
+      await deleteAttFiles([e]);
       await expMethods.deleteExpense(id);
       addHist("Dépense supprimée",`${e?.label||""} — ${(e?.amount||0).toFixed(2)} ${currency}`,"exp");
       pushNotif(t.expDeleted||"💰 Dépense supprimée","exp");
@@ -9965,7 +10034,7 @@ function ExpTab() {
   ].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
 
   // ── PDF Export ───────────────────────────────────────────────────────────
-  function generateLegalPDF(){
+  async function generateLegalPDF(){
     if(!premFull){ onUpgrade(); return; } // Réservé aux membres Premium abonnés
     setExportGenerating(true);
     try{
@@ -9998,6 +10067,15 @@ function ExpTab() {
         return s||"—";
       };
       // Attachments section
+      // Pré-charger les URLs signées des pièces jointes (Storage)
+      const attUrlMap={};
+      for(const exp of filteredExpenses){
+        for(const a of (exp.attachments||[])){
+          if(a.storagePath && a.type?.startsWith("image/")){
+            try{ attUrlMap[a.storagePath]=await getAttSignedUrl(a.storagePath); }catch{}
+          } else if(a.data){ attUrlMap[a.id||a.storagePath]=a.data; } // legacy base64
+        }
+      }
       let attachmentsHtml="";
       const expWithAtt=filteredExpenses.filter(e=>(e.attachments||[]).length>0);
       if(expWithAtt.length>0){
@@ -10006,8 +10084,9 @@ function ExpTab() {
           const pName=cfg.parents[e.paidBy]?.name||`Parent ${e.paidBy+1}`;
           attachmentsHtml+=`<div style="margin-bottom:24px;page-break-inside:avoid;"><div style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:6px;padding:8px 14px;margin-bottom:8px;font-size:10px;"><strong>${e.label||"—"}</strong> — ${pName} — ${fmtDate(e.date)} — ${(e.amount||0).toFixed(2)} ${currency}</div><div style="display:flex;flex-wrap:wrap;gap:10px;">`;
           (e.attachments||[]).forEach(a=>{
-            if(a.data&&a.type&&a.type.startsWith("image/")) attachmentsHtml+=`<img src="${a.data}" style="max-width:200px;max-height:160px;border:1px solid #dee2e6;border-radius:4px;object-fit:contain;" alt="${a.name||"pièce jointe"}">`;
-            else if(a.data&&a.type==="application/pdf") attachmentsHtml+=`<div style="width:110px;height:80px;border:1px solid #dee2e6;border-radius:4px;display:flex;align-items:center;justify-content:center;background:#f8f9fa;font-size:10px;color:#666;text-align:center;padding:6px;">📄 PDF<br><span style="font-size:8px;">${(a.name||"").slice(0,18)}</span></div>`;
+            { const imgSrc=a.storagePath?attUrlMap[a.storagePath]:(attUrlMap[a.id]||a.data);
+              if(imgSrc&&a.type&&a.type.startsWith("image/")) attachmentsHtml+=`<img src="${imgSrc}" style="max-width:200px;max-height:160px;border:1px solid #dee2e6;border-radius:4px;object-fit:contain;" alt="${a.name||"pièce jointe"}">`;
+              else if(a.type==="application/pdf") attachmentsHtml+=`<div style="width:110px;height:80px;border:1px solid #dee2e6;border-radius:4px;display:flex;align-items:center;justify-content:center;background:#f8f9fa;font-size:10px;color:#666;text-align:center;padding:6px;">📄 PDF<br><span style="font-size:8px;">${(a.name||"").slice(0,18)}</span></div>`; }
           });
           attachmentsHtml+=`</div></div>`;
         });
@@ -10263,23 +10342,25 @@ window.addEventListener('message',function(e){
     <div style={{position:"relative"}}>
       {/* ── Viewer modal ── */}
       {viewer&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:500,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setViewer(null)}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:500,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>{setViewer(null);setViewerUrl(null);}}>
           <div onClick={e=>e.stopPropagation()} style={{maxWidth:"min(94vw,680px)",maxHeight:"88vh",display:"flex",flexDirection:"column",gap:10}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
               <span style={{color:"#fff",fontSize:13,fontWeight:700,wordBreak:"break-all"}}>{viewer.name}</span>
               <div style={{display:"flex",gap:8,flexShrink:0}}>
                 <button onClick={()=>downloadAtt(viewer)} style={{padding:"6px 14px",background:C.vio,color:"#fff",borderRadius:8,fontSize:12,fontWeight:700}}>{t.expDownload||"⬇ Télécharger"}</button>
-                <button onClick={()=>setViewer(null)} style={{padding:"6px 12px",background:"rgba(255,255,255,.15)",color:"#fff",borderRadius:8,fontSize:12}}>✕</button>
+                <button onClick={()=>{setViewer(null);setViewerUrl(null);}} style={{padding:"6px 12px",background:"rgba(255,255,255,.15)",color:"#fff",borderRadius:8,fontSize:12}}>✕</button>
               </div>
             </div>
             {viewer.type==='application/pdf'
               ? <div style={{background:C.card,borderRadius:12,padding:24,textAlign:"center"}}>
                   <div style={{fontSize:56,marginBottom:12}}>📄</div>
                   <div style={{fontSize:14,color:C.txt,marginBottom:6,fontWeight:700}}>{viewer.name}</div>
-                  <div style={{fontSize:12,color:C.mut,marginBottom:14}}>{fmtSize(viewer.compressedSize||viewer.originalSize)}</div>
+                  <div style={{fontSize:12,color:C.mut,marginBottom:14}}>{fmtSize(viewer.size||viewer.compressedSize||viewer.originalSize)}</div>
                   <button onClick={()=>downloadAtt(viewer)} style={{padding:"10px 24px",background:C.vio,color:"#fff",borderRadius:10,fontSize:14,fontWeight:800}}>{t.expDownloadPdf||"⬇ Télécharger le PDF"}</button>
                 </div>
-              : <img src={viewer.data} alt={viewer.name} style={{maxWidth:"100%",maxHeight:"75vh",borderRadius:12,objectFit:"contain"}} />
+              : viewerUrl
+                ? <img src={viewerUrl} alt={viewer.name} style={{maxWidth:"100%",maxHeight:"75vh",borderRadius:12,objectFit:"contain"}} />
+                : <div style={{color:"#fff",padding:20,textAlign:"center"}}>⏳ Chargement…</div>
             }
           </div>
         </div>
