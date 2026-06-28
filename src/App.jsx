@@ -9477,8 +9477,20 @@ function EditDay({ds,onClose,editRef}) {
 }
 
 // ─── RATING ──────────────────────────────────────────────────────────────────
+// Formate le nom affiché publiquement dans les avis : "Prénom I." (ex. "Lea D.")
+// plutôt que le nom de compte/connexion (ex. "Sissi1"), pour rester pudique
+// dans une section visible par d'autres utilisateurs.
+function formatPublicReviewName(fullName) {
+  if (!fullName) return "Anonyme";
+  const parts = String(fullName).trim().split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return parts[0] || "Anonyme";
+  const first = parts[0];
+  const lastInitial = parts[parts.length - 1].charAt(0).toUpperCase();
+  return `${first} ${lastInitial}.`;
+}
+
 function RatingTab() {
-  const {C,t,user,sub,familySync,myUid} = useApp();
+  const {C,t,cfg,user,sub,familySync,myUid} = useApp();
   const [hovered, setHovered] = useState(0);
   const [selected, setSelected] = useState(0);
   const [comment, setComment] = useState("");
@@ -9520,15 +9532,21 @@ function RatingTab() {
     setSending(true);
     try {
       if(!myUid) throw new Error("Non connecté");
+      // Nom AFFICHÉ de la famille (ex. "Lea Durant"), pas le login du compte
+      // (ex. "Sissi1") — voir RatingTab plus haut pour le même souci côté Coffre.
+      const familyDisplayName = (cfg?.parents||[]).find(p=>p.email && p.email===user?.email)?.name
+        || user?.name || user?.email || "Anonyme";
       await supabase.from("ratings").upsert({
         family_id: familySync?.familyId || null,
         user_id:   myUid,
         stars:     selected,
         comment:   comment.trim(),
-        user_name: user?.name || user?.email || "Anonyme",
+        user_name: formatPublicReviewName(familyDisplayName),
         plan:      sub?.plan || "unknown",
       }, { onConflict: "user_id" });
       setSubmitted(true);
+      // Recharge les avis publics pour refléter immédiatement le nom corrigé
+      supabase.rpc("get_public_ratings",{max_count:5}).then(({data})=>{ if(data?.length) setPublicReviews(data); }).catch(()=>{});
     } catch(e) {
       console.error("Rating submit error:", e);
       setSubmitted(true);
