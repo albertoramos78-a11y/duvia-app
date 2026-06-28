@@ -9556,16 +9556,11 @@ function RatingTab() {
 function HistTab() {
   const {C,t,cfg,setTab,setMenuTab,history:ctxHistory} = useApp();
   const history = ctxHistory || [];
-  const [filterType,setFilterType] = useState("all");
-
   const TYPE_MAP   = {"cal":0,"schedule":1,"exp":2,"contacts":3,"vault":4,"msg":5};
   const TYPE_ICON  = {"cal":"📅","schedule":"🏫","exp":"💰","contacts":"📞","vault":"🗄️","msg":"💬"};
   const TYPE_LABEL = {"cal":"Calendrier","schedule":"EDT","exp":"Dépenses","contacts":"Contacts","vault":"Coffre","msg":"Messages"};
 
-  // Seuls les types présents dans l'historique
-  const presentTypes = [...new Set(history.map(h=>h.type).filter(Boolean))];
-
-  const filtered = filterType==="all" ? history : history.filter(h=>h.type===filterType);
+  const filtered = history;
 
   function handleClick(h) {
     const idx = TYPE_MAP[h.type];
@@ -9575,11 +9570,8 @@ function HistTab() {
 
   return (
     <div>
-      {/* ── Titre ── */}
-      <div style={{marginBottom:12}}>
-        <div style={{fontSize:20,fontWeight:900,color:C.txt}}>{t.historyTitle||"Historique"}</div>
-        <div style={{fontSize:12,color:C.mut,marginTop:2}}>{t.histSub||"Journal des modifications"} · {history.length} entrée{history.length!==1?"s":""}</div>
-      </div>
+      {/* ── Sous-titre uniquement (le titre "Historique" est affiché par le menu) ── */}
+      <div style={{fontSize:12,color:C.mut,marginBottom:12}}>{t.histSub||"Journal des modifications"} · {history.length} entrée{history.length!==1?"s":""}</div>
 
       {/* ── Bandeau info permanence ── */}
       <div style={{display:"flex",gap:8,alignItems:"flex-start",background:`${C.grn}0d`,border:`1px solid ${C.grn}33`,borderRadius:10,padding:"10px 12px",marginBottom:14}}>
@@ -9589,17 +9581,7 @@ function HistTab() {
         </div>
       </div>
 
-      {/* ── Filtres par type (seulement si présents) ── */}
-      {presentTypes.length>1&&(
-        <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-          <button onClick={()=>setFilterType("all")} style={{padding:"4px 10px",background:filterType==="all"?C.vio:C.sur,color:filterType==="all"?"#fff":C.mut,border:`1.5px solid ${filterType==="all"?C.vio:C.bor}`,borderRadius:20,fontSize:11,fontWeight:700}}>Tous</button>
-          {presentTypes.map(type=>(
-            <button key={type} onClick={()=>setFilterType(type)} style={{padding:"4px 10px",background:filterType===type?C.vio:C.sur,color:filterType===type?"#fff":C.mut,border:`1.5px solid ${filterType===type?C.vio:C.bor}`,borderRadius:20,fontSize:11,fontWeight:700}}>
-              {TYPE_ICON[type]} {TYPE_LABEL[type]||type}
-            </button>
-          ))}
-        </div>
-      )}
+
 
       {/* ── Liste ── */}
       {filtered.length===0
