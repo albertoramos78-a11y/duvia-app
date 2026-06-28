@@ -9468,13 +9468,25 @@ function RatingTab() {
   const [submitted, setSubmitted] = useState(false);
   const [sending, setSending] = useState(false);
   const [avgStats, setAvgStats] = useState(null);
+  const [existingRating, setExistingRating] = useState(null); // avis déjà soumis
 
-  // Charge la moyenne au montage
   useEffect(()=>{
+    // Charge la moyenne globale
     supabase.from("ratings_summary").select("*").single()
-      .then(({data})=>{ if(data) setAvgStats(data); })
+      .then(({data})=>{ if(data?.total_count>0) setAvgStats(data); })
       .catch(()=>{});
-  },[]);
+
+    // Charge l'avis existant de cet utilisateur
+    if(!user?.id) return;
+    supabase.from("ratings").select("stars,comment").eq("user_id", user.id).maybeSingle()
+      .then(({data})=>{
+        if(data){
+          setExistingRating(data);
+          setSelected(data.stars);
+          setComment(data.comment||"");
+        }
+      }).catch(()=>{});
+  },[user?.id]);
 
   const EMOJIS  = ['', '😔', '😐', '🙂', '😊', '😍'];
   const PLACEHOLDERS = t.ratingPlaceholders || ['', 'Qu\'est-ce qui vous a déçu ?', 'Qu\'est-ce qui pourrait être amélioré ?', 'Qu\'avez-vous apprécié ?', 'Qu\'est-ce que vous aimez le plus ?', 'Qu\'est-ce que vous aimez le plus ?'];
@@ -9486,18 +9498,18 @@ function RatingTab() {
     if (!canSend) return;
     setSending(true);
     try {
-      await supabase.from("ratings").insert({
+      await supabase.from("ratings").upsert({
         family_id: familySync?.familyId || null,
         user_id:   user?.id || null,
         stars:     selected,
         comment:   comment.trim(),
         user_name: user?.name || user?.email || "Anonyme",
         plan:      sub?.plan || "unknown",
-      });
+      }, { onConflict: "user_id" });
       setSubmitted(true);
     } catch(e) {
       console.error("Rating submit error:", e);
-      setSubmitted(true); // On affiche quand même le succès
+      setSubmitted(true);
     }
     setSending(false);
   }
@@ -9530,6 +9542,11 @@ function RatingTab() {
       )}
       <div style={{background:C.card,borderRadius:20,padding:"32px 24px 28px",textAlign:"center",boxShadow:`0 4px 24px rgba(0,0,0,.07)`,animation:"ratingAppear .45s cubic-bezier(.34,1.56,.64,1) both"}}>
 
+        {existingRating && !submitted && (
+          <div style={{background:`${C.grn}12`,border:`1px solid ${C.grn}33`,borderRadius:8,padding:"8px 12px",marginBottom:16,fontSize:12,color:C.grn,textAlign:"left"}}>
+            ✏️ Vous avez déjà soumis un avis ({existingRating.stars}★). Modifiez-le ci-dessous.
+          </div>
+        )}
         {/* Emoji */}
         <div style={{fontSize:44,marginBottom:12,lineHeight:1,transition:"all .2s"}}>{emoji}</div>
         <div style={{fontSize:17,fontWeight:800,color:C.txt,marginBottom:4,letterSpacing:"-.2px"}}>{t.ratingHeading||"Votre avis compte"}</div>
@@ -9573,7 +9590,7 @@ function RatingTab() {
           onClick={handleSubmit}
           style={{width:"100%",padding:"14px",border:"none",borderRadius:14,background:canSend?"linear-gradient(135deg,#FFB800,#FF8C00)":C.sur,color:canSend?"#fff":C.mut,fontSize:15,fontWeight:700,cursor:canSend?"pointer":"default",opacity:canSend?1:.5,transition:"all .25s",letterSpacing:".2px"}}
         >
-          {sending ? "⏳ Envoi…" : (t.ratingSubmit||"Envoyer mon avis")}
+          {sending ? "⏳ Envoi…" : existingRating ? "💾 Mettre à jour mon avis" : (t.ratingSubmit||"Envoyer mon avis")}
         </button>
       </div>
     </div>
