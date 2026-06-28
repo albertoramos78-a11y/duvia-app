@@ -9461,14 +9461,14 @@ function EditDay({ds,onClose,editRef}) {
 
 // ─── RATING ──────────────────────────────────────────────────────────────────
 function RatingTab() {
-  const {C,t,user,sub,familySync} = useApp();
+  const {C,t,user,sub,familySync,myUid} = useApp();
   const [hovered, setHovered] = useState(0);
   const [selected, setSelected] = useState(0);
   const [comment, setComment] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [sending, setSending] = useState(false);
   const [avgStats, setAvgStats] = useState(null);
-  const [existingRating, setExistingRating] = useState(null); // avis déjà soumis
+  const [existingRating, setExistingRating] = useState(null);
 
   useEffect(()=>{
     // Charge la moyenne globale
@@ -9477,8 +9477,8 @@ function RatingTab() {
       .catch(()=>{});
 
     // Charge l'avis existant de cet utilisateur
-    if(!user?.id) return;
-    supabase.from("ratings").select("stars,comment").eq("user_id", user.id).maybeSingle()
+    if(!myUid) return;
+    supabase.from("ratings").select("stars,comment").eq("user_id", myUid).maybeSingle()
       .then(({data})=>{
         if(data){
           setExistingRating(data);
@@ -9486,7 +9486,7 @@ function RatingTab() {
           setComment(data.comment||"");
         }
       }).catch(()=>{});
-  },[user?.id]);
+  },[myUid]);
 
   const EMOJIS  = ['', '😔', '😐', '🙂', '😊', '😍'];
   const PLACEHOLDERS = t.ratingPlaceholders || ['', 'Qu\'est-ce qui vous a déçu ?', 'Qu\'est-ce qui pourrait être amélioré ?', 'Qu\'avez-vous apprécié ?', 'Qu\'est-ce que vous aimez le plus ?', 'Qu\'est-ce que vous aimez le plus ?'];
@@ -9498,9 +9498,10 @@ function RatingTab() {
     if (!canSend) return;
     setSending(true);
     try {
+      if(!myUid) throw new Error("Non connecté");
       await supabase.from("ratings").upsert({
         family_id: familySync?.familyId || null,
-        user_id:   user?.id || null,
+        user_id:   myUid,
         stars:     selected,
         comment:   comment.trim(),
         user_name: user?.name || user?.email || "Anonyme",
