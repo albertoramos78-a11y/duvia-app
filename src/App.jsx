@@ -12391,7 +12391,7 @@ function MessagingTab(){
                   )}
                   <div style={{maxWidth:"78%"}}>
                     {!isMe&&isGroup&&<div style={{fontSize:10,color:C.mut,marginBottom:2,fontWeight:700}}>{m.fromName}</div>}
-                    <div onDoubleClick={()=>toggleMsgPin(m.id)} onClick={()=>setShowProof(showProof===m.id?null:m.id)} style={{
+                    <div onClick={()=>setShowProof(showProof===m.id?null:m.id)} style={{
                       padding:att&&attIsImg?6:"10px 13px",
                       background:isMe?`linear-gradient(135deg,${col},${col}cc)`:C.sur,
                       color:isMe?"#fff":C.txt,
@@ -12435,7 +12435,12 @@ function MessagingTab(){
                         </>
                       )}
                     </div>
-                    {pinnedMsgIds.includes(m.id)&&<div style={{fontSize:9,color:C.mut,marginTop:2,textAlign:isMe?"right":"left"}}>📌 Épinglé</div>}
+                    <div style={{display:"flex",justifyContent:isMe?"flex-end":"flex-start",alignItems:"center",gap:4,marginTop:2}}>
+                      <button onClick={()=>toggleMsgPin(m.id)} style={{background:"transparent",border:"none",fontSize:11,cursor:"pointer",opacity:pinnedMsgIds.includes(m.id)?1:0.3,padding:"0 2px"}} title={pinnedMsgIds.includes(m.id)?"Désépingler":"Épingler"}>
+                        📌
+                      </button>
+                      {pinnedMsgIds.includes(m.id)&&<span style={{fontSize:9,color:C.mut}}>Épinglé</span>}
+                    </div>
                     {showProof===m.id&&(
                       <div style={{marginTop:4,padding:"7px 10px",background:verified?`${C.grn}15`:`${C.red}15`,borderRadius:8,border:`1px solid ${verified?C.grn:C.red}`,fontSize:10}}>
                         <div style={{fontWeight:800,color:verified?C.grn:C.red,marginBottom:2}}>
@@ -14006,6 +14011,10 @@ function VaultTab() {
   const { docs: rawDocs, loading: vaultLoading, error: vaultError, addDoc, updateDoc, togglePin: toggleVaultPin, removeDoc, openDoc } =
     useVault(familySync.familyId, uid);
 
+  // Épinglage par compte (localStorage) — chaque parent gère ses épingles
+  const [pinnedDocIds, setPinnedDocIds] = useLocalStorage(`duvia_pinned_${user?.id||"x"}`, []);
+  const docs = (rawDocs||[]).map(d=>({...d, pinned: pinnedDocIds.includes(d.id)}));
+
   // Taille totale utilisée (en octets)
   const totalSizeBytes = useMemo(() =>
     docs.reduce((sum, d) => sum + (d.file_size || 0), 0),
@@ -14165,10 +14174,6 @@ function VaultTab() {
     setConfirmDel(null);
     if (previewDoc?.id === id) setPreviewDoc(null);
   }
-
-  // Épinglage par compte (localStorage) — chaque parent gère ses épingles
-  const [pinnedDocIds, setPinnedDocIds] = useLocalStorage(`duvia_pinned_${user?.id||"x"}`, []);
-  const docs = rawDocs.map(d=>({...d, pinned: pinnedDocIds.includes(d.id)}));
 
   function togglePin(id) {
     setPinnedDocIds(ids =>
