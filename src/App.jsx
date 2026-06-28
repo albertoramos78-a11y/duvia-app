@@ -9452,17 +9452,46 @@ function EditDay({ds,onClose,editRef}) {
 
 // ─── RATING ──────────────────────────────────────────────────────────────────
 function RatingTab() {
-  const {C,t} = useApp();
+  const {C,t,user,sub,familySync} = useApp();
   const [hovered, setHovered] = useState(0);
   const [selected, setSelected] = useState(0);
   const [comment, setComment] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [avgStats, setAvgStats] = useState(null);
+
+  // Charge la moyenne au montage
+  useEffect(()=>{
+    supabase.from("ratings_summary").select("*").single()
+      .then(({data})=>{ if(data) setAvgStats(data); })
+      .catch(()=>{});
+  },[]);
 
   const EMOJIS  = ['', '😔', '😐', '🙂', '😊', '😍'];
   const PLACEHOLDERS = t.ratingPlaceholders || ['', 'Qu\'est-ce qui vous a déçu ?', 'Qu\'est-ce qui pourrait être amélioré ?', 'Qu\'avez-vous apprécié ?', 'Qu\'est-ce que vous aimez le plus ?', 'Qu\'est-ce que vous aimez le plus ?'];
   const emoji   = selected ? EMOJIS[selected] : '🌟';
   const message = selected >= 4 ? (t.ratingMsgHigh||'Merci beaucoup ! 😍') : (t.ratingMsgLow||'Merci 🙏 Dites-nous comment améliorer');
-  const canSend = selected > 0;
+  const canSend = selected > 0 && !sending;
+
+  async function handleSubmit() {
+    if (!canSend) return;
+    setSending(true);
+    try {
+      await supabase.from("ratings").insert({
+        family_id: familySync?.familyId || null,
+        user_id:   user?.id || null,
+        stars:     selected,
+        comment:   comment.trim(),
+        user_name: user?.name || user?.email || "Anonyme",
+        plan:      sub?.plan || "unknown",
+      });
+      setSubmitted(true);
+    } catch(e) {
+      console.error("Rating submit error:", e);
+      setSubmitted(true); // On affiche quand même le succès
+    }
+    setSending(false);
+  }
 
   if (submitted) return (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 20px",gap:14,animation:"ratingAppear .45s cubic-bezier(.34,1.56,.64,1) both"}}>
@@ -9471,6 +9500,7 @@ function RatingTab() {
       <div style={{fontSize:18,fontWeight:800,color:C.txt}}>{t.ratingThanks||"Merci pour votre retour !"}</div>
       <div style={{fontSize:13,color:C.mut}}>{"★".repeat(selected)}{"☆".repeat(5-selected)} ({selected}/5)</div>
       {comment && <div style={{marginTop:8,fontSize:13,color:C.mut,fontStyle:"italic",textAlign:"center",maxWidth:260,lineHeight:1.5}}>"{comment}"</div>}
+      {avgStats?.total_count>0 && <div style={{marginTop:12,fontSize:12,color:C.mut}}>⭐ {avgStats.avg_stars}/5 · {avgStats.total_count} avis au total</div>}
     </div>
   );
 
@@ -9484,6 +9514,11 @@ function RatingTab() {
         .duvia-textarea:focus{outline:none;border-color:#FFB800 !important;box-shadow:0 0 0 3px rgba(255,184,0,.15)}
       `}</style>
 
+      {avgStats?.total_count>0 && (
+        <div style={{textAlign:"center",marginBottom:16,fontSize:12,color:C.mut}}>
+          ⭐ <strong style={{color:C.txt}}>{avgStats.avg_stars}/5</strong> · {avgStats.total_count} avis Duvia
+        </div>
+      )}
       <div style={{background:C.card,borderRadius:20,padding:"32px 24px 28px",textAlign:"center",boxShadow:`0 4px 24px rgba(0,0,0,.07)`,animation:"ratingAppear .45s cubic-bezier(.34,1.56,.64,1) both"}}>
 
         {/* Emoji */}
@@ -9526,10 +9561,10 @@ function RatingTab() {
 
         {/* Submit button */}
         <button
-          onClick={()=>{ if(canSend) setSubmitted(true); }}
+          onClick={handleSubmit}
           style={{width:"100%",padding:"14px",border:"none",borderRadius:14,background:canSend?"linear-gradient(135deg,#FFB800,#FF8C00)":C.sur,color:canSend?"#fff":C.mut,fontSize:15,fontWeight:700,cursor:canSend?"pointer":"default",opacity:canSend?1:.5,transition:"all .25s",letterSpacing:".2px"}}
         >
-          {t.ratingSubmit||"Envoyer mon avis"}
+          {sending ? "⏳ Envoi…" : (t.ratingSubmit||"Envoyer mon avis")}
         </button>
       </div>
     </div>
