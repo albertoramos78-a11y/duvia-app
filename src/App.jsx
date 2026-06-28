@@ -9556,51 +9556,79 @@ function RatingTab() {
 function HistTab() {
   const {C,t,cfg,setTab,setMenuTab,history:ctxHistory} = useApp();
   const history = ctxHistory || [];
+  const [filterType,setFilterType] = useState("all");
 
-  const TYPE_MAP = {"cal":0,"schedule":1,"exp":2,"contacts":3,"vault":4,"msg":5};
-  const TYPE_ICON = {"cal":"📅","schedule":"🏫","exp":"💰","contacts":"📞","vault":"🗄️","msg":"💬"};
+  const TYPE_MAP   = {"cal":0,"schedule":1,"exp":2,"contacts":3,"vault":4,"msg":5};
+  const TYPE_ICON  = {"cal":"📅","schedule":"🏫","exp":"💰","contacts":"📞","vault":"🗄️","msg":"💬"};
+  const TYPE_LABEL = {"cal":"Calendrier","schedule":"EDT","exp":"Dépenses","contacts":"Contacts","vault":"Coffre","msg":"Messages"};
+
+  // Seuls les types présents dans l'historique
+  const presentTypes = [...new Set(history.map(h=>h.type).filter(Boolean))];
+
+  const filtered = filterType==="all" ? history : history.filter(h=>h.type===filterType);
 
   function handleClick(h) {
     const idx = TYPE_MAP[h.type];
     if(idx === undefined) return;
-    setMenuTab(null);
-    setTab(idx);
+    setMenuTab(null); setTab(idx);
   }
 
-  if(!history.length) return <div style={{textAlign:"center",padding:60,color:C.mut}}><div style={{fontSize:48,marginBottom:12}}>📋</div>{t.noHistory}</div>;
   return (
     <div>
-      <div style={{marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
-        <div style={{width:36,height:36,borderRadius:12,background:`linear-gradient(135deg,${C.vio},${C.pin})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>📋</div>
-        <div style={{flex:1}}>
-          <div style={{fontSize:16,fontWeight:900}}>{t.historyTitle||"Historique"}</div>
-          <div style={{fontSize:11,color:C.mut}}>{t.histSub||"Journal des modifications"}</div>
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:4,padding:"5px 9px",background:`${C.ora}15`,border:`1px solid ${C.ora}44`,borderRadius:8,flexShrink:0}}>
-          <span style={{fontSize:11}}>👁️</span>
-          <span style={{fontSize:10,color:C.ora,fontWeight:700}}>{t.vaultShared||"Visible QUE par les parents"}</span>
+      {/* ── Titre ── */}
+      <div style={{marginBottom:12}}>
+        <div style={{fontSize:20,fontWeight:900,color:C.txt}}>{t.historyTitle||"Historique"}</div>
+        <div style={{fontSize:12,color:C.mut,marginTop:2}}>{t.histSub||"Journal des modifications"} · {history.length} entrée{history.length!==1?"s":""}</div>
+      </div>
+
+      {/* ── Bandeau info permanence ── */}
+      <div style={{display:"flex",gap:8,alignItems:"flex-start",background:`${C.grn}0d`,border:`1px solid ${C.grn}33`,borderRadius:10,padding:"10px 12px",marginBottom:14}}>
+        <span style={{fontSize:16,flexShrink:0}}>🔒</span>
+        <div style={{fontSize:11,color:C.mut,lineHeight:1.5}}>
+          L'historique est <strong style={{color:C.txt}}>permanent et non modifiable</strong>. Il est conservé même si un parent quitte la famille et constitue une <strong style={{color:C.txt}}>preuve légale</strong> horodatée par le serveur.
         </div>
       </div>
-      <div className="sec">{t.historyTitle} ({history.length})</div>
-      {history.map((h,i)=>{
-        const d=new Date(h.createdAt||h.date);
-        const isClickable = h.type && TYPE_MAP[h.type] !== undefined;
-        return (
-          <div key={i} onClick={isClickable?()=>handleClick(h):undefined}
-            className="card"
-            style={{marginBottom:10,display:"flex",gap:12,cursor:isClickable?"pointer":"default",border:`1.5px solid ${C.bor}`,transition:"opacity .15s"}}>
-            <div style={{background:C.sur,borderRadius:"50%",width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>
-              {TYPE_ICON[h.type]||"📝"}
-            </div>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontWeight:700,fontSize:14}}>{h.action}</div>
-              <div style={{color:C.mut,fontSize:13,marginTop:2}}>{h.detail}</div>
-              <div style={{color:C.mut,fontSize:11,marginTop:3,fontFamily:"JetBrains Mono"}}>{h.who} · {d.toLocaleDateString()} {d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</div>
-            </div>
-            {isClickable && <span style={{fontSize:12,color:C.mut,alignSelf:"center",flexShrink:0}}>→</span>}
-          </div>
-        );
-      })}
+
+      {/* ── Filtres par type (seulement si présents) ── */}
+      {presentTypes.length>1&&(
+        <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+          <button onClick={()=>setFilterType("all")} style={{padding:"4px 10px",background:filterType==="all"?C.vio:C.sur,color:filterType==="all"?"#fff":C.mut,border:`1.5px solid ${filterType==="all"?C.vio:C.bor}`,borderRadius:20,fontSize:11,fontWeight:700}}>Tous</button>
+          {presentTypes.map(type=>(
+            <button key={type} onClick={()=>setFilterType(type)} style={{padding:"4px 10px",background:filterType===type?C.vio:C.sur,color:filterType===type?"#fff":C.mut,border:`1.5px solid ${filterType===type?C.vio:C.bor}`,borderRadius:20,fontSize:11,fontWeight:700}}>
+              {TYPE_ICON[type]} {TYPE_LABEL[type]||type}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Liste ── */}
+      {filtered.length===0
+        ? <div style={{textAlign:"center",padding:40,color:C.mut}}><div style={{fontSize:36,marginBottom:8}}>📋</div>Aucune entrée</div>
+        : filtered.map((h,i)=>{
+            const d=new Date(h.createdAt||h.date);
+            const isClickable = h.type && TYPE_MAP[h.type] !== undefined;
+            const lines = (h.detail||"").split("\n").filter(Boolean);
+            return (
+              <div key={i} onClick={isClickable?()=>handleClick(h):undefined}
+                className="card"
+                style={{marginBottom:10,display:"flex",gap:12,cursor:isClickable?"pointer":"default",border:`1.5px solid ${C.bor}`}}>
+                <div style={{background:C.sur,borderRadius:"50%",width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
+                  {TYPE_ICON[h.type]||"📝"}
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:700,fontSize:14,marginBottom:2}}>{h.action}</div>
+                  {lines.map((line,li)=>(
+                    <div key={li} style={{color:C.mut,fontSize:12,lineHeight:1.4}}>{line}</div>
+                  ))}
+                  <div style={{color:C.mut,fontSize:10,marginTop:4,fontFamily:"JetBrains Mono"}}>
+                    Saisi par <strong style={{color:C.txt}}>{h.who}</strong> · {d.toLocaleDateString("fr-FR")} {d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}
+                  </div>
+                </div>
+                {isClickable && <span style={{fontSize:12,color:C.mut,alignSelf:"center",flexShrink:0}}>→</span>}
+              </div>
+            );
+          })
+      }
     </div>
   );
 }
@@ -9616,6 +9644,8 @@ function ExpTab() {
   const [catF,setCatF]=useState("all");
   const [viewer,setViewer]=useState(null);
   const [viewerUrl,setViewerUrl]=useState(null);
+  const [detailExp,setDetailExp]=useState(null);
+  const [detailUrls,setDetailUrls]=useState({});
   const [formErr,setFormErr]=useState("");
   const [shakeLabel,setShakeLabel]=useState(false);
   function _triggerShakeLabel(){ setShakeLabel(true); setTimeout(()=>setShakeLabel(false),600); }
@@ -9779,7 +9809,7 @@ function ExpTab() {
     return path;
   }
 
-  async function compressImageToBlob(file, maxW=1200, quality=0.82) {
+  async function compressImageToBlob(file, maxW=1000, quality=0.72) {
     return new Promise(resolve => {
       const img = new Image();
       const url = URL.createObjectURL(file);
@@ -9790,7 +9820,15 @@ function ExpTab() {
         canvas.width = Math.round(img.width * ratio);
         canvas.height = Math.round(img.height * ratio);
         canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob(blob => resolve(blob), "image/jpeg", quality);
+        canvas.toBlob(blob => {
+          if(!blob){ resolve(null); return; }
+          // Si encore > 800 Ko, 2ème passe plus agressive
+          if(blob.size > 800*1024){
+            canvas.toBlob(blob2 => resolve(blob2||blob), "image/jpeg", 0.50);
+          } else {
+            resolve(blob);
+          }
+        }, "image/jpeg", quality);
       };
       img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
       img.src = url;
@@ -9801,6 +9839,18 @@ function ExpTab() {
     const att=(form.attachments||[]).find(a=>a.id===id);
     if(att?.storagePath) supabase.storage.from(ATT_BUCKET).remove([att.storagePath]).catch(console.error);
     setForm(f=>({...f,attachments:(f.attachments||[]).filter(a=>a.id!==id)}));
+  }
+
+  async function openDetail(e){
+    setDetailExp(e);
+    setDetailUrls({});
+    const atts=(e.attachments||[]).filter(a=>a.storagePath);
+    if(atts.length===0) return;
+    const map={};
+    await Promise.all(atts.map(async a=>{
+      try{ map[a.storagePath]=await getAttSignedUrl(a.storagePath); }catch{}
+    }));
+    setDetailUrls(map);
   }
 
   async function openViewer(att){
@@ -9870,17 +9920,17 @@ function ExpTab() {
             status:"pending", createdBy: user?.parentIdx??0,
           }));
           await expMethods.updateExpensesBySeries(rid,newExpenses);
-          { const sA=payload.split||50; const sB=100-sA; addHist(t.expModified||"Dépense modifiée",`🔄 ${cleanLabel} · série (${occurrences.length} occ.) — ${amt.toFixed(2)} ${currency} · ${sA}/${sB}`,"exp"); }
+          { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`🔄 ${cleanLabel} · série (${occurrences.length} occ.) — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
           pushNotif(`✏️ ${form.label} — série modifiée, revalidation requise`,"exp");
         } else {
           // Fallback: single
           await expMethods.updateExpense(editId,{...payload,status:"pending",createdBy:user?.parentIdx??0});
-          { const sA=payload.split||50; const sB=100-sA; addHist(t.expModified||"Dépense modifiée",`${cleanLabel} — ${amt.toFixed(2)} ${currency} · ${sA}/${sB}`,"exp"); }
+          { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
           pushNotif(`✏️ ${form.label} (${amt.toFixed(2)} ${currency}) modifiée — revalidation requise`,"exp");
         }
       } else {
         await expMethods.updateExpense(editId,{...payload,status:"pending",createdBy:user?.parentIdx??0});
-        { const sA=payload.split||50; const sB=100-sA; addHist(t.expModified||"Dépense modifiée",`${cleanLabel} — ${amt.toFixed(2)} ${currency} · ${sA}/${sB}`,"exp"); }
+        { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
         pushNotif(`✏️ ${form.label} (${amt.toFixed(2)} ${currency}) modifiée — revalidation requise`,"exp");
       }
     } else if(form.recurring) {
@@ -9893,14 +9943,14 @@ function ExpTab() {
         status:"pending", createdBy: user?.parentIdx??0,
       }));
       await expMethods.addExpenses(newExpenses);
-      { const sA=payload.split||50; const sB=100-sA; addHist(t.newExpense||"Nouvelle dépense",`🔄 ${cleanLabel} · ${occurrences.length} occ. — ${amt.toFixed(2)} ${currency} · ${sA}/${sB}`,"exp"); }
+      { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.newExpense||"Nouvelle dépense",`🔄 ${cleanLabel} · ${occurrences.length} occ. — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
       pushNotif(`🔄 ${form.label} — ${occurrences.length} occurrence${occurrences.length>1?"s":""}` ,"exp");
       setActivity(a=>({...a,expenses:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
       setExpSubmittedPopup(true);
     } else {
       const e={...payload,status:"pending",createdBy:user?.parentIdx??0};
       await expMethods.addExpense(e);
-      { const sA=payload.split||50; const sB=100-sA; addHist(t.newExpense||"Nouvelle dépense",`${cleanLabel} — ${amt.toFixed(2)} ${currency} · ${sA}/${sB}`,"exp"); }
+      { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.newExpense||"Nouvelle dépense",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
       pushNotif(`💰 ${form.label} (${form.amount}${currency})`,"exp");
       setActivity(a=>({...a,expenses:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
       addRefAction("ADD_EXPENSE");
@@ -10340,6 +10390,113 @@ window.addEventListener('message',function(e){
 
   return (
     <div style={{position:"relative"}}>
+      {/* ── Detail modal ── */}
+      {detailExp&&(()=>{
+        const e=detailExp;
+        const atts=e.attachments||[];
+        const st=e.status||"confirmed";
+        const stLabel=st==="confirmed"?(t.expStatusConfirmed||"✅ Accepté"):st==="rejected"?(t.expStatusRejected||"❌ Refusé"):(t.expStatusPending||"⏳ En attente");
+        const stColor=st==="confirmed"?C.grn:st==="rejected"?C.red:C.yel;
+        const payer=cfg.parents[e.paidBy];
+        const creator=cfg.parents[e.createdBy];
+        const sA=e.split||50; const sB=100-sA;
+        const iAmSender=user?.role==="parent"&&e.createdBy!==undefined&&user?.parentIdx===e.createdBy;
+        const iAmReceiver=user?.role==="parent"&&e.createdBy!==undefined&&user?.parentIdx!==e.createdBy;
+        const isPending=st==="pending";
+        return(
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:490,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setDetailExp(null)}>
+            <div onClick={ev=>ev.stopPropagation()} style={{background:C.card,borderRadius:"18px 18px 0 0",width:"100%",maxWidth:560,maxHeight:"88vh",overflowY:"auto",padding:"20px 18px 32px"}}>
+              {/* Header */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:18,fontWeight:900,color:C.txt,wordBreak:"break-word"}}>
+                    {e.recurringId&&<span style={{background:`${C.vio}18`,color:C.vio,borderRadius:4,padding:"1px 5px",fontSize:11,fontWeight:800,marginRight:6}}>🔄</span>}
+                    {e.label}
+                  </div>
+                  <div style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 10px",background:`${stColor}15`,border:`1px solid ${stColor}44`,borderRadius:20,marginTop:6}}>
+                    <span style={{fontSize:12,fontWeight:700,color:stColor}}>{stLabel}</span>
+                  </div>
+                </div>
+                <button onClick={()=>setDetailExp(null)} style={{background:"transparent",border:"none",fontSize:20,color:C.mut,padding:"0 4px",flexShrink:0}}>✕</button>
+              </div>
+
+              {/* Montant */}
+              <div style={{background:C.sur,borderRadius:12,padding:"14px 16px",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div>
+                  <div style={{fontSize:28,fontWeight:900,color:C.blu,fontFamily:"JetBrains Mono"}}>{Number(e.amount).toFixed(2)} <span style={{fontSize:16}}>{currency}</span></div>
+                  <div style={{fontSize:12,color:C.mut,marginTop:2}}>{t.expPaidBy||"Payé par"} <strong style={{color:payer?.color||C.grn}}>{payer?.name||`P${e.paidBy+1}`}</strong></div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{sA}/{sB}</div>
+                  <div style={{fontSize:11,color:C.mut}}>répartition</div>
+                </div>
+              </div>
+
+              {/* Infos */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+                <div style={{background:C.sur,borderRadius:10,padding:"10px 12px"}}>
+                  <div style={{fontSize:10,color:C.mut,fontWeight:700,marginBottom:2}}>CATÉGORIE</div>
+                  <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{e.category||"—"}</div>
+                </div>
+                <div style={{background:C.sur,borderRadius:10,padding:"10px 12px"}}>
+                  <div style={{fontSize:10,color:C.mut,fontWeight:700,marginBottom:2}}>DATE</div>
+                  <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{e.date?(e.date.split("-").reverse().join("/")):"—"}</div>
+                </div>
+                {e.note&&(
+                  <div style={{background:C.sur,borderRadius:10,padding:"10px 12px",gridColumn:"1/-1"}}>
+                    <div style={{fontSize:10,color:C.mut,fontWeight:700,marginBottom:2}}>NOTE</div>
+                    <div style={{fontSize:13,color:C.txt}}>{e.note}</div>
+                  </div>
+                )}
+                {creator&&(
+                  <div style={{background:C.sur,borderRadius:10,padding:"10px 12px",gridColumn:"1/-1"}}>
+                    <div style={{fontSize:10,color:C.mut,fontWeight:700,marginBottom:2}}>AJOUTÉ PAR</div>
+                    <div style={{fontSize:13,fontWeight:700,color:creator.color||C.txt}}>{creator.name}</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Pièces jointes */}
+              {atts.length>0&&(
+                <div style={{marginBottom:12}}>
+                  <div style={{fontSize:11,fontWeight:800,color:C.mut,marginBottom:8}}>📎 PIÈCES JOINTES ({atts.length})</div>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    {atts.map(a=>{
+                      const url=a.storagePath?detailUrls[a.storagePath]:(a.data||null);
+                      return(
+                        <div key={a.id} onClick={()=>openViewer(a)} style={{width:80,height:80,borderRadius:10,overflow:"hidden",border:`1.5px solid ${C.bor}`,background:C.sur,cursor:"pointer",flexShrink:0}}>
+                          {(a.thumb||url)&&a.type!=="application/pdf"
+                            ? <img src={a.thumb||url} alt={a.name} style={{width:"100%",height:"100%",objectFit:"cover"}} />
+                            : <div style={{width:"100%",height:"100%",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2}}>
+                                <span style={{fontSize:24}}>{a.type==="application/pdf"?"📄":"🖼️"}</span>
+                                <span style={{fontSize:8,color:C.mut,textAlign:"center",padding:"0 4px"}}>{(a.name||"").slice(0,12)}</span>
+                              </div>
+                          }
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              {isPending&&iAmReceiver&&(
+                <div style={{display:"flex",gap:8,marginBottom:10}}>
+                  <button onClick={()=>{confirmExp(e.id);setDetailExp(null);}} style={{flex:1,padding:"12px",background:C.grn,color:"#fff",borderRadius:12,fontWeight:800,fontSize:14}}>✅ {t.expValidateBtn||"Valider"}</button>
+                  <button onClick={()=>{rejectExp(e.id);setDetailExp(null);}} style={{flex:1,padding:"12px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,borderRadius:12,fontWeight:700,fontSize:14}}>❌ {t.expRejectBtn||"Refuser"}</button>
+                </div>
+              )}
+              {(iAmSender||isAdm)&&(
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={()=>{startEdit(e);setDetailExp(null);}} style={{flex:1,padding:"12px",background:C.sur,color:C.txt,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13}}>✎ Modifier</button>
+                  <button onClick={()=>{del(e.id);setDetailExp(null);}} style={{flex:1,padding:"12px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,borderRadius:12,fontWeight:700,fontSize:13}}>🗑 Supprimer</button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Viewer modal ── */}
       {viewer&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:500,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>{setViewer(null);setViewerUrl(null);}}>
@@ -10700,8 +10857,8 @@ window.addEventListener('message',function(e){
           {formErr&&<div style={{fontSize:12,color:C.red,padding:"7px 10px",background:`${C.red}12`,borderRadius:8,marginBottom:6}}>{formErr}</div>}
           <div style={{display:"flex",gap:8,alignItems:"flex-start",background:`${C.vio}0c`,border:`1px solid ${C.vio}33`,borderRadius:8,padding:"8px 10px",marginBottom:10}}>
             <span style={{fontSize:14,flexShrink:0}}>ℹ️</span>
-            <div style={{fontSize:11,color:C.mut,lineHeight:1.4}}>
-              {t.expInfoPart1} <strong style={{color:C.mut}}>{t.expInfoPending}</strong>{t.expInfoPart2} <strong style={{color:C.grn}}>{t.expInfoConfirmed}</strong>{t.expInfoPart3} <strong style={{color:C.red}}>{t.expInfoRejected}</strong>{t.expInfoPart4}
+            <div style={{fontSize:11,color:C.mut,lineHeight:1.5}}>
+              Toute dépense ajoutée est <strong style={{color:C.yel}}>⏳ en attente</strong> jusqu'à validation par l'autre parent. Une fois <strong style={{color:C.grn}}>✅ acceptée</strong>, elle est comptabilisée. Si <strong style={{color:C.red}}>❌ refusée</strong>, elle reste visible mais exclue des totaux. Chaque action est enregistrée dans l'historique.
             </div>
           </div>
           <div style={{display:"flex",gap:8,marginTop:4}}>
@@ -10713,12 +10870,16 @@ window.addEventListener('message',function(e){
         </div>
       )}
 
-      {/* ── Category filter ── */}
-      <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
-        {[{k:"all",l:t.all},...t.cats.map(c=>({k:c,l:c}))].map(({k,l})=>(
-          <button key={k} onClick={()=>setCatF(k)} style={{padding:"4px 10px",background:catF===k?C.vio:C.sur,color:catF===k?"#fff":C.mut,border:`1.5px solid ${catF===k?C.vio:C.bor}`,borderRadius:20,fontSize:11,fontWeight:700}}>{l}</button>
-        ))}
-      </div>
+      {/* ── Category filter — seulement les catégories avec des dépenses ── */}
+      { const activeCats=new Set((ctxExpenses||[]).map(e=>e.category).filter(Boolean));
+        const visibleCats=[{k:"all",l:t.all||"Tous"},...(t.cats||[]).filter(c=>activeCats.has(c)).map(c=>({k:c,l:c}))];
+        return visibleCats.length>1&&(
+        <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
+          {visibleCats.map(({k,l})=>(
+            <button key={k} onClick={()=>setCatF(k)} style={{padding:"4px 10px",background:catF===k?C.vio:C.sur,color:catF===k?"#fff":C.mut,border:`1.5px solid ${catF===k?C.vio:C.bor}`,borderRadius:20,fontSize:11,fontWeight:700}}>{l}</button>
+          ))}
+        </div>
+      );}
 
       {/* ── Expense list ── */}
       {allItems.length===0
@@ -10792,7 +10953,7 @@ window.addEventListener('message',function(e){
             const expStatusLabel= expSt==="confirmed"?(t.expStatusConfirmed||"✅ Accepté"):expSt==="rejected"?(t.expStatusRejected||"❌ Refusé"):(t.expStatusPending||"⏳ En attente");
             const expStatusColor= expSt==="confirmed"?C.grn:expSt==="rejected"?C.red:C.yel;
             return (
-              <div key={e.id} className="card" style={{marginBottom:10,borderColor:expBorderCol}}>
+              <div key={e.id} className="card" style={{marginBottom:10,borderColor:expBorderCol,cursor:"pointer"}} onClick={()=>openDetail(e)}>
                 <div style={{display:"flex",alignItems:"center",gap:11}}>
                   <div style={{background:C.sur,borderRadius:10,padding:"7px 9px",textAlign:"center",minWidth:58,flexShrink:0}}>
                     <div style={{fontFamily:"JetBrains Mono",fontSize:14,fontWeight:700,color:expSt==="rejected"?C.red:C.blu}}>{e.amount.toFixed(2)}</div>
@@ -10818,14 +10979,14 @@ window.addEventListener('message',function(e){
                   {/* Boutons émetteur */}
                   {(iAmExpSender||isAdm) && expSt==="pending" && (
                     <div style={{display:"flex",gap:5,flexShrink:0}}>
-                      <button onClick={()=>startEdit(e)} style={{padding:"5px 9px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12}}>✎</button>
-                      <button onClick={()=>del(e.id)} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12}}>✕</button>
+                      <button onClick={ev=>{ev.stopPropagation();startEdit(e);}} style={{padding:"5px 9px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12}}>✎</button>
+                      <button onClick={ev=>{ev.stopPropagation();del(e.id);}} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12}}>✕</button>
                     </div>
                   )}
                   {(iAmExpSender||isAdm) && expSt!=="pending" && (
                     <div style={{display:"flex",gap:5,flexShrink:0}}>
-                      <button onClick={()=>startEdit(e)} style={{padding:"5px 9px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12}}>✎</button>
-                      <button onClick={()=>del(e.id)} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12}}>✕</button>
+                      <button onClick={ev=>{ev.stopPropagation();startEdit(e);}} style={{padding:"5px 9px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12}}>✎</button>
+                      <button onClick={ev=>{ev.stopPropagation();del(e.id);}} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12}}>✕</button>
                     </div>
                   )}
                   {/* Receiver sans createdBy (legacy) ou admin sans rôle parent */}
@@ -10846,11 +11007,11 @@ window.addEventListener('message',function(e){
                       {t.expPendingConfirmQ||"Pouvez-vous confirmer ?"}
                     </div>
                     <div style={{display:"flex",gap:8}}>
-                      <button onClick={()=>confirmExp(e.id)}
+                      <button onClick={ev=>{ev.stopPropagation();confirmExp(e.id);}}
                         style={{flex:1,padding:"10px",background:C.grn,color:"#fff",borderRadius:10,fontWeight:800,fontSize:13}}>
                         {t.expValidateBtn||"✅ Valider"}
                       </button>
-                      <button onClick={()=>rejectExp(e.id)}
+                      <button onClick={ev=>{ev.stopPropagation();rejectExp(e.id);}}
                         style={{flex:1,padding:"10px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,borderRadius:10,fontWeight:700,fontSize:13}}>
                         {t.expRejectBtn||"❌ Refuser"}
                       </button>
@@ -10860,7 +11021,7 @@ window.addEventListener('message',function(e){
                 {atts.length>0&&(
                   <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
                     {atts.map(a=>(
-                      <div key={a.id} onClick={()=>openViewer(a)} style={{width:56,height:56,borderRadius:8,overflow:"hidden",border:`1.5px solid ${C.bor}`,background:C.sur,cursor:"pointer",position:"relative",flexShrink:0}}>
+                      <div key={a.id} onClick={ev=>{ev.stopPropagation();openViewer(a);}} style={{width:56,height:56,borderRadius:8,overflow:"hidden",border:`1.5px solid ${C.bor}`,background:C.sur,cursor:"pointer",position:"relative",flexShrink:0}}>
                         {a.thumb
                           ? <img src={a.thumb} alt={a.name} style={{width:"100%",height:"100%",objectFit:"cover"}} />
                           : <div style={{width:"100%",height:"100%",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
