@@ -4474,7 +4474,11 @@ function PasswordResetScreen({ onDone }) {
 function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLogin,onObsJoin,familySync,cfg,setCfg}) {
   const [mode,setMode]=useState("login");
   const [avgRating,setAvgRating]=useState(null);
-  useEffect(()=>{ supabase.rpc("get_ratings_summary").then(({data})=>{ if(data?.total_count>0) setAvgRating(data); }).catch(()=>{}); },[]);
+  const [publicReviews,setPublicReviews]=useState([]);
+  useEffect(()=>{
+    supabase.rpc("get_ratings_summary").then(({data})=>{ if(data?.total_count>0) setAvgRating(data); }).catch(()=>{});
+    supabase.rpc("get_public_ratings",{max_count:3}).then(({data})=>{ if(data?.length) setPublicReviews(data); }).catch(()=>{});
+  },[]);
   const [email,setEmail]=useState(()=>{ try{return window.localStorage.getItem("duvia_last_email")||"";}catch{return "";} }); const [pw,setPw]=useState("");
   const [name,setName]=useState(""); const [role,setRole]=useState("parent");
   const [showInstallModal,setShowInstallModal]=useState(false);
@@ -5042,13 +5046,6 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
             <img src="/logo.png" alt="Duvia" style={{width:"100%",height:"100%",objectFit:"contain"}} />
           </div>
           <div style={{fontSize:13,color:C.mut,fontStyle:"italic"}}>{t.appSub}</div>
-          {avgRating && (
-            <div style={{marginTop:8,display:"flex",justifyContent:"center",alignItems:"center",gap:6}}>
-              <span style={{color:"#FFB800",fontSize:13}}>{"★".repeat(Math.round(avgRating.avg_stars))}{"☆".repeat(5-Math.round(avgRating.avg_stars))}</span>
-              <span style={{fontSize:12,color:C.mut,fontWeight:700}}>{avgRating.avg_stars}/5</span>
-              <span style={{fontSize:11,color:C.mut}}>· {avgRating.total_count} avis</span>
-            </div>
-          )}
         </div>
         <div className="card" style={C._brand?{background:`linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`}:undefined}>
           {isExpiredInvite && (
@@ -5249,6 +5246,29 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
         </div>
       </div>
       {showInstallModal && <InstallAppModal C={C} t={t} onClose={()=>setShowInstallModal(false)} />}
+      {/* Note moyenne + avis publics — bas de page */}
+      {avgRating && (
+        <div style={{marginTop:16,paddingBottom:8}}>
+          <div style={{textAlign:"center",marginBottom:12}}>
+            <span style={{color:"#FFB800",fontSize:14}}>{"★".repeat(Math.round(avgRating.avg_stars))}{"☆".repeat(5-Math.round(avgRating.avg_stars))}</span>
+            <span style={{fontSize:12,color:"#888",fontWeight:700,marginLeft:6}}>{avgRating.avg_stars}/5</span>
+            <span style={{fontSize:11,color:"#aaa"}}> · {avgRating.total_count} avis</span>
+          </div>
+          {publicReviews.length>0 && (
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {publicReviews.map((r,i)=>(
+                <div key={i} style={{background:"rgba(255,255,255,0.6)",borderRadius:12,padding:"10px 14px",backdropFilter:"blur(4px)"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                    <span style={{color:"#FFB800",fontSize:12}}>{"★".repeat(r.stars)}{"☆".repeat(5-r.stars)}</span>
+                    <span style={{fontSize:11,fontWeight:700,color:"#555"}}>{r.display_name}</span>
+                  </div>
+                  <div style={{fontSize:12,color:"#666",fontStyle:"italic",lineHeight:1.4}}>"{r.comment}"</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -9469,12 +9489,16 @@ function RatingTab() {
   const [sending, setSending] = useState(false);
   const [avgStats, setAvgStats] = useState(null);
   const [existingRating, setExistingRating] = useState(null);
+  const [publicReviews, setPublicReviews] = useState([]);
 
   useEffect(()=>{
     // Charge la moyenne globale
     supabase.rpc("get_ratings_summary")
       .then(({data})=>{ if(data?.total_count>0) setAvgStats(data); })
       .catch(()=>{});
+
+    // Charge les avis publics
+    supabase.rpc("get_public_ratings",{max_count:5}).then(({data})=>{ if(data?.length) setPublicReviews(data); }).catch(()=>{});
 
     // Charge l'avis existant de cet utilisateur
     if(!myUid) return;
@@ -9523,6 +9547,20 @@ function RatingTab() {
       <div style={{fontSize:13,color:C.mut}}>{"★".repeat(selected)}{"☆".repeat(5-selected)} ({selected}/5)</div>
       {comment && <div style={{marginTop:8,fontSize:13,color:C.mut,fontStyle:"italic",textAlign:"center",maxWidth:260,lineHeight:1.5}}>"{comment}"</div>}
       {avgStats?.total_count>0 && <div style={{marginTop:12,fontSize:12,color:C.mut}}>⭐ {avgStats.avg_stars}/5 · {avgStats.total_count} avis au total</div>}
+      {publicReviews.length>0 && (
+        <div style={{marginTop:20,width:"100%",textAlign:"left"}}>
+          <div style={{fontSize:11,fontWeight:800,color:C.mut,marginBottom:10,textTransform:"uppercase",letterSpacing:".5px"}}>Ce que disent les utilisateurs</div>
+          {publicReviews.map((r,i)=>(
+            <div key={i} style={{background:C.sur,borderRadius:10,padding:"10px 12px",marginBottom:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                <span style={{color:"#FFB800",fontSize:12}}>{"★".repeat(r.stars)}{"☆".repeat(5-r.stars)}</span>
+                <span style={{fontSize:11,fontWeight:700,color:C.txt}}>{r.display_name}</span>
+              </div>
+              <div style={{fontSize:12,color:C.mut,fontStyle:"italic",lineHeight:1.4}}>"{r.comment}"</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 
