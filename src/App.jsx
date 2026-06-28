@@ -3361,14 +3361,12 @@ export default function App() {
   useEffect(() => {
     const notifs = cfg.notifs || [];
     if (notifs.length === 0) return;
-    const latestId = notifs[0]?.id; // notifs triées par date desc (plus récente en premier)
+    const latestId = notifs[0]?.id;
     if (lastNotifIdRef.current === null) {
-      // Premier chargement — on mémorise sans notifier
       lastNotifIdRef.current = latestId;
       return;
     }
-    if (latestId === lastNotifIdRef.current) return; // pas de changement
-    // Nouvelles notifs arrivées depuis le dernier render
+    if (latestId === lastNotifIdRef.current) return;
     const newOnes = notifs.filter(n => n.id > lastNotifIdRef.current);
     lastNotifIdRef.current = latestId;
     if (newOnes.length === 0) return;
@@ -3381,6 +3379,44 @@ export default function App() {
       }
     });
   }, [cfg.notifs, t]);
+
+  // ── Notifications OS pour les messages reçus (via Realtime useMessages) ──
+  // Les messages ne passent PAS par cfg.notifs — ils ont leur propre canal
+  // Realtime (table messages). On surveille le tableau msgs et on notifie
+  // uniquement les messages dont on est destinataire et qu'on n'a pas envoyés.
+  const lastMsgIdRef = useRef(null);
+  useEffect(() => {
+    if (!msgs || msgs.length === 0) return;
+    const _myUidStr = String(myUid || _myId || "");
+    if (!_myUidStr) return;
+    // Trier par ts pour avoir le plus récent en premier
+    const sorted = [...msgs].sort((a,b) => b.ts > a.ts ? 1 : -1);
+    const latestId = sorted[0]?.id;
+    if (lastMsgIdRef.current === null) {
+      lastMsgIdRef.current = latestId;
+      return; // premier chargement — mémoriser sans notifier
+    }
+    if (latestId === lastMsgIdRef.current) return;
+    // Nouveaux messages : envoyés après le dernier connu, dont je suis destinataire, pas expéditeur
+    const newOnes = msgs.filter(m =>
+      m.id > lastMsgIdRef.current &&
+      String(m.from) !== _myUidStr &&
+      (m.to||[]).map(String).includes(_myUidStr)
+    );
+    lastMsgIdRef.current = latestId;
+    if (newOnes.length === 0 || !window.Notification || Notification.permission !== "granted") return;
+    newOnes.forEach(m => {
+      const senderName = m.fromName || t.appName;
+      const preview = (m.content||"").startsWith("__ATTACH__")
+        ? `📎 ${senderName} a partagé un fichier`
+        : `💬 ${senderName} : ${(m.content||"").slice(0,80)}`;
+      if(navigator.serviceWorker?.controller){
+        navigator.serviceWorker.ready.then(reg=>reg.showNotification(t.appName,{body:preview})).catch(()=>{});
+      } else {
+        try{ new Notification(t.appName,{body:preview}); }catch(e){}
+      }
+    });
+  }, [msgs, myUid, _myId, t]);
 
   // Called when an observer registers via invite link — adds them as pending + notifies parents
   function handleObsJoin(obsData){
