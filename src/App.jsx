@@ -9539,7 +9539,6 @@ function RatingTab() {
       const familyDisplayName = (cfg?.parents||[]).find(p=>p.email && p.email===user?.email)?.name
         || user?.name || user?.email || "Anonyme";
       const publicName = formatPublicReviewName(familyDisplayName);
-      console.log("[DEBUG avis] user?.email=", user?.email, "| cfg?.parents=", (cfg?.parents||[]).map(p=>({email:p.email,name:p.name})), "| familyDisplayName=", familyDisplayName, "| publicName envoyé=", publicName); // TEMP — à retirer une fois le bug résolu
       const { error: upsertError } = await supabase.from("ratings").upsert({
         family_id: familySync?.familyId || null,
         user_id:   myUid,
