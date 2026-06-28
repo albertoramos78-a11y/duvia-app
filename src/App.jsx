@@ -2724,7 +2724,9 @@ export default function App() {
   function cycleTheme(){ setThemeMode(m=>m==="palette"?"clair":m==="clair"?"sombre":"palette"); }
   const dark = themeMode==="sombre";
   const [lang,setLang]   = useLocalStorage("duvia_lang", "fr");
-  const [currency,setCurrency] = useLocalStorage("duvia_currency", "€");
+  // Devise partagée via cfg (synchro famille) — remplace localStorage
+  const currency = cfg.currency || "€";
+  const setCurrency = useCallback((val) => setCfg(c=>({...c,currency:val})), [setCfg]);
   const [weekStart,setWeekStart] = useLocalStorage("duvia_week_start", "lundi");
   const [summerActive,setSummerActive] = useLocalStorage("duvia_summer", false);
   const [rgActive,setRgActive]         = useLocalStorage("duvia_rg", false);
@@ -5634,7 +5636,6 @@ function PrefsTab() {
       setEmailMsg(m.email_notifs    !== false);
       setEmailExp(m.email_expenses  !== false);
       setEmailVault(m.email_vault   !== false);
-      if(m.currency)   setCurrency(m.currency);
       if(m.week_start) setWeekStart(m.week_start);
       // Détecte les comptes Google (pas de mot de passe Supabase)
       const provider = data?.user?.app_metadata?.provider;
@@ -10555,7 +10556,7 @@ window.addEventListener('message',function(e){
                         <span style={{fontSize:16}}>📊</span>
                         <div style={{fontSize:12,color:C.txt}}>
                           <strong>{n} occurrence{n>1?"s":""}</strong> générée{n>1?"s":""}
-                          {amt>0 && <> · Total <strong style={{color:C.grn}}>{(n*amt).toFixed(2)} ${currency}</strong></>}
+                          {amt>0 && <> · Total <strong style={{color:C.grn}}>{(n*amt).toFixed(2)} {currency}</strong></>}
                         </div>
                       </div>
                     );
@@ -10589,14 +10590,14 @@ window.addEventListener('message',function(e){
                   <div style={{flex:1,background:`${payerColor}14`,border:`1px solid ${payerColor}44`,borderRadius:8,padding:"6px 10px",textAlign:"center"}}>
                     <div style={{fontSize:10,color:payerColor,fontWeight:800,marginBottom:2}}>{payerName}</div>
                     <div style={{fontSize:15,fontWeight:900,color:payerColor,fontFamily:"JetBrains Mono"}}>
-                      {amt>0?payerAmt.toFixed(2):"–"}${currency}
+                      {amt>0?payerAmt.toFixed(2):"–"}{currency}
                     </div>
                     <div style={{fontSize:9,color:C.mut}}>{100-sp}% · {t.expSharePayer||"part payeur"}</div>
                   </div>
                   <div style={{flex:1,background:`${C.bor}55`,border:`1px solid ${C.bor}`,borderRadius:8,padding:"6px 10px",textAlign:"center"}}>
                     <div style={{fontSize:10,color:C.mut,fontWeight:800,marginBottom:2}}>{otherName}</div>
                     <div style={{fontSize:15,fontWeight:900,color:C.txt,fontFamily:"JetBrains Mono"}}>
-                      {amt>0?otherAmt.toFixed(2):"–"}${currency}
+                      {amt>0?otherAmt.toFixed(2):"–"}{currency}
                     </div>
                     <div style={{fontSize:9,color:C.mut}}>{sp}% · {t.expShareDue||"part due"}</div>
                   </div>
@@ -10675,7 +10676,7 @@ window.addEventListener('message',function(e){
                   {iAmReceiver && st==="pending" && (
                     <div style={{marginTop:12,padding:"12px 14px",background:`${C.yel}0d`,border:`1px solid ${C.yel}44`,borderRadius:10}}>
                       <div style={{fontSize:13,color:C.txt,marginBottom:10,lineHeight:1.5}}>
-                        <strong style={{color:fromP?.color||C.grn}}>{fromP?.name||`P${item.from+1}`}</strong> vous a envoyé un remboursement de <strong>{item.amount.toFixed(2)} ${currency}</strong> le {(item.date||"").split("-").reverse().join("/")}.<br/>
+                        <strong style={{color:fromP?.color||C.grn}}>{fromP?.name||`P${item.from+1}`}</strong> vous a envoyé un remboursement de <strong>{item.amount.toFixed(2)} {currency}</strong> le {(item.date||"").split("-").reverse().join("/")}.<br/>
                         Pouvez-vous confirmer la réception ?
                       </div>
                       <div style={{display:"flex",gap:8}}>
@@ -10751,7 +10752,7 @@ window.addEventListener('message',function(e){
                     <div style={{fontSize:13,color:C.txt,marginBottom:10,lineHeight:1.5}}>
                       <strong style={{color:cfg.parents[e.createdBy]?.color||C.blu}}>{cfg.parents[e.createdBy]?.name||`P${(e.createdBy||0)+1}`}</strong>{" "}
                       {t.expPendingConfirmMsg||"a ajouté une dépense de"}{" "}
-                      <strong>{e.amount.toFixed(2)} ${currency}</strong> ({e.label}).{" "}
+                      <strong>{e.amount.toFixed(2)} {currency}</strong> ({e.label}).{" "}
                       {t.expPendingConfirmQ||"Pouvez-vous confirmer ?"}
                     </div>
                     <div style={{display:"flex",gap:8}}>
