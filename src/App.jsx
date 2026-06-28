@@ -9538,12 +9538,14 @@ function RatingTab() {
       // (ex. "Sissi1") — voir RatingTab plus haut pour le même souci côté Coffre.
       const familyDisplayName = (cfg?.parents||[]).find(p=>p.email && p.email===user?.email)?.name
         || user?.name || user?.email || "Anonyme";
+      const publicName = formatPublicReviewName(familyDisplayName);
+      console.log("[DEBUG avis] user?.email=", user?.email, "| cfg?.parents=", (cfg?.parents||[]).map(p=>({email:p.email,name:p.name})), "| familyDisplayName=", familyDisplayName, "| publicName envoyé=", publicName); // TEMP — à retirer une fois le bug résolu
       const { error: upsertError } = await supabase.from("ratings").upsert({
         family_id: familySync?.familyId || null,
         user_id:   myUid,
         stars:     selected,
         comment:   comment.trim(),
-        user_name: formatPublicReviewName(familyDisplayName),
+        user_name: publicName,
         plan:      sub?.plan || "unknown",
       }, { onConflict: "user_id" });
       if (upsertError) throw upsertError; // supabase-js ne lève pas d'exception, il faut vérifier le champ error nous-mêmes
