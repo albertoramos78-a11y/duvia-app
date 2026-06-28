@@ -3344,7 +3344,13 @@ export default function App() {
   const pushNotif = useCallback((msg,type="info") => {
     const n={id:Date.now(),msg,type,read:false,date:new Date().toISOString()};
     setCfg(c=>({...c,notifs:[n,...(c.notifs||[])]}));
-    if(window.Notification&&Notification.permission==="granted") new Notification(t.appName,{body:msg});
+    if(window.Notification&&Notification.permission==="granted"){
+      if(navigator.serviceWorker?.controller){
+        navigator.serviceWorker.ready.then(reg=>reg.showNotification(t.appName,{body:msg})).catch(()=>{});
+      } else {
+        try{ new Notification(t.appName,{body:msg}); }catch(e){}
+      }
+    }
   }, [setCfg, t]); // ✅ référence stable
 
   // Called when an observer registers via invite link — adds them as pending + notifies parents
