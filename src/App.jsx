@@ -2637,6 +2637,8 @@ export default function App() {
   } = useExpenses(familySync.familyId);
   const { history: historyData, addHistEntry } = useHistory(familySync.familyId);
   const [myUid, setMyUid] = useState(null);
+  // Vérification admin côté serveur — résiste à la manipulation du localStorage
+  const [adminVerified, setAdminVerified] = useState(false);
   const [pendingUser,setPendingUser] = useState(null); // parent en attente d'accepter la charte d'engagement
   // 🔧 Traduit les messages du nuage (uuid Supabase) vers le format local
   // (id de connexion de l'appli) pour que toute la logique existante de
@@ -2747,6 +2749,23 @@ export default function App() {
         const uid = data?.user?.id;
         if (!uid) return;
         setMyUid(uid);
+        // Vérification admin côté serveur — si localStorage est falsifié, Supabase corrige
+        if (user?.role === "admin") {
+          const { data: adminRow } = await supabase
+            .from("app_admins")
+            .select("user_id")
+            .eq("user_id", uid)
+            .maybeSingle();
+          if (adminRow) {
+            setAdminVerified(true);
+          } else {
+            // Rôle admin falsifié dans localStorage → on le retire
+            setAdminVerified(false);
+            setUsers(us => us.map(u => u.id === user.id ? {...u, role: "parent"} : u));
+          }
+        } else {
+          setAdminVerified(false);
+        }
         await supabase.from("id_links").upsert(
           { family_id: familySync.familyId, local_id: String(user.id), supabase_uid: uid, email: user.email||null },
           { onConflict: "family_id,local_id" }
@@ -3204,7 +3223,8 @@ export default function App() {
   const prem  = useMemo(() => isPrem(sub), [sub]);
   const perms = useMemo(() => getPerms(sub), [sub]);
   const days  = useMemo(() => trialLeft(sub), [sub]);
-  const isAdm = user?.role==="admin";
+  // isAdm = vrai seulement si Supabase confirme (app_admins) — résiste au localStorage falsifié
+  const isAdm = user?.role === "admin" && adminVerified;
   const isObs = user?.role==="observer";
   const isChild = user?.role==="child";
   const _myId = String(user?.id||"");
@@ -3585,7 +3605,7 @@ export default function App() {
     C, t, lang, setLang, dark, themeMode, cycleTheme,
     currency, setCurrency, weekStart, setWeekStart,
     cfg, setCfg, sub, setSub, user, users, setUsers,
-    prem, perms, st, days, isAdm, isObs, isChild, unread,
+    prem, perms, st, days, isAdm, isObs, isChild, unread, adminVerified,
     addHist, pushNotif, updateCal, onUpgrade, handleObsJoin,
     apiData, apiLoading,
     setMenuTab, setShowMenu,
