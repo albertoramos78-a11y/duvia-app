@@ -3256,8 +3256,12 @@ export default function App() {
   }
   // Sync activity depuis localStorage quand un autre user écrit (cross-session)
   const [activityTick,setActivityTick] = useState(0);
+  const [vaultUnreadTick,setVaultUnreadTick] = useState(0);
   useEffect(()=>{
-    function onStorage(e){if(e.key==="duvia_activity")setActivityTick(t=>t+1);}
+    function onStorage(e){
+      if(e.key==="duvia_activity") setActivityTick(t=>t+1);
+      if(e.key?.includes("vault_unread")) setVaultUnreadTick(t=>t+1);
+    }
     window.addEventListener("storage",onStorage);
     return()=>window.removeEventListener("storage",onStorage);
   },[]);
@@ -3266,7 +3270,12 @@ export default function App() {
     try{ const raw=window.localStorage.getItem("duvia_activity"); if(raw)return JSON.parse(raw); }catch{}
     return activity;
   }, [activity, activityTick]); // ✅ recalculé uniquement si activity ou tick change
-  const vaultDot   = cfg.vaultActivity?.by && cfg.vaultActivity.by!==_myId && cfg.vaultActivity.ts>(_seen.vault||"");
+  // Unread vault docs (localStorage, par user)
+  const vaultUnreadCount = useMemo(() => {
+    void vaultUnreadTick;
+    try{ const ids=JSON.parse(localStorage.getItem(`duvia_vault_unread_${_myId}`)||"[]"); return ids.length; }catch{ return 0; }
+  }, [vaultUnreadTick, _myId]);
+  const vaultDot   = (cfg.vaultActivity?.by && cfg.vaultActivity.by!==_myId && cfg.vaultActivity.ts>(_seen.vault||"")) || vaultUnreadCount>0;
   const contactsDot= liveActivity.contacts?.by && liveActivity.contacts.by!==_myId && liveActivity.contacts.ts>(_seen.contacts||"");
   // Vibration dépenses = dépenses EN ATTENTE créées par l'autre parent (source DB)
   const expPendingDot = (allExpenses||[]).some(e =>
@@ -3442,7 +3451,7 @@ export default function App() {
     pushNotif(`👥 ${obsData.name} — ${t.obsPendingInfo||"demande à rejoindre la famille"}`, "info");
   }
   function addHist(action,detail="",type="") {
-    addHistEntry(action, detail, type, user?.name||"Système", myUid||null);
+    addHistEntry(action, detail, type, cfg.parents?.[user?.parentIdx]?.name || user?.name || "Système", myUid||null);
   }
   function updateCal(ds,data) {
     setCfg(c=>({...c,overrides:{...c.overrides,[ds]:{...(c.overrides[ds]||{}),...data}}}));
@@ -3758,7 +3767,7 @@ export default function App() {
       {/* HEADER */}
       <div style={{flexShrink:0,background:headerBG,borderBottom:`1.5px solid ${C.bor}`,boxShadow:"0 1px 6px rgba(0,0,0,.06)"}}>
       <div style={{padding:"0 14px",display:"flex",alignItems:"center",gap:12,height:58}}>
-        <img src="/logo-nav.png" alt="Duvia" style={{width:84,height:84,objectFit:"contain",flexShrink:0}} />
+        <img src="/logo-nav.png" alt="Duvia" style={{width:84,height:84,objectFit:"contain",flexShrink:0,animation:(sub?.pendingSpins||0)>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}} />
         <div style={{display:"flex",flexDirection:"column",justifyContent:"center",minWidth:0,flex:1}}>
           <div style={{fontSize:10,color:C.mut,fontStyle:"italic",lineHeight:1.2}}>
             <span>Two homes · One family</span>
@@ -14211,7 +14220,15 @@ function VaultTab() {
 
   // Épinglage par compte (localStorage) — chaque parent gère ses épingles
   const [pinnedDocIds, setPinnedDocIds] = useLocalStorage(`duvia_pinned_${user?.id||"x"}`, []);
-  const docs = (rawDocs||[]).map(d=>({...d, pinned: pinnedDocIds.includes(d.id)}));
+  // Docs non lus — point rouge jusqu'à ouverture
+  const [unreadDocIds, setUnreadDocIds] = useLocalStorage(`duvia_vault_unread_${user?.id||"x"}`, []);
+  const docs = (rawDocs||[]).map(d=>({...d, pinned: pinnedDocIds.includes(d.id), unread: unreadDocIds.includes(d.id)}));
+
+  // Ouvrir un doc : le marque comme lu
+  function openVaultDoc(doc) {
+    setUnreadDocIds(ids => ids.filter(id => id !== doc.id));
+    setPreviewDoc(doc);
+  }
 
   // Taille totale utilisée (en octets)
   const totalSizeBytes = useMemo(() =>
@@ -14416,7 +14433,7 @@ function VaultTab() {
   const others = filtered.filter(d => !d.pinned)
     .sort((a,b) => new Date(b.created_at||0) - new Date(a.created_at||0));
 
-  // ── Popup OS quand l'autre parent ajoute un doc ──────────────────────────
+  // ── Détection nouveaux docs (autre parent) → popup OS + point rouge ────────
   const seenVaultIdsRef = useRef(null);
   useEffect(() => {
     if (!docs || docs.length === 0) return;
@@ -14427,8 +14444,15 @@ function VaultTab() {
     }
     const newDocs = docs.filter(d => !seenVaultIdsRef.current.has(d.id));
     docs.forEach(d => seenVaultIdsRef.current.add(d.id));
-    const toNotify = newDocs.filter(d => !_myUidStr || String(d.uploaded_by||d.user_id) !== _myUidStr);
-    toNotify.forEach(d => {
+    const fromOthers = newDocs.filter(d => !_myUidStr || String(d.uploaded_by||d.user_id) !== _myUidStr);
+    if (fromOthers.length === 0) return;
+    // Ajouter aux non-lus
+    setUnreadDocIds(ids => {
+      const toAdd = fromOthers.map(d => d.id).filter(id => !ids.includes(id));
+      return toAdd.length ? [...ids, ...toAdd] : ids;
+    });
+    // Popup OS
+    fromOthers.forEach(d => {
       const who = resolveAddedBy(d.added_by_name||"").label;
       const body = `🗄️ ${who} a ajouté "${d.name}"`;
       if(window.Notification && Notification.permission === "granted"){
@@ -14638,10 +14662,11 @@ function VaultTab() {
     const uploadedAt = doc.created_at ? new Date(doc.created_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) : null;
     return (
     <div style={{background:C.card,border:`1.5px solid ${doc.pinned?C.vio:C.bor}`,borderRadius:14,padding:"12px 14px",marginBottom:10,cursor:"pointer",transition:"all .15s",borderLeft:doc.pinned?`4px solid ${C.vio}`:undefined}}
-      onClick={()=>setPreviewDoc(doc)}>
+      onClick={()=>openVaultDoc(doc)}>
       <div style={{display:"flex",gap:12,alignItems:"center"}}>
-        <div style={{width:40,height:40,borderRadius:10,background:`${C.vio}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>
+        <div style={{width:40,height:40,borderRadius:10,background:`${C.vio}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0,position:"relative"}}>
           {catIcon(doc.category_idx)}
+          {doc.unread && <span style={{position:"absolute",top:-3,right:-3,width:9,height:9,borderRadius:"50%",background:"#e53e3e",border:`2px solid ${C.card}`}}/>}
         </div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:14,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{doc.name}</div>
