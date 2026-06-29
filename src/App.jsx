@@ -3341,19 +3341,17 @@ export default function App() {
 
   useEffect(()=>{ if(window.Notification&&Notification.permission==="default") Notification.requestPermission(); },[]);
 
+  // IDs de notifs créées par MOI dans cet onglet — le useEffect les ignore
+  const myOwnNotifIds = useRef(new Set());
+
   const pushNotif = useCallback((msg,type="info") => {
     const n={id:Date.now(),msg,type,read:false,date:new Date().toISOString()};
+    myOwnNotifIds.current.add(n.id); // marquer comme "créé par moi"
     setCfg(c=>({...c,notifs:[n,...(c.notifs||[])]}));
-    if(window.Notification&&Notification.permission==="granted"){
-      if(navigator.serviceWorker?.controller){
-        navigator.serviceWorker.ready.then(reg=>reg.showNotification(t.appName,{body:msg})).catch(()=>{});
-      } else {
-        try{ new Notification(t.appName,{body:msg}); }catch(e){}
-      }
-    }
-  }, [setCfg, t]); // ✅ référence stable
+    // Pas de popup OS ici — le créateur ne voit pas son propre popup
+  }, [setCfg]); // ✅ référence stable
 
-  // ── Notifications OS pour l'autre parent (dépenses/actions via cfg.notifs) ──
+  // ── Notifications OS pour l'AUTRE parent (dépenses/actions via cfg.notifs) ──
   const lastNotifIdRef = useRef(null);
   useEffect(() => {
     const notifs = cfg.notifs || [];
@@ -3363,8 +3361,10 @@ export default function App() {
     if (latestId === lastNotifIdRef.current) return;
     const newOnes = notifs.filter(n => n.id > lastNotifIdRef.current);
     lastNotifIdRef.current = latestId;
-    if (newOnes.length === 0 || !window.Notification || Notification.permission !== "granted") return;
-    newOnes.forEach(n => {
+    // Filtrer les notifs que j'ai moi-même créées (pas de popup pour le créateur)
+    const toShow = newOnes.filter(n => !myOwnNotifIds.current.has(n.id));
+    if (toShow.length === 0 || !window.Notification || Notification.permission !== "granted") return;
+    toShow.forEach(n => {
       if(navigator.serviceWorker?.controller){
         navigator.serviceWorker.ready.then(reg=>reg.showNotification(t.appName,{body:n.msg})).catch(()=>{});
       } else { try{ new Notification(t.appName,{body:n.msg}); }catch(e){} }
@@ -12209,7 +12209,8 @@ function MessagingTab(){
   }
 
   const myId=String(user?.id||"");
-  const myName=user?.name||"?";
+  // Nom depuis cfg.parents (source de vérité famille) — fallback user.name
+  const myName=cfg.parents[user?.parentIdx??-1]?.name||user?.name||"?";
 
   // Helper: affiche un emoji ou une photo en rond
   function renderAvatar(av, size) {
