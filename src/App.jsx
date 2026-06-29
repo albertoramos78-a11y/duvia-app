@@ -3485,9 +3485,11 @@ export default function App() {
         // Nettoyage table subscriptions avant suppression du compte
         if(myUid) await supabase.from("subscriptions").delete().eq("user_id", myUid);
         await supabase.functions.invoke("delete-account", {
-          userId:   myUid || String(myId),
-          email:    myEmail,
-          familyId: familyId,
+          body: {
+            userId:   myUid || String(myId),
+            email:    myEmail,
+            familyId: familyId,
+          }
         });
       } catch(err) {
         setDeleteAccountError(`Erreur serveur : ${err.message}. Réessaie ou contacte le support.`);
@@ -14417,7 +14419,8 @@ function VaultTab() {
       pushNotif(`🗑️ Document supprimé : "${docName}"`, "vault");
       addHist("Document supprimé", `${myDisplayName} — "${docName}"`, "vault");
       setActivity(a=>({...a,vault:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
-      setActivity(a=>({...a,vault:{ts:new Date().toISOString(),by:String(user?.id||"")}})); setCfg(c=>({...c,vaultActivity:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
+      setCfg(c=>({...c,vaultActivity:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
+      try { supabase.functions.invoke("notify-vault", { body: { action:"delete", docName, byName:myDisplayName, familyId:familySync?.familyId } }).catch(()=>{}); } catch(e){}
     } catch (e) {
       alert("⚠️ Erreur lors de la suppression : " + (e?.message || e));
     }
