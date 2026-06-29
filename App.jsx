@@ -1,0 +1,14886 @@
+import { useState, useEffect, useRef, useMemo, useCallback, createContext, useContext } from "react";
+import posthog from "posthog-js";
+import { supabase } from "./supabaseClient";
+import { initDiagnostics, retryPendingReport, submitBugReport } from "./services/diagnostics";
+import { useVault } from "./hooks/useVault";
+import { useMessages } from "./hooks/useMessages";
+import { useIdLinks } from "./hooks/useIdLinks";
+import { useExpenses } from "./hooks/useExpenses";
+import { useHistory } from "./hooks/useHistory";
+import { TR } from './i18n/index.js';
+import { APP_URL, LIMITS, PRIVACY_URL, CGU_URL, RGPD_NOTICE_VERSION } from './config.js';
+import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx } from './utils/core.js';
+import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, BRAND, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
+
+// ─── POSTHOG — Analytics (pays, logins, comportement) ───────────────────────
+const PH_KEY = import.meta.env.VITE_POSTHOG_KEY;
+if (PH_KEY) {
+  posthog.init(PH_KEY, {
+    api_host: "https://eu.i.posthog.com", // serveurs Europe (RGPD)
+    capture_pageview: true,
+    persistence: "localStorage",
+    autocapture: false,                   // pas de capture automatique des clics
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SUPABASE CLIENT — léger, basé sur fetch (pas de npm supplémentaire)
+// Variables à définir dans .env :
+//   VITE_SUPABASE_URL=https://xxx.supabase.co
+//   VITE_SUPABASE_ANON_KEY=eyJhbG...
+// ═══════════════════════════════════════════════════════════════════════════════
+// ⚠️  Avant déploiement Vercel : remplace les "" par tes vraies clés Supabase
+//     URL  → https://xxx.supabase.co
+//     KEY  → eyJhbGci... (clé anon publique)
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── Edge Function → voir fichier séparé : supabase/functions/delete-account/index.ts
+
+
+// Preserve scroll position when expanding accordions
+// ═══════════════════════════════════════════════════════════════════════════════
+// SÉCURITÉ — Validation & Sanitization
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Limites globales
+// LIMITS imported from src/config.js
+
+// Types de fichiers autorisés dans le vault
+const ALLOWED_VAULT_TYPES = [
+  "application/pdf",
+  "image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif",
+  "image/heic", "image/heif",
+];
+const ALLOWED_VAULT_EXTS = [".pdf",".jpg",".jpeg",".png",".webp",".gif",".heic",".heif"];
+
+// Supprime les balises HTML et caractères dangereux d'un texte
+function sanitize(str) {
+  if (typeof str !== "string") return "";
+  return str
+    .replace(/<[^>]*>/g, "")           // supprime les balises HTML
+    .replace(/javascript:/gi, "")       // supprime javascript:
+    .replace(/on\w+\s*=/gi, "")         // supprime onXxx=
+    .trim();
+}
+
+// ── Filtre insultes ───────────────────────────────────────────────────────────
+// Deux listes séparées pour éviter les faux positifs :
+// - LONG_BAD : sous-chaîne (mots longs, sans risque de collision)
+// - SHORT_BAD : mot entier seulement (mots courts, évite "technique" → "nique")
+const LONG_BAD = [
+  // Français — insultes longues
+  "connard","connarde","connards","connardes",
+  "merde","merdique","merdeuse",
+  "putain","putains","salopard","salopards","saloperie","salope","salopes",
+  "enculer","encule","enculé","enculée","enculés","enculées",
+  "filsdeput","filsdepute","fillesdepute",
+  "batard","bâtard","bastard","batards","bâtards","bastards",
+  "ordure","ordures","raclure","raclures","pourriture","pourritures",
+  "abruti","abrutie","abrutis","cretin","cretins","cretine","imbecile","imbeciles","debile","debiles",
+  "gueule","gueules","fermetagueule","tafermerlague",
+  "pedale","pedales","tapette","tapettes","faggot","faggots",
+  "nazi","nazis","fasciste","fascistes","terroriste","terroristes",
+  "suicider","tuetoi","suicide","vadiecrever","vacrever","creve",
+  "vatefoutre","vatefaire","niquer",
+  "jevaistuer","jevaiskiller","jetuer","jevaistemasser",
+  "jedeteste","jetedeteste","jetehais","vatefair",
+  // Anglais
+  "fuck","fucking","fucked","fucker","fuckers","fuckoff",
+  "shit","shitty","bullshit",
+  "bitch","bitches",
+  "asshole","assholes","dickhead","motherfucker","motherfucking",
+  "cunt","cunts","whore","whores","slut","sluts",
+  "nigger","niggers","nigga",
+  "retarded","morons",
+  "killurself","killyourself","godie","godieinfiredie",
+];
+
+const SHORT_BAD = [
+  // Mots courts — uniquement en tant que mot entier
+  "con","conne","cul","culs","pd","pds","tg","fdp","ntm","kys",
+  "nique","pute","putes","bite","bites","kike","mdr","lol",
+  "fick","kak","scheiss",
+];
+
+// Prépare le texte pour le filtre : accents + leet speak + collapse f.u.c.k
+function _prepFilter(str) {
+  let s = str.toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // accents
+    .replace(/0/g,"o").replace(/1/g,"i").replace(/3/g,"e")
+    .replace(/4/g,"a").replace(/5/g,"s").replace(/@/g,"a")
+    .replace(/\$/g,"s").replace(/€/g,"e").replace(/!/g,"i")
+    .replace(/(.)\1+/g,"$1");                       // meeeerde→merde, enculle→encule
+  // Collapse f.u.c.k / f-u-c-k / f_u_c_k → fuck (6 passes pour les mots longs)
+  for(let i=0;i<6;i++) s = s.replace(/([a-z])[.\-_*+|]+([a-z])/g,"$1$2");
+  return s;
+}
+
+function containsBadWord(text) {
+  const prep   = _prepFilter(text);
+  const noSpc  = prep.replace(/\s+/g,""); // version sans espaces (détecte les mots collés)
+
+  // Long words — substring dans le texte sans espaces
+  for(const w of LONG_BAD){
+    const nw = _prepFilter(w).replace(/\s/g,"");
+    if(noSpc.includes(nw)) return true;
+  }
+
+  // Short words — mot entier seulement (split par espaces/ponctuation)
+  const words = prep.split(/[\s,!?;:.'"()\[\]]+/).filter(Boolean);
+  for(const w of SHORT_BAD){
+    const nw = _prepFilter(w);
+    if(words.includes(nw)) return true;
+  }
+
+  return false;
+}
+
+function isCleanText(text) { return !containsBadWord(text); }
+
+// Valide le format email
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
+}
+
+// ── Identifiant Email OU Téléphone (observateurs / enfants) ──────────────────
+// Supabase Auth (configuré ici en email+mot de passe uniquement) n'a pas
+// d'authentification téléphone native activée. Pour permettre aux observateurs
+// et enfants de s'identifier avec leur numéro de téléphone, on génère une
+// adresse email technique stable et invisible pour l'utilisateur, dérivée du
+// numéro normalisé. Le vrai numéro reste stocké dans le profil (champ `phone`).
+function normalizePhoneDigits(p) {
+  if (!p) return "";
+  let c = String(p).trim().replace(/[\s.\-()]/g, "");
+  c = c.replace(/^\+/, "");
+  if (c.startsWith("00")) c = c.slice(2);
+  else if (c.startsWith("0")) c = "33" + c.slice(1);
+  return c.replace(/\D/g, "");
+}
+function isLikelyPhoneIdentifier(v) {
+  if (!v || v.includes("@")) return false;
+  return normalizePhoneDigits(v).length >= 8;
+}
+// Transforme un identifiant (email réel OU numéro de téléphone) en adresse
+// email "technique" utilisée pour les appels Supabase Auth.
+function identifierToAuthEmail(v) {
+  const raw = (v || "").trim();
+  if (!raw) return "";
+  if (raw.includes("@")) return raw.toLowerCase();
+  return `tel${normalizePhoneDigits(raw)}@phone.duvia.app`;
+}
+
+// Valide le mot de passe : longueur + au moins une majuscule + un caractère spécial.
+function validatePassword(pw) {
+  if (!pw || pw.length < LIMITS.PASSWORD_MIN) return `Mot de passe trop court (${LIMITS.PASSWORD_MIN} caractères min.)`;
+  if (pw.length > LIMITS.PASSWORD_MAX) return "Mot de passe trop long.";
+  if (!/[A-ZÀ-ÖØ-Þ]/.test(pw)) return "Le mot de passe doit contenir au moins une majuscule.";
+  if (!/[^A-Za-z0-9]/.test(pw)) return "Le mot de passe doit contenir au moins un caractère spécial (ex : ! ? @ # $).";
+  return null;
+}
+
+// Compteur anti-spam messages (en mémoire session)
+const _msgTimestamps = [];
+function checkMsgRateLimit() {
+  const now = Date.now();
+  // Garder uniquement les messages des 60 dernières secondes
+  while (_msgTimestamps.length && _msgTimestamps[0] < now - 60000) _msgTimestamps.shift();
+  if (_msgTimestamps.length >= LIMITS.MSG_PER_MIN) return false;
+  _msgTimestamps.push(now);
+  return true;
+}
+
+// Valide un fichier vault
+function validateVaultFile(file) {
+  if (!file) return null;
+  const ext = "." + file.name.split(".").pop().toLowerCase();
+  const typeOk = ALLOWED_VAULT_TYPES.includes(file.type) || ALLOWED_VAULT_EXTS.includes(ext);
+  if (!typeOk) return `Type de fichier non autorisé. Formats acceptés : PDF, JPG, PNG, WebP`;
+  const sizeMB = file.size / (1024 * 1024);
+  if (sizeMB > LIMITS.FILE_MAX_MB) return `Fichier trop lourd (max ${LIMITS.FILE_MAX_MB} MB). Ce fichier fait ${sizeMB.toFixed(1)} MB.`;
+  return null;
+}
+
+function lockScroll(el) {
+  if (!el) return ()=>{};
+  const pos = el.scrollTop;
+  return () => { el.scrollTop = pos; };
+}
+function nearestScroller(node) {
+  while (node && node !== document.body) {
+    const s = window.getComputedStyle(node);
+    if (s.overflowY === "auto" || s.overflowY === "scroll") return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+
+
+const APP_LOGO = "/app-logo.jpeg";
+const APP_LOGO_PNG = "/logo.png";
+
+// ─── THEMES ───────────────────────────────────────────────────────────────────
+// Theme constants imported from src/theme.js
+
+// ─── TRANSLATIONS ─────────────────────────────────────────────────────────────
+const LANGS = {
+  fr:{flag:"🇫🇷",name:"Français"},
+  en:{flag:"🇬🇧",name:"English"},
+  de:{flag:"🇩🇪",name:"Deutsch"},
+  es:{flag:"🇪🇸",name:"Español"},
+  pt:{flag:"🇵🇹",name:"Português"},
+};
+
+// TR imported from src/i18n/index.js
+
+// ─── SUBSCRIPTION & PLANS : freemium | trial_premium | earned_premium | premium ──
+const TRIAL_DAYS      = 15;   // alias backward compat
+const TRIAL_BASE_DAYS = 15;   // jours trial automatique à l'inscription
+const TRIAL_MAX_DAYS  = 30;   // plafond absolu depuis la date de création du compte
+const FILLEUL_BONUS_DAYS = 15; // jours "Premium – x j restants" offerts au filleul validé
+const REF_TRIAL_PALIERS = { 1: 5, 2: 10 }; // bonus parrain phase trial (3+ = 0j)
+const PREM_BONUS_PER_REF = 1;  // jours/filleul validé phase premium abonné
+const PREM_MAX_PER_MONTH = 5;  // plafond jours bonus/mois premium
+const SPIN_PER_REF = 1;        // tours de roue par filleul validé (tous statuts)
+function makeRefCode(id,email){ const b=(email||"").split("@")[0].replace(/[^a-z0-9]/gi,"").toUpperCase().slice(0,4).padEnd(4,"X"); return `DUV-${b}-${String(id).slice(-4).padStart(4,"0")}`; }
+function makeSub() { return { plan:"trial_premium", accountCreatedAt:new Date().toISOString(), trialStart:new Date().toISOString(), premiumSince:null, cycle:"yearly", refCode:null, refUsed:null, refCount:0, validatedRefCount:0, refMonths:0, trialExtension:0, pendingSpins:0, monthlyRefMonth:null, monthlyRefCount:0 }; }
+function refBonusDaysTrial(validatedCount, extSoFar) {
+  const remaining = TRIAL_MAX_DAYS - TRIAL_BASE_DAYS - extSoFar;
+  if(remaining <= 0) return 0;
+  const palier = REF_TRIAL_PALIERS[validatedCount] ?? 0;
+  return Math.min(palier, remaining);
+}
+function refBonusDaysPremium(monthlyCount) {
+  return monthlyCount <= PREM_MAX_PER_MONTH ? PREM_BONUS_PER_REF : 0;
+}
+// backward compat
+function refBonusDays(n) { return REF_TRIAL_PALIERS[n] ?? 0; }
+function refBonusDaysFor(n, isPF) { return isPF ? refBonusDaysPremium(n) : refBonusDaysTrial(n, 0); }
+function makeAdminSub() { return { plan:"premium", premiumSince:new Date().toISOString(), cycle:"yearly", earnedTheme:true, earnedBadge:true, earnedRG:true, earnedWC:true, earnedVideo:true, earnedLicorne:true, lastSpinByUser:{}, giftedPrizes:{}, _admin:true }; }
+function subStatus(sub) {
+  if(sub._admin) return "premium";
+  if(sub.plan==="premium") {
+    // Vérifie l'expiration de l'abonnement payant
+    if(sub.premiumSince && sub.cycle) {
+      const expiry = new Date(sub.premiumSince);
+      sub.cycle==="yearly" ? expiry.setFullYear(expiry.getFullYear()+1) : expiry.setMonth(expiry.getMonth()+1);
+      const bonusDays = sub.refMonths ? sub.refMonths * 30 : 0;
+      expiry.setDate(expiry.getDate() + bonusDays);
+      if(Date.now() > expiry.getTime()) return "freemium"; // abonnement expiré → freemium
+    }
+    return "premium";
+  }
+  if(isBeta()) return "trial_premium"; // 🎉 Bêta — Trial Premium offert à tous
+  if(sub.plan==="freemium") return "freemium";
+  const created = sub.accountCreatedAt || sub.trialStart;
+  const ext = sub.trialExtension||0;
+  const maxDays = Math.min(TRIAL_BASE_DAYS + ext, TRIAL_MAX_DAYS);
+  const d = (Date.now()-new Date(created).getTime())/86400000;
+  if(d<=maxDays) return sub.plan==="earned_premium" ? "earned_premium" : "trial_premium";
+  return "freemium"; // expiré → freemium
+}
+function trialLeft(sub) { const created=sub.accountCreatedAt||sub.trialStart; const ext=sub.trialExtension||0; const maxDays=Math.min(TRIAL_BASE_DAYS+ext,TRIAL_MAX_DAYS); return Math.max(0,Math.ceil(maxDays-(Date.now()-new Date(created).getTime())/86400000)); }
+function isPrem(sub) { const st=subStatus(sub); return st==="premium"||st==="trial_premium"||st==="earned_premium"||sub._admin; }
+function isPremFull(sub) { return subStatus(sub)==="premium"||sub._admin; }
+function isFreemiumPlan(sub) { return subStatus(sub)==="freemium"; }
+function getPerms(sub) {
+  const st=subStatus(sub);
+  const isFree    = st==="freemium";
+  const isTrial   = st==="trial_premium"||st==="earned_premium"; // inclut la bêta
+  const isPremium = st==="premium"||sub._admin;
+  return {
+    maxParents:    2,
+    maxChildren:   isFree?1:isTrial?2:Infinity,
+    sameGuardAll:  !isFree,
+    zoneChoice:    !isFree,
+    feteMere:      !isFree,
+    fetePere:      !isFree,
+    birthParents:  !isFree,
+    birthChildren: !isFree,
+    customDates:   !isFree,
+    maxCustomDates:isPremium?Infinity:isTrial?2:0,
+    customGuard:   !isFree,
+    maxObservers:  isFree?1:Infinity,
+    calendarEdit:  true,
+    scheduleAdd:   !isFree,
+    expenseAdd:    true,
+    refundAdd:     true,
+    balanceVisible:!isFree,
+    contactAdd:    !isFree,
+    maxVaultDocs:  (isPremium||isTrial) ? Infinity : 0,   // Coffre-fort : Premium + Bêta/trial
+    maxStorageMB:   isPremium ? 500 : isTrial ? 50 : 5,   // Stockage total : Premium 500 Mo · Trial 50 Mo · Freemium 5 Mo
+    maxVaultSizeGB: isPremium ? 500/1024 : isTrial ? 50/1024 : 5/1024, // dérivé de maxStorageMB
+    canSpin:       !isFree,
+    spinWinSub:    isPremium,
+  };
+}
+function isAdmin(user) { return user?.role==="admin"; }
+
+// ─── BÊTA GRATUITE — Premium offert jusqu'au 30 septembre 2026 ────────────────
+const BETA_END = new Date("2026-10-01T00:00:00"); // 1er octobre = fin bêta
+// Âge du consentement numérique : 15 ans en France (RGPD art. 8, transposé par
+// la loi Informatique et Libertés). En dessous, le consentement d'un titulaire
+// de l'autorité parentale est requis.
+const RGPD_CONSENT_AGE = 15;
+function isBeta() { return Date.now() < BETA_END.getTime(); }
+const BETA_DAYS_LEFT = () => Math.max(0, Math.ceil((BETA_END - Date.now()) / 86400000));
+
+// ─── DATA ─────────────────────────────────────────────────────────────────────
+// 🔧 L'admin n'est plus un compte local codé en dur (faille de sécurité :
+// le mot de passe était visible par n'importe qui dans le code envoyé au
+// navigateur). L'admin est maintenant un vrai compte Supabase Auth, vérifié
+// côté serveur via la table app_admins (voir doLogin et 0003_app_admins.sql).
+const DEMO_USERS = [];
+
+const ZONE_ACADEMIES = {
+  A:"Besançon, Bordeaux, Clermont-Ferrand, Dijon, Grenoble, Limoges, Lyon, Poitiers",
+  B:"Aix-Marseille, Amiens, Caen, Lille, Nancy-Metz, Nantes, Nice, Orléans-Tours, Reims, Rennes, Rouen, Strasbourg",
+  C:"Créteil, Montpellier, Paris, Toulouse, Versailles",
+};
+
+function schoolYearStart() { const n=new Date(); return n.getMonth()>=8?n.getFullYear():n.getFullYear()-1; }
+
+// ─── COUNTRIES ────────────────────────────────────────────────────────────────
+const COUNTRIES = [
+  {code:"FR", flag:"🇫🇷", name:"France",         ohCode:"FR"},
+  {code:"BE", flag:"🇧🇪", name:"Belgique",        ohCode:"BE"},
+  {code:"CH", flag:"🇨🇭", name:"Suisse",          ohCode:"CH"},
+  {code:"LU", flag:"🇱🇺", name:"Luxembourg",      ohCode:"LU"},
+  {code:"DE", flag:"🇩🇪", name:"Deutschland",     ohCode:"DE"},
+  {code:"AT", flag:"🇦🇹", name:"Österreich",      ohCode:"AT"},
+  {code:"NL", flag:"🇳🇱", name:"Nederland",       ohCode:"NL"},
+  {code:"ES", flag:"🇪🇸", name:"España",          ohCode:"ES"},
+  {code:"PT", flag:"🇵🇹", name:"Portugal",        ohCode:"PT"},
+  {code:"IT", flag:"🇮🇹", name:"Italia",          ohCode:"IT"},
+  {code:"GB", flag:"🇬🇧", name:"United Kingdom",  ohCode:"GB"},
+  {code:"PL", flag:"🇵🇱", name:"Polska",          ohCode:"PL"},
+  {code:"CZ", flag:"🇨🇿", name:"Česká republika", ohCode:"CZ"},
+  {code:"SK", flag:"🇸🇰", name:"Slovensko",       ohCode:"SK"},
+  {code:"HR", flag:"🇭🇷", name:"Hrvatska",        ohCode:"HR"},
+  {code:"CA", flag:"🇨🇦", name:"Canada (QC)",     ohCode:null},
+];
+
+// ─── OPENHOLIDAYS API ─────────────────────────────────────────────────────────
+// https://openholidaysapi.org
+const OH_BASE = "https://openholidaysapi.org";
+
+// Full subdivisions catalog per country
+// Each entry: { code, label } — used for the zone picker UI + API calls
+const OH_SUBS_CATALOG = {
+  FR: [
+    {code:"FR-ARA", label:"Zone A — Auvergne-Rhône-Alpes"},
+    {code:"FR-BRE", label:"Zone B — Bretagne"},
+    {code:"FR-COR", label:"Zone B — Corse"},
+    {code:"FR-GES", label:"Zone B — Grand Est"},
+    {code:"FR-HDF", label:"Zone B — Hauts-de-France"},
+    {code:"FR-HNO", label:"Zone A — Hauts-Normandie"},
+    {code:"FR-IDF", label:"Zone C — Île-de-France"},
+    {code:"FR-NAQ", label:"Zone A — Nouvelle-Aquitaine"},
+    {code:"FR-NOR", label:"Zone B — Normandie"},
+    {code:"FR-OCC", label:"Zone C — Occitanie"},
+    {code:"FR-PAC", label:"Zone B — Provence-Alpes-Côte d'Azur"},
+    {code:"FR-PDL", label:"Zone B — Pays de la Loire"},
+  ],
+  DE: [
+    {code:"DE-BB", label:"Brandenburg"},
+    {code:"DE-BE", label:"Berlin"},
+    {code:"DE-BW", label:"Baden-Württemberg"},
+    {code:"DE-BY", label:"Bayern"},
+    {code:"DE-HB", label:"Bremen"},
+    {code:"DE-HE", label:"Hessen"},
+    {code:"DE-HH", label:"Hamburg"},
+    {code:"DE-MV", label:"Mecklenburg-Vorpommern"},
+    {code:"DE-NI", label:"Niedersachsen"},
+    {code:"DE-NW", label:"Nordrhein-Westfalen"},
+    {code:"DE-RP", label:"Rheinland-Pfalz"},
+    {code:"DE-SH", label:"Schleswig-Holstein"},
+    {code:"DE-SL", label:"Saarland"},
+    {code:"DE-SN", label:"Sachsen"},
+    {code:"DE-ST", label:"Sachsen-Anhalt"},
+    {code:"DE-TH", label:"Thüringen"},
+  ],
+  AT: [
+    {code:"AT-1", label:"Burgenland"},
+    {code:"AT-2", label:"Kärnten"},
+    {code:"AT-3", label:"Niederösterreich"},
+    {code:"AT-4", label:"Oberösterreich"},
+    {code:"AT-5", label:"Salzburg"},
+    {code:"AT-6", label:"Steiermark"},
+    {code:"AT-7", label:"Tirol"},
+    {code:"AT-8", label:"Vorarlberg"},
+    {code:"AT-9", label:"Wien"},
+  ],
+  CH: [
+    {code:"CH-AG", label:"Aargau"},
+    {code:"CH-BE", label:"Bern"},
+    {code:"CH-BL", label:"Basel-Landschaft"},
+    {code:"CH-BS", label:"Basel-Stadt"},
+    {code:"CH-FR", label:"Fribourg"},
+    {code:"CH-GE", label:"Genève"},
+    {code:"CH-GL", label:"Glarus"},
+    {code:"CH-GR", label:"Graubünden"},
+    {code:"CH-JU", label:"Jura"},
+    {code:"CH-LU", label:"Luzern"},
+    {code:"CH-NE", label:"Neuchâtel"},
+    {code:"CH-NW", label:"Nidwalden"},
+    {code:"CH-OW", label:"Obwalden"},
+    {code:"CH-SG", label:"St. Gallen"},
+    {code:"CH-SH", label:"Schaffhausen"},
+    {code:"CH-SO", label:"Solothurn"},
+    {code:"CH-SZ", label:"Schwyz"},
+    {code:"CH-TG", label:"Thurgau"},
+    {code:"CH-TI", label:"Ticino"},
+    {code:"CH-UR", label:"Uri"},
+    {code:"CH-VD", label:"Vaud"},
+    {code:"CH-VS", label:"Valais"},
+    {code:"CH-ZG", label:"Zug"},
+    {code:"CH-ZH", label:"Zürich"},
+  ],
+  GB: [
+    {code:"GB-ENG", label:"England"},
+    {code:"GB-NIR", label:"Northern Ireland"},
+    {code:"GB-SCT", label:"Scotland"},
+    {code:"GB-WLS", label:"Wales"},
+  ],
+  ES: [
+    {code:"ES-AN", label:"Andalucía"},
+    {code:"ES-AR", label:"Aragón"},
+    {code:"ES-AS", label:"Asturias"},
+    {code:"ES-CB", label:"Cantabria"},
+    {code:"ES-CL", label:"Castilla y León"},
+    {code:"ES-CM", label:"Castilla-La Mancha"},
+    {code:"ES-CN", label:"Canarias"},
+    {code:"ES-CT", label:"Catalunya"},
+    {code:"ES-EX", label:"Extremadura"},
+    {code:"ES-GA", label:"Galicia"},
+    {code:"ES-IB", label:"Illes Balears"},
+    {code:"ES-MC", label:"Murcia"},
+    {code:"ES-MD", label:"Madrid"},
+    {code:"ES-NC", label:"Navarra"},
+    {code:"ES-PV", label:"País Vasco"},
+    {code:"ES-RI", label:"La Rioja"},
+    {code:"ES-VC", label:"Valencia"},
+  ],
+  BE: [
+    {code:"BE-BRU", label:"Bruxelles-Capitale"},
+    {code:"BE-VAN", label:"Flandre"},
+    {code:"BE-WAL", label:"Wallonie"},
+  ],
+  NL: [
+    {code:"NL-DR", label:"Drenthe"},
+    {code:"NL-FL", label:"Flevoland"},
+    {code:"NL-FR", label:"Friesland"},
+    {code:"NL-GE", label:"Gelderland"},
+    {code:"NL-GR", label:"Groningen"},
+    {code:"NL-LI", label:"Limburg"},
+    {code:"NL-NB", label:"Noord-Brabant"},
+    {code:"NL-NH", label:"Noord-Holland"},
+    {code:"NL-OV", label:"Overijssel"},
+    {code:"NL-UT", label:"Utrecht"},
+    {code:"NL-ZE", label:"Zeeland"},
+    {code:"NL-ZH", label:"Zuid-Holland"},
+  ],
+  IT: [
+    {code:"IT-21", label:"Piemonte"},
+    {code:"IT-23", label:"Valle d'Aosta"},
+    {code:"IT-25", label:"Lombardia"},
+    {code:"IT-32", label:"Trentino-Alto Adige"},
+    {code:"IT-34", label:"Veneto"},
+    {code:"IT-36", label:"Friuli-Venezia Giulia"},
+    {code:"IT-42", label:"Liguria"},
+    {code:"IT-45", label:"Emilia-Romagna"},
+    {code:"IT-52", label:"Toscana"},
+    {code:"IT-55", label:"Umbria"},
+    {code:"IT-57", label:"Marche"},
+    {code:"IT-62", label:"Lazio"},
+    {code:"IT-65", label:"Abruzzo"},
+    {code:"IT-67", label:"Molise"},
+    {code:"IT-72", label:"Campania"},
+    {code:"IT-75", label:"Puglia"},
+    {code:"IT-77", label:"Basilicata"},
+    {code:"IT-78", label:"Calabria"},
+    {code:"IT-82", label:"Sicilia"},
+    {code:"IT-88", label:"Sardegna"},
+  ],
+  PL: [
+    {code:"PL-02", label:"Dolnośląskie"},
+    {code:"PL-04", label:"Kujawsko-Pomorskie"},
+    {code:"PL-06", label:"Lubelskie"},
+    {code:"PL-08", label:"Lubuskie"},
+    {code:"PL-10", label:"Łódzkie"},
+    {code:"PL-12", label:"Małopolskie"},
+    {code:"PL-14", label:"Mazowieckie"},
+    {code:"PL-16", label:"Opolskie"},
+    {code:"PL-18", label:"Podkarpackie"},
+    {code:"PL-20", label:"Podlaskie"},
+    {code:"PL-22", label:"Pomorskie"},
+    {code:"PL-24", label:"Śląskie"},
+    {code:"PL-26", label:"Świętokrzyskie"},
+    {code:"PL-28", label:"Warmińsko-Mazurskie"},
+    {code:"PL-30", label:"Wielkopolskie"},
+    {code:"PL-32", label:"Zachodniopomorskie"},
+  ],
+  // Single subdivision countries (no picker needed)
+  LU: [{code:"LU-L", label:"Luxembourg"}],
+  PT: [{code:"PT-11", label:"Portugal"}],
+  CZ: [{code:"CZ-10", label:"Česká republika"}],
+  SK: [{code:"SK-BL", label:"Slovensko"}],
+  HR: [{code:"HR-21", label:"Hrvatska"}],
+};
+
+// Returns the default subdivision code for a country (first in list)
+function getDefaultSub(country) {
+  const subs = OH_SUBS_CATALOG[country];
+  return subs?.[0]?.code || null;
+}
+
+// Returns whether a country has multiple zones to choose from
+function hasMultipleZones(country) {
+  return (OH_SUBS_CATALOG[country]?.length || 0) > 1;
+}
+
+// In-memory cache: key → { schoolHols, publicHols, ts }
+const OH_CACHE = {};
+function ohCacheKey(country, zone, year) { return `${country}|${zone||""}|${year}`; }
+
+async function fetchOHSchoolHols(country, zone, year) {
+  // zone is a full subdivisionCode e.g. "FR-IDF", "DE-BY"
+  const sub = zone || getDefaultSub(country);
+  if (!sub) return null;
+  try {
+    const url = `${OH_BASE}/SchoolHolidays?countryIsoCode=${country}&subdivisionCode=${sub}&validFrom=${year}-01-01&validTo=${year+1}-12-31&languageIsoCode=FR`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data||[]).map(h => ({
+      n: (h.name||[]).find(x=>x.language==="FR")?.text || (h.name||[])[0]?.text || h.id,
+      s: h.startDate.slice(0,10),
+      e: h.endDate.slice(0,10),
+    }));
+  } catch { return null; }
+}
+
+async function fetchOHPublicHols(country, year) {
+  if (!COUNTRIES.find(c=>c.code===country)?.ohCode) return null;
+  try {
+    const url = `${OH_BASE}/PublicHolidays?countryIsoCode=${country}&validFrom=${year}-01-01&validTo=${year}-12-31&languageIsoCode=FR`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data||[]).map(h => ({
+      date: h.startDate.slice(0,10),
+      n: (h.name||[]).find(x=>x.language==="FR")?.text || (h.name||[])[0]?.text || h.id,
+    }));
+  } catch { return null; }
+}
+
+async function fetchOHData(country, zone, year) {
+  const key = ohCacheKey(country, zone, year);
+  if (OH_CACHE[key]) return OH_CACHE[key];
+  const [schoolHols, publicHols] = await Promise.all([
+    fetchOHSchoolHols(country, zone, year),
+    fetchOHPublicHols(country, year),
+  ]);
+  const result = { schoolHols, publicHols, ts: Date.now() };
+  OH_CACHE[key] = result;
+  return result;
+}
+
+// ─── STATIC FALLBACK (countries not covered by OpenHolidays, or API failure) ──
+const STATIC_SCHOOL_HOLS = {
+  CA:[{n:"Noël 2025",s:"2025-12-22",e:"2026-01-04"},{n:"Relâche 2026",s:"2026-03-02",e:"2026-03-06"},{n:"Pâques 2026",s:"2026-04-03",e:"2026-04-10"},{n:"Été 2026",s:"2026-06-26",e:"2026-09-07"},{n:"Noël 2026",s:"2026-12-21",e:"2027-01-03"}],
+  // Fallbacks pour pays couverts par OpenHolidays (si API indisponible)
+  DE:[{n:"Weihnachten 2025",s:"2025-12-22",e:"2026-01-05"},{n:"Winterferien 2026",s:"2026-02-02",e:"2026-02-15"},{n:"Osterferien 2026",s:"2026-03-28",e:"2026-04-10"},{n:"Sommerferien 2026",s:"2026-06-22",e:"2026-08-01"},{n:"Herbstferien 2026",s:"2026-10-26",e:"2026-11-06"},{n:"Weihnachten 2026",s:"2026-12-21",e:"2027-01-03"}],
+  ES:[{n:"Navidad 2025",s:"2025-12-22",e:"2026-01-07"},{n:"Semana Santa 2026",s:"2026-03-28",e:"2026-04-05"},{n:"Verano 2026",s:"2026-06-22",e:"2026-09-13"},{n:"Navidad 2026",s:"2026-12-21",e:"2027-01-06"}],
+  BE:[{n:"Vacances Noël 2025",s:"2025-12-22",e:"2026-01-04"},{n:"Carnaval 2026",s:"2026-03-02",e:"2026-03-13"},{n:"Pâques 2026",s:"2026-04-04",e:"2026-04-19"},{n:"Été 2026",s:"2026-07-01",e:"2026-08-31"},{n:"Toussaint 2026",s:"2026-10-26",e:"2026-11-06"},{n:"Noël 2026",s:"2026-12-21",e:"2027-01-03"}],
+  CH:[{n:"Weihnachten 2025",s:"2025-12-22",e:"2026-01-04"},{n:"Sportferien 2026",s:"2026-02-09",e:"2026-02-22"},{n:"Osterferien 2026",s:"2026-04-04",e:"2026-04-19"},{n:"Sommerferien 2026",s:"2026-07-06",e:"2026-08-16"},{n:"Herbstferien 2026",s:"2026-10-05",e:"2026-10-18"},{n:"Weihnachten 2026",s:"2026-12-21",e:"2027-01-03"}],
+  GB:[{n:"Christmas 2025",s:"2025-12-20",e:"2026-01-04"},{n:"Half-term Feb 2026",s:"2026-02-16",e:"2026-02-22"},{n:"Easter 2026",s:"2026-04-04",e:"2026-04-19"},{n:"Summer 2026",s:"2026-07-20",e:"2026-09-06"},{n:"Half-term Oct 2026",s:"2026-10-26",e:"2026-11-01"},{n:"Christmas 2026",s:"2026-12-19",e:"2027-01-03"}],
+  NL:[{n:"Kerstvakantie 2025",s:"2025-12-22",e:"2026-01-04"},{n:"Voorjaarsvakantie 2026",s:"2026-02-23",e:"2026-03-01"},{n:"Meivakantie 2026",s:"2026-04-25",e:"2026-05-10"},{n:"Zomervakantie 2026",s:"2026-07-13",e:"2026-08-23"},{n:"Herfstvakantie 2026",s:"2026-10-19",e:"2026-10-25"},{n:"Kerstvakantie 2026",s:"2026-12-21",e:"2027-01-03"}],
+  AT:[{n:"Weihnachten 2025",s:"2025-12-24",e:"2026-01-06"},{n:"Semesterferien 2026",s:"2026-02-09",e:"2026-02-13"},{n:"Osterferien 2026",s:"2026-04-01",e:"2026-04-12"},{n:"Sommerferien 2026",s:"2026-06-27",e:"2026-09-06"},{n:"Herbstferien 2026",s:"2026-10-24",e:"2026-10-27"},{n:"Weihnachten 2026",s:"2026-12-24",e:"2027-01-06"}],
+  IT:[{n:"Natale 2025",s:"2025-12-20",e:"2026-01-07"},{n:"Carnevale 2026",s:"2026-02-16",e:"2026-02-17"},{n:"Pasqua 2026",s:"2026-04-02",e:"2026-04-07"},{n:"Estate 2026",s:"2026-06-13",e:"2026-09-13"},{n:"Natale 2026",s:"2026-12-20",e:"2027-01-07"}],
+  PT:[{n:"Natal 2025",s:"2025-12-20",e:"2026-01-04"},{n:"Carnaval 2026",s:"2026-03-03",e:"2026-03-04"},{n:"Páscoa 2026",s:"2026-03-28",e:"2026-04-05"},{n:"Verão 2026",s:"2026-06-22",e:"2026-09-13"},{n:"Todos os Santos 2026",s:"2026-10-31",e:"2026-11-02"},{n:"Natal 2026",s:"2026-12-19",e:"2027-01-04"}],
+  LU:[{n:"Noël 2025",s:"2025-12-20",e:"2026-01-04"},{n:"Carnaval 2026",s:"2026-02-28",e:"2026-03-01"},{n:"Pâques 2026",s:"2026-04-04",e:"2026-04-19"},{n:"Été 2026",s:"2026-07-15",e:"2026-09-14"},{n:"Toussaint 2026",s:"2026-10-17",e:"2026-11-01"},{n:"Noël 2026",s:"2026-12-19",e:"2027-01-04"}],
+  PL:[{n:"Boże Narodzenie 2025",s:"2025-12-23",e:"2026-01-04"},{n:"Ferie zimowe 2026",s:"2026-01-17",e:"2026-02-01"},{n:"Wielkanoc 2026",s:"2026-04-09",e:"2026-04-14"},{n:"Wakacje 2026",s:"2026-06-27",e:"2026-08-31"},{n:"Przerwa jesienna 2026",s:"2026-10-31",e:"2026-11-01"},{n:"Boże Narodzenie 2026",s:"2026-12-22",e:"2027-01-03"}],
+  CZ:[{n:"Vánoce 2025",s:"2025-12-22",e:"2026-01-02"},{n:"Jarní prázdniny 2026",s:"2026-03-02",e:"2026-03-06"},{n:"Velikonoce 2026",s:"2026-04-02",e:"2026-04-07"},{n:"Léto 2026",s:"2026-06-29",e:"2026-08-31"},{n:"Vánoce 2026",s:"2026-12-21",e:"2027-01-02"}],
+  SK:[{n:"Vianoce 2025",s:"2025-12-22",e:"2026-01-07"},{n:"Jarné 2026",s:"2026-04-02",e:"2026-04-09"},{n:"Léto 2026",s:"2026-06-29",e:"2026-08-31"},{n:"Jeseň 2026",s:"2026-10-26",e:"2026-10-30"},{n:"Vianoce 2026",s:"2026-12-21",e:"2027-01-07"}],
+  HR:[{n:"Božić 2025",s:"2025-12-22",e:"2026-01-07"},{n:"Uskrs 2026",s:"2026-04-02",e:"2026-04-07"},{n:"Ljeto 2026",s:"2026-06-15",e:"2026-09-06"},{n:"Božić 2026",s:"2026-12-21",e:"2027-01-07"}],
+};
+const STATIC_PUBLIC_HOLS = {
+  // Pays non couverts par OpenHolidays
+  CA:[{date:"2026-01-01",n:"Jour de l'An"},{date:"2026-02-16",n:"Family Day"},{date:"2026-04-03",n:"Vendredi Saint"},{date:"2026-05-18",n:"Fête de la Reine"},{date:"2026-07-01",n:"Fête du Canada"},{date:"2026-09-07",n:"Fête du Travail"},{date:"2026-10-12",n:"Action de grâces"},{date:"2026-11-11",n:"Jour du Souvenir"},{date:"2026-12-25",n:"Noël"},{date:"2026-12-26",n:"Lendemain de Noël"}],
+  // Fallbacks pour pays couverts par OpenHolidays (si API indisponible)
+  FR:[{date:"2026-01-01",n:"Jour de l'An"},{date:"2026-04-06",n:"Lundi de Pâques"},{date:"2026-05-01",n:"Fête du Travail"},{date:"2026-05-08",n:"Victoire 1945"},{date:"2026-05-14",n:"Ascension"},{date:"2026-05-25",n:"Lundi de Pentecôte"},{date:"2026-07-14",n:"Fête Nationale"},{date:"2026-08-15",n:"Assomption"},{date:"2026-11-01",n:"Toussaint"},{date:"2026-11-11",n:"Armistice"},{date:"2026-12-25",n:"Noël"}],
+  DE:[{date:"2026-01-01",n:"Neujahr"},{date:"2026-01-06",n:"Heilige Drei Könige"},{date:"2026-04-03",n:"Karfreitag"},{date:"2026-04-06",n:"Ostermontag"},{date:"2026-05-01",n:"Tag der Arbeit"},{date:"2026-05-14",n:"Christi Himmelfahrt"},{date:"2026-05-25",n:"Pfingstmontag"},{date:"2026-10-03",n:"Tag der Deutschen Einheit"},{date:"2026-12-25",n:"1. Weihnachtstag"},{date:"2026-12-26",n:"2. Weihnachtstag"}],
+  ES:[{date:"2026-01-01",n:"Año Nuevo"},{date:"2026-01-06",n:"Reyes Magos"},{date:"2026-04-03",n:"Viernes Santo"},{date:"2026-05-01",n:"Día del Trabajo"},{date:"2026-08-15",n:"Asunción"},{date:"2026-10-12",n:"Fiesta Nacional"},{date:"2026-11-01",n:"Todos los Santos"},{date:"2026-12-06",n:"Día de la Constitución"},{date:"2026-12-08",n:"Inmaculada Concepción"},{date:"2026-12-25",n:"Navidad"}],
+  BE:[{date:"2026-01-01",n:"Jour de l'An"},{date:"2026-04-06",n:"Lundi de Pâques"},{date:"2026-05-01",n:"Fête du Travail"},{date:"2026-05-14",n:"Ascension"},{date:"2026-05-25",n:"Lundi de Pentecôte"},{date:"2026-07-21",n:"Fête Nationale"},{date:"2026-08-15",n:"Assomption"},{date:"2026-11-01",n:"Toussaint"},{date:"2026-11-11",n:"Armistice"},{date:"2026-12-25",n:"Noël"}],
+  CH:[{date:"2026-01-01",n:"Neujahr"},{date:"2026-04-03",n:"Karfreitag"},{date:"2026-04-06",n:"Ostermontag"},{date:"2026-05-01",n:"Tag der Arbeit"},{date:"2026-05-14",n:"Auffahrt"},{date:"2026-05-25",n:"Pfingstmontag"},{date:"2026-08-01",n:"Nationalfeiertag"},{date:"2026-12-25",n:"Weihnachten"},{date:"2026-12-26",n:"Stephanstag"}],
+  AT:[{date:"2026-01-01",n:"Neujahr"},{date:"2026-01-06",n:"Heilige Drei Könige"},{date:"2026-04-06",n:"Ostermontag"},{date:"2026-05-01",n:"Staatsfeiertag"},{date:"2026-05-14",n:"Christi Himmelfahrt"},{date:"2026-05-25",n:"Pfingstmontag"},{date:"2026-06-04",n:"Fronleichnam"},{date:"2026-08-15",n:"Mariä Himmelfahrt"},{date:"2026-10-26",n:"Nationalfeiertag"},{date:"2026-11-01",n:"Allerheiligen"},{date:"2026-12-08",n:"Mariä Empfängnis"},{date:"2026-12-25",n:"Christtag"},{date:"2026-12-26",n:"Stefanitag"}],
+  GB:[{date:"2026-01-01",n:"New Year's Day"},{date:"2026-04-03",n:"Good Friday"},{date:"2026-04-06",n:"Easter Monday"},{date:"2026-05-04",n:"Early May Bank Holiday"},{date:"2026-05-25",n:"Spring Bank Holiday"},{date:"2026-08-31",n:"Summer Bank Holiday"},{date:"2026-12-25",n:"Christmas Day"},{date:"2026-12-28",n:"Boxing Day"}],
+  NL:[{date:"2026-01-01",n:"Nieuwjaarsdag"},{date:"2026-04-03",n:"Goede Vrijdag"},{date:"2026-04-05",n:"Eerste Paasdag"},{date:"2026-04-06",n:"Tweede Paasdag"},{date:"2026-04-27",n:"Koningsdag"},{date:"2026-05-05",n:"Bevrijdingsdag"},{date:"2026-05-14",n:"Hemelvaartsdag"},{date:"2026-05-24",n:"Eerste Pinksterdag"},{date:"2026-05-25",n:"Tweede Pinksterdag"},{date:"2026-12-25",n:"Eerste Kerstdag"},{date:"2026-12-26",n:"Tweede Kerstdag"}],
+  IT:[{date:"2026-01-01",n:"Capodanno"},{date:"2026-01-06",n:"Epifania"},{date:"2026-04-05",n:"Pasqua"},{date:"2026-04-06",n:"Lunedì dell'Angelo"},{date:"2026-04-25",n:"Festa della Liberazione"},{date:"2026-05-01",n:"Festa del Lavoro"},{date:"2026-06-02",n:"Festa della Repubblica"},{date:"2026-08-15",n:"Ferragosto"},{date:"2026-11-01",n:"Ognissanti"},{date:"2026-12-08",n:"Immacolata Concezione"},{date:"2026-12-25",n:"Natale"},{date:"2026-12-26",n:"Santo Stefano"}],
+  PT:[{date:"2026-01-01",n:"Ano Novo"},{date:"2026-02-17",n:"Terça-feira de Carnaval"},{date:"2026-04-03",n:"Sexta-feira Santa"},{date:"2026-04-05",n:"Páscoa"},{date:"2026-04-25",n:"Dia da Liberdade"},{date:"2026-05-01",n:"Dia do Trabalho"},{date:"2026-06-10",n:"Dia de Portugal"},{date:"2026-08-15",n:"Assunção"},{date:"2026-10-05",n:"Implantação da República"},{date:"2026-11-01",n:"Todos-os-Santos"},{date:"2026-12-01",n:"Restauração da Independência"},{date:"2026-12-08",n:"Imaculada Conceição"},{date:"2026-12-25",n:"Natal"}],
+  LU:[{date:"2026-01-01",n:"Nouvel An"},{date:"2026-04-06",n:"Lundi de Pâques"},{date:"2026-05-01",n:"Fête du Travail"},{date:"2026-05-14",n:"Ascension"},{date:"2026-05-25",n:"Lundi de Pentecôte"},{date:"2026-06-23",n:"Fête Nationale"},{date:"2026-08-15",n:"Assomption"},{date:"2026-11-01",n:"Toussaint"},{date:"2026-12-25",n:"Noël"},{date:"2026-12-26",n:"Saint-Étienne"}],
+  PL:[{date:"2026-01-01",n:"Nowy Rok"},{date:"2026-01-06",n:"Trzech Króli"},{date:"2026-04-05",n:"Niedziela Wielkanocna"},{date:"2026-04-06",n:"Poniedziałek Wielkanocny"},{date:"2026-05-01",n:"Święto Pracy"},{date:"2026-05-03",n:"Konstytucji 3 Maja"},{date:"2026-05-24",n:"Zielone Świątki"},{date:"2026-06-04",n:"Boże Ciało"},{date:"2026-08-15",n:"Wniebowzięcie NMP"},{date:"2026-11-01",n:"Wszystkich Świętych"},{date:"2026-11-11",n:"Święto Niepodległości"},{date:"2026-12-25",n:"Boże Narodzenie"},{date:"2026-12-26",n:"Drugi dzień Bożego Narodzenia"}],
+  CZ:[{date:"2026-01-01",n:"Nový rok"},{date:"2026-04-03",n:"Velký pátek"},{date:"2026-04-06",n:"Velikonoční pondělí"},{date:"2026-05-01",n:"Svátek práce"},{date:"2026-05-08",n:"Den vítězství"},{date:"2026-07-05",n:"Den slovanských věrozvěstů"},{date:"2026-07-06",n:"Den upálení Mistra Jana Husa"},{date:"2026-09-28",n:"Den české státnosti"},{date:"2026-10-28",n:"Den vzniku Československa"},{date:"2026-11-17",n:"Den boje za svobodu"},{date:"2026-12-24",n:"Štědrý den"},{date:"2026-12-25",n:"1. svátek vánoční"},{date:"2026-12-26",n:"2. svátek vánoční"}],
+  SK:[{date:"2026-01-01",n:"Nový rok"},{date:"2026-01-06",n:"Traja králi"},{date:"2026-04-03",n:"Veľký piatok"},{date:"2026-04-06",n:"Veľkonočný pondelok"},{date:"2026-05-01",n:"Sviatok práce"},{date:"2026-05-08",n:"Deň víťazstva"},{date:"2026-07-05",n:"Cyril a Metod"},{date:"2026-08-29",n:"SNP"},{date:"2026-09-01",n:"Ústava SR"},{date:"2026-09-15",n:"Sedembolestná Panna Mária"},{date:"2026-11-01",n:"Sviatok všetkých svätých"},{date:"2026-11-17",n:"Deň boja za slobodu"},{date:"2026-12-24",n:"Štedrý deň"},{date:"2026-12-25",n:"Vianoce"},{date:"2026-12-26",n:"Štefan"}],
+  HR:[{date:"2026-01-01",n:"Nova godina"},{date:"2026-01-06",n:"Sveta tri kralja"},{date:"2026-04-05",n:"Uskrs"},{date:"2026-04-06",n:"Uskrsni ponedjeljak"},{date:"2026-05-01",n:"Praznik rada"},{date:"2026-05-30",n:"Dan državnosti"},{date:"2026-06-04",n:"Tijelovo"},{date:"2026-06-22",n:"Dan antifašizma"},{date:"2026-08-05",n:"Dan domovinske zahvalnosti"},{date:"2026-08-15",n:"Velika Gospa"},{date:"2026-11-01",n:"Svi sveti"},{date:"2026-11-18",n:"Dan sjećanja"},{date:"2026-12-25",n:"Božić"},{date:"2026-12-26",n:"Sveti Stjepan"}],
+};
+
+// Helpers that read apiData prop (merged school+public hols from App)
+// Vacances FR statiques par zone (fallback quand l'API n'a pas encore répondu)
+const FR_STATIC_HOLS = {
+  "FR-ARA":[
+    {n:"Toussaint 2025",s:"2025-10-18",e:"2025-11-03"},
+    {n:"Noël 2025",s:"2025-12-20",e:"2026-01-05"},
+    {n:"Hiver 2026",s:"2026-02-07",e:"2026-02-23"},
+    {n:"Printemps 2026",s:"2026-04-04",e:"2026-04-20"},
+    {n:"Été 2026",s:"2026-07-05",e:"2026-09-01"},
+    {n:"Toussaint 2026",s:"2026-10-17",e:"2026-11-02"},
+    {n:"Noël 2026",s:"2026-12-19",e:"2027-01-04"},
+    {n:"Hiver 2027",s:"2027-02-13",e:"2027-03-01"},
+    {n:"Printemps 2027",s:"2027-04-10",e:"2027-04-26"},
+    {n:"Été 2027",s:"2027-07-04",e:"2027-09-01"},
+  ],
+  "FR-BRE":[
+    {n:"Toussaint 2025",s:"2025-10-18",e:"2025-11-03"},
+    {n:"Noël 2025",s:"2025-12-20",e:"2026-01-05"},
+    {n:"Hiver 2026",s:"2026-02-14",e:"2026-03-02"},
+    {n:"Printemps 2026",s:"2026-04-11",e:"2026-04-27"},
+    {n:"Été 2026",s:"2026-07-05",e:"2026-09-01"},
+    {n:"Toussaint 2026",s:"2026-10-17",e:"2026-11-02"},
+    {n:"Noël 2026",s:"2026-12-19",e:"2027-01-04"},
+    {n:"Hiver 2027",s:"2027-02-20",e:"2027-03-08"},
+    {n:"Printemps 2027",s:"2027-04-17",e:"2027-05-03"},
+    {n:"Été 2027",s:"2027-07-04",e:"2027-09-01"},
+  ],
+  "FR-COR":[
+    {n:"Toussaint 2025",s:"2025-10-18",e:"2025-11-03"},
+    {n:"Noël 2025",s:"2025-12-20",e:"2026-01-05"},
+    {n:"Hiver 2026",s:"2026-02-14",e:"2026-03-02"},
+    {n:"Printemps 2026",s:"2026-04-11",e:"2026-04-27"},
+    {n:"Été 2026",s:"2026-07-05",e:"2026-09-01"},
+    {n:"Toussaint 2026",s:"2026-10-17",e:"2026-11-02"},
+    {n:"Noël 2026",s:"2026-12-19",e:"2027-01-04"},
+    {n:"Hiver 2027",s:"2027-02-20",e:"2027-03-08"},
+    {n:"Printemps 2027",s:"2027-04-17",e:"2027-05-03"},
+    {n:"Été 2027",s:"2027-07-04",e:"2027-09-01"},
+  ],
+  "FR-GES":[
+    {n:"Toussaint 2025",s:"2025-10-18",e:"2025-11-03"},
+    {n:"Noël 2025",s:"2025-12-20",e:"2026-01-05"},
+    {n:"Hiver 2026",s:"2026-02-14",e:"2026-03-02"},
+    {n:"Printemps 2026",s:"2026-04-11",e:"2026-04-27"},
+    {n:"Été 2026",s:"2026-07-05",e:"2026-09-01"},
+    {n:"Toussaint 2026",s:"2026-10-17",e:"2026-11-02"},
+    {n:"Noël 2026",s:"2026-12-19",e:"2027-01-04"},
+    {n:"Hiver 2027",s:"2027-02-20",e:"2027-03-08"},
+    {n:"Printemps 2027",s:"2027-04-17",e:"2027-05-03"},
+    {n:"Été 2027",s:"2027-07-04",e:"2027-09-01"},
+  ],
+  "FR-HDF":[
+    {n:"Toussaint 2025",s:"2025-10-18",e:"2025-11-03"},
+    {n:"Noël 2025",s:"2025-12-20",e:"2026-01-05"},
+    {n:"Hiver 2026",s:"2026-02-14",e:"2026-03-02"},
+    {n:"Printemps 2026",s:"2026-04-11",e:"2026-04-27"},
+    {n:"Été 2026",s:"2026-07-05",e:"2026-09-01"},
+    {n:"Toussaint 2026",s:"2026-10-17",e:"2026-11-02"},
+    {n:"Noël 2026",s:"2026-12-19",e:"2027-01-04"},
+    {n:"Hiver 2027",s:"2027-02-20",e:"2027-03-08"},
+    {n:"Printemps 2027",s:"2027-04-17",e:"2027-05-03"},
+    {n:"Été 2027",s:"2027-07-04",e:"2027-09-01"},
+  ],
+  "FR-HNO":[
+    {n:"Toussaint 2025",s:"2025-10-18",e:"2025-11-03"},
+    {n:"Noël 2025",s:"2025-12-20",e:"2026-01-05"},
+    {n:"Hiver 2026",s:"2026-02-07",e:"2026-02-23"},
+    {n:"Printemps 2026",s:"2026-04-04",e:"2026-04-20"},
+    {n:"Été 2026",s:"2026-07-05",e:"2026-09-01"},
+    {n:"Toussaint 2026",s:"2026-10-17",e:"2026-11-02"},
+    {n:"Noël 2026",s:"2026-12-19",e:"2027-01-04"},
+    {n:"Hiver 2027",s:"2027-02-13",e:"2027-03-01"},
+    {n:"Printemps 2027",s:"2027-04-10",e:"2027-04-26"},
+    {n:"Été 2027",s:"2027-07-04",e:"2027-09-01"},
+  ],
+  "FR-IDF":[
+    {n:"Toussaint 2025",s:"2025-10-18",e:"2025-11-03"},
+    {n:"Noël 2025",s:"2025-12-20",e:"2026-01-05"},
+    {n:"Hiver 2026",s:"2026-02-21",e:"2026-03-09"},
+    {n:"Printemps 2026",s:"2026-04-18",e:"2026-05-04"},
+    {n:"Été 2026",s:"2026-07-05",e:"2026-09-01"},
+    {n:"Toussaint 2026",s:"2026-10-17",e:"2026-11-02"},
+    {n:"Noël 2026",s:"2026-12-19",e:"2027-01-04"},
+    {n:"Hiver 2027",s:"2027-02-06",e:"2027-02-22"},
+    {n:"Printemps 2027",s:"2027-04-03",e:"2027-04-19"},
+    {n:"Été 2027",s:"2027-07-04",e:"2027-09-01"},
+  ],
+  "FR-NAQ":[
+    {n:"Toussaint 2025",s:"2025-10-18",e:"2025-11-03"},
+    {n:"Noël 2025",s:"2025-12-20",e:"2026-01-05"},
+    {n:"Hiver 2026",s:"2026-02-07",e:"2026-02-23"},
+    {n:"Printemps 2026",s:"2026-04-04",e:"2026-04-20"},
+    {n:"Été 2026",s:"2026-07-05",e:"2026-09-01"},
+    {n:"Toussaint 2026",s:"2026-10-17",e:"2026-11-02"},
+    {n:"Noël 2026",s:"2026-12-19",e:"2027-01-04"},
+    {n:"Hiver 2027",s:"2027-02-13",e:"2027-03-01"},
+    {n:"Printemps 2027",s:"2027-04-10",e:"2027-04-26"},
+    {n:"Été 2027",s:"2027-07-04",e:"2027-09-01"},
+  ],
+  "FR-NOR":[
+    {n:"Toussaint 2025",s:"2025-10-18",e:"2025-11-03"},
+    {n:"Noël 2025",s:"2025-12-20",e:"2026-01-05"},
+    {n:"Hiver 2026",s:"2026-02-14",e:"2026-03-02"},
+    {n:"Printemps 2026",s:"2026-04-11",e:"2026-04-27"},
+    {n:"Été 2026",s:"2026-07-05",e:"2026-09-01"},
+    {n:"Toussaint 2026",s:"2026-10-17",e:"2026-11-02"},
+    {n:"Noël 2026",s:"2026-12-19",e:"2027-01-04"},
+    {n:"Hiver 2027",s:"2027-02-20",e:"2027-03-08"},
+    {n:"Printemps 2027",s:"2027-04-17",e:"2027-05-03"},
+    {n:"Été 2027",s:"2027-07-04",e:"2027-09-01"},
+  ],
+  "FR-OCC":[
+    {n:"Toussaint 2025",s:"2025-10-18",e:"2025-11-03"},
+    {n:"Noël 2025",s:"2025-12-20",e:"2026-01-05"},
+    {n:"Hiver 2026",s:"2026-02-21",e:"2026-03-09"},
+    {n:"Printemps 2026",s:"2026-04-18",e:"2026-05-04"},
+    {n:"Été 2026",s:"2026-07-05",e:"2026-09-01"},
+    {n:"Toussaint 2026",s:"2026-10-17",e:"2026-11-02"},
+    {n:"Noël 2026",s:"2026-12-19",e:"2027-01-04"},
+    {n:"Hiver 2027",s:"2027-02-06",e:"2027-02-22"},
+    {n:"Printemps 2027",s:"2027-04-03",e:"2027-04-19"},
+    {n:"Été 2027",s:"2027-07-04",e:"2027-09-01"},
+  ],
+  "FR-PAC":[
+    {n:"Toussaint 2025",s:"2025-10-18",e:"2025-11-03"},
+    {n:"Noël 2025",s:"2025-12-20",e:"2026-01-05"},
+    {n:"Hiver 2026",s:"2026-02-14",e:"2026-03-02"},
+    {n:"Printemps 2026",s:"2026-04-11",e:"2026-04-27"},
+    {n:"Été 2026",s:"2026-07-05",e:"2026-09-01"},
+    {n:"Toussaint 2026",s:"2026-10-17",e:"2026-11-02"},
+    {n:"Noël 2026",s:"2026-12-19",e:"2027-01-04"},
+    {n:"Hiver 2027",s:"2027-02-20",e:"2027-03-08"},
+    {n:"Printemps 2027",s:"2027-04-17",e:"2027-05-03"},
+    {n:"Été 2027",s:"2027-07-04",e:"2027-09-01"},
+  ],
+  "FR-PDL":[
+    {n:"Toussaint 2025",s:"2025-10-18",e:"2025-11-03"},
+    {n:"Noël 2025",s:"2025-12-20",e:"2026-01-05"},
+    {n:"Hiver 2026",s:"2026-02-14",e:"2026-03-02"},
+    {n:"Printemps 2026",s:"2026-04-11",e:"2026-04-27"},
+    {n:"Été 2026",s:"2026-07-05",e:"2026-09-01"},
+    {n:"Toussaint 2026",s:"2026-10-17",e:"2026-11-02"},
+    {n:"Noël 2026",s:"2026-12-19",e:"2027-01-04"},
+    {n:"Hiver 2027",s:"2027-02-20",e:"2027-03-08"},
+    {n:"Printemps 2027",s:"2027-04-17",e:"2027-05-03"},
+    {n:"Été 2027",s:"2027-07-04",e:"2027-09-01"},
+  ],
+};
+function getHolsFromData(country, apiData, subdivisionCode) {
+  // 1. API data has priority (live or cached)
+  if (apiData?.schoolHols?.length) return apiData.schoolHols;
+  // 2. Static fallback by subdivision for FR
+  if (country === "FR" && subdivisionCode && FR_STATIC_HOLS[subdivisionCode]) return FR_STATIC_HOLS[subdivisionCode];
+  // 3. Generic static fallback for all countries (DE, ES, BE, CH, GB, PT, etc.)
+  return STATIC_SCHOOL_HOLS[country] || [];
+}
+function getPublicHolName(dateStr, country, apiData) {
+  if (apiData?.publicHols) {
+    const h = (apiData.publicHols||[]).find(h=>h.date===dateStr);
+    return h ? h.n : null;
+  }
+  const h = (STATIC_PUBLIC_HOLS[country]||[]).find(h=>h.date===dateStr);
+  return h ? h.n : null;
+}
+
+// ─── DATE UTILS ───────────────────────────────────────────────────────────────
+const pad = n => String(n).padStart(2,"0");
+function toStr(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function dInMonth(y,m) { return new Date(y,m+1,0).getDate(); }
+function dow(y,m,d) { return (new Date(y,m,d).getDay()+6)%7; }
+function wkNum(date) {
+  const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));
+  d.setUTCDate(d.getUTCDate()+4-(d.getUTCDay()||7));
+  return Math.ceil((((d-new Date(Date.UTC(d.getUTCFullYear(),0,1)))/864e5)+1)/7);
+}
+function easterDate(y) {
+  const a=y%19,b=~~(y/100),c=y%100,d=~~(b/4),e=b%4,f=~~((b+8)/25),g=~~((b-f+1)/3),
+    h=(19*a+b-d-g+15)%30,i=~~(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,
+    m2=~~((a+11*h+22*l)/451),mo=~~((h+l-7*m2+114)/31),dy=((h+l-7*m2+114)%31)+1;
+  return new Date(y,mo-1,dy);
+}
+function isFerie(date, countryCode, apiData) {
+  // Uses API data if available, falls back to static
+  const ds=`${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
+  return !!getPublicHolName(ds, countryCode||"FR", apiData);
+}
+function isSco(ds,zone,country,apiData) { return getHolsFromData(country,apiData,zone).some(h=>ds>=h.s&&ds<=h.e); }
+function getHolName(ds,zone,country,apiData) { const h=getHolsFromData(country,apiData,zone).find(h=>ds>=h.s&&ds<=h.e); return h?h.n:null; }
+function daysRange(s,e) {
+  const out=[],cur=new Date(s+"T12:00:00"),end=new Date(e+"T12:00:00");
+  while(cur<=end){out.push(toStr(cur));cur.setDate(cur.getDate()+1);}
+  return out;
+}
+
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
+// Rechargement « interne » à l'app (éjection, quitter, nouvelle version, etc.) :
+// pose un drapeau pour que la déconnexion-à-la-sortie NE se déclenche PAS sur ces
+// rechargements (sinon l'utilisateur serait éjecté vers l'écran de connexion).
+function duviaReload(){
+  try { window.sessionStorage.setItem("duvia_internal_reload","1"); } catch {}
+  window.location.reload();
+}
+
+function makeCfg() {
+  return {
+    parents:[{id:1,name:"",gender:"F",birthDay:"",birthMonth:"",color:PCOLS[0]}],
+    children:[{id:1,name:"",email:"",birthDay:"",birthMonth:"",birthYear:"",allergy:"",bloodType:"",
+      home:{school:"",doctor:"",notes:"",emergencyContacts:""}}],
+    observers:[],sameGuardAll:true,zone:"",subdivisionCode:"",country:"FR",activeNatHols:null,
+    specialDates:{
+      motherDay:{enabled:false},fatherDay:{enabled:false},
+      parentBirths:[],childBirths:[],schoolHolDetails:{},custom:[],
+    },
+    custody:{startMonth:pad(new Date().getMonth()+1),startYear:String(new Date().getFullYear()),
+      type:"weekAlt",weekAlt:{evenIdx:0},exclusive:{mainIdx:0,weIdx:1,parity:"even"},
+      pattern:[],confirmed:false},
+    custodyPerChild:{},childrenZones:{},overrides:{},history:[],expenses:[],notifs:[],
+    shareCode:Math.random().toString(36).slice(2,8).toUpperCase(),
+  };
+}
+
+function resolveGuard(ds,cfg,childId) {
+  // 1. Sélectionner le bon planning : per-child ou global
+  const usePerChild = !cfg.sameGuardAll && childId && cfg.custodyPerChild?.[childId]?.confirmed;
+  const custody = usePerChild ? cfg.custodyPerChild[childId] : cfg.custody;
+
+  // 2. Manual overrides (global)
+  if(cfg.overrides?.[ds]) return cfg.overrides[ds];
+
+  // 3. Fête des Mères / Fête des Pères — garde forcée si activée
+  const sd = cfg.specialDates || {};
+  const country = cfg.country || "FR";
+  const dsDate = new Date(ds+"T12:00:00");
+  const y = dsDate.getFullYear();
+  if(sd.motherDay?.enabled) {
+    const mdDate = getMothersDayDate(y, country);
+    if(sameDay(mdDate, dsDate)) {
+      const motherIdx = cfg.parents.findIndex(p => p.gender === "F");
+      if(motherIdx !== -1) return {parentIdx:motherIdx, timeType:"full", source:"motherDay"};
+    }
+  }
+  if(sd.fatherDay?.enabled) {
+    const fdDate = getFathersDayDate(y, country);
+    if(sameDay(fdDate, dsDate)) {
+      const fatherIdx = cfg.parents.findIndex(p => p.gender === "M");
+      if(fatherIdx !== -1) return {parentIdx:fatherIdx, timeType:"full", source:"fatherDay"};
+    }
+  }
+
+  // 4. Anniversaires des parents — garde forcée si activée
+  const parentBirths = sd.parentBirths || [];
+  const dsM = dsDate.getMonth() + 1;
+  const dsD = dsDate.getDate();
+  for(let pi = 0; pi < cfg.parents.length; pi++) {
+    const pb = parentBirths[pi];
+    if(!pb?.enabled) continue;
+    const p = cfg.parents[pi];
+    if(!p?.birthDay || !p?.birthMonth) continue;
+    if(+p.birthDay === dsD && +p.birthMonth === dsM) {
+      return {parentIdx:pi, timeType:"full", source:"parentBirthday"};
+    }
+  }
+
+  // 4b. Anniversaires des enfants — garde paire/impaire si configurée
+  const perChildSD = cfg.specialDates?.perChild || {};
+  for(let ci = 0; ci < cfg.children.length; ci++) {
+    const ch = cfg.children[ci];
+    if(!ch?.birthDay || !ch?.birthMonth) continue;
+    if(+ch.birthDay !== dsD || +ch.birthMonth !== dsM) continue;
+    // Cet enfant fête son anniversaire ce jour
+    // Récupérer les préférences : per-child si disponible, sinon global
+    const chSdLocal = childId && perChildSD[ch.id] ? perChildSD[ch.id] : null;
+    const evenIdx = chSdLocal?.evenParentIdx ?? sd.evenParentIdx ?? 0;
+    const oddIdx  = chSdLocal?.oddParentIdx  ?? sd.oddParentIdx  ?? 1;
+    const parentIdx = y % 2 === 0 ? evenIdx : oddIdx;
+    if(parentIdx === -1) return {parentIdx:-1, timeType:"full", source:"childBirthday", allParents:true};
+    return {parentIdx, timeType:"full", source:"childBirthday"};
+  }
+
+  // 5. Vacances scolaires — per-child si disponible, sinon global
+  const holDetails = (childId && cfg.specialDates?.schoolHolDetailsPerChild?.[childId])
+    || cfg.specialDates?.schoolHolDetails || {};
+  for(const holName of Object.keys(holDetails)) {
+    const det = holDetails[holName];
+    if(det[ds]!==undefined) {
+      const v=det[ds];
+      if(typeof v==="string"&&v.startsWith("obs:"))
+        return {obsId:v.slice(4),timeType:"full",source:"schoolHol"};
+      return {parentIdx:v,timeType:"full",source:"schoolHol"};
+    }
+  }
+
+  // 5. Pattern de garde
+  if(!custody?.confirmed) return null;
+  const {type,weekAlt,exclusive,pattern} = custody;
+  // startYear/startMonth : depuis custody ou fallback cfg.custody
+  const startYear = custody.startYear || cfg.custody.startYear;
+  const startMonth = custody.startMonth || cfg.custody.startMonth;
+  const start=new Date(+startYear,+startMonth-1,1);
+  // 🔧 Fix : la grille personnalisée suppose que sa colonne 1 = un LUNDI.
+  // Si le 1er du mois choisi n'est pas un lundi, tout le pattern se
+  // retrouvait décalé par rapport à ce qui est affiché dans la grille
+  // (ex: "albe" coché sur la colonne Mardi pouvait s'appliquer un autre
+  // jour). On recale "start" sur le lundi de cette même semaine, pour que
+  // diff=0 tombe toujours un lundi, comme le suggère visuellement la grille.
+  start.setDate(start.getDate() - ((start.getDay()+6)%7));
+  const target=new Date(ds+"T12:00:00");
+  const diff=Math.floor((target-start)/864e5);
+  if(diff<0) return null;
+  if(type==="weekAlt"){
+    const wn=wkNum(target);
+    return {parentIdx:wn%2===0?weekAlt.evenIdx:1-weekAlt.evenIdx,timeType:"full"};
+  }
+  if(type==="exclusive"){
+    const dw=(target.getDay()+6)%7;
+    if(dw<5) return {parentIdx:exclusive.mainIdx,timeType:"full"};
+    const wn=wkNum(target);
+    return {parentIdx:wn%2===(exclusive.parity==="even"?0:1)?exclusive.weIdx:exclusive.mainIdx,timeType:"full"};
+  }
+  if(type==="custom"&&pattern?.length) return pattern[diff%pattern.length]||null;
+  return null;
+}
+
+// ─── EXPORT iCAL — Télécharge le planning de garde (.ics) ───────────────────
+function generateICS(cfg) {
+  const parents = cfg.parents || [];
+  const children = cfg.children || [];
+  const childNames = children.map(c => c.name).filter(Boolean).join(", ");
+  function pad(n) { return String(n).padStart(2,"0"); }
+  function toICS(d) { return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`; }
+  const lines = [
+    "BEGIN:VCALENDAR","VERSION:2.0",
+    "PRODID:-//Duvia//Calendrier de garde//FR",
+    "CALSCALE:GREGORIAN","METHOD:PUBLISH",
+    "X-WR-CALNAME:Duvia \u2013 Garde altern\u00e9e",
+  ];
+  const today = new Date(); today.setHours(0,0,0,0);
+  const endDate = new Date(today); endDate.setMonth(endDate.getMonth()+12);
+  let cur = new Date(today), periodStart = null, periodPIdx = null;
+  function pushEvent(start, end, pIdx) {
+    const p = parents[pIdx]; if(!p) return;
+    const name = p.name || `Parent ${pIdx+1}`;
+    const title = childNames ? `${childNames} chez ${name}` : `Garde chez ${name}`;
+    const endPlus = new Date(end); endPlus.setDate(endPlus.getDate()+1);
+    lines.push("BEGIN:VEVENT",
+      `DTSTART;VALUE=DATE:${toICS(start)}`,
+      `DTEND;VALUE=DATE:${toICS(endPlus)}`,
+      `SUMMARY:${title}`,
+      `UID:duvia-${toICS(start)}-p${pIdx}@duvia.fr`,
+      "END:VEVENT");
+  }
+  while(cur <= endDate) {
+    const ds = `${cur.getFullYear()}-${pad(cur.getMonth()+1)}-${pad(cur.getDate())}`;
+    const g = resolveGuard(ds, cfg, null);
+    const pIdx = (g?.parentIdx ?? -1);
+    if(pIdx !== periodPIdx) {
+      if(periodStart !== null && periodPIdx >= 0) {
+        const prev = new Date(cur); prev.setDate(prev.getDate()-1);
+        pushEvent(periodStart, prev, periodPIdx);
+      }
+      periodStart = new Date(cur); periodPIdx = pIdx;
+    }
+    cur.setDate(cur.getDate()+1);
+  }
+  if(periodStart !== null && periodPIdx >= 0) pushEvent(periodStart, endDate, periodPIdx);
+  lines.push("END:VCALENDAR");
+  return lines.join("\r\n");
+}
+function downloadICS(cfg) {
+  const content = generateICS(cfg);
+  const blob = new Blob([content], {type:"text/calendar;charset=utf-8"});
+  // Web Share API — ouvre le sélecteur natif sur Android/iOS (agenda, etc.)
+  if (navigator.share && navigator.canShare) {
+    const file = new File([blob], "duvia-garde.ics", {type:"text/calendar"});
+    if (navigator.canShare({files:[file]})) {
+      navigator.share({files:[file], title:"Duvia – Planning de garde"}).catch(()=>{});
+      return;
+    }
+  }
+  // Fallback desktop : téléchargement classique
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href=url; a.download="duvia-garde.ics";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 500);
+}
+
+// ─── Helper : affiche le vrai prénom de l'observateur (jamais l'email brut) ──
+function obsLabel(o) {
+  const n = o.name || "";
+  // Si le nom ressemble à un email, on prend la partie avant @
+  if (n.includes("@")) return n.split("@")[0];
+  if (n) return n;
+  if (o.email) return o.email.split("@")[0];
+  return "Gardien";
+}
+
+// ─── CSS ──────────────────────────────────────────────────────────────────────
+function css(C) {
+  const wcExtras = C._wc ? `
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+body{background:linear-gradient(160deg,#f0f7ff 0%,#dbeafe 40%,#d1fae5 100%)!important;min-height:100vh;}
+body::after{content:"🏆";position:fixed;bottom:80px;right:16px;font-size:28px;opacity:.25;pointer-events:none;animation:wcPulse 2s ease-in-out infinite;}
+@keyframes wcBall{0%,100%{transform:rotate(-15deg) translateY(0)}50%{transform:rotate(15deg) translateY(-8px)}}
+@keyframes wcPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
+@keyframes wcShine{0%{left:-100%}100%{left:200%}}
+.card{border-radius:16px!important;border-color:#bfdbfe!important;border-top:3px solid #2563eb!important;box-shadow:0 2px 8px rgba(37,99,235,.08)!important;}
+.card:hover{box-shadow:0 4px 20px rgba(37,99,235,.15)!important;}
+.sec{color:#1d4ed8!important;font-family:'Bebas Neue',sans-serif!important;font-size:13px!important;letter-spacing:.15em!important;}
+input,select{border-radius:10px!important;border-color:#bfdbfe!important;height:44px!important;}
+input:focus,select:focus{border-color:#16a34a!important;box-shadow:0 0 0 3px rgba(22,163,74,.15)!important;}
+button{border-radius:10px!important;}
+` : '';
+  const rgExtras = C._rg ? `
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+body{background:linear-gradient(160deg,#f5ede6 0%,#eedfd6 50%,#e8d5c8 100%)!important;min-height:100vh;}
+body::before{content:"🎾";position:fixed;top:14px;right:72px;font-size:24px;animation:spinBall 4s linear infinite;pointer-events:none;z-index:9999;}
+body::after{content:"";position:fixed;bottom:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#c2745a,#1a6b3c,#c2745a,#1a6b3c);pointer-events:none;z-index:9998;}
+@keyframes spinBall{from{transform:rotate(0deg) translateX(4px)}to{transform:rotate(360deg) translateX(4px)}}
+.card{border-radius:6px!important;border-color:#c2745a55!important;border-left:3px solid #c2745a!important;box-shadow:2px 2px 0 #eedfd6!important;}
+.card:hover{box-shadow:3px 3px 0 #c2745a88!important;}
+.sec{color:#7a4a35!important;font-family:'Playfair Display',serif!important;letter-spacing:.04em!important;}
+input,select{border-radius:6px!important;border-color:#c2745a!important;border-left:3px solid #c2745a!important;height:44px!important;}
+input:focus,select:focus{border-color:#1a6b3c!important;box-shadow:0 0 0 2px rgba(26,107,60,.2)!important;}
+button{border-radius:6px!important;}
+` : '';
+  const summerExtras = C._summer ? `
+@import url('https://fonts.googleapis.com/css2?family=Pacifico&family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+body{background:linear-gradient(160deg,#fff8e7 0%,#fff3cc 40%,#e0f7fa 100%);min-height:100vh;}
+body::before{content:"☀️";position:fixed;top:14px;right:70px;font-size:28px;animation:sunPulse 3s ease-in-out infinite;pointer-events:none;z-index:9999;}
+body::after{content:"🌊 🌊 🌊";position:fixed;bottom:0;left:0;right:0;font-size:18px;letter-spacing:8px;opacity:.3;pointer-events:none;animation:waveDrift 4s ease-in-out infinite alternate;text-align:center;}
+@keyframes sunPulse{0%,100%{transform:scale(1) rotate(-5deg)}50%{transform:scale(1.1) rotate(5deg)}}
+@keyframes waveDrift{from{transform:translateX(-10px)}to{transform:translateX(10px)}}
+.card{border-radius:20px!important;border-color:#fde68a!important;box-shadow:0 2px 12px rgba(249,115,22,.1)!important;}
+.card:hover{box-shadow:0 4px 20px rgba(249,115,22,.18)!important;}
+input,select{border-radius:12px!important;border-color:#fde68a!important;height:44px!important;}
+input:focus,select:focus{border-color:#f97316!important;box-shadow:0 0 0 3px rgba(249,115,22,.15)!important;}
+button{border-radius:12px!important;}
+.sec{color:#b45309!important;}
+` : '';
+  const videoExtras = C._video ? `
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+body{background:#07071a!important;background-image:linear-gradient(rgba(91,33,182,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(91,33,182,.04) 1px,transparent 1px)!important;background-size:32px 32px!important;min-height:100vh;}
+body::before{content:"🎮";position:fixed;top:14px;right:70px;font-size:22px;animation:gameFloat 2.5s ease-in-out infinite;pointer-events:none;z-index:9999;}
+body::after{content:"";position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(139,92,246,.025) 3px,rgba(139,92,246,.025) 4px);pointer-events:none;z-index:0;}
+@keyframes gameFloat{0%,100%{transform:translateY(0) rotate(-8deg)}50%{transform:translateY(-7px) rotate(8deg)}}
+@keyframes neonPulse{0%,100%{box-shadow:0 0 8px rgba(139,92,246,.5),0 0 20px rgba(139,92,246,.2),inset 0 1px 0 rgba(139,92,246,.15)}50%{box-shadow:0 0 18px rgba(139,92,246,.9),0 0 40px rgba(139,92,246,.45),inset 0 1px 0 rgba(139,92,246,.3)}}
+@keyframes neonSlide{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+@keyframes pixelBlink{0%,49%{opacity:1}50%,100%{opacity:0}}
+.card{background:linear-gradient(150deg,#0f0f2a 0%,#0b0b20 100%)!important;border:1.5px solid #5b21b6!important;border-radius:10px!important;box-shadow:0 0 14px rgba(139,92,246,.18),inset 0 1px 0 rgba(139,92,246,.12)!important;}
+.card:hover{border-color:#8b5cf6!important;box-shadow:0 0 24px rgba(139,92,246,.38),inset 0 1px 0 rgba(139,92,246,.25)!important;transform:translateY(-1px);}
+.sec{font-family:'Orbitron',sans-serif!important;color:#8b5cf6!important;font-size:10px!important;letter-spacing:.18em!important;text-shadow:0 0 10px rgba(139,92,246,.7)!important;}
+.fi{background:transparent!important;}
+input,select{background:#0b0b22!important;border:1.5px solid #5b21b6!important;border-radius:8px!important;color:#ede9fe!important;height:44px!important;}
+input:focus,select:focus{border-color:#8b5cf6!important;box-shadow:0 0 0 3px rgba(139,92,246,.25),0 0 14px rgba(139,92,246,.35)!important;}
+button{border-radius:8px!important;}
+.nav-tab{background:#0a0a1e!important;}
+.nav-tab.active{background:#181835!important;border-bottom-color:#8b5cf6!important;filter:drop-shadow(0 0 6px rgba(139,92,246,.5));}
+` : '';
+  const brandExtras = C._brand ? `
+body{background:linear-gradient(145deg,#2d2d3a 0%,#1e1e2e 30%,#2a2a3c 60%,#1a1a2a 100%)!important;min-height:100vh;}
+` : '';
+  return `
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+${wcExtras}
+${rgExtras}
+${summerExtras}
+${videoExtras}
+${brandExtras}
+
+/* ── Reset & Base ── */
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:${C.bg};color:${C.txt};font-family:'Nunito',sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:${C.bor};border-radius:4px;}
+::-webkit-scrollbar-thumb:hover{background:${C.mut};}
+
+/* ── Form inputs — uniform 44px height, consistent radius & border ── */
+input,select,textarea{
+  background:${C.inp};
+  border:1.5px solid ${C.bor};
+  color:${C.txt};
+  border-radius:10px;
+  padding:0 13px;
+  height:44px;
+  font-family:inherit;
+  font-size:14px;
+  width:100%;
+  outline:none;
+  transition:border-color .18s, box-shadow .18s;
+  line-height:1;
+}
+textarea{height:auto;padding:11px 13px;line-height:1.5;}
+input:focus,select:focus,textarea:focus{
+  border-color:${C.vio};
+  box-shadow:0 0 0 3px ${C.vio}20;
+}
+input::placeholder,textarea::placeholder{color:${C.mut};opacity:.7;}
+input[type=color]{padding:3px 4px;height:44px;width:48px;min-width:48px;cursor:pointer;border-radius:10px;}
+input[type=checkbox]{width:17px;height:17px;accent-color:${C.vio};cursor:pointer;flex-shrink:0;}
+
+/* ── Buttons — uniform 44px touch target, consistent radius ── */
+button{
+  font-family:inherit;
+  cursor:pointer;
+  border:none;
+  border-radius:10px;
+  font-size:14px;
+  font-weight:700;
+  height:44px;
+  padding:0 16px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  transition:all .15s;
+  white-space:nowrap;
+}
+button:active{transform:scale(.97);}
+button:disabled{opacity:.5;cursor:not-allowed;}
+
+/* Small button variant */
+button.btn-sm{height:34px;padding:0 12px;font-size:12px;border-radius:8px;}
+/* Icon-only button */
+button.btn-icon{width:44px;height:44px;padding:0;border-radius:10px;}
+
+/* ── Labels & Fields ── */
+.lbl{
+  font-size:11px;
+  color:${C.mut};
+  display:block;
+  margin-bottom:6px;
+  font-weight:800;
+  letter-spacing:.07em;
+  text-transform:uppercase;
+}
+.field{margin-bottom:16px;}
+.row{display:flex;gap:12px;align-items:flex-end;}
+.row > *{flex:1;min-width:0;}
+
+/* ── Cards ── */
+.card{
+  background:${C.card};
+  border:1.5px solid ${C.bor};
+  border-radius:14px;
+  padding:16px;
+  transition:box-shadow .18s;
+}
+.card:hover{box-shadow:0 3px 12px rgba(0,0,0,.08);}
+
+/* ── Section headers ── */
+.sec{
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.13em;
+  text-transform:uppercase;
+  color:${C.mut};
+  margin-bottom:14px;
+  padding-bottom:8px;
+  border-bottom:1.5px solid ${C.bor};
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+/* ── Badges & chips ── */
+.badge{
+  display:inline-flex;
+  align-items:center;
+  font-size:10px;
+  padding:3px 9px;
+  border-radius:6px;
+  font-weight:800;
+  line-height:1;
+}
+.chip{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  background:${C.sur};
+  border:1.5px solid ${C.bor};
+  border-radius:20px;
+  padding:5px 12px;
+  font-size:12px;
+  font-weight:600;
+}
+
+/* ── Animations ── */
+@keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.fi{animation:fi .22s ease;}
+@keyframes menuPulse{
+  0%,100%{opacity:1;box-shadow:0 0 0 0 ${C.vio}88}
+  50%{opacity:.7;box-shadow:0 0 0 7px ${C.vio}00}
+}
+@keyframes slideIn{from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:translateX(0)}}
+@keyframes fadeInDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulseFade{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.8;transform:scale(1.03)}}
+
+/* ── Nav tabs ── */
+.nav-tab{
+  flex:1;
+  padding:10px 4px 8px;
+  background:transparent;
+  border-bottom:2.5px solid transparent;
+  border-radius:0;
+  font-size:20px;
+  height:auto;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:2px;
+  position:relative;
+  transition:background .15s,color .15s,border-color .15s;
+}
+.nav-tab.active{background:${C.sur};border-bottom-color:${C.vio};}
+.nav-tab-label{font-size:9px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;}
+
+/* ── Menu items ── */
+.menu-item{
+  width:100%;
+  padding:0 16px;
+  height:48px;
+  background:transparent;
+  color:${C.txt};
+  text-align:left;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  border-bottom:1px solid ${C.bor};
+  font-size:13px;
+  font-weight:700;
+  border-radius:0;
+  transition:background .12s;
+}
+.menu-item:hover{background:${C.sur};}
+.menu-item:active{transform:none;background:${C.bor};}
+
+/* ── Form sections in Config ── */
+.config-section{
+  background:${C.card};
+  border:1.5px solid ${C.bor};
+  border-radius:14px;
+  padding:18px;
+  margin-bottom:14px;
+}
+
+/* ── Upgrade / premium lock ── */
+.lock-card{
+  background:linear-gradient(135deg,${C.vio}12,${C.blu}0a);
+  border:1.5px dashed ${C.vio}66;
+  border-radius:14px;
+  padding:28px 20px;
+  text-align:center;
+}
+
+/* ── Expense / history cards ── */
+.list-item{
+  background:${C.card};
+  border:1.5px solid ${C.bor};
+  border-radius:12px;
+  padding:14px 16px;
+  margin-bottom:10px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  transition:box-shadow .15s;
+}
+.list-item:hover{box-shadow:0 2px 10px rgba(0,0,0,.07);}
+
+/* ── Step indicators ── */
+.step-dot{
+  width:28px;height:28px;
+  border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:900;
+  flex-shrink:0;
+}
+
+/* ── Tab pill selector ── */
+.tab-pill{
+  display:flex;
+  background:${C.sur};
+  border-radius:10px;
+  padding:4px;
+  gap:2px;
+  margin-bottom:16px;
+}
+.tab-pill button{
+  flex:1;
+  height:36px;
+  padding:0 10px;
+  font-size:12px;
+  border-radius:7px;
+  background:transparent;
+  color:${C.mut};
+  transition:all .15s;
+}
+.tab-pill button.active{
+  background:${C.card};
+  color:${C.vio};
+  box-shadow:0 1px 4px rgba(0,0,0,.1);
+}
+@keyframes duvia-shake{
+  0%,100%{ transform:translateX(0); }
+  15%    { transform:translateX(-9px) rotate(-1deg); }
+  30%    { transform:translateX(8px)  rotate(1deg); }
+  45%    { transform:translateX(-7px) rotate(-0.5deg); }
+  60%    { transform:translateX(6px); }
+  75%    { transform:translateX(-4px); }
+  90%    { transform:translateX(2px); }
+}
+@keyframes spin{ to{ transform:rotate(360deg); } }
+@keyframes navWobble{
+  0%,100%{transform:rotate(0deg) translateY(0)}
+  10%{transform:rotate(-14deg) translateY(-2px)}
+  20%{transform:rotate(14deg) translateY(-2px)}
+  30%{transform:rotate(-10deg) translateY(-1px)}
+  40%{transform:rotate(10deg) translateY(-1px)}
+  50%{transform:rotate(-6deg)}
+  60%{transform:rotate(6deg)}
+  70%{transform:rotate(0deg)}
+}
+.duvia-shake{
+  animation: duvia-shake 0.55s cubic-bezier(.36,.07,.19,.97) both;
+  border-color: ${C.red} !important;
+  box-shadow: 0 0 0 3px ${C.red}33 !important;
+}
+`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HOOK — localStorage persistence
+// ═══════════════════════════════════════════════════════════════════════════════
+function useLocalStorage(key, initialValue) {
+  const [state, setState] = useState(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      if (item !== null) return JSON.parse(item);
+    } catch {}
+    return typeof initialValue === "function" ? initialValue() : initialValue;
+  });
+
+  // Sync to localStorage after each state change (non-blocking)
+  useEffect(() => {
+    try { window.localStorage.setItem(key, JSON.stringify(state)); } catch {}
+  }, [key, state]); // ✅ key ajoutée (était absent — bug potentiel)
+
+  // useCallback : setValue ne change plus à chaque render
+  const setValue = useCallback((value) => {
+    setState(prev => typeof value === "function" ? value(prev) : value);
+  }, []); // ✅ référence stable
+
+  return [state, setValue];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SYNCHRONISATION FAMILLE — Phase 1 Supabase
+// Chaque appareil obtient un "badge invisible" (compte anonyme Supabase).
+// Les données de la famille (cfg) sont sauvegardées dans la table `families`,
+// identifiées par `cfg.shareCode`. Un 2e parent peut "rejoindre" cette même
+// famille en saisissant ce code.
+// ═══════════════════════════════════════════════════════════════════════════════
+function useFamilySync(cfg, setCfg) {
+  const [syncStatus, setSyncStatus] = useState("connecting"); // connecting | synced | offline | error
+  const [familyId, setFamilyIdState] = useState(null);
+  const [families, setFamilies] = useState([]); // [{id,label}] — familles validées (status=active) de ce compte
+  const [pendingMembers, setPendingMembers] = useState([]); // [{userId,email,role,joinedAt}] — en attente de ma validation
+  const [pendingApproval, setPendingApproval] = useState(false); // ce compte n'a qu'une adhésion "pending", pas d'accès
+  const [removedObserver, setRemovedObserver] = useState(false); // observateur retiré → page no-access
+  const familyIdRef = useRef(null);
+  const skipNextSave = useRef(true);
+  const saveTimer = useRef(null);
+  const cfgRef = useRef(cfg); cfgRef.current = cfg; // snapshot courant pour l'éjection
+  const uidRef = useRef(null);
+
+  function setFamilyIdBoth(id){ familyIdRef.current = id; setFamilyIdState(id); }
+
+  // ── Éjection INSTANTANÉE ──────────────────────────────────────────────────
+  // Si mon adhésion à la famille active passe à un statut ≠ 'active' (retiré par
+  // le créateur, ou la famille est dissoute), on le détecte en temps réel : on
+  // sauvegarde une synthèse locale des données puis on recharge → boot me fait
+  // repartir sur une famille vierge, et un message explicatif s'affiche.
+  useEffect(() => {
+    if (!familyId) return;
+    let ch; let cancelled = false;
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      const uid = data?.user?.id; uidRef.current = uid;
+      if (!uid || cancelled) return;
+      ch = supabase
+        .channel(`fm_self_${familyId}`)
+        .on("postgres_changes",
+          { event: "*", schema: "public", table: "family_members", filter: `family_id=eq.${familyId}` },
+          (payload) => {
+            const row = payload.new;
+            // (a) Quelqu'un rejoint / change de statut → rafraîchir mes demandes
+            //     en attente pour pouvoir valider EN DIRECT (sans recharger).
+            try { refreshPendingMembers(); } catch {}
+            // (b) Mon propre statut passe à ≠ 'active' → je suis éjecté.
+            if (row?.user_id === uid && row?.status && row.status !== "active") {
+              const voluntary = (() => { try { return window.localStorage.getItem("duvia_left") === "1"; } catch { return false; } })();
+              try {
+                window.localStorage.setItem("duvia_family_snapshot", JSON.stringify({ at: new Date().toISOString(), cfg: cfgRef.current || null }));
+                if (!voluntary) window.localStorage.setItem("duvia_ejected", "1");
+              } catch {}
+              duviaReload();
+              return;
+            }
+            // (c) Un AUTRE membre s'est retiré/a quitté → le retirer de ma donnée
+            //     partagée (cfg.parents) et prévenir (notification au créateur).
+            if (row?.user_id && row.user_id !== uid && (row.status === "removed" || row.status === "left")) {
+              const parents = cfgRef.current?.parents || [];
+              let myEmail2 = ""; try { myEmail2 = JSON.parse(window.localStorage.getItem("duvia_session") || window.sessionStorage.getItem("duvia_session") || "null") || ""; } catch {}
+              const activeIds = parents.map(p => p?.userId).filter(Boolean).filter(id => id !== row.user_id);
+              const next = markDepartedParents(parents, { activeIds, inactiveIds: [row.user_id], myUid: uid, myEmail: myEmail2 });
+              if (next) {
+                const idx = next.findIndex((p, j) => p?.left && !parents[j]?.left);
+                const leftName = idx >= 0 ? (parents[idx]?.name || "L'invité") : "L'invité";
+                setCfg(c => ({ ...c, parents: next }));
+                try { window.dispatchEvent(new CustomEvent("duvia-invite-left", { detail: leftName })); } catch {}
+              }
+            }
+          })
+        .subscribe();
+    })();
+    return () => { cancelled = true; if (ch) supabase.removeChannel(ch); };
+  }, [familyId]);
+
+  // ── Realtime + polling fallback 30s ───────────────────────────────────────
+  // Realtime : push instantané quand un obs clique sur son lien (INSERT/UPDATE).
+  // Polling 30s + focus/visibilité : filet de sécurité si Realtime est désactivé.
+  useEffect(() => {
+    if (!familyId) return;
+    const tick = () => { try { refreshPendingMembers(); } catch {} };
+    const onVis = () => { if (!document.hidden) tick(); };
+    window.addEventListener("focus", tick);
+    document.addEventListener("visibilitychange", onVis);
+    const pollId = setInterval(tick, 30000);
+
+    // Push instantané : écoute INSERT/UPDATE sur family_members pour cette famille
+    const channel = supabase
+      .channel(`family_members:${familyId}`)
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "family_members",
+        filter: `family_id=eq.${familyId}`,
+      }, () => { tick(); })
+      .subscribe();
+
+    return () => {
+      clearInterval(pollId);
+      window.removeEventListener("focus", tick);
+      document.removeEventListener("visibilitychange", onVis);
+      supabase.removeChannel(channel);
+    };
+  }, [familyId]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        // 1. S'assurer d'avoir une session (compte anonyme automatique)
+        const { data: sessData } = await supabase.auth.getSession();
+        if (!sessData?.session) {
+          const { error: signErr } = await supabase.auth.signInAnonymously();
+          if (signErr) throw signErr;
+        }
+        const { data: userData } = await supabase.auth.getUser();
+        const uid = userData?.user?.id;
+        if (!uid) throw new Error("no-uid");
+
+        // 2. 🔧 Le serveur fait toujours autorité : on vérifie d'abord si ce
+        // compte appartient déjà à une famille connue, AVANT de faire
+        // confiance à la note locale (duvia_family_id). Cette note peut
+        // disparaître (cache vidé, nouvel appareil/navigateur) alors que le
+        // compte, lui, reste bien lié — sans ça, l'app créait une nouvelle
+        // famille vide à chaque fois que la note locale manquait.
+        let familyId = null;
+        let hasPendingOnly = false;
+        let wasRemoved = false;
+        let wasRemovedObserver = false;
+        let membershipQueryFailed = false;
+        try {
+          const { data: memberships, error: memErr } = await supabase
+            .from("family_members")
+            .select("family_id, status")
+            .eq("user_id", uid);
+          if (memErr) throw memErr;
+          const actives = (memberships || []).filter(m => m.status === "active");
+          // 🔧 Multi-familles : si plusieurs familles actives, préférer celle
+          // notée localement (duvia_family_id) — typiquement celle rejointe via
+          // un lien d'invitation — plutôt que « la première venue » (qui pouvait
+          // être une famille vierge laissée par un départ précédent).
+          let active = null;
+          try {
+            const noted = window.localStorage.getItem("duvia_family_id");
+            if (noted) active = actives.find(m => m.family_id === noted) || null;
+          } catch {}
+          if (!active) active = actives[0] || null;
+          if (active?.family_id) {
+            familyId = active.family_id;
+            try { window.localStorage.setItem("duvia_family_id", familyId); } catch {}
+          } else if ((memberships || []).some(m => m.status === "pending")) {
+            // 🔒 Le compte n'a QUE des adhésions en attente de validation —
+            // on ne charge rien et on ne crée surtout pas de nouvelle famille.
+            hasPendingOnly = true;
+          } else if ((memberships || []).some(m => m.status === "removed")) {
+            // 🔧 Le compte a été RETIRÉ de sa (seule) famille par l'inviteur →
+            // Distinguer : observateur retiré (→ page "no access") vs parent (→ famille vierge)
+            const removedAsMember = (memberships || []).find(m => m.status === "removed");
+            if (removedAsMember?.role === "observer") {
+              wasRemovedObserver = true;
+            } else {
+              wasRemoved = true;
+            }
+          }
+        } catch (e) {
+          console.warn("[Duvia][sync] membership lookup failed:", e);
+          membershipQueryFailed = true;
+        }
+
+        if (hasPendingOnly) {
+          if (!cancelled) { setPendingApproval(true); setSyncStatus("synced"); }
+          return;
+        }
+
+        // 🔧 Observateur retiré → page "no access" (pas de nouvelle famille)
+        if (wasRemovedObserver) {
+          if (!cancelled) { setRemovedObserver(true); setSyncStatus("synced"); }
+          return;
+        }
+
+        // 🔧 Membre retiré : créer une famille vierge (profil seul, index 0),
+        // effacer toute trace de l'ancienne famille, puis recharger proprement.
+        // Garde anti-boucle : on ne tente ça qu'UNE fois par session.
+        if (wasRemoved && !familyId) {
+          let alreadyTried = false;
+          try { alreadyTried = window.sessionStorage.getItem("duvia_fresh_try") === "1"; } catch {}
+          if (alreadyTried) {
+            // La tentative précédente n'a pas abouti → on n'insiste pas (évite la
+            // page blanche / boucle). On laisse l'utilisateur sur un état stable.
+            if (!cancelled) { setPendingApproval(false); setSyncStatus("error"); }
+            return;
+          }
+          try { window.sessionStorage.setItem("duvia_fresh_try", "1"); } catch {}
+          try {
+            const newId = crypto.randomUUID();
+            const fresh = makeCfg();
+            try {
+              const list = JSON.parse(window.localStorage.getItem("duvia_users") || "[]");
+              const sessEmail = JSON.parse(window.localStorage.getItem("duvia_session") || window.sessionStorage.getItem("duvia_session") || "null");
+              const me = list.find(u2 => u2.email === sessEmail);
+              if (me) {
+                fresh.parents[0] = {
+                  ...fresh.parents[0],
+                  id: me.id || 1, name: me.name || "", email: me.email || "",
+                  gender: me.gender || fresh.parents[0].gender, phone: me.phone || "",
+                };
+                window.localStorage.setItem("duvia_users", JSON.stringify(
+                  list.map(u2 => u2.email === sessEmail ? { ...u2, parentIdx: 0 } : u2)
+                ));
+              }
+            } catch {}
+            const { error: famErr } = await supabase.from("families").insert({ id: newId, share_code: fresh.shareCode, data: fresh });
+            if (famErr) throw famErr;
+            const { error: memErr2 } = await supabase.from("family_members").insert({ family_id: newId, user_id: uid, role: "parent" });
+            if (memErr2) throw memErr2;
+            try { window.localStorage.setItem("duvia_family_id", newId); } catch {}
+            try { window.localStorage.removeItem("duvia_left"); } catch {}
+            if (!cancelled) { duviaReload(); }
+          } catch (e) {
+            console.error("[Duvia][sync] fresh-family-after-removal failed:", e);
+            if (!cancelled) setSyncStatus("error");
+          }
+          return;
+        }
+
+        if (membershipQueryFailed) {
+          // 🔒 On ne sait pas si ce compte a déjà une famille (erreur réseau/serveur) —
+          // surtout ne pas en créer une nouvelle ni faire confiance à une note locale
+          // potentiellement périmée (compte précédent sur cet appareil). On s'arrête
+          // proprement plutôt que de risquer une fuite ou un doublon.
+          if (!cancelled) setSyncStatus("error");
+          return;
+        }
+
+        if (!familyId) {
+          // 🔧 Le serveur a confirmé qu'aucune famille n'est liée à ce compte —
+          // on en crée une nouvelle directement. On ne passe plus par la note
+          // locale (duvia_family_id) ni par un code de partage en fallback
+          // automatique : ça pourrait appartenir à un compte précédent sur cet
+          // appareil (la vérification serveur ci-dessus est désormais fiable).
+          familyId = crypto.randomUUID();
+          // 🔧 Pré-remplir le profil du créateur DANS la donnée insérée elle-même
+          // (pas seulement en local après coup) — sinon le prochain fetch écrase
+          // la version vide qui vient d'être enregistrée, et le nom disparaît.
+          let seedCfg = cfg;
+          try {
+            const rawUsers   = window.localStorage.getItem("duvia_users");
+            const sessEmail  = JSON.parse(window.localStorage.getItem("duvia_session") || window.sessionStorage.getItem("duvia_session") || "null");
+            const list = rawUsers ? JSON.parse(rawUsers) : [];
+            const me = list.find(u2 => u2.email === sessEmail);
+            if (me && me.role === "parent" && typeof me.parentIdx === "number") {
+              const parents = [...(cfg.parents || [])];
+              const idx = me.parentIdx;
+              const existing = parents[idx] || {};
+              parents[idx] = {
+                ...existing,
+                id:     existing.id || me.id,
+                name:   me.name   || existing.name   || "",
+                email:  me.email  || existing.email  || "",
+                gender: me.gender || existing.gender || "M",
+                phone:  me.phone  || existing.phone  || "",
+                color:  existing.color || PCOLS[idx % PCOLS.length],
+              };
+              seedCfg = { ...cfg, parents };
+            }
+          } catch {}
+          await supabase.from("families").insert({ id: familyId, share_code: seedCfg.shareCode, data: seedCfg });
+          await supabase.from("family_members").insert({ family_id: familyId, user_id: uid, role: "parent" });
+          try { window.localStorage.setItem("duvia_family_id", familyId); } catch {}
+        } else {
+          // S'assurer que ce compte est bien membre (sécurité) — le serveur a
+          // confirmé ci-dessus que cette famille est bien la sienne.
+          await supabase.from("family_members").upsert(
+            { family_id: familyId, user_id: uid, role: "parent" },
+            { onConflict: "family_id,user_id" }
+          );
+        }
+
+        setFamilyIdBoth(familyId);
+
+        // 5. Charger les données du cloud (le cloud fait foi au démarrage)
+        const { data: famRow, error: fetchErr } = await supabase
+          .from("families").select("data").eq("id", familyId).maybeSingle();
+        if (fetchErr) throw fetchErr;
+        if (!cancelled && famRow?.data && Object.keys(famRow.data).length > 0) {
+          setCfg(() => famRow.data);
+
+          // 🔧 CORRECTIF (suite) : si je viens d'être validé, l'inviteur n'a pu
+          // écrire qu'un nom provisoire (partie locale de mon email). Je remplace
+          // par mon vrai nom depuis mon profil local — sans écraser un nom déjà
+          // saisi par quelqu'un d'autre, et uniquement sur MON propre créneau
+          // (repéré par userId === uid, ou nom vide).
+          try {
+            const rawUsers  = window.localStorage.getItem("duvia_users");
+            const sessEmail = JSON.parse(window.localStorage.getItem("duvia_session") || window.sessionStorage.getItem("duvia_session") || "null");
+            const list = rawUsers ? JSON.parse(rawUsers) : [];
+            const me = list.find(u2 => u2.email === sessEmail);
+            const patched = reconcileOwnParentSlot(famRow.data.parents, me, uid);
+            if (patched && !cancelled) setCfg(c => ({ ...c, parents: patched }));
+          } catch {}
+
+          // 🔧 Réconciliation parents : marquer « parti » (left) si inactif
+          try {
+            const { data: mems } = await supabase
+              .from("family_members").select("user_id,status").eq("family_id", familyId);
+            const active = new Set((mems || []).filter(m => m.status === "active").map(m => m.user_id));
+            const inactive = new Set((mems || []).filter(m => m.status !== "active").map(m => m.user_id));
+            let myEmail2 = ""; try { myEmail2 = JSON.parse(window.localStorage.getItem("duvia_session") || window.sessionStorage.getItem("duvia_session") || "null") || ""; } catch {}
+            if (inactive.size && !cancelled) {
+              setCfg(c => {
+                const next = markDepartedParents(c.parents, { activeIds: active, inactiveIds: inactive, myUid: uid, myEmail: myEmail2 });
+                return next ? { ...c, parents: next } : c;
+              });
+            }
+          } catch {}
+
+          // 🔧 Réconciliation observateurs : ajouter dans cfg.observers tout
+          // membre actif role='observer' présent dans family_members mais absent
+          // du blob — cas typique : validation faite juste avant un rechargement.
+          try {
+            const { data: obsRows } = await supabase
+              .from("family_members")
+              .select("user_id, display_name, role, status")
+              .eq("family_id", familyId)
+              .eq("role", "observer")
+              .eq("status", "active");
+            if (obsRows && obsRows.length > 0 && !cancelled) {
+              // Récupère les emails via family_invitations pour matcher les cartes pending_invite
+              let emailByObsUid = {};
+              try {
+                const { data: obsInvRows } = await supabase
+                  .from("family_invitations")
+                  .select("used_by, email")
+                  .eq("family_id", familyId)
+                  .not("used_by", "is", null);
+                (obsInvRows || []).forEach(r => { if(r.used_by) emailByObsUid[r.used_by] = r.email; });
+              } catch {}
+              setCfg(c => {
+                const existing = new Set((c.observers || []).map(o => String(o.id || o.userId)));
+                const toAdd = obsRows.filter(r => !existing.has(String(r.user_id)));
+                if (!toAdd.length) return c;
+                let updatedObservers = [...(c.observers || [])];
+                for (const r of toAdd) {
+                  const rEmail = emailByObsUid[r.user_id] || "";
+                  // 🔧 CORRECTIF : avant d'ajouter une nouvelle carte, chercher une carte
+                  // pending_invite ou pending existante avec le même email — la mettre à jour
+                  // en place plutôt que créer un doublon.
+                  const pendingIdx = updatedObservers.findIndex(o =>
+                    (o.status === "pending_invite" || o.status === "pending") &&
+                    rEmail && o.email &&
+                    o.email.toLowerCase() === rEmail.toLowerCase()
+                  );
+                  if (pendingIdx >= 0) {
+                    updatedObservers[pendingIdx] = {
+                      ...updatedObservers[pendingIdx],
+                      id: r.user_id, userId: r.user_id,
+                      status: "active",
+                      name: (updatedObservers[pendingIdx].name && updatedObservers[pendingIdx].name !== "Observateur invité")
+                        ? updatedObservers[pendingIdx].name
+                        : (r.display_name || "Observateur"),
+                    };
+                  } else {
+                    updatedObservers.push({
+                      id: r.user_id, userId: r.user_id,
+                      name: r.display_name || "Observateur",
+                      email: rEmail, phone: "", role: "grandparent",
+                      status: "active", canGuard: false,
+                    });
+                  }
+                }
+                return { ...c, observers: updatedObservers };
+              });
+            }
+          } catch {}
+        }
+        if (!cancelled) refreshFamilies(uid);
+        if (!cancelled) refreshPendingMembers();
+        if (!cancelled) setSyncStatus("synced");
+      } catch (e) {
+        console.error("[Duvia][sync] init error:", e);
+        if (!cancelled) setSyncStatus("offline");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── Sauvegarde automatique (avec petit délai) ───────────────────────────
+  useEffect(() => {
+    if (!familyIdRef.current) return;
+    if (skipNextSave.current) { skipNextSave.current = false; return; }
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      try {
+        const { error } = await supabase
+          .from("families")
+          .update({ data: cfg, updated_at: new Date().toISOString() })
+          .eq("id", familyIdRef.current);
+        if (error) throw error;
+        setSyncStatus("synced");
+      } catch (e) {
+        console.error("[Duvia][sync] save error:", e);
+        setSyncStatus("error");
+      }
+    }, 1500);
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
+  }, [cfg]);
+
+  // ── Mise à jour automatique : écoute les changements faits par l'autre
+  // appareil (Supabase Realtime) et met à jour l'écran sans recharger ─────
+  useEffect(() => {
+    if (!familyId) return;
+    const channel = supabase
+      .channel(`family_${familyId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "families", filter: `id=eq.${familyId}` },
+        (payload) => {
+          if (payload.new?.data && payload.new.data.parents) {
+            skipNextSave.current = true;
+            setCfg(() => payload.new.data);
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [familyId]);
+
+  // ── Rejoindre la famille d'un autre appareil avec son code ──────────────
+  async function joinFamily(code) {
+    const cleanCode = (code || "").trim().toUpperCase();
+    if (!cleanCode) return { ok: false, error: "empty" };
+    try {
+      setSyncStatus("connecting");
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData?.user?.id;
+      const { data: foundId, error: rpcErr } = await supabase.rpc("find_family_by_share_code", { p_code: cleanCode });
+      if (rpcErr) throw rpcErr;
+      if (!foundId) { setSyncStatus("synced"); return { ok: false, error: "notfound" }; }
+
+      await supabase.from("family_members").upsert(
+        { family_id: foundId, user_id: uid, role: "parent" },
+        { onConflict: "family_id,user_id" }
+      );
+      const { data: famRow, error: fetchErr } = await supabase
+        .from("families").select("data").eq("id", foundId).maybeSingle();
+      if (fetchErr) throw fetchErr;
+      if (!famRow?.data || !famRow.data.parents) {
+        setSyncStatus("error");
+        return { ok: false, error: "error" };
+      }
+
+      // ⚠️ Annule toute sauvegarde "en attente" des anciennes données locales —
+      // sinon elle écraserait les données de la famille qu'on vient de rejoindre.
+      if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
+
+      setFamilyIdBoth(foundId);
+      try { window.localStorage.setItem("duvia_family_id", foundId); } catch {}
+      // On skip ce setCfg (données brutes Supabase) mais PAS les suivants (ex: inviteStatus:accepted)
+      // afin que le Parent 1 voie bien que le Parent 2 a rejoint la famille.
+      skipNextSave.current = true;
+      setCfg(() => ({ ...famRow.data, shareCode: cleanCode }));
+      setSyncStatus("synced");
+      return { ok: true, _familyId: foundId };
+    } catch (e) {
+      console.error("[Duvia][sync] join error:", e);
+      setSyncStatus("error");
+      return { ok: false, error: "error" };
+    }
+  }
+
+  // ── Inscription : crée le compte Supabase Auth et ouvre la session ────────
+  async function linkAccount(email, password, metadata) {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email, password, options: { data: metadata || {} },
+      });
+      if (error) {
+        if (error.message?.includes("already registered"))
+          return { ok: false, error: "already_registered" };
+        throw error;
+      }
+      // signUp retourne une session directement si "Confirm email" est OFF
+      if (!data?.session) {
+        // Pas de session → on force la connexion
+        const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInErr) throw signInErr;
+      }
+      const getUserRes = await supabase.auth.getUser();
+      const newUserId = getUserRes.data?.user?.id;
+      // ── PostHog : tracking inscription ──
+      if (newUserId) posthog.capture("signup", { role: metadata?.role || "unknown" });
+      return { ok: true, userId: newUserId };
+    } catch (e) {
+      console.error("[Duvia][sync] linkAccount error:", e);
+      return { ok: false, error: e.message || "error" };
+    }
+  }
+
+  // ── Connexion sur un autre appareil avec un compte existant ─────────────
+  async function signInExisting(email, password) {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      const uid = data?.user?.id;
+      if (!uid) throw new Error("no-uid");
+
+      // Retrouver la famille liée à ce compte (uniquement si adhésion validée)
+      const { data: members, error: memErr } = await supabase
+        .from("family_members").select("family_id").eq("user_id", uid).eq("status","active").limit(1);
+      if (memErr) throw memErr;
+      const familyId = members?.[0]?.family_id;
+      if (familyId) {
+        const { data: famRow, error: fetchErr } = await supabase
+          .from("families").select("data").eq("id", familyId).maybeSingle();
+        if (fetchErr) throw fetchErr;
+        if (famRow?.data && famRow.data.parents) {
+          if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
+          setFamilyIdBoth(familyId);
+          try { window.localStorage.setItem("duvia_family_id", familyId); } catch {}
+          skipNextSave.current = true;
+          setCfg(() => famRow.data);
+        }
+      }
+      setSyncStatus("synced");
+      return { ok: true, metadata: data?.user?.user_metadata || {} };
+    } catch (e) {
+      console.error("[Duvia][sync] signInExisting error:", e);
+      return { ok: false, error: e.message || "error" };
+    }
+  }
+
+  // ── Liste des familles validées (status=active) de ce compte ────────────
+  async function refreshFamilies(uid) {
+    try {
+      const { data, error } = await supabase
+        .from("family_members")
+        .select("family_id, families(data)")
+        .eq("user_id", uid)
+        .eq("status", "active");
+      if (error) throw error;
+      const list = (data || []).map(r => ({
+        id: r.family_id,
+        label: (r.families?.data?.parents || []).map(p => p?.name).filter(Boolean).join(" & ") || "Famille",
+      }));
+      setFamilies(list);
+    } catch (e) {
+      console.warn("[Duvia][sync] refreshFamilies failed:", e);
+    }
+  }
+
+  // ── Basculer vers une autre famille déjà validée (menu déroulant) ───────
+  async function switchFamily(newFamilyId) {
+    if (!newFamilyId || newFamilyId === familyIdRef.current) return { ok: true };
+    if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
+    setSyncStatus("connecting");
+    try {
+      const { data: famRow, error } = await supabase
+        .from("families").select("data").eq("id", newFamilyId).maybeSingle();
+      if (error || !famRow?.data) { setSyncStatus("error"); return { ok: false, error: "error" }; }
+      skipNextSave.current = true;
+      setFamilyIdBoth(newFamilyId);
+      try { window.localStorage.setItem("duvia_family_id", newFamilyId); } catch {}
+      setCfg(() => famRow.data);
+      setSyncStatus("synced");
+      return { ok: true };
+    } catch (e) {
+      console.error("[Duvia][sync] switchFamily error:", e);
+      setSyncStatus("error");
+      return { ok: false, error: e.message || "error" };
+    }
+  }
+
+  // ── Créer une nouvelle famille (ex: 2e fratrie) et basculer sur elle ────
+  async function createNewFamily(prefillParent) {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData?.user?.id;
+      if (!uid) return { ok: false, error: "no-uid" };
+      const newId = crypto.randomUUID();
+      const base = makeCfg();
+      const blankCfg = {
+        ...base,
+        parents: [{ ...base.parents[0], ...(prefillParent || {}) }],
+        shareCode: Math.random().toString(36).slice(2, 8).toUpperCase(),
+      };
+      const { error: insFamErr } = await supabase
+        .from("families").insert({ id: newId, share_code: blankCfg.shareCode, data: blankCfg });
+      if (insFamErr) throw insFamErr;
+      const { error: insMemErr } = await supabase
+        .from("family_members").insert({ family_id: newId, user_id: uid, role: "parent", status: "active" });
+      if (insMemErr) throw insMemErr;
+
+      if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
+      skipNextSave.current = true;
+      setFamilyIdBoth(newId);
+      try { window.localStorage.setItem("duvia_family_id", newId); } catch {}
+      setCfg(() => blankCfg);
+      await refreshFamilies(uid);
+      setSyncStatus("synced");
+      return { ok: true, familyId: newId };
+    } catch (e) {
+      console.error("[Duvia][sync] createNewFamily error:", e);
+      return { ok: false, error: e.message || "error" };
+    }
+  }
+
+  // ── Rejoindre une famille via un token d'invitation (validation en 2 temps) ─
+  // 🔒 Ne charge jamais les données de la famille ici : le statut est "pending",
+  // l'invité ne doit rien voir tant qu'il n'est pas validé par l'inviteur.
+  async function joinFamilyByToken(token, identity) {
+    try {
+      const { data: familyId, error } = await supabase.rpc("accept_family_invitation", { p_token: token });
+      if (error || !familyId) {
+        const msg = error?.message || "";
+        if (msg.includes("invitation_expired")) return { ok: false, error: "expired" };
+        if (msg.includes("invitation_already_used")) return { ok: false, error: "used" };
+        if (msg.includes("invitation_not_found")) return { ok: false, error: "not_found" };
+        return { ok: false, error: msg || "error" };
+      }
+      // 🔧 Enregistre le vrai nom/genre de l'invité sur SA ligne family_members,
+      // côté serveur (source autoritaire). Non bloquant : si la RPC échoue, la
+      // réconciliation côté invité au prochain chargement reste un filet de
+      // sécurité.
+      if (identity && (identity.name || identity.gender)) {
+        try {
+          await supabase.rpc("set_member_identity", {
+            p_family_id: familyId,
+            p_display_name: identity.name || null,
+            p_gender: identity.gender || null,
+          });
+        } catch (e) { console.warn("[Duvia][sync] set_member_identity:", e); }
+      }
+      return { ok: true, familyId, pending: true };
+    } catch (e) {
+      console.error("[Duvia][sync] joinFamilyByToken error:", e);
+      return { ok: false, error: e.message || "error" };
+    }
+  }
+
+  // ── Demandes en attente de validation pour la famille active ────────────
+  async function refreshPendingMembers() {
+    if (!familyIdRef.current) { setPendingMembers([]); return; }
+    try {
+      const { data: pendingRows, error } = await supabase
+        .from("family_members")
+        .select("user_id, role, joined_at, display_name, gender")
+        .eq("family_id", familyIdRef.current)
+        .eq("status", "pending");
+      if (error) throw error;
+      if (!pendingRows?.length) { setPendingMembers([]); return; }
+      // L'email + le token relient le membre DB à la carte locale.
+      // Parents → family_invitations ; observateurs → observer_invitations.
+      const emailByUid = {};
+      const tokenByUid = {};
+      const { data: invRows } = await supabase
+        .from("family_invitations")
+        .select("used_by, email")
+        .eq("family_id", familyIdRef.current)
+        .not("used_by", "is", null);
+      (invRows || []).forEach(r => { if (r.used_by) emailByUid[r.used_by] = r.email; });
+      const { data: obsInvRows } = await supabase
+        .from("observer_invitations")
+        .select("used_by, email, token")
+        .eq("family_id", familyIdRef.current)
+        .not("used_by", "is", null);
+      (obsInvRows || []).forEach(r => {
+        if (r.used_by) {
+          if (r.email) emailByUid[r.used_by] = r.email;
+          if (r.token) tokenByUid[r.used_by] = r.token;
+        }
+      });
+      setPendingMembers(pendingRows.map(r => ({
+        userId: r.user_id, role: r.role, joinedAt: r.joined_at,
+        displayName: r.display_name || null,
+        gender: r.gender || null,
+        email: emailByUid[r.user_id] || null,
+        inviteToken: tokenByUid[r.user_id] || null,
+      })));
+    } catch (e) {
+      console.warn("[Duvia][sync] refreshPendingMembers failed:", e);
+    }
+  }
+
+  async function validateMember(member) {
+    // Accepte soit l'objet membre complet {userId,email,role,...}, soit (compat)
+    // un simple userId — on retrouve alors les infos dans pendingMembers.
+    const m = typeof member === "object" && member
+      ? member
+      : (pendingMembers.find(p => p.userId === member) || { userId: member });
+    const userId = m.userId;
+    try {
+      const { error } = await supabase.rpc("validate_family_member", { p_family_id: familyIdRef.current, p_user_id: userId });
+      if (error) throw error;
+
+      // 🔧 CORRECTIF : la RPC bascule seulement family_members.status='active'.
+      // Sans écriture ici, le membre validé n'apparaissait JAMAIS dans la donnée
+      // partagée (families.data.parents) — ni chez l'inviteur, ni chez l'invité
+      // au rechargement. On l'inscrit donc dans cfg.parents (l'autosave pousse
+      // ensuite vers Supabase). L'invité affinera son propre nom à sa connexion.
+      if ((m.role || "parent") === "parent") {
+        setCfg(c => ({ ...c, parents: insertValidatedParent(c.parents, m) }));
+      } else if (m.role === "observer") {
+        // Observateur Supabase validé → mettre à jour la fiche existante en "active".
+        // On cherche la fiche d'origine par userId, id local, ou email (quand disponible).
+        // Si trouvée : on la met à jour sur place (pas de création de doublon).
+        // Si non trouvée (cas rare) : on crée une nouvelle entrée active.
+        setCfg(c => {
+          const matchFn = o =>
+            // 🔑 Token = clé fiable à 100% reliant la carte pending_invite au membre DB
+            (m.inviteToken && o.inviteToken && o.inviteToken === m.inviteToken) ||
+            // obsCardId = ID direct passé par l'appelant
+            (m.obsCardId && String(o.id) === String(m.obsCardId)) ||
+            String(o.id) === String(m.userId) ||
+            o.userId === m.userId ||
+            (m.email && o.email && o.email === m.email) ||
+            (m.displayName && (m.displayName === o.email || m.displayName === o.name));
+
+          const originalInvite = (c.observers||[]).find(matchFn);
+
+          if (originalInvite) {
+            // ✅ Mise à jour en place : on préserve toutes les données de la fiche existante
+            return {
+              ...c,
+              observers: (c.observers||[]).map(o =>
+                matchFn(o)
+                  ? { ...o, id: m.userId, userId: m.userId,
+                      status: "active",
+                      // Si le nom stocké ressemble à un email, on préfère le vrai nom Supabase
+                      name: (m.displayName && !m.displayName.includes("@")) ? m.displayName : (o.name && !o.name.includes("@") && o.name !== "Observateur") ? o.name : (m.displayName||m.email||o.name||"Observateur"),
+                      email: o.email || m.email || "" }
+                  : o
+              )
+            };
+          }
+          // Fallback : aucune fiche existante trouvée → on en crée une nouvelle
+          return {
+            ...c,
+            observers: [
+              ...(c.observers||[]),
+              { id: m.userId, userId: m.userId,
+                name: m.displayName||m.email||"Observateur",
+                email: m.email||"", phone: "",
+                address: "", role: "grandparent",
+                status:"active", canGuard: false }
+            ]
+          };
+        });
+      }
+
+      await refreshPendingMembers();
+      await refreshFamilies((await supabase.auth.getUser()).data?.user?.id);
+      return { ok: true };
+    } catch (e) {
+      console.error("[Duvia][sync] validateMember error:", e);
+      return { ok: false, error: e.message || "error" };
+    }
+  }
+
+  async function rejectMember(userId) {
+    try {
+      const { error } = await supabase.rpc("reject_family_member", { p_family_id: familyIdRef.current, p_user_id: userId });
+      if (error) throw error;
+      await refreshPendingMembers();
+      return { ok: true };
+    } catch (e) {
+      console.error("[Duvia][sync] rejectMember error:", e);
+      return { ok: false, error: e.message || "error" };
+    }
+  }
+
+  // Retire un membre ACTIF de la famille (inviteur → invité). Le serveur passe
+  // son adhésion à 'removed' ; le membre retiré repartira sur une famille
+  // vierge à sa prochaine connexion (détecté dans le boot ci-dessus).
+  async function removeFamilyMember(userId) {
+    if (!userId || !familyIdRef.current) return { ok: false, error: "missing" };
+    try {
+      const { error } = await supabase.rpc("remove_family_member", { p_family_id: familyIdRef.current, p_user_id: userId });
+      if (error) throw error;
+      const { data } = await supabase.auth.getUser();
+      await refreshFamilies(data?.user?.id);
+      return { ok: true };
+    } catch (e) {
+      console.error("[Duvia][sync] removeFamilyMember error:", e);
+      return { ok: false, error: e.message || "error" };
+    }
+  }
+
+  // « Quitter la famille » (créateur ou invité) : retire ma propre adhésion.
+  async function leaveFamily() {
+    const fid = familyIdRef.current;
+    if (!fid) return { ok: false, error: "no-family" };
+    try {
+      // Mémorise la synthèse + marque le départ volontaire (pas de message d'éjection).
+      try {
+        window.localStorage.setItem("duvia_family_snapshot", JSON.stringify({ at: new Date().toISOString(), cfg: cfgRef.current || null }));
+        window.localStorage.setItem("duvia_left", "1");
+      } catch {}
+      // 🔧 Retirer MON propre créneau de la donnée PARTAGÉE pour que l'autre
+      // parent ne me voie plus (la réconciliation par userId n'était pas fiable).
+      // On m'identifie par mon uid (posé sur mon créneau au boot) OU par mon email.
+      try {
+        const uid = uidRef.current;
+        const myEmail = (cfgRef.current?.parents || []).find(p => p && p.userId === uid)?.email;
+        const { data: fam } = await supabase.from("families").select("data").eq("id", fid).maybeSingle();
+        if (fam?.data?.parents) {
+          const parents = fam.data.parents.filter((p, j) =>
+            j === 0 ? true : !(p && ((uid && p.userId === uid) || (myEmail && p.email && p.email.toLowerCase() === myEmail.toLowerCase())))
+          );
+          if (parents.length !== fam.data.parents.length) {
+            await supabase.from("families").update({ data: { ...fam.data, parents } }).eq("id", fid);
+          }
+        }
+      } catch (e) { console.warn("[Duvia][sync] leaveFamily: nettoyage créneau partagé:", e); }
+      const { error } = await supabase.rpc("leave_family", { p_family_id: fid });
+      if (error) throw error;
+
+      // 🔧 Si je n'ai plus AUCUNE autre famille active, m'en attribuer une
+      // vierge TOUT DE SUITE (avec un nouveau code) — sinon je me retrouve sans
+      // famille et bloqué sur l'écran « Impossible de vérifier ta famille ».
+      try {
+        const uid = uidRef.current;
+        const { data: others } = await supabase
+          .from("family_members").select("family_id")
+          .eq("user_id", uid).eq("status", "active");
+        if (!others || others.length === 0) {
+          const newId = crypto.randomUUID();
+          const fresh = makeCfg();
+          try {
+            const myOld = (cfgRef.current?.parents || []).find(p => p && p.userId === uid)
+                       || (cfgRef.current?.parents || [])[0] || {};
+            fresh.parents[0] = {
+              ...fresh.parents[0],
+              id: myOld.id || 1, name: myOld.name || "", email: myOld.email || "",
+              gender: myOld.gender || fresh.parents[0].gender, phone: myOld.phone || "",
+            };
+          } catch {}
+          // Même schéma d'insertion que la création de famille normale (qui marche) :
+          // family_members sans 'status' explicite → le défaut (actif) s'applique.
+          await supabase.from("families").insert({ id: newId, share_code: fresh.shareCode, data: fresh });
+          await supabase.from("family_members").insert({ family_id: newId, user_id: uid, role: "parent" });
+          try { window.localStorage.setItem("duvia_family_id", newId); } catch {}
+          try { window.localStorage.removeItem("duvia_left"); } catch {}
+          // 🔧 Dans ma nouvelle famille je suis le parent UNIQUE (index 0) : il faut
+          // mettre à jour mon parentIdx, sinon ma fiche d'identité complète reste
+          // masquée (elle ne s'affiche que sur « ma » carte, i === parentIdx).
+          try {
+            const list = JSON.parse(window.localStorage.getItem("duvia_users") || "[]");
+            const sessEmail = JSON.parse(window.localStorage.getItem("duvia_session") || window.sessionStorage.getItem("duvia_session") || "null");
+            window.localStorage.setItem("duvia_users", JSON.stringify(
+              list.map(u2 => u2.email === sessEmail ? { ...u2, parentIdx: 0 } : u2)
+            ));
+          } catch {}
+        }
+      } catch (e) { console.warn("[Duvia][sync] leaveFamily: création famille vierge:", e); }
+
+      // 🔧 Purger la liste de familles : retire l’ancienne du dropdown dès le
+      // retour, sans attendre le rechargement. La famille quittée est désormais
+      // status="removed" → refreshFamilies (qui filtre status=active) ne la
+      // renverra plus. Père1 ne voit plus "Sissi & Alb" dans son sélecteur.
+      try { await refreshFamilies(uidRef.current); } catch {}
+      return { ok: true };
+    } catch (e) {
+      console.error("[Duvia][sync] leaveFamily error:", e);
+      return { ok: false, error: e.message || "error" };
+    }
+  }
+
+  return { syncStatus, familyId, families, joinFamily, linkAccount, signInExisting, switchFamily, createNewFamily, refreshFamilies, joinFamilyByToken, pendingMembers, refreshPendingMembers, validateMember, rejectMember, removeFamilyMember, leaveFamily, pendingApproval, removedObserver };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONTEXT — shared app state accessible anywhere without prop-drilling
+// ═══════════════════════════════════════════════════════════════════════════════
+const AppContext = createContext(null);
+function useApp() { return useContext(AppContext); }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INFO BUBBLE (générique) — icône 👋, ouverte automatiquement une seule fois
+// puis togglable manuellement. Persisté via localStorage par clé+utilisateur.
+// ═══════════════════════════════════════════════════════════════════════════════
+function InfoBubble({C,tipKey,title,children,autoOpen=true}) {
+  const {t} = useApp();
+  const [open, setOpen] = useState(() => {
+    if (!autoOpen) return false;
+    try { return !window.localStorage.getItem(tipKey); } catch { return true; }
+  });
+  function close() {
+    setOpen(false);
+    try { window.localStorage.setItem(tipKey, "1"); } catch {}
+  }
+  function toggle() {
+    setOpen(o => {
+      const next = !o;
+      if (!next) { try { window.localStorage.setItem(tipKey, "1"); } catch {} }
+      return next;
+    });
+  }
+
+  return (
+    <div style={{position:"relative"}}>
+      <button onClick={toggle} style={{width:28,height:28,borderRadius:"50%",background:open?C.vio:`${C.vio}18`,border:`1.5px solid ${C.vio}`,color:open?"#fff":C.vio,fontSize:13,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+        👋
+      </button>
+      {open && (
+        <div onClick={close} style={{position:"absolute",top:36,right:0,zIndex:50,cursor:"pointer",animation:"fadeInDown .35s ease",width:230}}>
+          <div style={{position:"absolute",top:-7,right:8,width:0,height:0,borderLeft:"8px solid transparent",borderRight:"8px solid transparent",borderBottom:`8px solid ${C.vio}`}} />
+          <div style={{background:C.vio,color:"#fff",borderRadius:14,padding:"12px 16px",boxShadow:"0 8px 28px rgba(0,0,0,.22)",position:"relative"}}>
+            <div style={{fontSize:18,marginBottom:6,textAlign:"center"}}>👋</div>
+            <div style={{fontSize:13,fontWeight:800,marginBottom:4,lineHeight:1.3,textAlign:"center"}}>
+              {title}
+            </div>
+            <div style={{fontSize:12,opacity:.92,lineHeight:1.45}}>
+              {children}
+            </div>
+            <div style={{fontSize:10,opacity:.7,marginTop:8,textAlign:"right"}}>
+              {t.tapToClose||"Appuyer pour fermer"}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INFO BUBBLE — icône 👋 avec bulle style "Bienvenue sur Duvia"
+// ═══════════════════════════════════════════════════════════════════════════════
+function StepIdInfoButton({C,t}) {
+  const tipKey = "duvia_stepid_info_seen";
+  const [open, setOpen] = useState(() => {
+    try { return !window.localStorage.getItem(tipKey); } catch { return true; }
+  });
+  const btnRef = useRef(null);
+  const [pos, setPos] = useState({top:0, right:0, arrowRight:0});
+
+  useEffect(() => {
+    if (open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      const vw = window.innerWidth;
+      setPos({ top: r.bottom + 10, right: vw - r.right - 4, arrowRight: 10 });
+      // Marquer comme vu
+      try { window.localStorage.setItem(tipKey, "1"); } catch {}
+    }
+  }, [open]);
+
+  return (
+    <div style={{position:"relative",marginLeft:"auto"}}>
+      <button ref={btnRef} onClick={()=>setOpen(o=>!o)}
+        style={{width:30,height:30,borderRadius:"50%",background:open?C.vio:`${C.vio}22`,border:`1.5px solid ${C.vio}55`,color:open?"#fff":C.vio,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",flexShrink:0}}>
+        👋
+      </button>
+      {open && (
+        <div onClick={()=>setOpen(false)} style={{position:"fixed",top:pos.top,right:pos.right,zIndex:400,cursor:"pointer",animation:"fadeInDown .25s ease",maxWidth:240}}>
+          <div style={{position:"absolute",top:-7,right:pos.arrowRight,width:0,height:0,borderLeft:"8px solid transparent",borderRight:"8px solid transparent",borderBottom:`8px solid ${C.vio}`}} />
+          <div style={{background:C.vio,color:"#fff",borderRadius:14,padding:"14px 16px",boxShadow:"0 8px 28px rgba(0,0,0,.25)"}}>
+            <div style={{fontSize:18,marginBottom:6,textAlign:"center"}}>👋</div>
+            <div style={{fontSize:13,fontWeight:800,marginBottom:8,lineHeight:1.3}}>{t.helpIdTitle}</div>
+            <div style={{fontSize:12,opacity:.95,lineHeight:1.6,display:"flex",flexDirection:"column",gap:8}}>
+              <div>
+                <strong>{t.helpIdParentTitle}</strong><br/>
+                {t.helpIdParentBody}
+              </div>
+              <div>
+                <strong>{t.helpIdChildTitle}</strong><br/>
+                {t.helpIdChildBody}
+              </div>
+              <div>
+                <strong>{t.helpIdInviteTitle}</strong><br/>
+                {t.helpIdInviteBody}
+              </div>
+            </div>
+            <div style={{fontSize:10,opacity:.7,marginTop:10,textAlign:"right"}}>{t.tapToClose}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INFO BUBBLE — Dates spéciales
+// ═══════════════════════════════════════════════════════════════════════════════
+function StepDatesInfoButton({C,t}) {
+  const tipKey = "duvia_stepdates_info_seen";
+  const [open, setOpen] = useState(() => {
+    try { return !window.localStorage.getItem(tipKey); } catch { return true; }
+  });
+  const btnRef = useRef(null);
+  const [pos, setPos] = useState({top:0, right:0});
+
+  useEffect(() => {
+    if (open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      const vw = window.innerWidth;
+      setPos({ top: r.bottom + 10, right: vw - r.right - 4 });
+      try { window.localStorage.setItem(tipKey, "1"); } catch {}
+    }
+  }, [open]);
+
+  return (
+    <div style={{position:"relative",marginLeft:"auto"}}>
+      <button ref={btnRef} onClick={()=>setOpen(o=>!o)}
+        style={{width:30,height:30,borderRadius:"50%",background:open?C.vio:`${C.vio}22`,border:`1.5px solid ${C.vio}55`,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",flexShrink:0}}>
+        👋
+      </button>
+      {open && (
+        <div onClick={()=>setOpen(false)} style={{position:"fixed",top:pos.top,right:pos.right,zIndex:400,cursor:"pointer",animation:"fadeInDown .25s ease",maxWidth:250}}>
+          <div style={{position:"absolute",top:-7,right:10,width:0,height:0,borderLeft:"8px solid transparent",borderRight:"8px solid transparent",borderBottom:`8px solid ${C.vio}`}} />
+          <div style={{background:C.vio,color:"#fff",borderRadius:14,padding:"14px 16px",boxShadow:"0 8px 28px rgba(0,0,0,.25)"}}>
+            <div style={{fontSize:18,marginBottom:6,textAlign:"center"}}>📅</div>
+            <div style={{fontSize:13,fontWeight:800,marginBottom:8,lineHeight:1.3}}>{t.helpDatesTitle}</div>
+            <div style={{fontSize:12,opacity:.95,lineHeight:1.6,display:"flex",flexDirection:"column",gap:8}}>
+              <div>
+                <strong>{t.helpDatesMothersTitle}</strong><br/>
+                {t.helpDatesMothersBody}
+              </div>
+              <div>
+                <strong>{t.helpDatesParentBdayTitle}</strong><br/>
+                {t.helpDatesParentBdayBody}
+              </div>
+              <div>
+                <strong>{t.helpDatesChildBdayTitle}</strong><br/>
+                {t.helpDatesChildBdayBody}
+              </div>
+              <div>
+                <strong>{t.helpDatesHolidaysTitle}</strong><br/>
+                {t.helpDatesHolidaysBody}
+              </div>
+            </div>
+            <div style={{fontSize:10,opacity:.7,marginTop:10,textAlign:"right"}}>{t.tapToClose}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INFO BUBBLE — Modèle de garde
+// ═══════════════════════════════════════════════════════════════════════════════
+function StepGardeInfoButton({C,t}) {
+  const tipKey = "duvia_stepgarde_info_seen";
+  const [open, setOpen] = useState(() => {
+    try { return !window.localStorage.getItem(tipKey); } catch { return true; }
+  });
+  const btnRef = useRef(null);
+  const [pos, setPos] = useState({top:0, right:0});
+
+  useEffect(() => {
+    if (open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      const vw = window.innerWidth;
+      setPos({ top: r.bottom + 10, right: vw - r.right - 4 });
+      try { window.localStorage.setItem(tipKey, "1"); } catch {}
+    }
+  }, [open]);
+
+  return (
+    <div style={{position:"relative",marginLeft:"auto"}}>
+      <button ref={btnRef} onClick={()=>setOpen(o=>!o)}
+        style={{width:30,height:30,borderRadius:"50%",background:open?C.vio:`${C.vio}22`,border:`1.5px solid ${C.vio}55`,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",flexShrink:0}}>
+        👋
+      </button>
+      {open && (
+        <div onClick={()=>setOpen(false)} style={{position:"fixed",top:pos.top,right:pos.right,zIndex:400,cursor:"pointer",animation:"fadeInDown .25s ease",maxWidth:250}}>
+          <div style={{position:"absolute",top:-7,right:10,width:0,height:0,borderLeft:"8px solid transparent",borderRight:"8px solid transparent",borderBottom:`8px solid ${C.vio}`}} />
+          <div style={{background:C.vio,color:"#fff",borderRadius:14,padding:"14px 16px",boxShadow:"0 8px 28px rgba(0,0,0,.25)"}}>
+            <div style={{fontSize:18,marginBottom:6,textAlign:"center"}}>📆</div>
+            <div style={{fontSize:13,fontWeight:800,marginBottom:8,lineHeight:1.3}}>{t.helpGardeTitle}</div>
+            <div style={{fontSize:12,opacity:.95,lineHeight:1.6,display:"flex",flexDirection:"column",gap:8}}>
+              <div>
+                <strong>{t.helpGardeAltTitle}</strong><br/>
+                {t.helpGardeAltBody}
+              </div>
+              <div>
+                <strong>{t.helpGardeExclTitle}</strong><br/>
+                {t.helpGardeExclBody}
+              </div>
+              <div>
+                <strong>{t.helpGardeCustomTitle}</strong><br/>
+                {t.helpGardeCustomBody}
+              </div>
+            </div>
+            <div style={{fontSize:10,opacity:.7,marginTop:10,textAlign:"right"}}>{t.tapToClose}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INFO BUBBLE — Accès
+// ═══════════════════════════════════════════════════════════════════════════════
+function StepAccessInfoButton({C,t}) {
+  const tipKey = "duvia_stepaccess_info_seen";
+  const [open, setOpen] = useState(() => {
+    try { return !window.localStorage.getItem(tipKey); } catch { return true; }
+  });
+  const btnRef = useRef(null);
+  const [pos, setPos] = useState({top:0, right:0});
+
+  useEffect(() => {
+    if (open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      const vw = window.innerWidth;
+      setPos({ top: r.bottom + 10, right: vw - r.right - 4 });
+      try { window.localStorage.setItem(tipKey, "1"); } catch {}
+    }
+  }, [open]);
+
+  return (
+    <div style={{position:"relative",marginLeft:"auto"}}>
+      <button ref={btnRef} onClick={()=>setOpen(o=>!o)}
+        style={{width:30,height:30,borderRadius:"50%",background:open?C.vio:`${C.vio}22`,border:`1.5px solid ${C.vio}55`,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",flexShrink:0}}>
+        👋
+      </button>
+      {open && (
+        <div onClick={()=>setOpen(false)} style={{position:"fixed",top:pos.top,right:pos.right,zIndex:400,cursor:"pointer",animation:"fadeInDown .25s ease",maxWidth:250}}>
+          <div style={{position:"absolute",top:-7,right:10,width:0,height:0,borderLeft:"8px solid transparent",borderRight:"8px solid transparent",borderBottom:`8px solid ${C.vio}`}} />
+          <div style={{background:C.vio,color:"#fff",borderRadius:14,padding:"14px 16px",boxShadow:"0 8px 28px rgba(0,0,0,.25)"}}>
+            <div style={{fontSize:18,marginBottom:6,textAlign:"center"}}>👥</div>
+            <div style={{fontSize:13,fontWeight:800,marginBottom:8,lineHeight:1.3}}>{t.helpAccessTitle}</div>
+            <div style={{fontSize:12,opacity:.95,lineHeight:1.6,display:"flex",flexDirection:"column",gap:8}}>
+              <div>
+                <strong>{t.helpAccessLinkTitle}</strong><br/>
+                {t.helpAccessLinkBody}
+              </div>
+              <div>
+                <strong>{t.helpAccessObsTitle}</strong><br/>
+                {t.helpAccessObsBody}
+              </div>
+              <div>
+                <strong>{t.helpAccessApprovalTitle}</strong><br/>
+                {t.helpAccessApprovalBody}
+              </div>
+            </div>
+            <div style={{fontSize:10,opacity:.7,marginTop:10,textAlign:"right"}}>{t.tapToClose}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ROOT
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── Modale "Installer l'application" (réutilisable) ─────────────────────────
+function BugReportModal({ C, t, open, onClose, getContext }) {
+  const [comment, setComment] = useState("");
+  const [withShot, setWithShot] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [status, setStatus]   = useState(null); // "ok" | "err" | null
+  if (!open) return null;
+  const close = () => { if (sending) return; setComment(""); setWithShot(false); setStatus(null); onClose(); };
+  const send = async () => {
+    if (sending || !comment.trim()) return;
+    setSending(true); setStatus(null);
+    try {
+      await submitBugReport({ comment, withScreenshot: withShot, context: getContext ? getContext() : {} });
+      setStatus("ok");
+    } catch { setStatus("err"); }
+    finally { setSending(false); }
+  };
+  return (
+    <div onClick={close} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:18,maxWidth:420,width:"100%",padding:22,boxShadow:"0 12px 40px rgba(0,0,0,.25)",maxHeight:"90vh",overflowY:"auto"}}>
+        <div style={{fontSize:16,fontWeight:900,color:C.txt,textAlign:"center",marginBottom:4}}>🐛 {t.bugReportTitle}</div>
+        {status==="ok" ? (
+          <>
+            <div style={{fontSize:38,textAlign:"center",margin:"10px 0"}}>✅</div>
+            <div style={{fontSize:13,color:C.mut,textAlign:"center",lineHeight:1.5,marginBottom:16}}>{t.bugReportThanks}</div>
+            <button onClick={close} style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13}}>{t.doneBtn}</button>
+          </>
+        ) : (
+          <>
+            <div style={{fontSize:12.5,color:C.mut,textAlign:"center",lineHeight:1.5,margin:"4px 0 14px"}}>{t.bugReportDesc}</div>
+            <textarea value={comment} onChange={e=>setComment(e.target.value)} placeholder={t.bugReportPlaceholder} rows={4} maxLength={4000}
+              style={{width:"100%",boxSizing:"border-box",padding:12,borderRadius:12,border:`1.5px solid ${C.bor}`,fontSize:13,fontFamily:"inherit",resize:"vertical",marginBottom:12,background:C.sur,color:C.txt}} />
+            <label style={{display:"flex",alignItems:"flex-start",gap:8,cursor:"pointer",marginBottom:6,fontSize:12.5,color:C.txt}}>
+              <input type="checkbox" checked={withShot} onChange={e=>setWithShot(e.target.checked)} style={{width:16,height:16,marginTop:2,accentColor:C.vio,cursor:"pointer"}} />
+              <span>{t.bugReportScreenshot}</span>
+            </label>
+            {withShot && <div style={{fontSize:11,color:C.ora,lineHeight:1.4,marginBottom:12}}>⚠️ {t.bugReportScreenshotWarn}</div>}
+            {status==="err" && <div style={{fontSize:12,color:C.red,lineHeight:1.4,marginBottom:10}}>{t.bugReportError}</div>}
+            <button disabled={sending || !comment.trim()} onClick={send}
+              style={{width:"100%",height:46,background:(sending||!comment.trim())?C.bor:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:14,marginBottom:8,cursor:(sending||!comment.trim())?"not-allowed":"pointer"}}>
+              {sending ? t.bugReportSending : t.bugReportSend}
+            </button>
+            <button onClick={close} disabled={sending} style={{width:"100%",height:40,background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13}}>{t.cancel}</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function InstallAppModal({C,t,onClose}) {
+  return (
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:16,padding:20,maxWidth:400,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{fontSize:16,fontWeight:900,color:C.txt}}>{t.installAppTitle}</div>
+          <button onClick={onClose} style={{width:30,height:30,background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,color:C.mut,fontSize:14,cursor:"pointer"}}>✕</button>
+        </div>
+        <div style={{fontSize:13,color:C.mut,lineHeight:1.5,marginBottom:16}}>{t.installAppDesc}</div>
+
+        <div style={{background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:12,padding:"12px 14px",marginBottom:10}}>
+          <div style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:6,display:"flex",alignItems:"center",gap:6}}>🍏 {t.installAppIosTitle}</div>
+          <ol style={{margin:0,paddingLeft:18,fontSize:12,color:C.mut,lineHeight:1.6}}>
+            {t.installAppIos.map((step,i)=><li key={i} style={{marginBottom:4}}>{step}</li>)}
+          </ol>
+        </div>
+
+        <div style={{background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:12,padding:"12px 14px"}}>
+          <div style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:6,display:"flex",alignItems:"center",gap:6}}>🤖 {t.installAppAndroidTitle}</div>
+          <ol style={{margin:0,paddingLeft:18,fontSize:12,color:C.mut,lineHeight:1.6}}>
+            {t.installAppAndroid.map((step,i)=><li key={i} style={{marginBottom:4}}>{step}</li>)}
+          </ol>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  // ── Persistent state (survives refresh) ──────────────────────────────────
+  const [cfg,setCfg]     = useLocalStorage("duvia_cfg", makeCfg);
+  const familySync = useFamilySync(cfg, setCfg);
+  const [users,setUsers] = useLocalStorage("duvia_users", DEMO_USERS);
+
+  // 🔧 Migration : l'admin n'est plus un compte local — on retire toute
+  // ancienne entrée admin qui aurait pu rester enregistrée sur cet appareil
+  // (avec l'ancien mot de passe codé en dur, maintenant invalide de toute façon).
+  useEffect(()=>{
+    // 🔒 Purge le mot de passe stocké en clair (héritage) : la connexion passe
+    // par Supabase Auth — ce champ ne sert à rien et ne doit pas rester sur l'appareil.
+    setUsers(u => u.filter(x => x.role !== "admin").map(({password, ...rest}) => rest));
+  },[]);
+
+  const [sub,setSub]     = useLocalStorage("duvia_sub", makeSub);
+  const { msgs: cloudMsgs, send: _sendCloudMsg, markRead: markCloudMessageRead } = useMessages(familySync.familyId);
+  const { localToUid, uidToLocal } = useIdLinks(familySync.familyId);
+  const {
+    expenses: allExpenses,
+    reimbursements: allReimbursements,
+    addExpense, addExpenses,
+    updateExpense, updateExpensesBySeries,
+    deleteExpense, deleteExpensesBySeries,
+    confirmExp: dbConfirmExp, rejectExp: dbRejectExp,
+    addReimbursement, updateReimbursement, deleteReimbursement,
+    confirmReim: dbConfirmReim, rejectReim: dbRejectReim,
+  } = useExpenses(familySync.familyId);
+  const { history: historyData, addHistEntry } = useHistory(familySync.familyId);
+  const [myUid, setMyUid] = useState(null);
+  // Vérification admin côté serveur — résiste à la manipulation du localStorage
+  const [adminVerified, setAdminVerified] = useState(false);
+  const [pendingUser,setPendingUser] = useState(null); // parent en attente d'accepter la charte d'engagement
+  // 🔧 Traduit les messages du nuage (uuid Supabase) vers le format local
+  // (id de connexion de l'appli) pour que toute la logique existante de
+  // regroupement par conversation (ck, allConvs…) continue de fonctionner
+  // sans y toucher. Le nom de l'expéditeur est gardé tel quel (sender_name,
+  // une copie prise au moment de l'envoi) même si ce compte est supprimé
+  // plus tard — exactement comme l'ancien système, mais côté serveur.
+  // On garde les UIDs Supabase tels quels — ils sont stables (1 par personne),
+  // contrairement aux local_id qui changent à chaque appareil/session.
+  const msgs = (cloudMsgs||[]).map(cm => {
+    return {
+      id: cm.id, from: cm.sender_id, fromName: cm.sender_name || "?",
+      to: cm.recipient_ids || [], content: cm.content, ts: cm.created_at,
+      readBy: cm.read_by || [],
+      hash: hashMsg(cm.sender_id, cm.recipient_ids||[], cm.content, cm.created_at),
+    };
+  });
+  // emailToUid : email → supabase_uid (membres sans compte local sur cet appareil)
+  const [emailToUid, setEmailToUid] = useState(new Map());
+  useEffect(() => {
+    if (!familySync.familyId) return;
+    (async () => {
+      try {
+        const { data } = await supabase.from("id_links")
+          .select("email, supabase_uid")
+          .eq("family_id", familySync.familyId)
+          .not("email", "is", null);
+        if (data) setEmailToUid(new Map(data.map(r => [r.email, r.supabase_uid])));
+      } catch {}
+    })();
+  }, [familySync.familyId]);
+
+  function sendCloudMessage(senderName, recipientIds, content){
+    // recipientIds peut contenir : local_ids, UIDs Supabase déjà résolus, ou IDs synthétiques (cfgp_email)
+    const _uidSet = uidToLocal ? new Set(Array.from(uidToLocal.keys()).map(String)) : new Set();
+    const recipientUids = recipientIds.map(id=>{
+      const sid = String(id);
+      // Déjà un UID Supabase ?
+      if(_uidSet.has(sid)) return sid;
+      // local_id connu ?
+      if(localToUid && localToUid.has(sid)) return localToUid.get(sid);
+      // ID synthétique cfgp_email / cfgo_email ?
+      if(sid.startsWith("cfgp_") || sid.startsWith("cfgo_")){
+        const email = sid.replace(/^cfg[po]_/,"");
+        return (emailToUid && emailToUid.get(email)) || null;
+      }
+      // Format UUID ? (8-4-4-4-12 hex) → on suppose UID Supabase
+      if(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sid)) return sid;
+      return null;
+    }).filter(Boolean);
+    if(!myUid || recipientUids.length !== recipientIds.length){
+      return Promise.reject(new Error("Un destinataire n'a pas encore synchronisé son compte — demande-lui de se reconnecter une fois, puis réessaie."));
+    }
+    return _sendCloudMsg(myUid, senderName, recipientUids, content);
+  }
+  const [activity,setActivity] = useLocalStorage("duvia_activity", {vault:"",contacts:"",expenses:""});
+  const [simDate,setSimDate]   = useLocalStorage("duvia_simdate", null); // admin: simulate future date
+  const [themeMode,setThemeMode] = useLocalStorage("duvia_theme", "palette"); // "palette"|"clair"|"sombre"
+  function cycleTheme(){ setThemeMode(m=>m==="palette"?"clair":m==="clair"?"sombre":"palette"); }
+  const dark = themeMode==="sombre";
+  const [lang,setLang]   = useLocalStorage("duvia_lang", "fr");
+  // Devise partagée via cfg (synchro famille) — remplace localStorage
+  const currency = cfg.currency || "€";
+  const setCurrency = useCallback((val) => setCfg(c=>({...c,currency:val})), [setCfg]);
+  const [weekStart,setWeekStart] = useLocalStorage("duvia_week_start", "lundi");
+  const [summerActive,setSummerActive] = useLocalStorage("duvia_summer", false);
+  const [rgActive,setRgActive]         = useLocalStorage("duvia_rg", false);
+  const [wcActive,setWcActive]         = useLocalStorage("duvia_wc", false);
+  const [videoActive,setVideoActive]   = useLocalStorage("duvia_video", false);
+  const brandActive = themeMode==="palette";
+
+  // ── Session (email stored, user object restored from users list) ──────────
+  // sessionEmail en mémoire — restauré depuis Supabase si session encore valide (refresh)
+  const [sessionEmail, setSessionEmail] = useState(() => {
+    try {
+      const remember = window.localStorage.getItem("duvia_remember") === "1";
+      if (remember) return JSON.parse(window.localStorage.getItem("duvia_session") || window.sessionStorage.getItem("duvia_session") || "null");
+      // Non "rester connecté" : lire depuis sessionStorage (survit au refresh, pas à la fermeture)
+      return JSON.parse(window.sessionStorage.getItem("duvia_session") || "null");
+    } catch { return null; }
+  });
+  const [user, setUser] = useState(() => {
+    if (!sessionEmail) return null;
+    // 🔒 Sécurité appareil partagé : on ne restaure la session de l'app QUE si
+    // un jeton Supabase est présent dans sessionStorage (donc même onglet, non
+    // fermé). Sur un nouvel onglet/visite, pas de jeton → pas de restauration
+    // (évite d'afficher brièvement les données de l'utilisateur précédent).
+    try {
+      const hasSupaToken =
+        Object.keys(window.sessionStorage).some(k => k.startsWith("sb-") && k.includes("auth-token")) ||
+        Object.keys(window.localStorage).some(k => k.startsWith("sb-") && k.includes("auth-token"));
+      if (!hasSupaToken) return null;
+    } catch {}
+    // Priorité : liste users persistée en localStorage, fallback DEMO_USERS
+    try {
+      const raw = window.localStorage.getItem("duvia_users");
+      if (raw) {
+        const saved = JSON.parse(raw);
+        const found = saved.find(u => u.email === sessionEmail);
+        if (found) return found;
+      }
+    } catch {}
+    return DEMO_USERS.find(u => u.email === sessionEmail) || null;
+  });
+  // handleSetUser défini plus bas, après tous les useState
+
+  // ── 🪪 Carte d'identité cloud ───────────────────────────────────────────
+  // Relie l'id local de cette personne (ex: 1718000000000) à son uuid
+  // Supabase, dès qu'on connaît les deux. Sert à retrouver "qui est qui"
+  // quand on migre les messages vers le cloud (table id_links).
+  useEffect(() => {
+    if (!familySync.familyId || !user?.id) return;
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        const uid = data?.user?.id;
+        if (!uid) return;
+        setMyUid(uid);
+        // Vérification admin côté serveur — si localStorage est falsifié, Supabase corrige
+        if (user?.role === "admin") {
+          const { data: adminRow } = await supabase
+            .from("app_admins")
+            .select("user_id")
+            .eq("user_id", uid)
+            .maybeSingle();
+          if (adminRow) {
+            setAdminVerified(true);
+          } else {
+            // Rôle admin falsifié dans localStorage → on le retire
+            setAdminVerified(false);
+            setUsers(us => us.map(u => u.id === user.id ? {...u, role: "parent"} : u));
+          }
+        } else {
+          setAdminVerified(false);
+        }
+        await supabase.from("id_links").upsert(
+          { family_id: familySync.familyId, local_id: String(user.id), supabase_uid: uid, email: user.email||null },
+          { onConflict: "family_id,local_id" }
+        );
+      } catch (e) {
+        console.error("[Duvia][id_links] échec d'enregistrement de la carte d'identité:", e);
+      }
+    })();
+  }, [familySync.familyId, user?.id]);
+
+  // ── Vérification plan d'abonnement depuis Supabase ───────────────────────
+  // Écrase le plan localStorage avec la valeur serveur — résiste à la falsification
+  useEffect(() => {
+    if (!myUid || user?.role === "admin") return;
+    (async () => {
+      try {
+        const { data: subRow } = await supabase
+          .from("subscriptions")
+          .select("plan, premium_since, cycle, trial_start, trial_extension_days")
+          .eq("user_id", myUid)
+          .maybeSingle();
+        if (!subRow) return;
+        setSub(s => ({
+          ...s,
+          plan:          subRow.plan            || s.plan,
+          premiumSince:  subRow.premium_since   || s.premiumSince,
+          cycle:         subRow.cycle           || s.cycle,
+          trialStart:    subRow.trial_start     || s.trialStart,
+          trialExtension:subRow.trial_extension_days ?? s.trialExtension,
+        }));
+      } catch (e) {
+        console.error("[Duvia] Erreur vérification plan:", e);
+      }
+    })();
+  }, [myUid]);
+  useEffect(() => {
+    initDiagnostics();
+    retryPendingReport();
+  }, []);
+
+  // ── Vérification Supabase Auth au démarrage ───────────────────────────────
+  // Si la session Supabase a expiré ou le compte a été supprimé → déconnexion forcée.
+  // (L'admin est maintenant un vrai compte Supabase, plus d'exemption nécessaire.)
+  useEffect(() => {
+    if (!sessionEmail) return;
+    // ⏱️ « Rester connecté » plafonné à 24h : passé l'échéance, déconnexion
+    // forcée. Vérif LOCALE (basée sur l'horloge) → s'applique même hors-ligne.
+    try {
+      const until = parseInt(window.localStorage.getItem("duvia_remember_until") || "0", 10);
+      if (window.localStorage.getItem("duvia_remember") === "1" && until && Date.now() > until) {
+        ["duvia_remember","duvia_remember_until","duvia_session"].forEach(k => window.localStorage.removeItem(k));
+        [window.sessionStorage, window.localStorage].forEach(store => {
+          Object.keys(store).filter(k => k.startsWith("sb-")).forEach(k => store.removeItem(k));
+        });
+        supabase.auth.signOut().catch(()=>{});
+        setUser(null);
+        setSessionEmail(null);
+        return;
+      }
+    } catch {}
+    (async () => {
+      try {
+        const { data: sessData } = await supabase.auth.getSession();
+        if (!sessData?.session) {
+          // Session Supabase absente ou expirée → déconnexion forcée + nettoyage thème
+          setUser(null);
+          setSessionEmail(null);
+          try {
+            window.localStorage.removeItem("duvia_session");
+            window.localStorage.removeItem("duvia_summer");
+            window.localStorage.removeItem("duvia_rg");
+            window.localStorage.removeItem("duvia_wc");
+            window.localStorage.removeItem("duvia_video");
+          } catch {}
+        }
+      } catch {
+        // Pas de réseau → on garde la session locale (mode hors-ligne)
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 🔒 Déconnexion à la sortie de page (sauf « Rester connecté »).
+  // Quand l'utilisateur QUITTE/recharge la page sans avoir coché « Rester
+  // connecté », on efface les jetons de session → il devra se reconnecter en
+  // revenant. Les rechargements INTERNES de l'app (éjection, quitter, nouvelle
+  // version…) posent un drapeau via duviaReload() et sont donc épargnés.
+  useEffect(() => {
+    try { window.sessionStorage.removeItem("duvia_internal_reload"); } catch {}
+    const onLeave = () => {
+      try {
+        if (window.localStorage.getItem("duvia_remember") === "1") return; // rester connecté → rien effacer
+        if (window.sessionStorage.getItem("duvia_internal_reload") === "1") {
+          window.sessionStorage.removeItem("duvia_internal_reload"); return;
+        }
+        // ✅ Ne PAS effacer sessionStorage ici :
+        // - Refresh (pull-to-refresh) → sessionStorage survit → session restaurée automatiquement
+        // - Fermeture tab/navigateur → le navigateur efface sessionStorage tout seul
+        // On efface uniquement duvia_session de localStorage (email en clair)
+        window.localStorage.removeItem("duvia_session");
+      } catch {}
+    };
+    window.addEventListener("pagehide", onLeave);
+    return () => { window.removeEventListener("pagehide", onLeave); };
+  }, []);
+
+  // Consentement RGPD (politique de confidentialité) — accepté une fois par
+  // appareil, redemandé si la version change. Lu au démarrage depuis localStorage.
+  const [rgpdOk,setRgpdOk] = useState(()=>{
+    try { return isRgpdConsentValid(window.localStorage.getItem(RGPD_STORAGE_KEY), RGPD_NOTICE_VERSION); }
+    catch { return false; }
+  });
+  function acceptRgpd(){
+    try { window.localStorage.setItem(RGPD_STORAGE_KEY, JSON.stringify(makeRgpdConsentRecord(RGPD_NOTICE_VERSION))); } catch {}
+    setRgpdOk(true);
+  }
+  // Message après éjection (retiré de la famille par le créateur / dissolution).
+  const [ejectedNotice,setEjectedNotice] = useState(()=>{ try{return window.localStorage.getItem("duvia_ejected")==="1";}catch{return false;} });
+  function dismissEjected(){ try{window.localStorage.removeItem("duvia_ejected");}catch{} setEjectedNotice(false); }
+  // Notification au créateur quand un invité quitte/est retiré (temps réel).
+  const [inviteLeftNotice,setInviteLeftNotice] = useState(null);
+  useEffect(()=>{
+    const h = (e)=> setInviteLeftNotice((e && e.detail) || "L'invité");
+    window.addEventListener("duvia-invite-left", h);
+    return ()=> window.removeEventListener("duvia-invite-left", h);
+  },[]);
+  const [tab,setTab]   = useState(0);
+  const tabDir = useRef("right");
+  function switchTab(i){ tabDir.current = i > tab ? "right" : "left"; setTab(i); }
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [bell,setBell] = useState(false);
+  const [showMenu,setShowMenu] = useState(false);
+  const [showBugModal,setShowBugModal] = useState(false);
+  const [showInstallModal,setShowInstallModal] = useState(false);
+  const [showLicenseModal,setShowLicenseModal] = useState(false);
+  const [showPrizesMenu,setShowPrizesMenu] = useState(false);
+  const [menuHighlight,setMenuHighlight] = useState(true);
+  const [showOnboardingTip,setShowOnboardingTip] = useState(false);
+  const [configStep,setConfigStep] = useState(0);
+  const [showRefPrompt,setShowRefPrompt] = useState(false);
+  const [showResetConfirm,setShowResetConfirm] = useState(false);
+  // ✅ showRefPrompt accessible via Context (useApp()) — plus de référence globale window.__
+  const [menuTab,setMenuTab] = useState(null);
+  const [pendingReimPopup,setPendingReimPopup] = useState(null); // {reim, fromName}
+  const [pendingExpPopup,setPendingExpPopup]   = useState(null); // expense pending
+  const [expSubmittedPopup,setExpSubmittedPopup] = useState(false); // toast after adding expense
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  useEffect(() => {
+    const onUpdateReady = () => setUpdateAvailable(true);
+    window.addEventListener("duvia-update-ready", onUpdateReady);
+    return () => window.removeEventListener("duvia-update-ready", onUpdateReady);
+  }, []);
+  useEffect(()=>{ if(!expSubmittedPopup) return; const t=setTimeout(()=>setExpSubmittedPopup(false),2500); return ()=>clearTimeout(t); },[expSubmittedPopup]);
+  const [confirmDeleteAccount,setConfirmDeleteAccount] = useState(false);
+  const [deletingAccount,setDeletingAccount]           = useState(false);
+  const [deleteAccountError,setDeleteAccountError]     = useState("");
+
+  // ── Garde le user en mémoire synchronisé avec la liste users persistée ──────
+  // (ex: après setUsers suite à un achat, upgrade, parrainage, etc.)
+  useEffect(()=>{
+    if(!sessionEmail) return;
+    const fresh = users.find(u=>u.email===sessionEmail);
+    if(fresh && fresh !== user) setUser(fresh);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[users, sessionEmail]);
+
+  // ── handleSetUser — défini ici pour avoir accès à tous les setters useState ──
+  const handleSetUser = useCallback((u) => {
+    // 🔒 Compte différent de celui actif dans cet onglet (ou 1re connexion) →
+    // on ne fait JAMAIS confiance au cfg/family_id déjà en mémoire/localStorage,
+    // peu importe le chemin pris (inscription, connexion classique, invitation).
+    // On recharge entièrement la page pour repartir d'une résolution fraîche
+    // côté serveur, pour CE compte précis.
+    if (u && u.email && u.email !== sessionEmail) {
+      try {
+        const rawUsers = window.localStorage.getItem("duvia_users");
+        const list = rawUsers ? JSON.parse(rawUsers) : [];
+        if (!list.some(u2 => u2.email === u.email)) list.push(u);
+        window.localStorage.setItem("duvia_users", JSON.stringify(list));
+        // duvia_session → localStorage si "Rester connecté", sinon sessionStorage (refresh-safe)
+        const rememberSet = window.localStorage.getItem("duvia_remember") === "1";
+        if (rememberSet) { window.localStorage.setItem("duvia_session", JSON.stringify(u.email)); }
+        else { window.sessionStorage.setItem("duvia_session", JSON.stringify(u.email)); }
+        window.localStorage.removeItem("duvia_family_id");
+        window.localStorage.removeItem("duvia_cfg");
+      } catch {}
+      duviaReload();
+      return;
+    }
+    setUser(u);
+    setSessionEmail(u ? u.email : null);
+
+    // ── PostHog : identifier l'utilisateur au login, reset au logout ──
+    if (u && u.id) {
+      posthog.identify(u.id, {
+        email:       u.email  || "",
+        role:        u.role   || "unknown",
+        displayName: u.displayName || u.email || "",
+      });
+      posthog.capture("login", { role: u.role || "unknown" });
+    } else if (!u) {
+      posthog.capture("logout");
+      posthog.reset();
+    }
+
+    // Première connexion parent → afficher la bulle d'onboarding
+    if (u && u.role === "parent") {
+      const seenKey = `duvia_onboarding_${u.id}`;
+      try {
+        if (!window.localStorage.getItem(seenKey)) {
+          setShowOnboardingTip(true);
+          window.localStorage.setItem(seenKey, "1");
+        }
+      } catch {}
+    }
+    // Déconnexion → retour au thème par défaut
+    if (!u) {
+      setSummerActive(false);
+      setRgActive(false);
+      setWcActive(false);
+      setVideoActive(false);
+      setThemeMode("palette");
+      setShowPrizesMenu(false);
+      // 🔧 Repartir de zéro pour le prochain compte qui se connecte sur cet
+      // appareil — sans ça, ses données se mélangeraient avec celles du
+      // compte précédent (cfg/family_id restaient en mémoire/localStorage).
+      try {
+        window.localStorage.removeItem("duvia_family_id");
+        window.localStorage.removeItem("duvia_cfg");
+      } catch {}
+      setUser(null);
+      // 🔒 Indispensable : sans ça, la session Supabase du compte précédent
+      // reste active et le rechargement la reprend telle quelle.
+      supabase.auth.signOut().catch(()=>{}).finally(()=>{ duviaReload(); });
+      return;
+    }
+  }, [sessionEmail, setSessionEmail, setShowOnboardingTip, setSummerActive, setRgActive, setWcActive, setVideoActive, setThemeMode, setShowPrizesMenu]); // ✅ tous les setters existent à ce stade
+
+  // ── Google OAuth : détecte le retour de redirection et connecte l'utilisateur ──
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setShowPasswordReset(true);
+        return;
+      }
+      if (event === "SIGNED_IN" && session?.user) {
+        const provider = session.user.app_metadata?.provider;
+        if (provider === "google") {
+          const u = session.user;
+          const currentSession = JSON.parse(window.localStorage.getItem("duvia_session") || window.sessionStorage.getItem("duvia_session") || "null");
+          if (currentSession === u.email || sessionEmail === u.email) return; // déjà connecté
+          const googleUser = {
+            id: u.id,
+            email: u.email,
+            name: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split("@")[0] || "Utilisateur",
+            role: "parent",
+            parentIdx: 0,
+            sub: u.user_metadata?.sub || undefined,
+            accountCreatedAt: new Date().toISOString(),
+          };
+          // 🔧 Invitation dans l'URL (Google OAuth + lien d'invitation)
+          // On traite le join AVANT handleSetUser pour que l'app charge
+          // directement dans la bonne famille, sans reload.
+          const urlInvParam = new URLSearchParams(window.location.search).get("inv");
+          if (urlInvParam) {
+            try {
+              let joinToken = urlInvParam;
+              try { const d=JSON.parse(atob(urlInvParam)); joinToken=d.code||urlInvParam; } catch{}
+              const joinRes = await familySync.joinFamilyByToken(joinToken, { name: googleUser.name, gender: "M" });
+              if (joinRes?.ok) {
+                try{ window.localStorage.setItem("duvia_family_id", joinRes.familyId); }catch{}
+                // Reload sans le param ?inv= : familySync charge la bonne famille,
+                // la session Supabase persiste en localStorage → handleSetUser s'exécute au reload.
+                window.location.replace("https://app.duvia.fr");
+                return;
+              }
+            } catch(e) { console.warn("[Duvia] Google OAuth invite join failed:", e); }
+          }
+          handleSetUser(googleUser);
+        }
+      }
+    });
+    return () => subscription.unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Sync automatique des infos du parent connecté → cfg.parents ──────────
+  // Découplé de handleSetUser : doit aussi s'exécuter après un rechargement
+  // de page (nouveau compte / nouvelle famille créée), une fois que la
+  // famille a fini de charger.
+  useEffect(() => {
+    if (!user || user.role !== "parent" || typeof user.parentIdx !== "number") return;
+    if (!familySync.familyId) return;
+    setCfg(c => {
+      const parents = [...(c.parents || [])];
+      const idx      = user.parentIdx;
+      const existing = parents[idx] || {};
+      // 🔒 Ne JAMAIS écraser le créneau d'un AUTRE parent : si ce créneau a déjà
+      // un email différent du mien, mon parentIdx est périmé (cas multi-familles)
+      // → on ne touche à rien (évite de corrompre la fiche de l'autre parent).
+      if (existing.email && user.email && existing.email.toLowerCase() !== user.email.toLowerCase()) return c;
+      if (existing.name && existing.email === user.email) return c; // déjà à jour
+      parents[idx] = {
+        ...existing,
+        id:        existing.id || user.id,
+        name:      existing.name || user.name || "",
+        email:     user.email || existing.email || "",
+        gender:    existing.gender || user.gender || "M",
+        phone:     existing.phone || user.phone || "",
+        color:     existing.color || PCOLS[idx % PCOLS.length],
+        birthDay:  existing.birthDay || "",
+        birthMonth:existing.birthMonth || "",
+        inviteStatus: undefined,
+      };
+      return { ...c, parents };
+    });
+  }, [user, familySync.familyId]);
+
+  // 🔧 Auto-correction du parentIdx : en multi-familles, le parentIdx stocké
+  // peut être périmé (ex. créatrice ailleurs → parentIdx 0, mais invitée ici →
+  // créneau 1). On déduit le VRAI créneau (celui dont l'email correspond au
+  // mien) et on corrige, sinon l'app croit que la carte de l'autre parent est
+  // la mienne (champs éditables, bouton « Quitter » au mauvais endroit).
+  useEffect(() => {
+    if (!user || user.role !== "parent" || !familySync.familyId) return;
+    const parents = cfg.parents || [];
+    if (!parents.length || !user.email) return;
+    const mail = user.email.toLowerCase();
+    const realIdx = parents.findIndex(p => p && p.email && p.email.toLowerCase() === mail);
+    if (realIdx >= 0 && realIdx !== user.parentIdx) {
+      try {
+        const list = JSON.parse(window.localStorage.getItem("duvia_users") || "[]");
+        window.localStorage.setItem("duvia_users", JSON.stringify(
+          list.map(u2 => u2.email === user.email ? { ...u2, parentIdx: realIdx } : u2)
+        ));
+      } catch {}
+      setUser(u => (u ? { ...u, parentIdx: realIdx } : u));
+    }
+  }, [user, cfg.parents, familySync.familyId]);
+
+  // ── Referral tracking — scope filleul (pour le user courant) ─────────────
+  const refActionsKey = `duvia_ref_actions_${user?.id||"default"}`;
+  const [refActions, setRefActions] = useLocalStorage(refActionsKey, []);
+  const [showReferreePopup, setShowReferreePopup] = useState(false);
+  const [showReferrerPopup, setShowReferrerPopup] = useState(false);
+
+  // Parrain : afficher popup si bonus en attente (après login)
+  useEffect(()=>{
+    if(!user?.refCode) return;
+    const bonusKey = `duvia_ref_bonus_pending_family_${user.refCode}`;
+    const pending = localStorage.getItem(bonusKey);
+    if(pending){ setShowReferrerPopup(true); localStorage.removeItem(bonusKey); }
+  },[user?.id]);
+
+  // Popup remboursement en attente à la connexion
+  useEffect(()=>{
+    if(!user || user.role!=="parent") return;
+    const idx = user.parentIdx;
+    if(idx===undefined||idx===null) return;
+    const pending=(allReimbursements||[]).filter(r=>r.to===idx && r.status==="pending");
+    if(pending.length>0) setPendingReimPopup(pending[0]);
+  },[user?.id]);
+
+  // Popup dépense en attente à la connexion
+  useEffect(()=>{
+    if(!user || user.role!=="parent") return;
+    const idx = user.parentIdx;
+    if(idx===undefined||idx===null) return;
+    const pending=(allExpenses||[]).filter(e=>e.status==="pending" && e.createdBy!==undefined && e.createdBy!==idx);
+    if(pending.length>0) setPendingExpPopup(pending[0]);
+  },[user?.id]);
+
+  const addRefAction = useCallback((actionType) => {
+    if(!user?.refUsed) return; // seuls les filleuls (qui ont un parrain) trackent leurs actions
+    if(!REF_ACTION_WEIGHTS[actionType]) return;
+    setRefActions(prev=>{
+      if(prev.includes(actionType)) return prev;
+      const next=[...prev, actionType];
+      if(!refIsUnlocked(prev) && refIsUnlocked(next)){
+        setTimeout(()=>_onFilleulValidated(), 0);
+      }
+      return next;
+    });
+  }, [user?.refUsed, setRefActions]); // ✅ référence stable
+
+  function _onFilleulValidated(){
+    // 1. Filleul → passe en earned_premium + notification
+    setShowReferreePopup(true);
+    setSub(s=>({...s, plan:"earned_premium"}));
+    setUsers(us=>us.map(u=>u.id===user?.id?{...u,plan:"earned_premium"}:u));
+    // 2. Parrain → bonus selon statut
+    const parrain = users.find(u=>u.refCode===user?.refUsed);
+    if(!parrain) return;
+    const parrainIsPrem = isPremFull(parrain.sub||{}) || parrain._admin;
+    const newValidatedCount = (parrain.validatedRefCount||0)+1;
+    // Vérifier si le parrain est encore dans sa fenêtre trial (pas freemium)
+    const parrainCreated = parrain.accountCreatedAt || parrain.trialStart;
+    const parrainDaysElapsed = parrainCreated ? (Date.now()-new Date(parrainCreated).getTime())/86400000 : 999;
+    const parrainExt = parrain.trialExtension||0;
+    const parrainMaxDays = Math.min(TRIAL_BASE_DAYS+parrainExt, TRIAL_MAX_DAYS);
+    const parrainIsFreemium = !parrainIsPrem && parrainDaysElapsed > parrainMaxDays;
+    let bonusDays = 0;
+    let newMonthlyRefMonth = parrain.monthlyRefMonth||null;
+    let newMonthlyRefCount = parrain.monthlyRefCount||0;
+    if(parrainIsFreemium){
+      // Freemium : plus de jours d'extension — seulement un tour de roue
+      bonusDays = 0;
+    } else if(!parrainIsPrem){
+      // Trial / earned_premium : paliers dégressifs
+      bonusDays = refBonusDaysTrial(newValidatedCount, parrainExt);
+    } else {
+      // Premium abonné : plafond mensuel
+      const now = new Date();
+      const thisMonth = `${now.getFullYear()}-${now.getMonth()}`;
+      const mCount = (parrain.monthlyRefMonth===thisMonth ? parrain.monthlyRefCount||0 : 0)+1;
+      bonusDays = refBonusDaysPremium(mCount);
+      newMonthlyRefMonth = thisMonth;
+      newMonthlyRefCount = mCount;
+    }
+    const shouldUpgrade = !parrainIsPrem && !parrainIsFreemium && newValidatedCount>=1;
+    setUsers(us=>us.map(u=>u.id===parrain.id?{
+      ...u,
+      validatedRefCount: newValidatedCount,
+      trialExtension: (u.trialExtension||0)+bonusDays,
+      pendingSpins: (u.pendingSpins||0)+SPIN_PER_REF,
+      plan: shouldUpgrade ? "earned_premium" : u.plan,
+      monthlyRefMonth: newMonthlyRefMonth,
+      monthlyRefCount: newMonthlyRefCount,
+    }:u));
+    // Signal au parrain (cross-session via localStorage)
+    try{ localStorage.setItem(`duvia_ref_bonus_pending_family_${parrain.refCode}`, "true"); }catch{}
+  }
+  // Auto-disable RG / WC theme outside their period — SAUF si le thème a été acheté (cadeau permanent)
+  useEffect(()=>{
+    const uid = String(user?.id||"");
+    const gifted = sub.giftedPrizes?.[uid] || {};
+    if(!isRGPeriod() && rgActive && !gifted.rg && !sub.earnedRG) setRgActive(false);
+  },[rgActive, user?.id]);
+  useEffect(()=>{
+    const uid = String(user?.id||"");
+    const gifted = sub.giftedPrizes?.[uid] || {};
+    if(!isWCPeriod() && wcActive && !gifted.wc && !sub.earnedWC) setWcActive(false);
+  },[wcActive, user?.id]);
+  // ─── OpenHolidays API data ────────────────────────────────────────────────
+  const [apiData, setApiData] = useState(null);
+  const [apiLoading, setApiLoading] = useState(false);
+  useEffect(() => {
+    if (!cfg.country) return;
+    const country = cfg.country;
+    const zone = cfg.subdivisionCode || cfg.zone || "";
+    const year = new Date().getFullYear();
+    setApiLoading(true);
+    Promise.all([
+      fetchOHData(country, zone, year),
+      fetchOHData(country, zone, year + 1),
+    ]).then(([cur, nxt]) => {
+      // Merge school hols deduplicated
+      const schoolHols = [...(cur.schoolHols||[])];
+      if (nxt.schoolHols) {
+        const seen = new Set(schoolHols.map(h=>h.n));
+        nxt.schoolHols.forEach(h=>{ if(!seen.has(h.n)) schoolHols.push(h); });
+      }
+      // Merge public hols
+      const publicHols = [...(cur.publicHols||[]), ...(nxt.publicHols||[])];
+      setApiData({ schoolHols: schoolHols.length ? schoolHols : null, publicHols: publicHols.length ? publicHols : null });
+      setApiLoading(false);
+    }).catch(() => setApiLoading(false));
+  }, [cfg.country, cfg.subdivisionCode, cfg.zone]);
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const C = useMemo(() =>
+    videoActive ? VIDEO : wcActive ? WC : rgActive ? RG :
+    summerActive ? SUMMER : themeMode==="sombre" ? DARK :
+    themeMode==="clair" ? LIGHT : BRAND,
+  [videoActive, wcActive, rgActive, summerActive, themeMode]); // ✅ recalculé uniquement si le thème change
+  const cssString = useMemo(() => css(C), [C]); // ✅ ~300 lignes CSS générées une seule fois par thème
+  const brandCssString = useMemo(() => css(BRAND), []); // ✅ toujours BRAND pour la page de login
+  const headerBG = C._brand ? `linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)` : C.card;
+  const t     = useMemo(() => TR[lang], [lang]);
+  const st    = useMemo(() => subStatus(sub), [sub]);
+  const prem  = useMemo(() => isPrem(sub), [sub]);
+  const perms = useMemo(() => getPerms(sub), [sub]);
+  const days  = useMemo(() => trialLeft(sub), [sub]);
+  // isAdm = vrai seulement si Supabase confirme (app_admins) — résiste au localStorage falsifié
+  const isAdm = user?.role === "admin" && adminVerified;
+  const isObs = user?.role==="observer";
+  const isChild = user?.role==="child";
+  const _myId = String(user?.id||"");
+  const unreadMsgs = useMemo(() => {
+    const _uid = String(myUid || _myId || "");
+    if(!_uid) return 0;
+    return msgs.filter(m =>
+      (m.to||[]).map(String).includes(_uid) &&
+      !(m.readBy||[]).map(String).includes(_uid)
+    ).length;
+  }, [msgs, myUid, _myId]); // ✅ recalculé si msgs, myUid ou user change
+  // seen: clé fixe, objet {[userId]: {vault,contacts,expenses}}
+  const [allSeen,setAllSeen] = useLocalStorage("duvia_seen_all", {});
+  const _seen = allSeen[_myId] || {vault:"",contacts:"",expenses:""};
+  function _setSeen(updater){
+    setAllSeen(prev=>{
+
+      const cur=prev[_myId]||{vault:"",contacts:"",expenses:""};
+      return {...prev,[_myId]:typeof updater==="function"?updater(cur):updater};
+    });
+  }
+  // Sync activity depuis localStorage quand un autre user écrit (cross-session)
+  const [activityTick,setActivityTick] = useState(0);
+  // Docs coffre non-lus — dans le contexte principal pour que vaultDot soit réactif
+  const [unreadVaultDocIds, setUnreadVaultDocIds] = useLocalStorage(`duvia_vault_unread_${_myId}`, []);
+  const vaultUnreadCount = unreadVaultDocIds.length;
+  useEffect(()=>{
+    function onStorage(e){ if(e.key==="duvia_activity") setActivityTick(t=>t+1); }
+    window.addEventListener("storage",onStorage);
+    return()=>window.removeEventListener("storage",onStorage);
+  },[]);
+  const liveActivity = useMemo(() => {
+    try{ const raw=window.localStorage.getItem("duvia_activity"); if(raw)return JSON.parse(raw); }catch{}
+    return activity;
+  }, [activity, activityTick]);
+  const vaultDot   = (cfg.vaultActivity?.by && cfg.vaultActivity.by!==_myId && cfg.vaultActivity.ts>(_seen.vault||"")) || vaultUnreadCount>0;
+  const contactsDot= liveActivity.contacts?.by && liveActivity.contacts.by!==_myId && liveActivity.contacts.ts>(_seen.contacts||"");
+  // Vibration dépenses = dépenses EN ATTENTE créées par l'autre parent (source DB)
+  const expPendingDot = (allExpenses||[]).some(e =>
+    e.status==="pending" && user?.role==="parent" &&
+    e.createdBy!==undefined && e.createdBy!==(user?.parentIdx??-1)
+  );
+  // Sync current user's sub into the users list (so admin can see all subscribers)
+  useEffect(()=>{
+    if(!user || user.role==="admin") return;
+    setUsers(us => us.map(u => u.id===user.id ? {...u, sub: sub} : u));
+  },[sub?.plan, sub?.premiumSince, sub?.cycle, user?.id]);
+  // Auto-set admin subscription on login
+  useEffect(()=>{
+    if(user?.role==="admin"){ setSub(makeAdminSub()); return; }
+    if(!user) return;
+    // 🔧 Fix : on repart TOUJOURS de l'abonnement propre à CE compte (sa
+    // dernière sauvegarde dans user.sub), ou d'un essai neuf si c'est la
+    // 1ère connexion — jamais de ce qu'avait laissé la session précédente
+    // (ex: Premium simulé en admin) sur cet appareil.
+    const ownBase = user.sub || makeSub();
+    if(!user.refCode){ setSub(ownBase); return; }
+    const base = {
+      ...ownBase,
+      refCode: ownBase.refCode||user.refCode,
+      refCount: Math.max(ownBase.refCount||0, user.refCount||0),
+      validatedRefCount: Math.max(ownBase.validatedRefCount||0, user.validatedRefCount||0),
+      refMonths: Math.max(ownBase.refMonths||0, user.refMonths||0),
+      trialExtension: Math.max(ownBase.trialExtension||0, user.trialExtension||0),
+      pendingSpins: Math.max(ownBase.pendingSpins||0, user.pendingSpins||0),
+      accountCreatedAt: ownBase.accountCreatedAt||user.accountCreatedAt||ownBase.trialStart,
+      monthlyRefMonth: user.monthlyRefMonth||ownBase.monthlyRefMonth,
+      monthlyRefCount: Math.max(ownBase.monthlyRefCount||0, user.monthlyRefCount||0),
+    };
+    const upgradePlan = user.plan==="earned_premium" ? "earned_premium" : "trial_premium";
+    if((user.plan==="earned_premium"||user.startsAsPremiumTrial) && base.plan!=="premium" && base.plan!=="earned_premium"){
+      setSub({...base, plan: upgradePlan, trialStart:base.trialStart||new Date().toISOString()});
+    } else {
+      setSub(base);
+    }
+  },[user?.id]);
+  // ── Sync sub → table subscriptions (Stripe-ready) + user_metadata fallback ─
+  useEffect(() => {
+    if (!user?.id || !sub || !myUid || user?.role === "admin") return;
+    const timer = setTimeout(async () => {
+      try {
+        await supabase.from("subscriptions").upsert({
+          user_id: myUid, plan: sub.plan || "trial_premium",
+          premium_since: sub.premiumSince || null, cycle: sub.cycle || "yearly",
+          trial_start: sub.trialStart || sub.accountCreatedAt,
+          account_created_at: sub.accountCreatedAt,
+          trial_extension_days: sub.trialExtension || 0,
+          ref_code: sub.refCode || null, ref_used: sub.refUsed || null,
+          ref_count: sub.refCount || 0, validated_ref_count: sub.validatedRefCount || 0,
+          ref_months: sub.refMonths || 0, pending_spins: sub.pendingSpins || 0,
+          monthly_ref_month: sub.monthlyRefMonth || null, monthly_ref_count: sub.monthlyRefCount || 0,
+        }, { onConflict: "user_id" });
+        await supabase.auth.updateUser({ data: { sub } });
+      } catch(e) { console.warn("[Duvia] sub sync failed:", e); }
+    }, 3000);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sub, myUid]);
+
+  // Trial end warning — handled by header bubble
+  useEffect(()=>{
+    if(tab===2) _setSeen(s=>({...s,expenses:new Date().toISOString()}));
+    if(tab===3) _setSeen(s=>({...s,contacts:new Date().toISOString()}));
+    if(tab===4) _setSeen(s=>({...s,vault:new Date().toISOString()}));
+  },[tab]);
+  const unread = (cfg.notifs||[]).filter(n=>!n.read).length;
+  const pendingObsCount = (cfg.observers||[]).filter(o=>o.status==="pending").length;
+
+  useEffect(()=>{ if(window.Notification&&Notification.permission==="default") Notification.requestPermission(); },[]);
+
+  // IDs de notifs créées par MOI dans cet onglet — le useEffect les ignore
+  const myOwnNotifIds = useRef(new Set());
+
+  const pushNotif = useCallback((msg,type="info") => {
+    const n={id:Date.now(),msg,type,read:false,date:new Date().toISOString()};
+    myOwnNotifIds.current.add(n.id); // marquer comme "créé par moi"
+    setCfg(c=>({...c,notifs:[n,...(c.notifs||[])]}));
+    // Pas de popup OS ici — le créateur ne voit pas son propre popup
+  }, [setCfg]); // ✅ référence stable
+
+  // ── Notifications OS pour l'AUTRE parent (dépenses/actions via cfg.notifs) ──
+  const lastNotifIdRef = useRef(null);
+  useEffect(() => {
+    const notifs = cfg.notifs || [];
+    if (notifs.length === 0) return;
+    const latestId = notifs[0]?.id;
+    if (lastNotifIdRef.current === null) { lastNotifIdRef.current = latestId; return; }
+    if (latestId === lastNotifIdRef.current) return;
+    const newOnes = notifs.filter(n => n.id > lastNotifIdRef.current);
+    lastNotifIdRef.current = latestId;
+    // Filtrer les notifs que j'ai moi-même créées (pas de popup pour le créateur)
+    const toShow = newOnes.filter(n => !myOwnNotifIds.current.has(n.id));
+    if (toShow.length === 0 || !window.Notification || Notification.permission !== "granted") return;
+    toShow.forEach(n => {
+      if(navigator.serviceWorker?.controller){
+        navigator.serviceWorker.ready.then(reg=>reg.showNotification(t.appName,{body:n.msg})).catch(()=>{});
+      } else { try{ new Notification(t.appName,{body:n.msg}); }catch(e){} }
+    });
+  }, [cfg.notifs, t]);
+
+  // ── Notifications OS pour les messages reçus (Realtime useMessages) ──
+  const seenMsgIdsRef = useRef(null);
+  useEffect(() => {
+    if (!msgs || msgs.length === 0) return;
+    const _myUidStr = myUid ? String(myUid) : null;
+    if (seenMsgIdsRef.current === null) {
+      seenMsgIdsRef.current = new Set(msgs.map(m => m.id));
+      return;
+    }
+    const unseen = msgs.filter(m => !seenMsgIdsRef.current.has(m.id));
+    msgs.forEach(m => seenMsgIdsRef.current.add(m.id));
+    if (!_myUidStr || !window.Notification || Notification.permission !== "granted") return;
+    const toNotify = unseen.filter(m =>
+      String(m.from) !== _myUidStr &&
+      (m.to || []).map(String).includes(_myUidStr)
+    );
+    toNotify.forEach(m => {
+      const senderName = m.fromName || t.appName;
+      const preview = (m.content || "").startsWith("__ATTACH__")
+        ? `📎 ${senderName} a partagé un fichier`
+        : `💬 ${senderName} : ${(m.content || "").slice(0, 80)}`;
+      if(navigator.serviceWorker?.controller){
+        navigator.serviceWorker.ready.then(reg => reg.showNotification(t.appName, {body: preview})).catch(()=>{});
+      } else { try{ new Notification(t.appName, {body: preview}); }catch(e){} }
+    });
+  }, [msgs, myUid, _myId, t]);
+
+  // Called when an observer registers via invite link — adds them as pending + notifies parents
+  function handleObsJoin(obsData){
+    if(obsData.role === "child"){
+      // Enfant invité — active directement, notification aux parents
+      setCfg(c=>({
+        ...c,
+        pendingChildInvites:(c.pendingChildInvites||[]).map(inv=>
+          inv.code===obsData.inviteCode ? {...inv, used:true} : inv
+        ),
+      }));
+      pushNotif(`🧒 ${obsData.name} (${obsData.childAge} ans) a rejoint la famille — messagerie activée`, "info");
+      return;
+    }
+    // Observateur standard
+    setCfg(c=>{
+      const invite=(c.pendingInvites||[]).find(inv=>inv.code===obsData.inviteCode);
+      // 🔧 CORRECTIF : ne pas créer de doublon — si une carte pending_invite existe déjà
+      // pour ce même email ou token, on la met à jour en place.
+      const existingIdx=(c.observers||[]).findIndex(o=>
+        o.status==="pending_invite" && (
+          (obsData.inviteCode && o.inviteToken===obsData.inviteCode) ||
+          (obsData.email && o.email && o.email.toLowerCase()===obsData.email.toLowerCase())
+        )
+      );
+      let newObservers;
+      if(existingIdx>=0){
+        newObservers=(c.observers||[]).map((o,i)=>
+          i===existingIdx
+            ? {...o, id:obsData.id, name:obsData.name||o.name, email:obsData.email||o.email,
+               role:obsData.role||o.role||"grandparent", status:"pending",
+               inviteCode:obsData.inviteCode, canGuard:invite?.canGuard??o.canGuard??false}
+            : o
+        );
+      } else {
+        newObservers=[...(c.observers||[]),{id:obsData.id,name:obsData.name,email:obsData.email,role:obsData.role||"grandparent",status:"pending",inviteCode:obsData.inviteCode,canGuard:invite?.canGuard||false}];
+      }
+      return {...c,
+        observers:newObservers,
+        pendingInvites:(c.pendingInvites||[]).map(inv=>inv.code===obsData.inviteCode?{...inv,used:true}:inv),
+      };
+    });
+    pushNotif(`👥 ${obsData.name} — ${t.obsPendingInfo||"demande à rejoindre la famille"}`, "info");
+  }
+  function addHist(action,detail="",type="") {
+    addHistEntry(action, detail, type, cfg.parents?.[user?.parentIdx]?.name || user?.name || "Système", myUid||null);
+  }
+  function updateCal(ds,data) {
+    setCfg(c=>({...c,overrides:{...c.overrides,[ds]:{...(c.overrides[ds]||{}),...data}}}));
+    addHist(t.tabCal,ds,"cal");
+    pushNotif(`📅 ${ds}`,"cal");
+  }
+
+  // ── Suppression de mon propre compte ───────────────────────────────────────
+  async function deleteMyAccount(){
+    if(!user || deletingAccount) return;
+    const myEmail  = user.email;
+    const myId     = user.id;
+    const myName   = user.name;
+    const familyId = cfg?.familyId || null;
+
+    setDeletingAccount(true);
+    setDeleteAccountError("");
+
+    // ── 1. Suppression réelle en base via Edge Function Supabase ──────────────
+    if(myUid){
+      try {
+        // Nettoyage table subscriptions avant suppression du compte
+        if(myUid) await supabase.from("subscriptions").delete().eq("user_id", myUid);
+        await supabase.functions.invoke("delete-account", {
+          body: {
+            userId:   myUid || String(myId),
+            email:    myEmail,
+            familyId: familyId,
+          }
+        });
+      } catch(err) {
+        setDeleteAccountError(`Erreur serveur : ${err.message}. Réessaie ou contacte le support.`);
+        setDeletingAccount(false);
+        return;
+      }
+    }
+    // Supabase non configuré → suppression locale uniquement (mode dev/demo)
+
+    // ── 2. Nettoyage local ────────────────────────────────────────────────────
+    // 🔧 Plus besoin de marquer les messages ici : le nom de l'expéditeur
+    // (sender_name) est déjà enregistré sur chaque message au moment de
+    // l'envoi, côté serveur — il reste affiché tel quel même après la
+    // suppression du compte, sans action supplémentaire à faire.
+
+    if(user.role === "parent" && typeof user.parentIdx === "number"){
+      setCfg(c => {
+        const i = user.parentIdx;
+        const parent = c.parents[i];
+        if(!parent) return c;
+        const impacted = (c.custody?.pattern||[]).some(d => d.parentIdx === i);
+        return {
+          ...c,
+          parents: c.parents.filter((_,j) => j !== i),
+          expenses: [],
+          custody: impacted ? { ...c.custody, pattern: [], confirmed: false } : c.custody,
+          deletedParents: [...(c.deletedParents||[]), {
+            id: parent.id, name: parent.name || myName, email: myEmail,
+            deletedAt: new Date().toISOString(),
+          }],
+        };
+      });
+    }
+
+    setUsers(us => (us||[]).filter(u => u.email !== myEmail));
+
+    try {
+      [`duvia_ref_actions_${myId}`, `duvia_onboarding_${myId}`].forEach(k => {
+        try { window.localStorage.removeItem(k); } catch {}
+      });
+    } catch {}
+
+    // ── 3. Déconnexion ────────────────────────────────────────────────────────
+    setDeletingAccount(false);
+    setConfirmDeleteAccount(false);
+    setShowMenu(false);
+    setTab(0);
+    handleSetUser(null);
+  }
+
+  // Called by LoginScreen — intercept parent role for consent
+  function handleLogin(u) {
+    if(u.role==="parent") { setPendingUser(u); }
+    else { handleSetUser(u); }
+  }
+
+  if(showPasswordReset) return (
+    <PasswordResetScreen onDone={async()=>{ await supabase.auth.signOut(); setShowPasswordReset(false); }} />
+  );
+
+  if(!user) return (
+    <div>
+      <style>{brandCssString}</style>
+      {updateAvailable && (
+        <div style={{position:"fixed",top:14,left:"50%",transform:"translateX(-50%)",zIndex:9999,
+          background:C.card,border:`1.5px solid ${C.vio}`,borderRadius:14,padding:"10px 14px",
+          display:"flex",alignItems:"center",gap:10,boxShadow:"0 8px 30px rgba(0,0,0,.22)",maxWidth:"90vw"}}>
+          <span style={{fontSize:18}}>🔄</span>
+          <span style={{fontSize:12,fontWeight:700,color:C.txt}}>Nouvelle version disponible</span>
+          <button onClick={()=>duviaReload()} style={{padding:"6px 12px",background:C.vio,color:"#fff",fontSize:11,fontWeight:800,borderRadius:8}}>Rafraîchir</button>
+        </div>
+      )}
+      {!rgpdOk ? (
+        <RgpdConsentScreen C={C} t={t} lang={lang} setLang={setLang} onAccept={acceptRgpd} />
+      ) : pendingUser ? (
+        <ConsentScreen C={C} t={t} user={pendingUser}
+          onAccept={()=>{ handleSetUser(pendingUser); setPendingUser(null); }}
+          onDecline={()=>setPendingUser(null)} />
+      ) : (
+        <LoginScreen C={BRAND} t={t} lang={lang} setLang={setLang} themeMode={themeMode} cycleTheme={cycleTheme} users={users} setUsers={setUsers} onLogin={handleLogin} onObsJoin={handleObsJoin} familySync={familySync} cfg={cfg} setCfg={setCfg} />
+      )}
+    </div>
+  );
+
+  // Page "no access" pour observateur retiré de la famille
+  if(familySync.removedObserver) return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
+      <div style={{textAlign:"center",maxWidth:340}}>
+        <div style={{fontSize:48,marginBottom:12}}>🚫</div>
+        <div style={{fontWeight:900,fontSize:18,marginBottom:10,color:C.txt}}>Accès retiré</div>
+        <div style={{fontSize:14,color:C.mut,lineHeight:1.7,marginBottom:24}}>
+          Tu n'as plus accès à cette famille. Si tu penses que c'est une erreur, contacte le parent responsable.
+        </div>
+        <button onClick={()=>handleSetUser(null)}
+          style={{height:44,padding:"0 24px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13,borderRadius:10}}>
+          Se déconnecter
+        </button>
+      </div>
+    </div>
+  );
+
+  if(familySync.pendingApproval) return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
+      <div style={{textAlign:"center",maxWidth:320}}>
+        <div style={{fontSize:40,marginBottom:10}}>⏳</div>
+        <div style={{fontWeight:900,fontSize:17,marginBottom:8,color:C.txt}}>En attente d'approbation</div>
+        <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:20}}>Ta demande pour rejoindre cette famille a été envoyée. L'autre parent doit la valider avant que tu puisses accéder à l'application.</div>
+        <button onClick={()=>handleSetUser(null)} style={{height:40,padding:"0 20px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13,borderRadius:10}}>Se déconnecter</button>
+      </div>
+    </div>
+  );
+
+  if(familySync.syncStatus==="error" && !familySync.familyId) return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
+      <div style={{textAlign:"center",maxWidth:320}}>
+        <div style={{fontSize:40,marginBottom:10}}>⚠️</div>
+        <div style={{fontWeight:900,fontSize:17,marginBottom:8,color:C.txt}}>Problème de connexion</div>
+        <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:20}}>Impossible de vérifier ta famille pour le moment. Vérifie ta connexion internet et réessaie.</div>
+        <button onClick={()=>duviaReload()} style={{height:40,padding:"0 20px",background:C.vio,color:"#fff",border:"none",fontSize:13,fontWeight:700,borderRadius:10,marginRight:10}}>Réessayer</button>
+        <button onClick={()=>handleSetUser(null)} style={{height:40,padding:"0 20px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13,borderRadius:10}}>Se déconnecter</button>
+      </div>
+    </div>
+  );
+
+  const TABS = (isObs && !isAdm)
+    ? [{icon:"📅",label:t.tabCal},{icon:"📞",label:t.tabContacts||"Contacts"},{icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},{icon:"🎡",label:t.tabGame||"Jeu"}]
+    : (isChild && !isAdm)
+    ? [
+        {icon:"📅",label:t.tabCal},
+        {icon:"🎒",label:t.tabSchedule||"EDT"},
+        {icon:"📞",label:t.tabContacts||"Contacts"},
+        {icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},
+      ]
+    : [{icon:"📅",label:t.tabCal},{icon:"🎒",label:t.tabSchedule||"EDT"},{icon:"💰",label:t.tabExp,badge:expPendingDot?1:0},{icon:"📞",label:t.tabContacts||"Contacts",badge:contactsDot?1:0},{icon:"🗄️",label:t.tabVault||"Coffre",badge:vaultDot?1:0},{icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},{icon:"🎡",label:t.tabGame||"Jeu"}];
+
+  // ── Context value ─────────────────────────────────────────────────────────
+  const onUpgrade = () => { setMenuTab("premium"); setShowMenu(false); };
+  const ctxValue = {
+    C, t, lang, setLang, dark, themeMode, cycleTheme,
+    currency, setCurrency, weekStart, setWeekStart,
+    cfg, setCfg, sub, setSub, user, users, setUsers,
+    prem, perms, st, days, isAdm, isObs, isChild, unread, adminVerified,
+    addHist, pushNotif, updateCal, onUpgrade, handleObsJoin,
+    apiData, apiLoading,
+    setMenuTab, setShowMenu,
+    msgs, sendCloudMessage, markCloudMessageRead, myUid,
+    activity, setActivity, allSeen, setAllSeen, _setSeen,
+    unreadVaultDocIds, setUnreadVaultDocIds,
+    summerActive, setSummerActive, rgActive, setRgActive, wcActive, setWcActive, videoActive, setVideoActive,
+    brandActive,
+    handleSetUser,
+    configStep, setConfigStep,
+    tab, setTab,
+    addRefAction, refActions, showReferreePopup, setShowReferreePopup, showReferrerPopup, setShowReferrerPopup,
+    setShowResetConfirm,
+    simDate, setSimDate,
+    pendingReimPopup, setPendingReimPopup,
+    pendingExpPopup, setPendingExpPopup,
+    expSubmittedPopup, setExpSubmittedPopup,
+    setConfirmDeleteAccount,
+    familySync,
+    uidToLocal,
+    localToUid,
+    emailToUid,
+    // ── Expenses (Sprint 1 — données SQL) ──────────────────────────────────
+    expenses: allExpenses,
+    reimbursements: allReimbursements,
+    history: historyData,
+    expMethods: {
+      addExpense, addExpenses,
+      updateExpense, updateExpensesBySeries,
+      deleteExpense, deleteExpensesBySeries,
+      confirmExp: dbConfirmExp, rejectExp: dbRejectExp,
+      addReimbursement, updateReimbursement, deleteReimbursement,
+      confirmReim: dbConfirmReim, rejectReim: dbRejectReim,
+    },
+  };
+
+  return (
+    <AppContext.Provider value={ctxValue}>
+    <div style={{display:"flex",flexDirection:"column",height:"100vh",maxWidth:940,margin:"0 auto",overflow:"hidden",width:"100%"}}>
+      <style>{cssString}</style>
+
+      {inviteLeftNotice && (
+        <div style={{position:"fixed",top:14,left:"50%",transform:"translateX(-50%)",zIndex:10000,background:C.card,border:`1.5px solid ${C.vio}`,borderRadius:14,padding:"12px 16px",maxWidth:420,width:"90%",boxShadow:"0 8px 30px rgba(0,0,0,.18)",display:"flex",alignItems:"center",gap:12}}>
+          <div style={{fontSize:13.5,color:C.txt,fontWeight:600,lineHeight:1.5,flex:1}}>👋 <b>{inviteLeftNotice}</b> s'est retiré(e) de la famille.</div>
+          <button onClick={()=>setInviteLeftNotice(null)} style={{padding:"6px 12px",background:C.vio,color:"#fff",fontSize:12,fontWeight:800,borderRadius:8,flexShrink:0}}>OK</button>
+        </div>
+      )}
+
+      {ejectedNotice && (
+        <div style={{position:"fixed",inset:0,zIndex:10000,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.card,borderRadius:18,padding:"24px 22px",maxWidth:420,width:"100%",boxShadow:"0 10px 40px rgba(0,0,0,.3)"}}>
+            <div style={{fontSize:20,fontWeight:900,color:C.txt,marginBottom:10}}>👋 Vous avez quitté cette famille</div>
+            <div style={{fontSize:13.5,color:C.mut,lineHeight:1.6,marginBottom:18}}>
+              Vous avez été retiré(e) de la famille par le créateur. Vous repartez sur une famille personnelle vierge. Une synthèse de vos anciennes données (planning, comptes, messages) a été conservée sur cet appareil — l'export PDF sera bientôt disponible.
+            </div>
+            <button onClick={dismissEjected} style={{width:"100%",padding:"13px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:15,fontWeight:800,borderRadius:12}}>J'ai compris</button>
+          </div>
+        </div>
+      )}
+
+      {updateAvailable && (
+        <div style={{position:"fixed",top:14,left:"50%",transform:"translateX(-50%)",zIndex:9999,
+          background:C.card,border:`1.5px solid ${C.vio}`,borderRadius:14,padding:"10px 14px",
+          display:"flex",alignItems:"center",gap:10,boxShadow:"0 8px 30px rgba(0,0,0,.22)",maxWidth:"90vw"}}>
+          <span style={{fontSize:18}}>🔄</span>
+          <span style={{fontSize:12,fontWeight:700,color:C.txt}}>Nouvelle version disponible</span>
+          <button onClick={()=>duviaReload()} style={{padding:"6px 12px",background:C.vio,color:"#fff",fontSize:11,fontWeight:800,borderRadius:8}}>Rafraîchir</button>
+        </div>
+      )}
+
+      {/* ── Toast dépense soumise (global) ── */}
+      {expSubmittedPopup && (
+        <div style={{position:"fixed",top:14,left:"50%",transform:"translateX(-50%)",zIndex:9999,
+          background:C.card,border:`1.5px solid ${C.grn}`,borderRadius:14,padding:"12px 18px",
+          display:"flex",alignItems:"center",gap:10,boxShadow:"0 8px 30px rgba(0,0,0,.22)",
+          maxWidth:"90vw",animation:"fadeInDown .25s ease",pointerEvents:"none"}}>
+          <span style={{fontSize:20}}>✅</span>
+          <div>
+            <div style={{fontSize:13,fontWeight:800,color:C.txt}}>{t.expSubmittedTitle||"Dépense soumise"}</div>
+            <div style={{fontSize:11,color:C.mut}}>{t.expSubmittedBody||"Elle sera visible par l'autre parent pour validation."}</div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Popup remboursement en attente ── */}
+      {pendingReimPopup && (()=>{
+        const r=pendingReimPopup;
+        const fromP=cfg.parents[r.from];
+        const dateStr=(r.date||"").split("-").reverse().join("/");
+        const doConfirm=()=>{ dbConfirmReim(r.id); setPendingReimPopup(null); };
+        const doReject=()=>{ dbRejectReim(r.id); setPendingReimPopup(null); };
+        return (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+            <div style={{background:C.card,borderRadius:22,padding:"28px 24px",maxWidth:340,width:"100%",border:`1.5px solid ${C.yel}`,boxShadow:"0 16px 48px rgba(0,0,0,.28)",animation:"popIn .35s cubic-bezier(.34,1.56,.64,1)"}}>
+              <div style={{fontSize:40,textAlign:"center",marginBottom:10}}>💸</div>
+              <div style={{fontSize:16,fontWeight:800,marginBottom:6,textAlign:"center",color:C.txt}}>Remboursement reçu</div>
+              <div style={{fontSize:13,color:C.mut,marginBottom:20,textAlign:"center",lineHeight:1.6}}>
+                <strong style={{color:fromP?.color||C.grn}}>{fromP?.name||`Parent ${r.from+1}`}</strong> vous a envoyé un remboursement de{" "}
+                <strong style={{color:C.txt}}>{r.amount.toFixed(2)} {currency}</strong>{" "}le {dateStr}.
+                {r.note && <><br/><em>"{r.note}"</em></>}<br/><br/>
+                Pouvez-vous confirmer la réception ?
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <button onClick={doConfirm} style={{width:"100%",padding:"13px",background:C.grn,color:"#fff",borderRadius:12,fontWeight:800,fontSize:14}}>✅ Valider le remboursement</button>
+                <button onClick={doReject} style={{width:"100%",padding:"13px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,borderRadius:12,fontWeight:700,fontSize:14}}>❌ Refuser</button>
+                <button onClick={()=>setPendingReimPopup(null)} style={{width:"100%",padding:"10px",background:"transparent",color:C.mut,fontSize:12}}>Plus tard</button>
+              </div>
+            </div>
+            <style>{`@keyframes popIn{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}`}</style>
+          </div>
+        );
+      })()}
+
+      {/* ── Popup dépense en attente ── */}
+      {pendingExpPopup && (()=>{
+        const e=pendingExpPopup;
+        const creatorP=cfg.parents[e.createdBy];
+        const dateStr=(e.date||"").split("-").reverse().join("/");
+        const doConfirmE=()=>{ dbConfirmExp(e.id); setPendingExpPopup(null); };
+        const doRejectE=()=>{ dbRejectExp(e.id); setPendingExpPopup(null); };
+        return (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+            <div style={{background:C.card,borderRadius:22,padding:"28px 24px",maxWidth:340,width:"100%",border:`1.5px solid ${C.yel}`,boxShadow:"0 16px 48px rgba(0,0,0,.28)",animation:"popIn .35s cubic-bezier(.34,1.56,.64,1)"}}>
+              <div style={{fontSize:40,textAlign:"center",marginBottom:10}}>💰</div>
+              <div style={{fontSize:16,fontWeight:800,marginBottom:6,textAlign:"center",color:C.txt}}>{t.expPendingPopupTitle||"Dépense à confirmer"}</div>
+              <div style={{fontSize:13,color:C.mut,marginBottom:20,textAlign:"center",lineHeight:1.6}}>
+                <strong style={{color:creatorP?.color||C.blu}}>{creatorP?.name||`Parent ${(e.createdBy||0)+1}`}</strong>{" "}
+                {t.expPendingConfirmMsg||"a ajouté une dépense de"}{" "}
+                <strong style={{color:C.txt}}>{e.amount.toFixed(2)} {currency}</strong>{" "}—{" "}
+                <em>{e.label}</em>{" "}le {dateStr}.
+                {e.note && <><br/><em>"{e.note}"</em></>}<br/><br/>
+                {t.expPendingConfirmQ||"Pouvez-vous confirmer ?"}
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <button onClick={doConfirmE} style={{width:"100%",padding:"13px",background:C.grn,color:"#fff",borderRadius:12,fontWeight:800,fontSize:14}}>{t.expValidateBtn||"✅ Valider la dépense"}</button>
+                <button onClick={doRejectE} style={{width:"100%",padding:"13px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,borderRadius:12,fontWeight:700,fontSize:14}}>{t.expRejectBtn||"❌ Refuser"}</button>
+                <button onClick={()=>setPendingExpPopup(null)} style={{width:"100%",padding:"10px",background:"transparent",color:C.mut,fontSize:12}}>{t.expPendingLater||"Plus tard"}</button>
+              </div>
+            </div>
+            <style>{`@keyframes popIn{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}`}</style>
+          </div>
+        );
+      })()}
+
+      {/* HEADER */}
+      <div style={{flexShrink:0,background:headerBG,borderBottom:`1.5px solid ${C.bor}`,boxShadow:"0 1px 6px rgba(0,0,0,.06)"}}>
+      <div style={{padding:"0 14px",display:"flex",alignItems:"center",gap:12,height:58}}>
+        <img src="/logo-nav.png" alt="Duvia" style={{width:84,height:84,objectFit:"contain",flexShrink:0,animation:(sub?.pendingSpins||0)>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}} />
+        <div style={{display:"flex",flexDirection:"column",justifyContent:"center",minWidth:0,flex:1}}>
+          <div style={{fontSize:10,color:C.mut,fontStyle:"italic",lineHeight:1.2}}>
+            <span>Two homes · One family</span>
+            {C._wc && <span style={{fontSize:14,display:"inline-block",animation:"wcBall 3s ease-in-out infinite",transformOrigin:"center",marginLeft:4}}>⚽</span>}
+          </div>
+        </div>
+        {/* Right controls: palette → 🏆 lots → ☰ */}
+        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          <button onClick={()=>{cycleTheme();setSummerActive(false);setRgActive(false);setWcActive(false);setVideoActive(false);}} title={themeMode==="palette"?"→ Clair":themeMode==="clair"?"→ Sombre":"→ Palette"} style={{height:36,padding:"0 14px",background:themeMode==="palette"&&!summerActive&&!rgActive&&!wcActive?`${C.vio}18`:C.card,border:`1.5px solid ${themeMode==="palette"&&!summerActive&&!rgActive&&!wcActive?C.vio:C.bor}`,color:themeMode==="palette"&&!summerActive&&!rgActive&&!wcActive?C.vio:C.txt,fontSize:15,fontWeight:700,flexShrink:0,borderRadius:20,display:"flex",alignItems:"center",cursor:"pointer"}}>
+            {themeMode==="sombre"?"🌙":themeMode==="clair"?"☀️":"🎨"}
+          </button>
+          {/* ── Bouton lots gagnés ──────────────────────────────────────── */}
+          {(()=>{
+            const myG = sub.giftedPrizes?.[String(user?.id||"")] || {};
+            const selfB = {theme:sub.earnedSelf_theme,video:sub.earnedSelf_video,licorne:sub.earnedSelf_licorne,rg:sub.earnedSelf_rg,wc:sub.earnedSelf_wc};
+            const hasAny = sub.earnedBadge||sub.earnedTheme||sub.earnedVideo||sub.earnedLicorne||sub.earnedRG||sub.earnedWC
+                           ||myG.theme||myG.video||myG.licorne||myG.rg||myG.wc
+                           ||selfB.theme||selfB.video||selfB.licorne||selfB.rg||selfB.wc;
+            if(!hasAny) return null;
+            // Y a-t-il un lot activable mais pas encore actif ?
+            const hasActivatable =
+              ((sub.earnedTheme||myG.theme||selfB.theme) && !summerActive) ||
+              ((sub.earnedVideo||myG.video||selfB.video) && !videoActive) ||
+              ((sub.earnedLicorne||myG.licorne||selfB.licorne)) ||
+              ((sub.earnedWC||myG.wc||selfB.wc) && (isWCPeriod()||myG.wc||selfB.wc) && !wcActive) ||
+              ((sub.earnedRG||myG.rg||selfB.rg) && (isRGPeriod()||myG.rg||selfB.rg) && !rgActive);
+            return (
+              <div style={{position:"relative",flexShrink:0}}>
+                <button onClick={()=>setShowPrizesMenu(v=>!v)}
+                  style={{height:36,padding:"0 12px",
+                    background:showPrizesMenu?`${C.yel}22`:hasActivatable?`${C.yel}15`:C.card,
+                    border:`1.5px solid ${showPrizesMenu||hasActivatable?C.yel:C.bor}`,
+                    color:showPrizesMenu||hasActivatable?C.yel:C.mut,
+                    fontSize:16,fontWeight:700,borderRadius:20,display:"flex",alignItems:"center",gap:4,cursor:"pointer",transition:"all .2s"}}>
+                  🏆
+                  {hasActivatable && <span style={{width:7,height:7,borderRadius:"50%",background:C.yel,flexShrink:0}} />}
+                </button>
+                {showPrizesMenu && (
+                  <>
+                    <div onClick={()=>setShowPrizesMenu(false)} style={{position:"fixed",inset:0,zIndex:199}} />
+                    <div style={{position:"fixed",top:62,right:14,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:16,minWidth:240,maxWidth:"88vw",zIndex:300,boxShadow:"0 12px 40px rgba(0,0,0,.2)",overflow:"hidden"}}>
+                      <div style={{padding:"10px 14px 8px",fontSize:10,fontWeight:800,color:C.mut,letterSpacing:".08em",textTransform:"uppercase",borderBottom:`1px solid ${C.bor}`,background:C.sur}}>
+                        🏆 {isChild?t.wheelMyPrizesChild.replace("🏆 ",""):t.wheelMyPrizesAdult.replace("🏆 ","")}
+                      </div>
+                      {sub.earnedBadge && !isChild && (
+                        <div style={{padding:"0 14px",height:40,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:12,fontWeight:600,color:"#7c6fcd",background:"#7c6fcd08"}}>
+                          <span style={{fontSize:16}}>🏅</span>
+                          <span style={{flex:1}}>{t.wheelExclusiveBadge}</span>
+                          <span style={{background:"#7c6fcd22",color:"#7c6fcd",borderRadius:8,padding:"2px 7px",fontSize:10,fontWeight:800}}>{t.wheelWon.replace(" ✓","")}</span>
+                        </div>
+                      )}
+                      {(sub.earnedTheme||myG.theme||sub.earnedSelf_theme) && (
+                        <button onClick={()=>{setSummerActive(s=>!s);setRgActive(false);setWcActive(false);setVideoActive(false);setShowPrizesMenu(false);}}
+                          style={{width:"100%",padding:"0 14px",height:40,background:summerActive?"#3ecf8e15":"#3ecf8e08",color:"#3ecf8e",textAlign:"left",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:12,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                          <span style={{fontSize:16}}>🌴</span>
+                          <span style={{flex:1}}>{t.shopTheme}{sub.earnedSelf_theme&&!sub.earnedTheme?" 🛒":myG.theme&&!sub.earnedTheme?" 🎁":""}</span>
+                          <span style={{background:summerActive?"#3ecf8e33":"#3ecf8e18",color:"#3ecf8e",borderRadius:8,padding:"2px 7px",fontSize:10,fontWeight:800}}>{summerActive?t.wheelActiveCheck:t.wheelApply}</span>
+                        </button>
+                      )}
+                      {(sub.earnedVideo||myG.video||sub.earnedSelf_video) && (
+                        <button onClick={()=>{setVideoActive(s=>!s);setSummerActive(false);setRgActive(false);setWcActive(false);setShowPrizesMenu(false);}}
+                          style={{width:"100%",padding:"0 14px",height:40,background:videoActive?"#8b5cf615":"#8b5cf608",color:"#8b5cf6",textAlign:"left",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:12,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                          <span style={{fontSize:16}}>🎮</span>
+                          <span style={{flex:1}}>{t.shopVideo}{sub.earnedSelf_video&&!sub.earnedVideo?" 🛒":myG.video&&!sub.earnedVideo?" 🎁":""}</span>
+                          <span style={{background:videoActive?"#8b5cf633":"#8b5cf618",color:"#8b5cf6",borderRadius:8,padding:"2px 7px",fontSize:10,fontWeight:800}}>{videoActive?t.wheelActiveCheck:t.wheelApply}</span>
+                        </button>
+                      )}
+                      {(sub.earnedLicorne||myG.licorne||sub.earnedSelf_licorne) && (
+                        <div style={{padding:"0 14px",height:40,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:12,fontWeight:600,color:"#ec4899",background:"#ec489908"}}>
+                          <span style={{fontSize:16}}>🦄</span>
+                          <span style={{flex:1}}>{t.shopLicorne}{sub.earnedSelf_licorne&&!sub.earnedLicorne?" 🛒":myG.licorne&&!sub.earnedLicorne?" 🎁":""}</span>
+                          <span style={{background:"#ec489922",color:"#ec4899",borderRadius:8,padding:"2px 7px",fontSize:10,fontWeight:800}}>{t.wheelSoon}</span>
+                        </div>
+                      )}
+                      {(sub.earnedWC||myG.wc||sub.earnedSelf_wc) && (isWCPeriod()||myG.wc||sub.earnedSelf_wc) && (
+                        <button onClick={()=>{setWcActive(s=>!s);setSummerActive(false);setRgActive(false);setVideoActive(false);setShowPrizesMenu(false);}}
+                          style={{width:"100%",padding:"0 14px",height:40,background:wcActive?"#2563eb15":"#2563eb08",color:"#2563eb",textAlign:"left",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:12,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                          <span style={{fontSize:16}}>⚽</span>
+                          <span style={{flex:1}}>{t.shopWC}{sub.earnedSelf_wc&&!sub.earnedWC?" 🛒":myG.wc&&!sub.earnedWC?" 🎁":""}</span>
+                          <span style={{background:wcActive?"#2563eb33":"#2563eb18",color:"#2563eb",borderRadius:8,padding:"2px 7px",fontSize:10,fontWeight:800}}>{wcActive?t.wheelActiveCheck:t.wheelApply}</span>
+                        </button>
+                      )}
+                      {(sub.earnedRG||myG.rg||sub.earnedSelf_rg) && (isRGPeriod()||myG.rg||sub.earnedSelf_rg) && (
+                        <button onClick={()=>{setRgActive(s=>!s);setSummerActive(false);setWcActive(false);setVideoActive(false);setShowPrizesMenu(false);}}
+                          style={{width:"100%",padding:"0 14px",height:40,background:rgActive?"#c2745a15":"#c2745a08",color:"#c2745a",textAlign:"left",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:12,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                          <span style={{fontSize:16}}>🎾</span>
+                          <span style={{flex:1}}>{t.shopRG}{sub.earnedSelf_rg&&!sub.earnedRG?" 🛒":myG.rg&&!sub.earnedRG?" 🎁":""}</span>
+                          <span style={{background:rgActive?"#c2745a33":"#c2745a18",color:"#c2745a",borderRadius:8,padding:"2px 7px",fontSize:10,fontWeight:800}}>{rgActive?t.wheelActiveCheck:t.wheelApply}</span>
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+          <div style={{position:"relative",flexShrink:0}}>
+          {menuHighlight && (
+            <span style={{position:"absolute",inset:-4,borderRadius:10,border:`2.5px solid ${C.vio}`,animation:"menuPulse 1.2s ease-in-out infinite",pointerEvents:"none",zIndex:1}} />
+          )}
+          <button onClick={()=>{setShowMenu(v=>!v);setShowPrizesMenu(false);if(menuHighlight){setMenuHighlight(false);}if(showOnboardingTip){setShowOnboardingTip(false);}}} style={{height:36,padding:"0 14px",background:menuHighlight?`${C.vio}18`:showMenu?`${C.vio}18`:C.card,border:`1.5px solid ${menuHighlight||showMenu?C.vio:C.bor}`,color:menuHighlight||showMenu?C.vio:C.txt,fontSize:13,fontWeight:700,borderRadius:20,display:"flex",alignItems:"center",gap:6,position:"relative",transition:"all .2s",cursor:"pointer"}}>
+            <span>☰</span>
+            {!isObs && !isChild && unread>0 && <span style={{position:"absolute",top:-4,right:-4,background:C.red,borderRadius:"50%",width:16,height:16,fontSize:9,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,color:"#fff",border:`2px solid ${C.card}`}}>{unread}</span>}
+          </button>
+          {/* ── Bulle d'onboarding première connexion ── */}
+          {showOnboardingTip && (
+            <div onClick={()=>setShowOnboardingTip(false)} style={{position:"fixed",top:66,right:14,zIndex:400,cursor:"pointer",animation:"fadeInDown .35s ease"}}>
+              {/* flèche pointant vers le bouton ☰ */}
+              <div style={{position:"absolute",top:-7,right:18,width:0,height:0,borderLeft:"8px solid transparent",borderRight:"8px solid transparent",borderBottom:`8px solid ${C.vio}`}} />
+              <div style={{background:C.vio,color:"#fff",borderRadius:14,padding:"12px 16px",maxWidth:230,boxShadow:"0 8px 28px rgba(0,0,0,.22)",position:"relative"}}>
+                <div style={{fontSize:18,marginBottom:6,textAlign:"center"}}>👋</div>
+                <div style={{fontSize:13,fontWeight:800,marginBottom:4,lineHeight:1.3}}>
+                  {lang==="fr" ? "Bienvenue sur Duvia !" : lang==="en" ? "Welcome to Duvia!" : lang==="de" ? "Willkommen bei Duvia!" : lang==="es" ? "¡Bienvenido a Duvia!" : "Bem-vindo ao Duvia!"}
+                </div>
+                <div style={{fontSize:12,opacity:.92,lineHeight:1.45}}>
+                  {lang==="fr" ? <>Commencez par <strong>⚙️ Configuration</strong> pour paramétrer votre famille.</> : lang==="en" ? <>Start with <strong>⚙️ Settings</strong> to set up your family.</> : lang==="de" ? <>Beginne mit <strong>⚙️ Konfiguration</strong>.</> : lang==="es" ? <>Empieza por <strong>⚙️ Configuración</strong>.</> : <>Comece pela <strong>⚙️ Configuração</strong>.</>}
+                </div>
+                <div style={{fontSize:10,opacity:.7,marginTop:8,textAlign:"right"}}>
+                  {lang==="fr"?"Appuyer pour fermer":"Tap to close"}
+                </div>
+              </div>
+            </div>
+          )}
+          {showMenu && (
+            <>
+            <div onClick={()=>setShowMenu(false)} style={{position:"fixed",inset:0,zIndex:199}} />
+            <div style={{position:"fixed",top:85,right:14,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:16,minWidth:260,maxWidth:"90vw",zIndex:300,boxShadow:"0 12px 40px rgba(0,0,0,.2)",overflow:"hidden"}}>
+              {/* User header */}
+              <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.bor}`,display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:36,height:36,borderRadius:10,background:`linear-gradient(135deg,${isAdm?"#FFD700":isObs?C.ora:isChild?C.grn:((cfg.parents||[]).find(p=>p.email&&p.email===user?.email)?.color||C.vio)},${isAdm?"#ff9f43":C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
+                  {(() => {
+                    if(isAdm) return "👑";
+                    if(isObs) return "👁️";
+                    if(isChild) return "🧒";
+                    const av = (cfg.parents||[]).find(p=>p.email&&p.email===user?.email)?.avatar || user?.avatar || "👤";
+                    return (typeof av==="string"&&av.startsWith("http"))
+                      ? <img src={av} alt="" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:10}} />
+                      : av;
+                  })()}
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:800}}>{(cfg.parents||[]).find(p=>p.email&&p.email===user?.email)?.name || user.name}</div>
+                  <div style={{fontSize:10,color:C.mut,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user?.email||""}</div>
+                  <div style={{fontSize:11,color:isAdm?"#FFD700":isObs?C.ora:isChild?C.grn:C.mut}}>{isAdm?(t.menuAdmin||"👑 Administrateur"):isObs?t.roleObs:isChild?(t.roleChild||"🧒 Enfant"):t.roleParent}</div>
+                </div>
+              </div>
+              {/* Menu items */}
+              {!isObs && !isChild && (
+                <>
+                  {isAdm && (
+                    <button onClick={()=>{setMenuTab("admin");setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:menuTab==="admin"?`${"#FFD700"}18`:"#FFD70010",color:"#cc9900",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:700,borderRadius:0,cursor:"pointer"}}>
+                      <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>👑</span><span style={{flex:1,textAlign:"left"}}>Administration</span>
+                    </button>
+                  )}
+                  <button onClick={()=>{setMenuTab("config");setConfigStep(0);setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                    <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🏠</span><span style={{flex:1,textAlign:"left"}}>{t.tabConfig||"Configuration"} famille</span>
+                  </button>
+                  <button onClick={()=>{setMenuTab("prefs");setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                    <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>⚙️</span><span style={{flex:1,textAlign:"left"}}>Préférences</span>
+                  </button>
+                  <button onClick={()=>{setMenuTab("notifs");setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                    <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🔔</span><span style={{flex:1,textAlign:"left"}}>{t.tabNotifs}</span>
+                    {unread>0 && <span style={{background:C.red,color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:10,fontWeight:800}}>{unread}</span>}
+                  </button>
+                  <button onClick={()=>{setMenuTab("hist");setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                    <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>📋</span><span style={{flex:1,textAlign:"left"}}>{t.tabHist}</span>
+                  </button>
+                  <button onClick={()=>{setMenuTab("parrainage");setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:`${C.pin}08`,color:C.pin,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                    <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🎁</span><span style={{flex:1,textAlign:"left"}}>{t.parrainage||"Parrainage"}</span>
+                    {(sub.refMonths||0)>0 && <span style={{background:`${C.grn}22`,color:C.grn,borderRadius:10,padding:"2px 7px",fontSize:10,fontWeight:800}}>+{sub.refMonths} mois</span>}
+                  </button>
+                  <button onClick={()=>{setMenuTab("rating");setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:`${C.yel}08`,color:C.yel,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                    <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>⭐</span><span style={{flex:1,textAlign:"left"}}>{t.rateAppMenu||"Donner mon avis"}</span>
+                  </button>
+                </>
+              )}
+              {/* ── Lots gagnés déplacés dans le bouton 🏆 de la barre ───── */}
+              {isObs && !isAdm && (
+                <button onClick={async()=>{
+                  if(!window.confirm("Quitter la famille ? Vous n'aurez plus accès au calendrier ni à la messagerie.")) return;
+                  await familySync?.leaveFamily?.();
+                  setShowMenu(false);
+                  handleSetUser(null); setTab(0);
+                }} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.red,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                  <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🚪</span>
+                  <span style={{flex:1,textAlign:"left"}}>{t.obsLeaveFamily||"Quitter la famille"}</span>
+                </button>
+              )}
+              {isChild && !isAdm && (
+                <button onClick={()=>{setMenuTab("notifs");setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                  <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🔔</span><span style={{flex:1,textAlign:"left"}}>{t.tabNotifs}</span>
+                  {unread>0 && <span style={{background:C.red,color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:10,fontWeight:800}}>{unread}</span>}
+                </button>
+              )}
+
+              <button onClick={()=>{setShowBugModal(true);setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🐛</span><span style={{flex:1,textAlign:"left"}}>{t.bugReportMenu}</span>
+              </button>
+              <button onClick={()=>{setShowInstallModal(true);setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>📱</span><span style={{flex:1,textAlign:"left"}}>{t.installAppMenu}</span>
+              </button>
+              <button onClick={()=>{handleSetUser(null);setTab(0);setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.red,display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🚪</span><span style={{flex:1,textAlign:"left"}}>{t.logout}</span>
+              </button>
+              <div style={{padding:"10px 16px",borderTop:`1px solid ${C.bor}`,textAlign:"center",fontSize:10,color:C.mut,lineHeight:1.5}}>
+                DUVIA — Licence Propriétaire<br/>
+                © 2026 Alberto Ramos — Tous droits réservés<br/>
+                <button onClick={()=>setShowLicenseModal(true)} style={{background:"none",border:"none",color:C.vio,textDecoration:"underline",fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit"}}>{t.viewLicense}</button>
+              </div>
+            </div>
+            </>
+          )}
+        </div>
+        </div>{/* end right controls */}
+      </div>
+
+      {/* Modale "Installer l'application" */}
+      {showInstallModal && <InstallAppModal C={C} t={t} onClose={()=>setShowInstallModal(false)} />}
+
+      {/* Modale "Signaler un problème" (diagnostic) */}
+      <BugReportModal C={C} t={t} open={showBugModal} onClose={()=>setShowBugModal(false)}
+        getContext={()=>({
+          userId: myUid || null,
+          familyId: familySync?.familyId || null,
+          screen: menuTab,
+          appState: {
+            role: user?.role || null,
+            parentIdx: user?.parentIdx,
+            lang,
+            plan: sub?.plan || null,
+            nbParents: cfg?.parents?.length,
+            nbChildren: cfg?.children?.length,
+            syncStatus: familySync?.syncStatus,
+          },
+        })} />
+
+      {/* Modale "Licence" */}
+      {showLicenseModal && (
+        <div onClick={()=>setShowLicenseModal(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:16,padding:20,maxWidth:480,width:"100%",maxHeight:"80vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexShrink:0}}>
+              <div style={{fontSize:16,fontWeight:900,color:C.txt}}>📄 Licence</div>
+              <button onClick={()=>setShowLicenseModal(false)} style={{width:30,height:30,background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,color:C.mut,fontSize:14,cursor:"pointer"}}>✕</button>
+            </div>
+            <div style={{fontSize:12,color:C.mut,lineHeight:1.6,whiteSpace:"pre-wrap",overflowY:"auto",flex:1,paddingRight:4}}>
+{`DUVIA - Licence Propriétaire
+
+Copyright (c) 2026 Alberto Ramos
+
+Tous droits réservés.
+
+Le logiciel DUVIA, y compris son code source, son architecture, son interface utilisateur, son design, sa documentation, ses bases de données, ses contenus et tous les éléments associés, est la propriété exclusive d'Alberto Ramos.
+
+AUTORISATIONS
+
+L'utilisation de DUVIA est autorisée uniquement dans le cadre prévu par son auteur et conformément aux conditions d'utilisation applicables.
+
+RESTRICTIONS
+
+Sauf autorisation écrite préalable d'Alberto Ramos, il est strictement interdit de :
+
+- Copier ou reproduire tout ou partie du logiciel ;
+- Modifier, adapter ou créer des œuvres dérivées du logiciel ;
+- Distribuer, publier, vendre, louer ou concéder sous licence le logiciel ;
+- Décompiler, désassembler ou tenter d'extraire le code source ;
+- Utiliser tout ou partie du logiciel à des fins commerciales ;
+- Reproduire ou exploiter les fonctionnalités, l'architecture ou les contenus du logiciel dans un produit concurrent.
+
+PROPRIÉTÉ INTELLECTUELLE
+
+Aucun droit de propriété intellectuelle n'est transféré à l'utilisateur. Tous les droits, titres et intérêts relatifs à DUVIA demeurent la propriété exclusive d'Alberto Ramos.
+
+ABSENCE DE GARANTIE
+
+DUVIA est fourni « en l'état » (« as is »), sans aucune garantie expresse ou implicite, notamment concernant sa disponibilité, sa fiabilité ou son adéquation à un usage particulier.
+
+LIMITATION DE RESPONSABILITÉ
+
+Dans les limites autorisées par la loi, Alberto Ramos ne pourra être tenu responsable des dommages directs, indirects, accessoires ou consécutifs résultant de l'utilisation ou de l'impossibilité d'utiliser DUVIA.
+
+VIOLATION DE LA LICENCE
+
+Toute utilisation non autorisée du logiciel constitue une violation des droits de propriété intellectuelle et pourra donner lieu à des poursuites civiles et/ou pénales conformément aux lois applicables.
+
+CONTACT
+
+Pour toute demande d'autorisation ou de licence :
+
+Alberto Ramos
+Email : DUVIA.services@gmx.com
+
+Date d'entrée en vigueur : 14 juin 2026
+
+© 2026 Alberto Ramos. Tous droits réservés.`}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Trial / Premium / Earned bubble — second row */}
+      {!isObs && !isChild && st==="trial_premium" && (
+        <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>
+          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`${C.vio}18`,border:`1.5px solid ${C.vio}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.vio,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s"}}>
+            {isBeta()
+              ? <>🧪 Bêta · <span style={{opacity:.85}}>{(t.daysLeftSuffix||"{n}j restants").replace("{n}",BETA_DAYS_LEFT())}</span></>
+              : <>⭐ {t.trialBanner} · <span style={{opacity:.85}}>{days}j restant{days>1?"s":""}</span></>
+            }
+          </div>
+        </div>
+      )}
+      {!isObs && !isChild && st==="earned_premium" && (
+        <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>
+          <div onClick={()=>{setMenuTab("parrainage");setShowMenu(false);}} style={{background:days<=5?`${C.red}18`:`${C.grn}18`,border:`1.5px solid ${days<=5?C.red+"66":C.grn+"66"}`,borderRadius:20,padding:"4px 12px",fontSize:11,color:days<=5?C.red:C.grn,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",animation:"pulseFade 2s ease-in-out infinite"}}>
+            🎁 Premium – {days}j restant{days>1?"s":""}
+          </div>
+        </div>
+      )}
+      {!isObs && !isChild && st==="freemium" && (
+        <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>
+          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`${C.red}18`,border:`1.5px solid ${C.red}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.red,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}>
+            ⚠️ {t.trialExpired}
+          </div>
+        </div>
+      )}
+      {!isObs && !isChild && st==="premium" && (
+        <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>
+          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`${C.grn}18`,border:`1.5px solid ${C.grn}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.grn,fontWeight:800,display:"inline-flex",alignItems:"center",gap:6,cursor:"pointer"}}>⭐ Premium</div>
+        </div>
+      )}
+      </div>
+
+      {bell && <BellPanel onClose={()=>setBell(false)} />}
+
+      {/* BARRE FAMILLE — visible uniquement si plusieurs familles */}
+      {familySync.families.length > 1 && !isChild && (
+        <div style={{
+          flexShrink:0,
+          background:headerBG,
+          borderBottom:`1.5px solid ${C.bor}`,
+          padding:"6px 14px",
+          display:"flex",alignItems:"center",gap:8,
+        }}>
+          <span style={{fontSize:16,flexShrink:0}}>👨‍👩‍👧</span>
+          <select
+            value={familySync.familyId || ""}
+            onChange={e => familySync.switchFamily(e.target.value)}
+            style={{
+              flex:1,height:34,fontSize:13,fontWeight:800,
+              color:C.vio,background:`${C.vio}12`,
+              border:`2px solid ${C.vio}`,borderRadius:12,
+              cursor:"pointer",padding:"0 10px",
+            }}
+          >
+            {familySync.families.map(f => (
+              <option key={f.id} value={f.id} style={{color:C.txt}}>{f.label}</option>
+            ))}
+          </select>
+          <InfoBubble C={C} tipKey={`duvia_famtip_${user?.id||"x"}`} title={t.multiFamilyTitle||"Plusieurs familles"}>
+            {t.multiFamilyInfo||"Vous appartenez à plusieurs familles. Utilisez ce menu pour basculer de l'une à l'autre."}
+          </InfoBubble>
+        </div>
+      )}
+
+      {/* NAV — en haut. En config : remplacée par les étapes au même endroit */}
+      {menuTab==="config" ? (
+        (() => {
+          const STEPS=[{i:"👤",l:t.stepId},{i:"👥",l:t.stepAccess},{i:"🗓️",l:t.stepDates},{i:"📆",l:t.stepGarde}];
+          return (
+            <div style={{flexShrink:0,background:C.card,borderBottom:`1.5px solid ${C.bor}`,boxShadow:"0 1px 6px rgba(0,0,0,.05)"}}>
+              {/* Barre retour + titre */}
+              <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px 6px"}}>
+                <button onClick={()=>{setMenuTab(null);setConfigStep(0);}} style={{width:34,height:34,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:18,borderRadius:8,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>🔙</button>
+                <div style={{fontSize:14,fontWeight:900,flex:1}}>🏠 {t.tabConfig||"Configuration"} famille</div>
+                {configStep===0 && <StepIdInfoButton C={C} t={t} />}
+                {configStep===1 && <StepAccessInfoButton C={C} t={t} />}
+                {configStep===2 && <StepDatesInfoButton C={C} t={t} />}
+                {configStep===3 && <StepGardeInfoButton C={C} t={t} />}
+              </div>
+              {/* Onglets étapes */}
+              <div style={{display:"flex"}}>
+              {STEPS.map((s,i)=>(
+                <button key={i} onClick={()=>setConfigStep(i)}
+                  style={{flex:1,padding:"8px 4px 7px",background:configStep===i?C.sur:"transparent",color:configStep===i?C.vio:C.mut,borderBottom:configStep===i?`2.5px solid ${C.vio}`:"2.5px solid transparent",borderRadius:0,fontSize:16,height:"auto",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,transition:"all .15s",cursor:"pointer"}}>
+                  <span style={{lineHeight:1,position:"relative"}}>
+                    {s.i}
+                    {s.badge>0&&!s.wobbleOnly&&<span style={{position:"absolute",top:-4,right:-6,width:14,height:14,borderRadius:"50%",background:C.red,color:"#fff",fontSize:8,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{s.badge}</span>}
+                  </span>
+                  <span style={{fontSize:9,fontWeight:800,letterSpacing:".03em",textTransform:"uppercase"}}>{s.l}</span>
+                </button>
+              ))}
+              </div>
+            </div>
+          );
+        })()
+      ) : (
+        <div style={{flexShrink:0,background:headerBG,borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:"0 1px 6px rgba(0,0,0,.05)"}}>
+          {TABS.map((tb,i) => (
+            <button key={i} onClick={()=>{ switchTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,padding:"10px 2px",background:tab===i&&!menuTab?C.sur:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,borderBottom:tab===i&&!menuTab?`2.5px solid ${C.vio}`:"2.5px solid transparent",borderRadius:0,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",transition:"all .15s"}}>
+              <span style={{lineHeight:1,display:"inline-block",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}>{tb.icon}</span>
+              {tb.badge>0 && !tb.wobbleOnly && <span style={{position:"absolute",top:5,right:"10%",background:C.red,borderRadius:"50%",width:8,height:8,border:`2px solid ${C.card}`}}/>}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* BANNIÈRE BÊTA */}
+      {isBeta() && user && !sub._admin && (
+        <div style={{
+          background:C.sur,
+          borderBottom:`1px solid ${C.bor}`,
+          padding:"6px 16px",
+          display:"flex",alignItems:"center",justifyContent:"center",
+          flexShrink:0,
+        }}>
+          <div style={{fontSize:11,color:C.vio,fontWeight:700}}>
+            {t.betaBanner||"🎉 Bêta gratuite — Trial Premium jusqu'au 30 septembre 2026"}
+          </div>
+        </div>
+      )}
+
+      {/* CONTENT */}
+      <div id="duvia-scroll" style={{flex:1,overflowY:"auto",padding:16,background:C.bg}}>
+        {(isObs && !isAdm) ? (
+          /* Cas 1 : obs sans famille active (retiré par un parent) */
+          !familySync.familyId ? (
+            <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"80vh",padding:20}}>
+              <div style={{background:C.card,borderRadius:18,padding:28,maxWidth:380,textAlign:"center",boxShadow:"0 8px 32px rgba(0,0,0,.1)"}}>
+                <div style={{fontSize:48,marginBottom:12}}>👁️</div>
+                <div style={{fontWeight:900,fontSize:17,color:C.txt,marginBottom:8}}>
+                  {t.obsNoFamily||"Vous n'êtes pas affecté à une famille."}
+                </div>
+                <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:20}}>
+                  {t.obsNoFamilyDesc||"Seule une famille peut vous inviter à rejoindre Duvia. Contactez le parent qui souhaitait vous donner accès pour qu'il génère un nouveau lien d'invitation."}
+                </div>
+                <button onClick={async()=>{ await supabase.auth.signOut(); handleSetUser(null); setTab(0); }}
+                  style={{height:44,padding:"0 24px",background:C.vio,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:14,cursor:"pointer"}}>
+                  🔓 {t.logout||"Se déconnecter"}
+                </button>
+              </div>
+            </div>
+          ) :
+          /* Cas 2 : obs dans famille sans parent actif (famille dissoute) */
+          (cfg.parents||[]).filter(pp=>pp&&!pp.left).length===0 ? (
+            <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:300,padding:20}}>
+              <div style={{background:C.card,borderRadius:18,padding:28,maxWidth:380,textAlign:"center",boxShadow:"0 8px 32px rgba(0,0,0,.1)"}}>
+                <div style={{fontSize:44,marginBottom:12}}>🏚️</div>
+                <div style={{fontWeight:900,fontSize:17,color:C.txt,marginBottom:8}}>{t.familyDisbanded||"Cette famille n'a plus de parent actif."}</div>
+                <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:20}}>{t.familyDisbandedObs||"Votre accès est maintenu mais aucun parent ne gère plus cette famille. Vous pouvez quitter."}</div>
+                <button onClick={async()=>{if(!window.confirm("Quitter la famille ?")) return; await familySync?.leaveFamily?.(); handleSetUser(null); setTab(0);}}
+                  style={{height:44,padding:"0 24px",background:C.red,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:14,cursor:"pointer"}}>
+                  🚪 {t.obsLeaveFamily||"Quitter la famille"}
+                </button>
+              </div>
+            </div>
+          ) : (
+          <div>
+            {tab===0 && <CalTab readOnly updateCal={()=>{}} />}
+            {tab===1 && <ContactsTab readOnly />}
+            {tab===2 && <MessagingTab />}
+            {tab===3 && <GameTab />}
+          </div>
+          ) /* fin condition 0 parents */
+        ) : (isChild && !isAdm) ? (
+          <div>
+            {tab===0 && <CalTab readOnly updateCal={()=>{}} />}
+            {tab===1 && <ScheduleTab childReadOnly />}
+            {tab===2 && <ContactsTab addOnly />}
+            {tab===3 && <MessagingTab />}
+            {tab===4 && <GameTab />}
+          </div>
+        ) : (
+          <div>
+            {menuTab==="prefs" && (
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+                  <div style={{fontSize:15,fontWeight:900}}>⚙️ Préférences</div>
+                </div>
+                <PrefsTab />
+              </div>
+            )}
+            {menuTab==="config" && (
+              <div>
+                {configStep===0&&![...cfg.parents,...cfg.children].every(x=>x.name.trim())&&(
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,padding:"8px 12px",background:`${C.yel}18`,border:`1px solid ${C.yel}55`,borderRadius:10}}>
+                    <span style={{fontSize:15}}>⚠️</span>
+                    <span style={{fontSize:12,fontWeight:700,color:C.yel}}>{t.configIncomplete||"Incomplet"}</span>
+                    <span style={{fontSize:11,color:C.mut}}>{t.configIncompleteDesc||"— Renseignez tous les noms pour continuer."}</span>
+                  </div>
+                )}
+                <ConfigTab />
+              </div>
+            )}
+            {menuTab==="notifs" && (
+              <div>
+                <NotifTab />
+              </div>
+            )}
+            {menuTab==="premium" && (
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18,paddingBottom:14,borderBottom:`1.5px solid ${C.bor}`}}>
+                  <div style={{fontSize:15,fontWeight:900}}>⭐ {t.tabPremium}</div>
+                </div>
+                <PremiumTab />
+              </div>
+            )}
+            {menuTab==="hist" && <HistTab />}
+            {menuTab==="parrainage" && <ParrainageSection />}
+            {menuTab==="rating" && <RatingTab />}
+            {menuTab==="admin" && isAdm && <AdminTab />}
+            {!menuTab && tab===0 && <div key="t0" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><CalTab readOnly={false} canEdit={!isFreemiumPlan(sub)} /></div>}
+            {!menuTab && tab===1 && <div key="t1" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><ScheduleTab /></div>}
+            {!menuTab && tab===2 && <div key="t2" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><ExpTab /></div>}
+            {!menuTab && tab===3 && <div key="t3" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><ContactsTab /></div>}
+            {!menuTab && tab===4 && <div key="t4" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><VaultTab /></div>}
+            {!menuTab && tab===5 && <div key="t5" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><MessagingTab /></div>}
+            {!menuTab && tab===6 && <div key="t6" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><GameTab /></div>}
+          </div>
+        )}
+      </div>
+
+
+      {/* ── Modale suppression de mon compte ──────────────────────────────── */}
+      {confirmDeleteAccount && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:340,width:"100%",border:`1.5px solid ${C.bor}`,textAlign:"center"}}>
+            <div style={{fontSize:40,marginBottom:10}}>⚠️</div>
+            <div style={{fontSize:16,fontWeight:900,color:C.txt,marginBottom:8}}>Supprimer mon compte ?</div>
+            <div style={{fontSize:12,color:C.mut,lineHeight:1.6,marginBottom:8}}>
+              Cette action est <strong style={{color:C.red}}>définitive</strong>. Vous serez déconnecté(e) et ne pourrez plus accéder à votre compte.
+            </div>
+            <div style={{background:`${C.red}10`,border:`1px solid ${C.red}33`,borderRadius:10,padding:"10px 12px",margin:"12px 0 20px",textAlign:"left"}}>
+              <div style={{fontSize:11,fontWeight:800,color:C.red,marginBottom:6}}>Ce qui se passera :</div>
+              {["👤 Votre compte sera supprimé","🗓️ Le planning de garde sera réinitialisé si nécessaire","💰 Les dépenses partagées seront remises à zéro","📞 Vous serez retiré(e) des contacts de la famille","💬 Vos messages resteront visibles (marqués « compte supprimé »)"].map((l,i)=>(
+                <div key={i} style={{fontSize:11,color:C.mut,marginBottom:3}}>{l}</div>
+              ))}
+              {sub?.plan==="premium" && (
+                <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${C.red}33`}}>
+                  <div style={{fontSize:11,fontWeight:800,color:C.red,marginBottom:4}}>⭐ Abonnement Premium</div>
+                  <div style={{fontSize:11,color:C.mut}}>Votre abonnement sera annulé. Pensez à le résilier manuellement depuis votre gestionnaire de paiement pour éviter toute facturation future.</div>
+                </div>
+              )}
+            </div>
+            {deleteAccountError && (
+              <div style={{background:`${C.red}10`,border:`1px solid ${C.red}44`,borderRadius:10,padding:"10px 12px",marginBottom:16,fontSize:12,color:C.red,textAlign:"left"}}>
+                {deleteAccountError}
+              </div>
+            )}
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>{ setConfirmDeleteAccount(false); setDeleteAccountError(""); }}
+                disabled={deletingAccount}
+                style={{flex:1,height:44,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13,cursor:deletingAccount?"not-allowed":"pointer",opacity:deletingAccount?.5:1}}>
+                Annuler
+              </button>
+              <button onClick={deleteMyAccount} disabled={deletingAccount}
+                style={{flex:1,height:44,background:C.red,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13,cursor:deletingAccount?"not-allowed":"pointer",opacity:deletingAccount?.7:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                {deletingAccount
+                  ? <><span style={{width:16,height:16,border:"2px solid #fff4",borderTopColor:"#fff",borderRadius:"50%",display:"inline-block",animation:"spin 0.7s linear infinite"}}/>Suppression…</>
+                  : "🗑️ Supprimer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Modale reset ───────────────────────────────────────────────────── */}
+      {showResetConfirm && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:320,width:"100%",border:`1.5px solid ${C.bor}`,textAlign:"center"}}>
+            <div style={{fontSize:40,marginBottom:10}}>🔄</div>
+            <div style={{fontSize:16,fontWeight:900,color:C.txt,marginBottom:8}}>Réinitialiser l'app ?</div>
+            <div style={{fontSize:12,color:C.mut,lineHeight:1.6,marginBottom:20}}>
+              Toutes les données seront effacées :<br/>
+              comptes, calendrier, dépenses, messages…<br/>
+              <strong style={{color:C.ora}}>Retour à la première connexion.</strong>
+            </div>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setShowResetConfirm(false)}
+                style={{flex:1,height:44,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                Annuler
+              </button>
+              <button onClick={()=>{ try{window.localStorage.clear();}catch{} duviaReload(); }}
+                style={{flex:1,height:44,background:C.ora,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13,cursor:"pointer"}}>
+                🔄 Réinitialiser
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showRefPrompt && !sub.refCode && (
+        <div style={{position:"fixed",bottom:72,left:"50%",transform:"translateX(-50%)",width:"calc(100% - 32px)",maxWidth:440,background:C.card,border:`1.5px solid ${C.pin}`,borderRadius:14,padding:"14px 16px",boxShadow:"0 4px 20px rgba(0,0,0,.15)",zIndex:200,display:"flex",gap:12,alignItems:"center"}}>
+          <div style={{fontSize:26}}>🎁</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:800,color:C.pin,marginBottom:2}}>Invitez l'autre parent</div>
+            <div style={{fontSize:11,color:C.mut}}>Parrainez un proche — 15 jours offerts à chacun</div>
+          </div>
+          <div style={{display:"flex",gap:6,flexShrink:0}}>
+            <button onClick={()=>{setShowRefPrompt(false);setMenuTab("parrainage");setShowMenu(true);}} style={{padding:"7px 12px",background:`linear-gradient(135deg,${C.vio},${C.pin})`,color:"#fff",fontSize:12,fontWeight:700,borderRadius:8}}>Inviter</button>
+            <button onClick={()=>setShowRefPrompt(false)} style={{padding:"7px 10px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,fontSize:12,borderRadius:8}}>✕</button>
+          </div>
+        </div>
+      )}
+    </div>
+    </AppContext.Provider>
+  );
+}
+
+// ─── LOGIN ────────────────────────────────────────────────────────────────────
+// ── Écran RGPD de PREMIÈRE UTILISATION ───────────────────────────────────────
+// Distinct de la charte d'engagement (ConsentScreen). Affiché une seule fois
+// par appareil (redemandé si RGPD_NOTICE_VERSION change). Informe sur les
+// données + renvoie à la politique de confidentialité / CGU, et enregistre
+// l'acceptation (version + date) via onAccept.
+function RgpdConsentScreen({C,t,onAccept}) {
+  const [checked,setChecked] = useState(false);
+  const link = {color:C.vio,fontWeight:800,textDecoration:"underline"};
+  return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:C.bg}}>
+      <div style={{width:"100%",maxWidth:460}} className="fi">
+        <div style={{background:C.card,borderRadius:20,padding:"26px 24px",boxShadow:"0 10px 40px rgba(0,0,0,.12)"}}>
+          <div style={{fontSize:20,fontWeight:900,color:C.txt,marginBottom:6}}>
+            {t.rgpdTitle||"🔒 Vos données et votre vie privée"}
+          </div>
+          <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:16}}>
+            {t.rgpdIntro||"Duvia traite des données personnelles (identité, plannings de garde, dépenses, documents, messages) pour vous aider à organiser la vie de vos enfants. Vos données sont conservées de façon sécurisée et ne sont jamais vendues."}
+          </div>
+
+          <div style={{background:`${C.vio}0e`,border:`1px solid ${C.bor}`,borderRadius:12,padding:"12px 14px",marginBottom:16,fontSize:12.5,color:C.txt,lineHeight:1.6}}>
+            {t.rgpdRights||"Vous disposez d'un droit d'accès, de rectification, de suppression et de portabilité de vos données, ainsi que du droit de saisir la CNIL. Vous pouvez supprimer votre compte et vos données à tout moment depuis les réglages."}
+          </div>
+
+          <div style={{fontSize:12.5,color:C.mut,marginBottom:18}}>
+            {t.rgpdSeeMore||"Pour en savoir plus :"}{" "}
+            <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer" style={link}>{t.rgpdPrivacy||"Politique de confidentialité"}</a>
+            {" · "}
+            <a href={CGU_URL} target="_blank" rel="noopener noreferrer" style={link}>{t.rgpdCgu||"Conditions d'utilisation"}</a>
+          </div>
+
+          <label style={{display:"flex",gap:10,alignItems:"flex-start",cursor:"pointer",marginBottom:18}}>
+            <input type="checkbox" checked={checked} onChange={e=>setChecked(e.target.checked)} style={{width:20,height:20,marginTop:2,flexShrink:0,accentColor:C.vio,cursor:"pointer"}} />
+            <span style={{fontSize:13,color:C.txt,fontWeight:600,lineHeight:1.5}}>
+              {t.rgpdAcceptLabel||"J'ai lu et j'accepte la politique de confidentialité et les conditions d'utilisation de Duvia."}
+            </span>
+          </label>
+
+          <button onClick={onAccept} disabled={!checked} style={{
+            width:"100%",padding:"13px",background:checked?`linear-gradient(135deg,${C.vio},${C.blu})`:C.bor,
+            color:checked?"#fff":C.mut,fontSize:15,fontWeight:800,borderRadius:12,
+            cursor:checked?"pointer":"not-allowed",opacity:checked?1:.7,transition:"all .2s"}}>
+            {t.rgpdAcceptBtn||"✓ Continuer"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConsentScreen({C,t,user,onAccept,onDecline}) {
+  const [checked1,setChecked1] = useState(false);
+  const [checked2,setChecked2] = useState(false);
+  const [checked3,setChecked3] = useState(false);
+  const canAccept = checked1 && checked2 && checked3;
+  return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:`radial-gradient(ellipse at 30% 20%,rgba(124,111,205,.15) 0%,transparent 60%),${C.bg}`}}>
+      <div style={{width:"100%",maxWidth:420}} className="fi">
+        <div style={{textAlign:"center",marginBottom:22,paddingLeft:180}}>
+          <div style={{fontSize:36,marginBottom:8}}>👨‍👩‍👧</div>
+          <div style={{fontSize:20,fontWeight:900,color:C.txt,marginBottom:6}}>{t.consentWelcome||"Bienvenue"}, {user.name?.split(" ")[0]} !</div>
+          <div style={{fontSize:13,color:C.mut,fontStyle:"italic",lineHeight:1.5}}>{t.consentIntro||"Avant de commencer, merci de confirmer votre engagement."}</div>
+        </div>
+        <div className="card" style={{marginBottom:14}}>
+          <div style={{fontSize:14,fontWeight:800,color:C.txt,marginBottom:14,lineHeight:1.5}}>
+            {t.consentTitle||"Vous utilisez cette application pour organiser la vie d'un ou plusieurs enfants."}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            <label style={{display:"flex",alignItems:"flex-start",gap:12,cursor:"pointer",padding:"12px 14px",background:checked1?`${C.vio}11`:C.sur,border:`2px solid ${checked1?C.vio:C.bor}`,borderRadius:12,transition:"all .2s"}}>
+              <input type="checkbox" checked={checked1} onChange={e=>setChecked1(e.target.checked)} style={{marginTop:2,flexShrink:0}} />
+              <div>
+                <div style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:3}}>{t.consentCheck1Title||"Je suis parent ou titulaire de l'autorité parentale"}</div>
+                <div style={{fontSize:11,color:C.mut,lineHeight:1.4}}>{t.consentCheck1Desc||"Je déclare avoir les droits parentaux sur le ou les enfants concernés par cette application."}</div>
+              </div>
+            </label>
+            <label style={{display:"flex",alignItems:"flex-start",gap:12,cursor:"pointer",padding:"12px 14px",background:checked2?`${C.grn}11`:C.sur,border:`2px solid ${checked2?C.grn:C.bor}`,borderRadius:12,transition:"all .2s"}}>
+              <input type="checkbox" checked={checked2} onChange={e=>setChecked2(e.target.checked)} style={{marginTop:2,flexShrink:0}} />
+              <div>
+                <div style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:3}}>{t.consentCheck2Title||"J'utilise cette application dans l'intérêt du ou des enfants"}</div>
+                <div style={{fontSize:11,color:C.mut,lineHeight:1.4}}>{t.consentCheck2Desc||"Je m'engage à utiliser Duvia uniquement pour le bien-être et l'organisation de vie des enfants."}</div>
+              </div>
+            </label>
+            <label style={{display:"flex",alignItems:"flex-start",gap:12,cursor:"pointer",padding:"12px 14px",background:checked3?`${C.ora}11`:C.sur,border:`2px solid ${checked3?C.ora:C.bor}`,borderRadius:12,transition:"all .2s"}}>
+              <input type="checkbox" checked={checked3} onChange={e=>setChecked3(e.target.checked)} style={{marginTop:2,flexShrink:0}} />
+              <div>
+                <div style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:3}}>{t.consentCheck3Title||"J'ai compris que Duvia n'a aucune valeur juridique"}</div>
+                <div style={{fontSize:11,color:C.mut,lineHeight:1.4}}>{t.consentCheck3Desc||"Duvia est un outil d'aide à l'organisation familiale. Il ne remplace pas un accord légal, une décision judiciaire ou l'avis d'un professionnel du droit."}</div>
+              </div>
+            </label>
+          </div>
+          <button
+            onClick={onAccept}
+            disabled={!canAccept}
+            style={{width:"100%",padding:"13px",marginTop:18,background:canAccept?`linear-gradient(135deg,${C.vio},${C.blu})`:`${C.bor}`,color:canAccept?"#fff":C.mut,fontSize:15,fontWeight:800,borderRadius:12,cursor:canAccept?"pointer":"not-allowed",transition:"all .2s",opacity:canAccept?1:.7}}>
+            {t.consentAccept||"✓ J'accepte et j'accède à l'application"}
+          </button>
+          <button onClick={onDecline} style={{width:"100%",padding:"9px",marginTop:8,background:"transparent",color:C.mut,fontSize:12,textDecoration:"underline"}}>
+            {t.consentDecline||"← Retour à la connexion"}
+          </button>
+        </div>
+        <div style={{fontSize:10,color:C.mut,textAlign:"center",lineHeight:1.5,padding:"0 10px"}}>
+          {t.consentFooter||"Ces engagements sont demandés à chaque nouvelle connexion pour garantir une utilisation bienveillante de l'application."}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── PASSWORD RESET SCREEN ────────────────────────────────────────────────────
+function PasswordResetScreen({ onDone }) {
+  const [pw, setPw]   = useState("");
+  const [pw2, setPw2] = useState("");
+  const [err, setErr] = useState("");
+  const [ok, setOk]   = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function doReset() {
+    const pwErr = validatePassword(pw);
+    if (pwErr) { setErr(pwErr); return; }
+    if (pw !== pw2) { setErr("Les mots de passe ne correspondent pas."); return; }
+    setErr(""); setLoading(true);
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    setLoading(false);
+    if (error) { setErr("Erreur : " + error.message); return; }
+    setOk("✅ Mot de passe mis à jour !");
+    setTimeout(onDone, 2000);
+  }
+
+  return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:"#F8F2FF",fontFamily:"Nunito,sans-serif"}}>
+      <div style={{background:"#fff",borderRadius:20,padding:32,maxWidth:380,width:"100%",boxShadow:"0 8px 32px rgba(123,124,245,.15)"}}>
+        <div style={{textAlign:"center",marginBottom:24}}>
+          <div style={{fontSize:40,marginBottom:8}}>🔐</div>
+          <div style={{fontSize:18,fontWeight:900,color:"#17103A"}}>Nouveau mot de passe</div>
+          <div style={{fontSize:13,color:"#888",marginTop:4}}>Choisissez un mot de passe sécurisé</div>
+        </div>
+        <div style={{marginBottom:12}}>
+          <label style={{fontSize:12,fontWeight:700,color:"#17103A",display:"block",marginBottom:4}}>Nouveau mot de passe</label>
+          <input type="password" value={pw} onChange={e=>setPw(e.target.value)}
+            placeholder="8 car. min · 1 majuscule · 1 caractère spécial"
+            style={{width:"100%",height:44,borderRadius:10,border:"1.5px solid #e0d9f5",padding:"0 12px",fontSize:14,boxSizing:"border-box",fontFamily:"inherit"}} />
+        </div>
+        <div style={{marginBottom:20}}>
+          <label style={{fontSize:12,fontWeight:700,color:"#17103A",display:"block",marginBottom:4}}>Confirmer le mot de passe</label>
+          <input type="password" value={pw2} onChange={e=>setPw2(e.target.value)}
+            placeholder="Répétez le mot de passe"
+            style={{width:"100%",height:44,borderRadius:10,border:"1.5px solid #e0d9f5",padding:"0 12px",fontSize:14,boxSizing:"border-box",fontFamily:"inherit"}} />
+        </div>
+        {err && <div style={{color:"#ef4444",fontSize:12,fontWeight:700,marginBottom:12,padding:"8px 12px",background:"#fef2f2",borderRadius:8}}>{err}</div>}
+        {ok  && <div style={{color:"#22c55e",fontSize:12,fontWeight:700,marginBottom:12,padding:"8px 12px",background:"#f0fdf4",borderRadius:8}}>{ok}</div>}
+        <button onClick={doReset} disabled={loading}
+          style={{width:"100%",height:48,background:"linear-gradient(135deg,#7B7CF5,#7BA8F5)",color:"#fff",borderRadius:12,fontSize:15,fontWeight:800,border:"none",cursor:loading?"not-allowed":"pointer",opacity:loading?.6:1}}>
+          {loading ? "Mise à jour…" : "Confirmer le nouveau mot de passe"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLogin,onObsJoin,familySync,cfg,setCfg}) {
+  const [mode,setMode]=useState("login");
+  const [avgRating,setAvgRating]=useState(null);
+  const [publicReviews,setPublicReviews]=useState([]);
+  const [reviewsOpen,setReviewsOpen]=useState(false); // accordéon avis publics — replié par défaut
+  useEffect(()=>{
+    supabase.rpc("get_ratings_summary").then(({data})=>{ if(data?.total_count>0) setAvgRating(data); }).catch(()=>{});
+    supabase.rpc("get_public_ratings",{max_count:3}).then(({data})=>{ if(data?.length) setPublicReviews(data); }).catch(()=>{});
+  },[]);
+  const [email,setEmail]=useState(()=>{ try{return window.localStorage.getItem("duvia_last_email")||"";}catch{return "";} }); const [pw,setPw]=useState("");
+  const [name,setName]=useState(""); const [role,setRole]=useState("parent");
+  const [showInstallModal,setShowInstallModal]=useState(false);
+  const [err,setErr]=useState(""); const [ok,setOk]=useState("");
+  const [showPw,setShowPw]=useState(false);
+  // « Rester connecté » — opt-in PROPRE à chaque affichage de l'écran de
+  // connexion : on remet le drapeau à zéro au montage (évite qu'une valeur
+  // « 1 » d'une session précédente garde l'utilisateur connecté par erreur).
+  const [remember,setRemember]=useState(false);
+  useEffect(()=>{ try{ window.localStorage.removeItem("duvia_remember"); window.localStorage.removeItem("duvia_remember_until"); }catch{} },[]);
+
+
+  const [shakeName,setShakeName]=useState(false);
+  function _triggerShakeName(){ setShakeName(true); setTimeout(()=>setShakeName(false),600); }
+  const [showLangMenu,setShowLangMenu]=useState(false);
+  const foundLang=LANGS[lang]||LANGS["fr"];
+  async function doLogin(){
+    if(!email||!pw){ setErr(t.wrongPw); return; }
+    try{ window.localStorage.setItem("duvia_last_email", email.trim()); }catch{}
+    // 🔧 Si on arrive par un lien d'invitation, se connecter doit AUSSI rattacher
+    // à la famille. La connexion simple ne le fait pas → on délègue au flux qui
+    // rejoint réellement la famille (sinon l'invité finit dans sa propre famille).
+    if(isAnyInvite && obsInviteCode?.code){ return doLoginAndJoin(); }
+    const cleanEmail = identifierToAuthEmail(email);
+
+    // Supabase Auth est la source de vérité pour TOUS les comptes, admin compris.
+    setErr(""); setOk(t.syncConnecting||"Connexion…");
+    const { data, error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password: pw });
+    if(error){
+      setOk(""); setErr(t.wrongPw); return;
+    }
+
+    // Admin vérifié côté serveur (table app_admins) — personne ne peut se
+    // donner ce rôle soi-même, et il n'y a plus de mot de passe admin dans le code.
+    const { data: adminRow } = await supabase
+      .from("app_admins")
+      .select("user_id")
+      .eq("user_id", data.user.id)
+      .maybeSingle();
+    if (adminRow) {
+      setOk("");
+      onLogin({ id: data.user.id, email: cleanEmail, name: "Administrateur", role: "admin" });
+      return;
+    }
+
+    // Connexion Supabase OK → profil local depuis métadonnées Supabase
+    const meta = data.user?.user_metadata || {};
+    const existing = users.find(u => u.email===cleanEmail);
+    const profile = existing
+      ? { ...existing }
+      : {
+          id: Date.now(), email: cleanEmail,
+          name: meta.name || cleanEmail.split("@")[0],
+          role: meta.role || "parent",
+          parentIdx: meta.parentIdx ?? 0,
+          phone: isLikelyPhoneIdentifier(email) ? email.trim() : (meta.phone||undefined),
+          refCode: makeRefCode(Date.now(), cleanEmail),
+          refUsed:null, refCount:0, validatedRefCount:0, refMonths:0,
+          trialExtension:0, pendingSpins:0, monthlyRefMonth:null, monthlyRefCount:0,
+          accountCreatedAt: new Date().toISOString(),
+        };
+    if(!existing) setUsers(u => [...u, profile]);
+    // 🔧 Restaurer sub depuis table subscriptions (priorité) puis user_metadata (fallback)
+    try {
+      const { data: subRow } = await supabase.from("subscriptions")
+        .select("*").eq("user_id", data.user.id).maybeSingle();
+      if (subRow) {
+        profile.sub = {
+          plan: subRow.plan, premiumSince: subRow.premium_since, cycle: subRow.cycle,
+          trialStart: subRow.trial_start, accountCreatedAt: subRow.account_created_at,
+          trialExtension: subRow.trial_extension_days,
+          refCode: subRow.ref_code, refUsed: subRow.ref_used,
+          refCount: subRow.ref_count || 0, validatedRefCount: subRow.validated_ref_count || 0,
+          refMonths: subRow.ref_months || 0, pendingSpins: subRow.pending_spins || 0,
+          monthlyRefMonth: subRow.monthly_ref_month, monthlyRefCount: subRow.monthly_ref_count || 0,
+        };
+      } else {
+        const cloudSub = meta.sub;
+        if(cloudSub) profile.sub = cloudSub;
+      }
+    } catch { const cloudSub = meta.sub; if(cloudSub) profile.sub = cloudSub; }
+    setOk("");
+    onLogin(profile);
+  }
+  const [refInput,setRefInput] = useState("");
+  // Detect invite from URL — supports encoded (?inv=base64) and legacy plain params
+  const [obsInviteCode] = useState(()=>{
+    try{
+      const p = new URLSearchParams(window.location.search);
+      // 🆕 Invitation enfant (Supabase-backed) : ?cinv=TOKEN
+      // Invitation observateur (Supabase-backed) : ?oinv=TOKEN
+      const oinv = p.get("oinv");
+      if(oinv) return {code:oinv, family:"__obs_token__", role:"observer", email:"", isNewObsInvite:true};
+      const cinv = p.get("cinv");
+      if(cinv){
+        const cn = p.get("cname"); const cp = p.get("cphone");
+        return {code:cinv, family:"__child_token__", role:"child", email:"",
+          childName: cn ? decodeURIComponent(cn) : "",
+          childPhone: cp ? decodeURIComponent(cp) : "",
+          cborn: p.get("cborn") ? decodeURIComponent(p.get("cborn")) : "",
+          cconsent: p.get("cconsent")==="1",
+          isNewChildInvite:true};
+      }
+      const inv = p.get("inv");
+      if(inv){
+        try{
+          const d = JSON.parse(atob(inv));
+          // Vérifier expiration (24h)
+          if(d.expiresAt && new Date(d.expiresAt) < new Date()) return {expired:true};
+          return {code:d.code, family:d.family, role:d.role, email:d.email||"", expiresAt:d.expiresAt||null};
+        }catch{
+          // 🔧 Nouveau format (table family_invitations) : token brut, pas du JSON encodé.
+          // On le traite comme une invitation parent à valider côté serveur (RPC).
+          return {code:inv, family:"__token__", role:"parent", email:"", newStyle:true};
+        }
+      }
+      // legacy fallback (anciens liens non encodés)
+      return {code:p.get("code"), family:p.get("family"), role:p.get("role"), email:""};
+    }catch{return {};}
+  });
+  const isExpiredInvite = obsInviteCode?.expired === true;
+  const isObsInvite    = obsInviteCode?.role==="observer" && obsInviteCode?.family;
+  const isNewObsInvite = !!(obsInviteCode?.isNewObsInvite);
+  const isChildInvite  = obsInviteCode?.role==="child"    && obsInviteCode?.family;
+  const isParentInvite = obsInviteCode?.role==="parent"   && obsInviteCode?.family;
+  const isAnyInvite    = isObsInvite || isChildInvite || isParentInvite;
+
+  // Arrivée via lien d'invitation → pré-remplir l'email et choisir le bon écran
+  useEffect(()=>{
+    if(!isAnyInvite) return;
+    let cancelled = false;
+    (async () => {
+      const invEmail = obsInviteCode?.email || "";
+      if(invEmail){
+        // Ancien format : l'email est dans le lien.
+        setEmail(invEmail);
+        setMode("login");
+        return;
+      }
+      // Nouveau format (jeton) : l'email est côté serveur. On le récupère pour
+      // pré-remplir le champ ET savoir si le compte existe déjà → on ouvre
+      // « Connexion » si oui, « Créer un compte » sinon.
+      // Invitation observateur (nouveau style Supabase) ─ pré-remplissage via peek.
+      if(obsInviteCode?.isNewObsInvite && obsInviteCode?.code){
+        try{
+          const { data } = await supabase.rpc("peek_observer_invitation", { p_token: obsInviteCode.code });
+          if(!cancelled && data?.found){
+            if(data.email) setEmail(data.email);
+            else if(data.phone) setEmail(data.phone);
+            setMode("register");
+          } else if(!cancelled){ setMode("register"); }
+        }catch{ if(!cancelled) setMode("register"); }
+        return;
+      }
+      // Invitation enfant (nouveau style Supabase) ─ pré-remplissage direct.
+      if(obsInviteCode?.isNewChildInvite){
+        if(!cancelled){
+          if(obsInviteCode.childName)  setName(obsInviteCode.childName);
+          if(obsInviteCode.childPhone) setEmail(obsInviteCode.childPhone);
+          // Dériver l'âge depuis cborn pour que les validations fonctionnent
+          if(obsInviteCode.cborn){
+            const y=parseInt(obsInviteCode.cborn); const today=new Date();
+            const a=today.getFullYear()-y; setChildAge(String(a>0?a:1));
+            // Si parent a déjà consenti (cconsent=1), marquer le consentement
+            if(obsInviteCode.cconsent) setParentConsent(true);
+          }
+          setMode("register");
+        }
+        return;
+      }
+      if(obsInviteCode?.newStyle && obsInviteCode?.code){
+        try{
+          const { data, error } = await supabase.rpc("peek_invitation", { p_token: obsInviteCode.code });
+          const row = Array.isArray(data) ? data[0] : data;
+          if(!cancelled && row && row.email){
+            setEmail(row.email);
+            if(row.has_account){
+              // Compte déjà existant → écran « se connecter et rejoindre »
+              // (le seul chemin qui rattache vraiment à la famille).
+              setShowExistingAccount(true);
+            } else {
+              // Pas de compte → création, email pré-rempli.
+              setMode("register");
+            }
+            return;
+          }
+        }catch(e){ console.warn("[Duvia] peek_invitation:", e); }
+      }
+      // Repli : par défaut, écran de connexion (basculable manuellement).
+      if(!cancelled) setMode("login");
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  const [showExistingAccount, setShowExistingAccount] = useState(false);
+
+  const [childAge, setChildAge]           = useState("");
+  const [parentConsent, setParentConsent] = useState(false);
+  const [parentGender, setParentGender]   = useState("");
+  const [parentPhone, setParentPhone]     = useState("");
+  const [pwConfirm, setPwConfirm]         = useState("");
+
+  // En attente d'approbation : on n'affiche QUE le message d'attente (pas le
+  // formulaire ni le bouton « Envoyer le lien », qui n'ont rien à faire ici).
+  // ⚠️ Placé APRÈS tous les hooks (sinon « Rendered fewer hooks » / React #300).
+  if(mode==="obs_waiting") return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
+      <div style={{background:C.card,borderRadius:20,padding:"30px 24px",maxWidth:420,width:"100%",textAlign:"center",boxShadow:"0 10px 40px rgba(0,0,0,.12)"}}>
+        <div style={{fontSize:44,marginBottom:12}}>⏳</div>
+        <div style={{fontWeight:900,fontSize:18,marginBottom:8,color:C.txt}}>{t.obsJoinWaiting||"En attente d'approbation"}</div>
+        <div style={{fontSize:13.5,color:C.mut,lineHeight:1.6,marginBottom:18}}>{t.obsJoinWaitingInfo||"Votre demande a été envoyée aux parents. Vous recevrez une notification dès qu'elle sera approuvée."}</div>
+        <button onClick={()=>{ try{ window.location.href = window.location.origin + "/"; }catch{ setMode("login"); } }}
+          style={{height:42,padding:"0 22px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13,borderRadius:10}}>
+          {t.backLogin||"Retour"}
+        </button>
+      </div>
+    </div>
+  );
+
+  async function doReg(){
+    // ── Validations ─────────────────────────────────────────────────
+    const cleanName  = sanitize(name).slice(0, LIMITS.NAME_MAX);
+    // Vérifier que le lien d'invitation observateur n'a pas déjà été utilisé
+    if(isObsInvite && obsInviteCode?.code){
+      const inv=(cfg.pendingInvites||[]).find(i=>i.code===obsInviteCode.code);
+      if(inv && inv.used){ setErr(t.invErrUsedObs); return; }
+    }
+    const finalRolePreCheck = isObsInvite ? "observer" : isChildInvite ? "child" : role;
+    // Observateurs et enfants peuvent s'identifier par email OU par téléphone.
+    // Les parents restent en email obligatoire (utilisé ailleurs pour les invitations).
+    const rawIdentifier = email.trim();
+    const usingPhoneId = finalRolePreCheck !== "parent" && isLikelyPhoneIdentifier(rawIdentifier);
+    const regPhoneId = usingPhoneId ? rawIdentifier : "";
+    const cleanEmail = usingPhoneId
+      ? identifierToAuthEmail(rawIdentifier)
+      : rawIdentifier.toLowerCase().slice(0, LIMITS.EMAIL_MAX);
+    if(!cleanName || !cleanEmail || !pw){ setErr(t.allRequired); return; }
+    if(cleanName.length < 2){ setErr("Le nom doit contenir au moins 2 caractères."); return; }
+    if(!isCleanText(cleanName)){ _triggerShakeName(); setErr("⚠️ Le nom contient des mots inappropriés."); return; }
+    if(!usingPhoneId && !isValidEmail(cleanEmail)){ setErr(finalRolePreCheck==="parent" ? "Adresse email invalide." : "Adresse email ou numéro de téléphone invalide."); return; }
+    const pwErr = validatePassword(pw);
+    if(pwErr){ setErr(pwErr); return; }
+    if(pw !== pwConfirm){ setErr(t.pwMismatch); return; }
+    // Nettoyage du cache localStorage : on supprime toute entrée locale pour cet email
+    // Le vrai doublon sera détecté par Supabase lors du signUp (linkAccount).
+    setUsers(us => us.filter(u => u.email !== cleanEmail));
+    const newId=Date.now();
+    let realUserId = newId; // 🔧 déclaré ici (pas dans le if) pour être accessible partout
+    const newRefCode=makeRefCode(newId,cleanEmail);
+    let refUsed=null; let trialExtension=0;
+    if(refInput.trim()){
+      const code=refInput.trim().toUpperCase();
+      const referrer=users.find(u=>u.refCode===code);
+      if(!referrer){setErr(t.refInvalid||"Code parrain invalide");return;}
+      refUsed=code; // filleul → démarre en Trial Premium; bonus parrain déclenché à la validation (score ≥ 5)
+      const newRefCount=(referrer.refCount||0)+1;
+      setUsers(us=>us.map(u=>u.id===referrer.id?{...u,refCount:newRefCount}:u));
+    }
+    const finalRole = finalRolePreCheck;
+    const parentIdx = isParentInvite ? 1 : (finalRole==="parent" ? 0 : undefined);
+    if (isChildInvite) {
+      const age = parseInt(childAge);
+      if (!childAge || isNaN(age) || age < 5 || age > 99) {
+        setErr("⚠️ Veuillez saisir un âge valide (5 à 99 ans).");
+        return;
+      }
+      if (age < RGPD_CONSENT_AGE && !parentConsent) {
+        setErr("⚠️ Le consentement parental est obligatoire pour les enfants de moins de 15 ans (RGPD).");
+        return;
+      }
+    }
+    const childAgeNum = isChildInvite ? parseInt(childAge) : undefined;
+    const newUser = {id:newId,email:cleanEmail,name:cleanName,role:finalRole,parentIdx,
+      gender: finalRole==="parent" ? (parentGender||"M") : undefined,
+      phone:  finalRole==="parent" ? (parentPhone.trim()||"") : (regPhoneId||undefined),
+      refCode:newRefCode,refUsed,refCount:0,validatedRefCount:0,refMonths:0,trialExtension:0,pendingSpins:0,monthlyRefMonth:null,monthlyRefCount:0,accountCreatedAt:new Date().toISOString(),startsAsPremiumTrial:!!refUsed,
+      ...(isObsInvite  ? {obsStatus:"pending",obsFamilyCode:obsInviteCode.family,obsInviteCode:obsInviteCode.code} : {}),
+      ...(isChildInvite ? {
+        childAge: childAgeNum,
+        childMessagingAllowed: true,
+        obsFamilyCode: obsInviteCode.family,
+        obsInviteCode: obsInviteCode.code,
+        childParentConsentGiven: childAgeNum < RGPD_CONSENT_AGE ? true : undefined,
+      } : {}),
+    };
+    setUsers(u=>[...u,newUser]);
+
+    // ☁️ Créer le compte Supabase Auth pour TOUS les rôles (parent, observer, child)
+    // Supabase Auth est la source de vérité — sans compte là-bas, on ne peut plus se connecter.
+    // Exception : l'admin est local uniquement.
+    if(finalRole !== "admin"){
+      const linkRes = await familySync.linkAccount(cleanEmail, pw, {role:finalRole, parentIdx, name:cleanName, phone:regPhoneId||undefined});
+      // 🔧 UUID réel Supabase — utilisé dans onObsJoin pour que matchFn trouve la carte
+      realUserId = linkRes.userId || newId;
+      if(!linkRes.ok){
+        if(linkRes.error === "already_registered"){
+          // Email déjà dans Supabase → on annule la création locale et on bloque
+          setUsers(us => us.filter(u => u.email !== cleanEmail));
+          if(usingPhoneId){ setErr("Ce numéro de téléphone est déjà utilisé."); return; }
+          setShowExistingAccount(true); setErr(""); return;
+        }
+        console.warn("[Duvia] Cloud account link failed:", linkRes.error);
+      }
+    }
+    let parentInviteWaiting = false;
+    if(finalRole==="parent"){
+      if(isParentInvite && obsInviteCode.newStyle){
+        // 🔗 Nouveau format : rejoindre en "pending" via le token — écran d'attente.
+        const joinRes = await familySync.joinFamilyByToken(obsInviteCode.code, { name: cleanName, gender: parentGender||"M" });
+        if(joinRes.ok){
+          try{ window.localStorage.setItem("duvia_family_id", joinRes.familyId); }catch{}
+          parentInviteWaiting = true;
+        } else {
+          setErr(
+            joinRes.error==="expired" ? t.invErrExpired :
+            joinRes.error==="used"    ? t.invErrUsed :
+            t.invErrInvalid
+          );
+        }
+      } else if(isParentInvite && obsInviteCode.family){
+
+        // 🔗 Maintenant que le compte Auth existe, rejoindre la famille via le lien d'invitation
+        const joinRes = await familySync.joinFamily(obsInviteCode.family);
+        if(joinRes.ok){
+          // ✅ Délai 100ms pour laisser le useEffect remettre skipNextSave à false
+          // après le setCfg(famRow.data) dans joinFamily — sinon cette MAJ n'est pas
+          // envoyée à Supabase et le Parent 1 ne voit pas que le Parent 2 a rejoint.
+          await new Promise(r => setTimeout(r, 100));
+          setCfg(c=>{
+            const p=[...(c.parents||[])];
+            while(p.length<2) p.push({});
+            p[1] = {...p[1], name:cleanName, email:cleanEmail,
+              gender:parentGender||p[1]?.gender||"M",
+              phone:parentPhone.trim()||p[1]?.phone||"",
+              inviteStatus:"accepted"};
+            return {...c, parents:p};
+          });
+        } else {
+          console.warn("[Duvia] Auto-join family failed:", joinRes.error);
+        }
+      }
+    }
+
+    if(parentInviteWaiting){
+      setMode("obs_waiting"); setErr("");
+    } else if(isParentInvite && obsInviteCode.newStyle){
+      // ⚠️ Le rejoin par token a échoué — le message d'erreur est déjà affiché
+      // plus haut (lien expiré/déjà utilisé/invalide). On ne touche à rien ici.
+    } else if(isObsInvite && isNewObsInvite){
+      // 🆕 Invitation observateur Supabase : vérification côté serveur.
+      const { data: obsFamId, error: obsErr } = await supabase.rpc("accept_observer_invitation", { p_token: obsInviteCode.code });
+      if(obsErr){
+        const msg = obsErr.message||"";
+        console.error("[Duvia] accept_observer_invitation error:", msg);
+        if(msg.includes("used")){
+          // Token déjà accepté → Papi a déjà rejoint, on affiche juste l'écran d'attente
+          onObsJoin({id:realUserId,name:cleanName,email:cleanEmail,phone:regPhoneId||undefined,role:"observer",obsRole:parentGender||"grandparent",status:"pending",inviteCode:obsInviteCode.code});
+          setMode("obs_waiting"); setErr(""); return;
+        }
+        setErr(msg.includes("expired") ? (t.obsInvErrExpired||"❌ Ce lien a expiré.") : (t.obsInvErrInvalid||"❌ Lien invalide."));
+      } else {
+        try{ window.localStorage.setItem("duvia_family_id", obsFamId); }catch{}
+        onObsJoin({id:realUserId,name:cleanName,email:cleanEmail,phone:regPhoneId||undefined,role:"observer",obsRole:parentGender||"grandparent",status:"pending",inviteCode:obsInviteCode.code});
+        setMode("obs_waiting"); setErr("");
+      }
+    } else if(isObsInvite){
+      onObsJoin({id:realUserId,name:cleanName,email:cleanEmail,phone:regPhoneId||undefined,role:obsInviteCode.role||"observer",obsRole:parentGender||"grandparent",status:"pending",inviteCode:obsInviteCode.code});
+      setMode("obs_waiting"); setErr("");
+    } else if(isChildInvite && obsInviteCode.isNewChildInvite){
+      const { data: childFamId, error: childErr } = await supabase.rpc("accept_child_invitation", { p_token: obsInviteCode.code });
+      if(childErr){
+        const msg = childErr.message||"";
+        setErr(msg.includes("expired")?t.childInvErrExpired:msg.includes("used")?t.childInvErrUsed:t.childInvErrInvalid);
+      } else {
+        try{ window.localStorage.setItem("duvia_family_id", childFamId); }catch{}
+        const childUser = {...newUser, role:"child", status:"active", inviteCode:obsInviteCode.code, childAge:childAgeNum, childMessagingAllowed:true};
+        onObsJoin(childUser);
+        setErr(""); onLogin(childUser); // connexion directe, pas de retour à l’écran login
+      }
+    } else if(isChildInvite){
+      onObsJoin({id:newId,name:cleanName,email:cleanEmail,phone:regPhoneId||undefined,role:"child",status:"active",inviteCode:obsInviteCode.code,childAge:childAgeNum,childMessagingAllowed:true});
+      setOk(`✅ Compte créé ! Bienvenue ${cleanName}.`);
+      setMode("login"); setErr("");
+    } else {
+      // ✅ Inscription classique (sans invitation) → connexion directe, sans re-saisie.
+      setErr(""); setOk("");
+      onLogin(newUser);
+    }
+  }
+  async function doForgot(){
+    const id = email.trim();
+    if(!id){setErr(t.allRequired);return;}
+    if(isLikelyPhoneIdentifier(id)){ setErr("La réinitialisation du mot de passe par téléphone n'est pas disponible. Contactez le parent qui vous a invité."); return; }
+    if(!isValidEmail(id)){ setErr("Adresse email invalide."); return; }
+    setErr(""); setOk(t.syncConnecting||"Envoi…");
+    // Vrai email de réinitialisation Supabase. On NE révèle PAS si le compte
+    // existe (anti-énumération) : on affiche toujours le même message neutre,
+    // que l'adresse soit connue ou non. La liste locale `users` n'est pas
+    // consultée — elle est vide sur un nouvel appareil et n'est pas la source
+    // de vérité (Supabase Auth l'est).
+    try{
+      await supabase.auth.resetPasswordForEmail(id.toLowerCase(), {
+        redirectTo: `${APP_URL}/?reset=1`,
+      });
+    }catch(e){
+      console.warn("[Duvia] resetPasswordForEmail:", e);
+    }
+    setOk(t.resetSent); setErr("");
+  }
+
+  async function doLoginAndJoin(){
+    const cleanEmail = identifierToAuthEmail(email);
+
+    // 🔧 Supabase Auth fait foi — pas seulement la liste locale de cet appareil,
+    // qui est vide si l'invité ouvre le lien pour la première fois sur son
+    // propre téléphone (le cas le plus fréquent en réalité).
+    const { data, error: signErr } = await supabase.auth.signInWithPassword({ email: cleanEmail, password: pw });
+    if(signErr){ setErr(t.wrongPw); return; }
+    const meta = data.user?.user_metadata || {};
+    const existing = users.find(u2 => u2.email===cleanEmail);
+    const u = existing || {
+      id: Date.now(), email: cleanEmail,
+      name: meta.name || cleanEmail.split("@")[0],
+      role: meta.role || "parent",
+      parentIdx: meta.parentIdx ?? (isParentInvite ? 1 : 0),
+      accountCreatedAt: new Date().toISOString(),
+    };
+
+    // Rattacher le compte existant à la famille via le lien d'invitation
+    const childAgeNum = isChildInvite ? parseInt(childAge) : undefined;
+    const updatedUser = {
+      ...u,
+      ...(isParentInvite ? {
+        obsFamilyCode: obsInviteCode.family,
+        obsInviteCode: obsInviteCode.code,
+      } : {}),
+      ...(isObsInvite ? {
+        obsStatus: "pending",
+        obsFamilyCode: obsInviteCode.family,
+        obsInviteCode: obsInviteCode.code,
+      } : {}),
+      ...(isChildInvite ? {
+        childAge: childAgeNum,
+        childMessagingAllowed: true,
+        obsFamilyCode: obsInviteCode.family,
+        obsInviteCode: obsInviteCode.code,
+        childParentConsentGiven: childAgeNum < RGPD_CONSENT_AGE ? true : undefined,
+      } : {}),
+    };
+    if (existing) setUsers(us => us.map(u2 => u2.id===u.id ? updatedUser : u2));
+    else setUsers(us => [...us, updatedUser]);
+
+    if(isObsInvite){
+      // 🔧 CORRECTIF : appeler la RPC pour créer la ligne family_members (status='pending').
+      // Sans ça, le parent ne voit jamais le bouton "Accepter" car refreshPendingMembers
+      // ne trouve rien dans family_members. Ce chemin (compte existant) n'appelait pas
+      // accept_observer_invitation contrairement au chemin "nouveau compte".
+      if(isNewObsInvite && obsInviteCode.code){
+        const { data: obsFamId, error: obsErr } = await supabase.rpc("accept_observer_invitation", { p_token: obsInviteCode.code });
+        if(obsErr){
+          const msg = obsErr.message||"";
+          console.error("[Duvia] accept_observer_invitation (login):", msg);
+          if(!msg.includes("used")){
+            // Expiré ou invalide → erreur bloquante
+            setErr(msg.includes("expired") ? (t.obsInvErrExpired||"❌ Ce lien a expiré.") : (t.obsInvErrInvalid||"❌ Lien invalide."));
+            return;
+          }
+          // "already used" → Papi a déjà accepté, on montre juste l'attente
+        } else {
+          try{ window.localStorage.setItem("duvia_family_id", obsFamId); }catch{}
+        }
+      }
+      // 🔧 UUID réel depuis signInWithPassword — garantit que matchFn trouve la carte
+      onObsJoin({...updatedUser, id:data.user?.id||updatedUser.id, role:obsInviteCode.role||"grandparent", status:"pending", inviteCode:obsInviteCode.code});
+      setMode("obs_waiting"); setErr("");
+    } else if(isChildInvite && obsInviteCode.isNewChildInvite){
+      const { data: cFid, error: cErr } = await supabase.rpc("accept_child_invitation", { p_token: obsInviteCode.code });
+      if(cErr){
+        const msg=cErr.message||""; setErr(msg.includes("expired")?t.childInvErrExpired:msg.includes("used")?t.childInvErrUsed:t.childInvErrInvalid);
+      } else {
+        try{ window.localStorage.setItem("duvia_family_id", cFid); }catch{}
+        onObsJoin({...updatedUser, role:"child", status:"active", inviteCode:obsInviteCode.code, childAge:childAgeNum, childMessagingAllowed:true});
+        setShowExistingAccount(false); setErr(""); onLogin({...updatedUser,role:"child"});
+      }
+    } else if(isChildInvite){
+      onObsJoin({...updatedUser, role:"child", status:"active", inviteCode:obsInviteCode.code, childAge:childAgeNum, childMessagingAllowed:true});
+      setShowExistingAccount(false); setErr("");
+      onLogin(updatedUser);
+    } else if(isParentInvite){
+      if(obsInviteCode.newStyle){
+        // 🔗 Nouveau format : on rejoint la famille du lien (pending), écran
+        // d'attente. Pas de court-circuit « j'ai déjà une famille active » : le
+        // lien cible la famille de l'inviteur, pas une autre.
+        const joinRes = await familySync.joinFamilyByToken(obsInviteCode.code, { name: u.name||updatedUser.name, gender: u.gender||meta.gender||"M" });
+        if(joinRes.ok){
+          // 🔧 Famille rejointe via le lien → on la note comme famille par
+          // défaut. Sinon, avec une famille vierge laissée par un départ
+          // précédent, l'app pouvait basculer sur la mauvaise après validation.
+          try{ window.localStorage.setItem("duvia_family_id", joinRes.familyId); }catch{}
+          setShowExistingAccount(false); setErr("");
+          setMode("obs_waiting");
+        } else {
+          setErr(
+            joinRes.error==="expired" ? t.invErrExpired :
+            joinRes.error==="used"    ? t.invErrUsed :
+            t.invErrInvalid
+          );
+        }
+        return;
+      }
+      // Compte Parent 2 existant, ancien format → déjà connecté ci-dessus → rejoindre la famille
+      const joinRes = await familySync.joinFamily(obsInviteCode.family);
+      if(joinRes.ok){
+        await new Promise(r => setTimeout(r, 100));
+        setCfg(c=>{
+          const p=[...(c.parents||[])];
+          while(p.length<2) p.push({});
+          p[1]={...p[1], name:updatedUser.name, email:cleanEmail, inviteStatus:"accepted"};
+          return {...c, parents:p};
+        });
+      } else {
+        console.warn("[Duvia] join (existing) failed:", joinRes.error);
+      }
+      setShowExistingAccount(false); setErr("");
+      onLogin(updatedUser);
+    } else {
+      // Inscription directe sans invitation → connexion simple
+      setShowExistingAccount(false); setErr(""); onLogin(updatedUser);
+    }
+  }
+  return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),radial-gradient(ellipse at 30% 20%,rgba(124,111,205,.15) 0%,transparent 60%),${C.bg}`}}>
+      <div style={{width:"100%",maxWidth:400}} className="fi">
+        <div style={{display:"grid",gridTemplateColumns:"auto 1fr auto auto",alignItems:"center",gap:8,marginBottom:36}}>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>setShowInstallModal(true)} title={t.installAppMenu} style={{width:36,height:36,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,flexShrink:0}}>📱</button>
+            <a href="https://duvia.fr" title={t.backToSite||"Retour au site Duvia"} target="_blank" rel="noopener noreferrer" style={{width:36,height:36,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,textDecoration:"none",flexShrink:0}}>🌐</a>
+          </div>
+          <div />{/* spacer */}
+          <div style={{position:"relative"}}>
+            <button onClick={()=>setShowLangMenu(v=>!v)} style={{height:36,padding:"0 12px",background:showLangMenu?`${C.vio}18`:C.card,border:`1.5px solid ${showLangMenu?C.vio:C.bor}`,color:showLangMenu?C.vio:C.txt,fontSize:13,fontWeight:700,borderRadius:8,display:"flex",alignItems:"center",gap:6,cursor:"pointer"}}>
+              <span>{foundLang.flag}</span>
+              <span style={{fontSize:12}}>{foundLang.name}</span>
+              <span style={{fontSize:9,opacity:.6}}>{showLangMenu?"▲":"▼"}</span>
+            </button>
+            {showLangMenu && (
+              <div style={{position:"fixed",top:"auto",right:"auto",background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:16,minWidth:180,zIndex:300,boxShadow:"0 12px 40px rgba(0,0,0,.2)",overflow:"hidden",marginTop:4}}>
+                <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.bor}`,fontSize:9,fontWeight:800,color:C.mut,letterSpacing:".1em",textTransform:"uppercase"}}>
+                  {t.langLabel||"🌐 Langue"}
+                </div>
+                {Object.entries(LANGS).map(([k,v])=>(
+                  <button key={k} onClick={()=>{setLang(k);setShowLangMenu(false);}} style={{width:"100%",padding:"0 14px",height:44,background:lang===k?`${C.vio}12`:"transparent",color:lang===k?C.vio:C.txt,textAlign:"left",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:lang===k?800:600,borderRadius:0,cursor:"pointer"}}>
+                    <span style={{fontSize:20,flexShrink:0}}>{v.flag}</span>
+                    <span style={{flex:1}}>{v.name}</span>
+                    {lang===k && <span style={{color:C.vio,fontSize:14,fontWeight:900}}>✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <div style={{textAlign:"center",marginBottom:22}}>
+          <div style={{width:160,height:160,margin:"0 auto 2px",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <img src="/logo.png" alt="Duvia" style={{width:"100%",height:"100%",objectFit:"contain"}} />
+          </div>
+          <div style={{fontSize:13,color:C.mut,fontStyle:"italic"}}>{t.appSub}</div>
+        </div>
+        <div className="card" style={C._brand?{background:`linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`}:undefined}>
+          {isExpiredInvite && (
+            <div style={{background:`${C.red}12`,border:`1.5px solid ${C.red}44`,borderRadius:10,padding:"12px 14px",marginBottom:14,fontSize:13,color:C.red,fontWeight:700,textAlign:"center"}}>
+              ⏰ {t.invErrExpiredWait}
+            </div>
+          )}
+          {isAnyInvite && !isExpiredInvite && (
+            <div style={{background:`${C.vio}10`,border:`1.5px solid ${C.vio}33`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:C.vio,fontWeight:700,textAlign:"center"}}>
+              👨‍👩‍👧 {"Vous avez été invité(e) à rejoindre la famille sur Duvia"}
+            </div>
+          )}
+          <div style={{display:"flex",gap:4,marginBottom:18,background:C.sur,borderRadius:11,padding:4}}>
+            {[["login",t.login||"Connexion"],["register",t.register||"Créer un compte"]].map(([m,l])=>(
+              <button key={m} onClick={()=>{setMode(m);setErr("");setOk("");}} style={{flex:1,height:38,background:mode===m?C.card:"transparent",color:mode===m?C.vio:C.mut,borderRadius:8,fontSize:13,fontWeight:mode===m?800:700,boxShadow:mode===m?"0 1px 4px rgba(0,0,0,.1)":"none",transition:"all .15s"}}>{l}</button>
+            ))}
+          </div>
+          {err&&<div style={{background:`${C.red}12`,border:`1.5px solid ${C.red}44`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:C.red,fontWeight:700}}>{err}</div>}
+          {ok&&<div style={{background:`${C.grn}12`,border:`1.5px solid ${C.grn}44`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:C.grn,fontWeight:700}}>{ok}</div>}
+          {mode==="register" && (
+            <div>
+              {/* Compte existant détecté lors d'une invitation */}
+              {showExistingAccount && (
+                <div style={{background:`${C.yel}12`,border:`1.5px solid ${C.yel}55`,borderRadius:12,padding:"14px 16px",marginBottom:16}}>
+                  <div style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:6}}>
+                    {t.regExistingAccount||"👤 Un compte existe déjà avec cet email"}
+                  </div>
+                  <div style={{fontSize:12,color:C.mut,marginBottom:12,lineHeight:1.5}}>
+                    {t.regExistingAccountDesc||"Tu peux te connecter avec ton mot de passe existant pour rejoindre la famille, ou utiliser un autre email."}
+                  </div>
+                  <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:5}}>{t.regPasswordLabel||"MOT DE PASSE"}</div>
+                  <div style={{position:"relative",marginBottom:12}}>
+                    <input
+                      type={showPw?"text":"password"}
+                      value={pw}
+                      onChange={e=>setPw(e.target.value)}
+                      onKeyDown={e=>e.key==="Enter"&&doLoginAndJoin()}
+                      placeholder={t.regPasswordPlaceholder||"Ton mot de passe"}
+                      autoFocus
+                      style={{width:"100%",height:44,boxSizing:"border-box",fontSize:14,paddingRight:42}}
+                    />
+                    <button type="button" onClick={()=>setShowPw(v=>!v)} aria-label={showPw?"Masquer":"Afficher"} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",width:32,height:32,background:"transparent",border:"none",color:C.mut,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>{showPw?"🙈":"👁️"}</button>
+                  </div>
+                  {err && <div style={{fontSize:12,color:C.red,marginBottom:10}}>{err}</div>}
+                  <button onClick={doLoginAndJoin} style={{
+                    width:"100%",height:44,background:`linear-gradient(135deg,${C.vio},${C.blu})`,
+                    color:"#fff",fontSize:14,fontWeight:800,borderRadius:10,marginBottom:8,cursor:"pointer"
+                  }}>
+                    {isAnyInvite ? (t.regLoginJoin||"✅ Se connecter et rejoindre la famille") : (t.connect||"✅ Se connecter")}
+                  </button>
+                  <button onClick={()=>{setShowExistingAccount(false);setEmail("");setPw("");setPwConfirm("");setErr("");}} style={{
+                    width:"100%",height:38,background:"transparent",color:C.mut,
+                    border:`1px solid ${C.bor}`,fontSize:13,borderRadius:10,cursor:"pointer"
+                  }}>
+                    {t.regUseOtherEmail||"Utiliser un autre email"}
+                  </button>
+                </div>
+              )}
+              {!showExistingAccount && isChildInvite && <div style={{background:`${C.grn}12`,border:`1.5px solid ${C.grn}44`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:C.grn,fontWeight:700,textAlign:"center"}}>{t.regChildInviteMsg||"🧒 Rejoindre la famille en tant qu'enfant"}</div>}
+              {!showExistingAccount && isObsInvite && <div style={{background:`${C.blu}12`,border:`1.5px solid ${C.blu}44`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:C.blu,fontWeight:700,textAlign:"center"}}>👀 {t.obsJoinInfo||"Vous avez été invité(e) à rejoindre Duvia en tant qu'observateur."}</div>}
+              {!showExistingAccount && <><div className="field"><label className="lbl">{t.fullName}</label><input value={name} onChange={e=>setName(e.target.value)} className={shakeName?"duvia-shake":""} /></div>
+              {!isAnyInvite&&<div className="field"><label className="lbl">{t.roleLabel||"Rôle"}</label><select value={role} onChange={e=>setRole(e.target.value)}><option value="parent">{t.roleParent}</option><option value="observer">{t.roleObs}</option></select></div>}
+
+              {/* Vous êtes — pour les observateurs invités */}
+              {isObsInvite && (
+                <div className="field">
+                  <label className="lbl">{"👤 Vous êtes"}</label>
+                  <select value={role==="observer"?parentGender||"grandparent":parentGender} onChange={e=>setParentGender(e.target.value)} style={{width:"100%"}}>
+                    <option value="grandparent">{t.grandparent||"Grands-parents"}</option>
+                    <option value="uncle-aunt">{t.uncleAunt||"Oncle / Tante"}</option>
+                    <option value="sibling">{t.sibling||"Frère / Sœur"}</option>
+                    <option value="childcare">{t.childcareRole||"Assistante maternelle / Nourrice"}</option>
+                    <option value="other">{t.otherFamily||"Autre proche"}</option>
+                  </select>
+                </div>
+              )}
+
+              {/* Père / Mère / Autre — pour les parents uniquement, jamais pour enfant ni observateur */}
+              {(role==="parent"||isParentInvite) && !isChildInvite && !isObsInvite && (
+                <div className="field">
+                  <label className="lbl">{t.regYouAre||"Vous êtes"}</label>
+                  <div style={{display:"flex",gap:8}}>
+                    {[{v:"M",l:t.regGenderFather||"👨 Père"},{v:"F",l:t.regGenderMother||"👩 Mère"},{v:"O",l:t.regGenderOther||"🧑 Autre"}].map(({v,l})=>(
+                      <button key={v} type="button" onClick={()=>setParentGender(v)} style={{
+                        flex:1,padding:"8px 0",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",
+                        background:parentGender===v?C.vio:C.sur,
+                        color:parentGender===v?"#fff":C.mut,
+                        border:`1.5px solid ${parentGender===v?C.vio:C.bor}`,
+                        transition:"all .15s",
+                      }}>{l}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Téléphone — pour les parents */}
+              {(role==="parent"||isParentInvite) && (
+                <div className="field">
+                  <label className="lbl">{t.regPhone||"📞 Téléphone"} <span style={{color:C.mut,fontWeight:400}}>{t.regOptional||"(optionnel)"}</span></label>
+                  <input type="tel" value={parentPhone} onChange={e=>setParentPhone(e.target.value)} placeholder={t.regPhonePlaceholder||"06 12 34 56 78"} />
+                </div>
+              )}
+              </>}
+
+              {/* Champ âge supprimé : l'âge est calculé depuis la date de naissance saisie par le parent dans la fiche enfant (cborn dans l'URL). */}
+
+              {/* Pour les invitations enfant : le consentement parental est recueilli
+                  côté parent (modale dans ChildInviteBtn). On affiche juste un message de
+                  bienvenue / confirmation. */}
+              {isChildInvite && obsInviteCode?.cconsent && (
+                <div style={{background:`${C.grn}10`,border:`1px solid ${C.grn}33`,borderRadius:8,padding:"10px 14px",marginBottom:12,fontSize:12,color:C.grn,lineHeight:1.5}}>
+                  {(t.childMinorNotice||"✅ Accès autorisé par un parent — bienvenue {name} !").replace("{name}", name||obsInviteCode?.childName||"")}
+                </div>
+              )}
+
+              {/* Champ « Code parrain » retiré : le parrainage se fait via le menu Premium (invitation). */}
+            </div>
+          )}
+          {(() => {
+            const allowPhoneId = mode!=="register" || isObsInvite || isChildInvite || (!isAnyInvite && role!=="parent");
+            const lockedEmail = isParentInvite && !!obsInviteCode?.email;
+            return (
+              <div className="field">
+                <label className="lbl">{allowPhoneId ? (t.emailOrPhone||"Email ou téléphone") : t.email}</label>
+                <input
+                  type={allowPhoneId ? "text" : "email"}
+                  value={email}
+                  onChange={e=>setEmail(e.target.value)}
+                  placeholder={allowPhoneId ? (t.emailOrPhonePlaceholder||"email@exemple.fr ou 06 12 34 56 78") : undefined}
+                  readOnly={lockedEmail}
+                  style={lockedEmail ? {background:C.sur,color:C.mut,cursor:"default"} : undefined}
+                />
+                {allowPhoneId && mode==="register" && <div style={{fontSize:11,color:C.mut,marginTop:4}}>{t.emailOrPhoneHint||"💡 Pas d'email ? Utilisez un numéro de téléphone."}</div>}
+              </div>
+            );
+          })()}
+          {mode!=="forgot"&&<div className="field"><label className="lbl">{t.password}</label>
+            <div style={{position:"relative"}}>
+              <input type={showPw?"text":"password"} value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&mode==="login"&&doLogin()} style={{width:"100%",boxSizing:"border-box",paddingRight:42}} />
+              <button type="button" onClick={()=>setShowPw(v=>!v)} aria-label={showPw?"Masquer":"Afficher"} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",width:32,height:32,background:"transparent",border:"none",color:C.mut,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>{showPw?"🙈":"👁️"}</button>
+            </div>
+          </div>}
+          {mode==="register"&&<div className="field"><label className="lbl">{t.confirmPw}</label>
+            <div style={{position:"relative"}}>
+              <input type={showPw?"text":"password"} value={pwConfirm} onChange={e=>setPwConfirm(e.target.value)} placeholder={t.confirmPwPlaceholder} style={{width:"100%",boxSizing:"border-box",paddingRight:42,borderColor:pwConfirm&&pwConfirm!==pw?C.red:undefined}} />
+              {pwConfirm && <span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",fontSize:16}}>{pwConfirm===pw?"✅":"❌"}</span>}
+            </div>
+          </div>}
+          {(mode==="login"||mode==="register")&&(
+            <label style={{display:"flex",alignItems:"center",gap:8,margin:"2px 0 12px",cursor:"pointer",fontSize:12.5,color:C.mut}}>
+              <input type="checkbox" checked={remember}
+                onChange={e=>{ const v=e.target.checked; setRemember(v); try{ if(v){ window.localStorage.setItem("duvia_remember","1"); window.localStorage.setItem("duvia_remember_until", String(Date.now()+24*60*60*1000)); } else { window.localStorage.removeItem("duvia_remember"); window.localStorage.removeItem("duvia_remember_until"); } }catch{} }}
+                style={{width:17,height:17,accentColor:C.vio,cursor:"pointer"}} />
+              {t.rememberMe||"Rester connecté 24h sur cet appareil"}
+            </label>
+          )}
+          <button onClick={mode==="login"?doLogin:mode==="register"?doReg:doForgot} style={{width:"100%",height:48,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:15,fontWeight:800,marginBottom:10,borderRadius:12,boxShadow:`0 4px 14px ${C.vio}44`}}>
+            {mode==="login"?t.connect:mode==="register"?t.createAcc:t.sendLink}
+          </button>
+          {(mode==="login"||mode==="register")&&(
+            <>
+              <div style={{display:"flex",alignItems:"center",gap:8,margin:"4px 0"}}>
+                <div style={{flex:1,height:1,background:C.bor}} />
+                <span style={{fontSize:11,color:C.mut,fontWeight:600}}>ou</span>
+                <div style={{flex:1,height:1,background:C.bor}} />
+              </div>
+              <button onClick={async()=>{
+                const invSearch = window.location.search;
+                let loginHint = "";
+                try {
+                  const invToken = new URLSearchParams(invSearch).get("inv");
+                  if(invToken){ const d=JSON.parse(atob(invToken)); loginHint=d.email||""; }
+                } catch{}
+                await supabase.auth.signInWithOAuth({
+                  provider:"google",
+                  options:{
+                    redirectTo: `https://app.duvia.fr${invSearch||""}`,
+                    ...(loginHint ? {queryParams:{login_hint:loginHint}} : {})
+                  }
+                });
+              }} style={{width:"100%",height:44,background:"#fff",border:"1.5px solid #dadce0",borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",gap:10,fontSize:14,fontWeight:700,color:"#3c4043",cursor:"pointer",marginBottom:4,boxShadow:"0 1px 4px rgba(0,0,0,.08)"}}>
+                <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.8 2.5 30.2 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.9 6.1C12.4 13 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.5-4.1 7-10.2 7-17.1z"/><path fill="#FBBC05" d="M10.5 28.6A14.8 14.8 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6l-7.9-6.1A23.8 23.8 0 0 0 0 24c0 3.9.9 7.5 2.6 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.6-5.9c-2 1.4-4.7 2.2-7.6 2.2-6.3 0-11.6-3.5-13.5-9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>
+                Continuer avec Google
+              </button>
+            </>
+          )}
+          {mode==="login"&&<button onClick={()=>{setMode("forgot");setErr("");setOk("");}} style={{width:"100%",height:36,background:"transparent",color:C.mut,fontSize:12,textDecoration:"underline"}}>{t.forgotPw}</button>}
+          {mode==="forgot"&&<button onClick={()=>setMode("login")} style={{width:"100%",height:36,background:"transparent",color:C.mut,fontSize:12}}>{t.backLogin}</button>}
+
+          {mode==="obs_waiting"&&(
+            <div style={{textAlign:"center",padding:"8px 0 4px"}}>
+              <div style={{fontSize:36,marginBottom:8}}>⏳</div>
+              <div style={{fontWeight:900,fontSize:16,marginBottom:6}}>{t.obsJoinWaiting||"⏳ En attente d'approbation"}</div>
+              <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:14}}>{t.obsJoinWaitingInfo||"Votre demande a été envoyée aux parents."}</div>
+              <button onClick={()=>setMode("login")} style={{height:40,padding:"0 20px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13}}>← {t.backLogin}</button>
+            </div>
+          )}
+        </div>
+        {/* Note moyenne + avis — sous le formulaire, dans le conteneur.
+            Repliée par défaut (accordéon) : seule la moyenne est visible,
+            les avis individuels n'apparaissent qu'au clic, pour ne pas
+            allonger l'écran de connexion par défaut. */}
+        {avgRating && (
+          <div style={{marginTop:14}}>
+            <style>{`@keyframes loginReviewFade{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}`}</style>
+            <div
+              onClick={()=>setReviewsOpen(o=>!o)}
+              role="button"
+              aria-expanded={reviewsOpen}
+              style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginBottom:reviewsOpen?10:0,cursor:"pointer",userSelect:"none"}}
+            >
+              <span style={{color:"#FFB800",fontSize:14}}>{"★".repeat(Math.round(avgRating.avg_stars))}{"☆".repeat(5-Math.round(avgRating.avg_stars))}</span>
+              <span style={{fontSize:12,color:"#888",fontWeight:700}}>{avgRating.avg_stars}/5</span>
+              <span style={{fontSize:11,color:"#aaa"}}> · {avgRating.total_count} avis</span>
+              <span style={{fontSize:10,color:"#999",marginLeft:2,display:"inline-block",transition:"transform .2s",transform:reviewsOpen?"rotate(180deg)":"rotate(0deg)"}}>▾</span>
+            </div>
+            {reviewsOpen && publicReviews.map((r,i)=>(
+              <div key={i} style={{background:"rgba(255,255,255,0.65)",borderRadius:12,padding:"10px 14px",marginBottom:8,backdropFilter:"blur(4px)",animation:"loginReviewFade .2s ease both"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                  <span style={{color:"#FFB800",fontSize:12}}>{"★".repeat(r.stars)}{"☆".repeat(5-r.stars)}</span>
+                  <span style={{fontSize:11,fontWeight:700,color:"#555"}}>{r.display_name}</span>
+                </div>
+                <div style={{fontSize:12,color:"#666",fontStyle:"italic",lineHeight:1.4}}>"{r.comment}"</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {showInstallModal && <InstallAppModal C={C} t={t} onClose={()=>setShowInstallModal(false)} />}
+
+    </div>
+  );
+}
+
+// ─── BELL PANEL ───────────────────────────────────────────────────────────────
+function BellPanel({onClose}) {
+  const {C,t,cfg,setCfg,user} = useApp();
+  const allNotifs=cfg.notifs||[];
+  const storageKey = `duvia_deleted_notifs_${user?.id||"guest"}`;
+  const [deletedIds,setDeletedIds] = useLocalStorage(storageKey,[]);
+  const notifs = allNotifs.filter(n=>!deletedIds.includes(n.id));
+  function deleteNotif(id){ setDeletedIds(ids=>[...ids,id]); }
+  function markAll(){setCfg(c=>({...c,notifs:c.notifs.map(n=>({...n,read:true}))}));}
+  return (
+    <div style={{position:"relative",zIndex:200}}>
+      <div style={{position:"fixed",inset:0,zIndex:199}} onClick={onClose} />
+      <div className="fi" style={{position:"absolute",right:12,top:0,width:300,maxHeight:360,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:14,zIndex:200,overflow:"hidden",boxShadow:"0 12px 40px rgba(0,0,0,.4)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",borderBottom:`1.5px solid ${C.bor}`}}>
+          <span style={{fontWeight:800,fontSize:13}}>🔔 {t.notifsTitle}</span>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={markAll} style={{padding:"3px 8px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,fontSize:10}}>{t.markRead}</button>
+            <button onClick={onClose} style={{padding:"3px 8px",background:"transparent",color:C.mut,fontSize:15}}>×</button>
+          </div>
+        </div>
+        <div style={{overflowY:"auto",maxHeight:300}}>
+          {notifs.length===0?<div style={{padding:20,textAlign:"center",color:C.mut,fontSize:13}}>{t.noNotifs}</div>:
+            notifs.slice(0,15).map(n=>(
+              <div key={n.id} style={{padding:"9px 14px",borderBottom:`1px solid ${C.bor}`,background:n.read?"transparent":`${C.vio}11`,display:"flex",gap:8,alignItems:"flex-start"}}>
+                <span style={{fontSize:14,flexShrink:0}}>{n.type==="cal"?"📅":n.type==="exp"?"💰":"👋"}</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:12,color:n.read?C.mut:C.txt}}>{n.msg}</div>
+                  <div style={{fontSize:10,color:C.mut,marginTop:2,fontFamily:"JetBrains Mono"}}>{new Date(n.date).toLocaleString([],{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</div>
+                </div>
+                {!n.read&&<div style={{width:6,height:6,borderRadius:"50%",background:C.vio,flexShrink:0,marginTop:4}} />}
+                <button onClick={e=>{e.stopPropagation();deleteNotif(n.id);}} style={{background:"transparent",border:"none",color:C.mut,fontSize:13,cursor:"pointer",padding:"0 2px",marginTop:2}}>✕</button>
+              </div>
+            ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NotifTab({prem: premProp}) {
+  const {C,t,cfg,setCfg,prem: ctxPrem,onUpgrade,setActivity,user,setTab,setMenuTab,isObs,isChild} = useApp();
+  const prem = premProp !== undefined ? premProp : ctxPrem;
+  const allNotifs = cfg.notifs||[];
+  // Suppression locale uniquement — chaque parent gère ses propres notifs
+  const storageKey = `duvia_deleted_notifs_${user?.id||"guest"}`;
+  const [deletedIds,setDeletedIds] = useLocalStorage(storageKey,[]);
+  const notifs = allNotifs.filter(n=>!deletedIds.includes(n.id));
+  function deleteNotif(id){ if(window.confirm("Supprimer cette notification ?")) setDeletedIds(ids=>[...ids,id]); }
+  function deleteAll(){ if(window.confirm(`Supprimer toutes les notifications (${notifs.length}) ?`)) setDeletedIds(ids=>[...ids,...allNotifs.map(n=>n.id)]); }
+  function markAll(){setCfg(c=>({...c,notifs:c.notifs.map(n=>({...n,read:true}))}));}
+
+  // Map notif type → tab index (parent layout: 0=Cal, 1=Schedule, 2=Exp, 3=Contacts, 4=Vault, 5=Msg)
+  function getTabIndex(type) {
+    if(isObs||isChild) {
+      // Observer: 0=Cal, 1=Contacts, 2=Msg / Child: 0=Cal, 1=Schedule, 2=Contacts, 3=Msg
+      if(type==="cal") return 0;
+      if(type==="schedule") return isChild ? 1 : null;
+      if(type==="msg") return isChild ? 3 : 2;
+      return null;
+    }
+    if(type==="cal") return 0;
+    if(type==="schedule") return 1;
+    if(type==="exp") return 2;
+    if(type==="msg") return 5;
+    return null;
+  }
+
+  function handleNotifClick(n) {
+    // mark as read
+    setCfg(c=>({...c,notifs:c.notifs.map(x=>x.id===n.id?{...x,read:true}:x)}));
+    const idx = getTabIndex(n.type);
+    if(idx !== null) {
+      setMenuTab(null);
+      setTab(idx);
+    }
+  }
+
+  if(!prem) return (
+    <div style={{textAlign:"center",padding:"48px 20px"}}>
+      <div style={{fontSize:40,marginBottom:12}}>🔔</div>
+      <div style={{fontWeight:900,fontSize:17,marginBottom:8,color:C.txt}}>{t.tabNotifs}</div>
+      <div style={{fontWeight:700,fontSize:14,color:C.ora,marginBottom:8}}>🔒 {t.lockSection}</div>
+      <div style={{fontSize:13,color:C.mut,marginBottom:20,lineHeight:1.6}}>{t.lockDesc}</div>
+      <button onClick={onUpgrade} style={{height:44,padding:"0 26px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",borderRadius:12,fontSize:15,fontWeight:800}}>{t.upgradeCTA}</button>
+    </div>
+  );
+  return (
+    <div>
+      {/* Titre style Calendrier */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+        <div>
+          <div style={{fontSize:16,fontWeight:900}}>🔔 {t.tabNotifs||"Notifications"}</div>
+          <div style={{fontSize:11,color:C.mut}}>{notifs.filter(n=>!n.read).length} non lue{notifs.filter(n=>!n.read).length!==1?"s":""} · {notifs.length} au total</div>
+        </div>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={markAll} style={{height:32,padding:"0 10px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:11,borderRadius:8}}>{t.markRead||"Tout lu"}</button>
+          {notifs.length>0&&<button onClick={deleteAll} style={{height:32,padding:"0 10px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,fontSize:11,borderRadius:8}}>🗑 Tout supprimer</button>}
+        </div>
+      </div>
+      {notifs.length===0?<div style={{textAlign:"center",padding:60,color:C.mut}}><div style={{fontSize:48,marginBottom:12}}>🔔</div>{t.noNotifs}</div>:
+        notifs.map(n=>{
+          const idx = getTabIndex(n.type);
+          const isClickable = idx !== null;
+          return (
+            <div key={n.id}
+              className="card"
+              style={{marginBottom:10,border:`1.5px solid ${n.read?C.bor:C.vio}`,display:"flex",gap:12,cursor:isClickable?"pointer":"default",transition:"opacity .15s",alignItems:"flex-start"}}
+            >
+              <span onClick={()=>handleNotifClick(n)} style={{fontSize:18,flexShrink:0,cursor:isClickable?"pointer":"default"}}>{n.type==="cal"?"📅":n.type==="schedule"?"🏫":n.type==="exp"?"💰":n.type==="msg"?"💬":n.type==="obs"?"👥":"👋"}</span>
+              <div style={{flex:1}} onClick={()=>handleNotifClick(n)}>
+                <div style={{fontSize:14,color:n.read?C.mut:C.txt,fontWeight:n.read?400:700}}>{n.msg}</div>
+                <div style={{fontSize:11,color:C.mut,marginTop:4,fontFamily:"JetBrains Mono"}}>{new Date(n.date).toLocaleString()}</div>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,flexShrink:0}}>
+                {!n.read&&<span className="badge" style={{background:`${C.vio}22`,color:C.vio}}>{t.newBadge}</span>}
+                <button onClick={e=>{e.stopPropagation();deleteNotif(n.id);}} style={{background:"transparent",border:`1px solid ${C.bor}`,color:C.mut,fontSize:11,borderRadius:6,padding:"2px 7px",cursor:"pointer"}}>🗑</button>
+              </div>
+            </div>
+          );
+        })}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONFIG TAB
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── AVATARS ──────────────────────────────────────────────────────────────────
+const PARENT_AVATARS = ["👩","👨","👩‍🦱","👨‍🦱","👩‍🦰","👨‍🦰","👩‍🦳","👨‍🦳","👩‍🦲","👨‍🦲","🧔","👱‍♀️","👱","🧑","👮‍♀️","👮","👩‍⚕️","👨‍⚕️","👩‍🏫","👨‍🏫","🧕","🧑‍🦱","🧑‍🦰","🧑‍🦳"];
+const CHILD_AVATARS  = ["🧒","👧","👦","🧒‍♀️","🧒‍♂️","👧‍🦱","👦‍🦱","👧‍🦰","👦‍🦰","👧‍🦳","👦‍🦳","🧑‍🎨","🧑‍🎤","🧑‍🚀","🧑‍💻","👼","🧸","🦄","🐣","⭐"];
+const OBS_AVATARS    = ["👴","👵","🧓","👩‍👦","👨‍👦","👩‍👧","👨‍👧","🧑‍🤝‍🧑","👫","👬","👭","🤶","🎅","🧙‍♀️","🧙","🧝‍♀️","🦸‍♀️","🦸","🤴","👸"];
+
+function Avatar({emoji, color, size=40, onClick, selected=false}) {
+  const isPhoto = typeof emoji === "string" && emoji.startsWith("http");
+  return (
+    <div onClick={onClick} style={{
+      width:size, height:size, borderRadius:"50%",
+      background:color?`${color}22`:"#f0f1f6",
+      border:`2.5px solid ${selected?color||"#7c6fcd":"transparent"}`,
+      display:"flex", alignItems:"center", justifyContent:"center",
+      fontSize:size*0.5, cursor:onClick?"pointer":"default",
+      boxShadow:selected?`0 0 0 3px ${color||"#7c6fcd"}44`:"none",
+      transition:"all .15s", flexShrink:0,
+      userSelect:"none", overflow:"hidden",
+    }}>
+      {isPhoto
+        ? <img src={emoji} alt="" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:"50%"}} />
+        : emoji}
+    </div>
+  );
+}
+
+// ─── CROP MODAL (zoom + recadrage photo) ──────────────────────────────────────
+function CropModal({ file, onCrop, onCancel }) {
+  const canvasRef = useRef(null);
+  const [img, setImg] = useState(null);
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState({x:0, y:0});
+  const dragging = useRef(false);
+  const lastPos = useRef({x:0, y:0});
+  const SIZE = 240;
+
+  useEffect(() => {
+    if (!file) return;
+    const i = new Image();
+    i.onload = () => setImg(i);
+    i.src = URL.createObjectURL(file);
+    return () => URL.revokeObjectURL(i.src);
+  }, [file]);
+
+  useEffect(() => {
+    if (!img || !canvasRef.current) return;
+    const ctx = canvasRef.current.getContext("2d");
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    // Dessiner un cercle de clip
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(SIZE/2, SIZE/2, SIZE/2, 0, Math.PI*2);
+    ctx.clip();
+    // Calculer la taille de l'image zoomée
+    const scale = zoom * Math.max(SIZE/img.width, SIZE/img.height);
+    const w = img.width * scale;
+    const h = img.height * scale;
+    const x = (SIZE - w) / 2 + offset.x;
+    const y = (SIZE - h) / 2 + offset.y;
+    ctx.drawImage(img, x, y, w, h);
+    ctx.restore();
+    // Bordure du cercle
+    ctx.beginPath();
+    ctx.arc(SIZE/2, SIZE/2, SIZE/2 - 1, 0, Math.PI*2);
+    ctx.strokeStyle = "#7c6fcd";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }, [img, zoom, offset]);
+
+  function clampOffset(ox, oy, z) {
+    if (!img) return {x:ox, y:oy};
+    const scale = z * Math.max(SIZE/img.width, SIZE/img.height);
+    const w = img.width * scale;
+    const h = img.height * scale;
+    const maxX = Math.max(0, (w - SIZE) / 2);
+    const maxY = Math.max(0, (h - SIZE) / 2);
+    return {x: Math.max(-maxX, Math.min(maxX, ox)), y: Math.max(-maxY, Math.min(maxY, oy))};
+  }
+
+  function handlePointerDown(e) {
+    dragging.current = true;
+    lastPos.current = {x: e.clientX, y: e.clientY};
+    e.target.setPointerCapture(e.pointerId);
+  }
+  function handlePointerMove(e) {
+    if (!dragging.current) return;
+    const dx = e.clientX - lastPos.current.x;
+    const dy = e.clientY - lastPos.current.y;
+    setOffset(o => clampOffset(o.x + dx, o.y + dy, zoom));
+    lastPos.current = {x: e.clientX, y: e.clientY};
+  }
+  function handlePointerUp() { dragging.current = false; }
+
+  function handleZoom(newZoom) {
+    setZoom(newZoom);
+    setOffset(o => clampOffset(o.x, o.y, newZoom));
+  }
+
+  function handleCrop() {
+    if (!canvasRef.current) return;
+    canvasRef.current.toBlob(blob => { if (blob) onCrop(blob); }, "image/jpeg", 0.85);
+  }
+
+  if (!file) return null;
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{background:"#fff",borderRadius:20,padding:20,maxWidth:320,width:"90%",textAlign:"center"}}>
+        <div style={{fontWeight:800,fontSize:14,marginBottom:12}}>📷 Recadrer la photo</div>
+        <canvas ref={canvasRef} width={SIZE} height={SIZE}
+          onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp}
+          style={{width:SIZE,height:SIZE,borderRadius:"50%",cursor:"grab",touchAction:"none",display:"block",margin:"0 auto"}} />
+        <div style={{marginTop:14,display:"flex",alignItems:"center",gap:8,justifyContent:"center"}}>
+          <span style={{fontSize:12}}>🔍</span>
+          <input type="range" min="1" max="3" step="0.05" value={zoom} onChange={e=>handleZoom(+e.target.value)}
+            style={{flex:1,maxWidth:180,accentColor:"#7c6fcd"}} />
+          <span style={{fontSize:10,color:"#999"}}>{Math.round(zoom*100)}%</span>
+        </div>
+        <div style={{marginTop:14,display:"flex",gap:10,justifyContent:"center"}}>
+          <button onClick={onCancel} style={{padding:"8px 20px",borderRadius:10,border:"1.5px solid #ddd",background:"#f5f5f5",fontSize:13,fontWeight:600,cursor:"pointer"}}>Annuler</button>
+          <button onClick={handleCrop} style={{padding:"8px 20px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#7c6fcd,#e66fd2)",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>✓ Valider</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AvatarPicker({current, onSelect, pool, color}) {
+  const [open, setOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [cropFile, setCropFile] = useState(null);
+  const fileRef = useRef(null);
+  const {myUid} = useApp();
+
+  function handleFileSelect(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { alert("Photo trop lourde (max 5 Mo)"); return; }
+    if (!file.type.startsWith("image/")) { alert("Fichier non supporté"); return; }
+    setCropFile(file);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  async function handleCroppedBlob(blob) {
+    if (!myUid) return;
+    setUploading(true);
+    setCropFile(null);
+    try {
+      const path = `${myUid}/${Date.now()}.jpg`;
+      const { error } = await supabase.storage.from("avatars").upload(path, blob, { upsert: true, contentType: "image/jpeg" });
+      if (error) throw error;
+      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+      if (data?.publicUrl) { onSelect(data.publicUrl); setOpen(false); }
+    } catch (err) {
+      console.error("[Duvia] Avatar upload error:", err);
+      alert("Erreur lors de l'upload de la photo");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div style={{position:"relative",zIndex:open?500:1}}>
+      <Avatar emoji={current||pool[0]} color={color} size={44} onClick={()=>setOpen(o=>!o)} selected={!!current} />
+      {open && (
+        <>
+          <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:498}} />
+          <div style={{position:"absolute",top:50,left:0,zIndex:499,background:"white",border:"1.5px solid #e5e7eb",borderRadius:14,padding:8,boxShadow:"0 8px 24px rgba(0,0,0,.25)",display:"grid",gridTemplateColumns:"repeat(5,44px)",gap:4,width:"auto"}}>
+            {pool.map((em,i)=>(
+              <div key={i} onClick={()=>{onSelect(em);setOpen(false);}} style={{
+                width:40,height:40,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:24,cursor:"pointer",background:current===em?`${color||"#7c6fcd"}22`:"transparent",
+                border:`1.5px solid ${current===em?color||"#7c6fcd":"transparent"}`,
+                transition:"all .1s",flexShrink:0,
+              }}>{em}</div>
+            ))}
+            {/* Bouton galerie photo */}
+            <div onClick={()=>!uploading && fileRef.current?.click()} style={{
+              width:40,height:40,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",
+              fontSize:uploading?14:20,cursor:uploading?"wait":"pointer",
+              background:typeof current==="string"&&current.startsWith("http")?`${color||"#7c6fcd"}22`:"transparent",
+              border:`1.5px solid ${typeof current==="string"&&current.startsWith("http")?color||"#7c6fcd":"#e5e7eb"}`,
+              transition:"all .1s",flexShrink:0,
+            }}>{uploading?"⏳":"🖼️"}</div>
+            {/* Bouton appareil photo (mobile) */}
+            <div onClick={()=>{if(!uploading){const inp=document.createElement("input");inp.type="file";inp.accept="image/*";inp.capture="user";inp.onchange=e=>handleFileSelect(e);inp.click();}}} style={{
+              width:40,height:40,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",
+              fontSize:20,cursor:uploading?"wait":"pointer",
+              background:"transparent",
+              border:`1.5px solid #e5e7eb`,
+              transition:"all .1s",flexShrink:0,
+            }}>📷</div>
+            <input ref={fileRef} type="file" accept="image/*" onChange={handleFileSelect} style={{display:"none"}} />
+          </div>
+        </>
+      )}
+      {cropFile && <CropModal file={cropFile} onCrop={handleCroppedBlob} onCancel={()=>setCropFile(null)} />}
+    </div>
+  );
+}
+
+// ─── STEP LANGUE ──────────────────────────────────────────────────────────────
+function StepLang({lang,setLang}) {
+  const {C,t} = useApp();
+  return (
+    <div>
+      <div className="sec" style={{marginBottom:14}}>{t.langAppTitle}</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        {Object.entries(LANGS).map(([k,v])=>(
+          <button key={k} onClick={()=>setLang(k)} style={{
+            padding:"14px 12px",
+            background:lang===k?`${C.vio}18`:C.sur,
+            border:`2px solid ${lang===k?C.vio:C.bor}`,
+            borderRadius:12,
+            display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+            cursor:"pointer",transition:"all .15s"
+          }}>
+            <span style={{fontSize:15,fontWeight:700,color:lang===k?C.vio:C.txt}}>{v.name}</span>
+            {lang===k&&<span style={{color:C.vio,fontSize:16,fontWeight:900}}>✓</span>}
+          </button>
+        ))}
+      </div>
+      <div style={{marginTop:16,padding:"12px 14px",background:`${C.vio}08`,borderRadius:12,border:`1px solid ${C.vio}22`,fontSize:12,color:C.mut,lineHeight:1.5}}>
+        {t.langAppDesc}
+      </div>
+    </div>
+  );
+}
+
+// ─── PRÉFÉRENCES ──────────────────────────────────────────────────────────────
+function PrefsTab() {
+  const {C,t,lang,setLang,sub,setConfirmDeleteAccount,user,currency,setCurrency,weekStart,setWeekStart} = useApp();
+
+  // ── Prefs state (chargé depuis user_metadata) ─────────────────────────────
+  const [emailMsg,    setEmailMsg]    = useState(true);
+  const [emailExp,    setEmailExp]    = useState(true);
+  const [emailVault,  setEmailVault]  = useState(true);
+  const [isGoogleUser, setIsGoogleUser] = useState(false);
+  const [pwMode,      setPwMode]      = useState(false);
+  const [pwOld,setPwOld] = useState("");
+  const [pw,setPw]   = useState(""); const [pw2,setPw2] = useState("");
+  const [showPwOld,setShowPwOld] = useState(false);
+  const [showPw,setShowPw]       = useState(false);
+  const [showPw2,setShowPw2]     = useState(false);
+  const [pwErr,setPwErr] = useState(""); const [pwOk,setPwOk] = useState("");
+  const [saving,setSaving] = useState(false);
+  const [emailMode,setEmailMode]   = useState(false);
+  const [newEmail,setNewEmail]     = useState("");
+  const [emailErr,setEmailErr]     = useState("");
+  const [emailOk,setEmailOk]       = useState("");
+  const [savingEmail,setSavingEmail] = useState(false);
+
+  useEffect(()=>{
+    supabase.auth.getUser().then(({data})=>{
+      const m = data?.user?.user_metadata || {};
+      setEmailMsg(m.email_notifs    !== false);
+      setEmailExp(m.email_expenses  !== false);
+      setEmailVault(m.email_vault   !== false);
+      if(m.week_start) setWeekStart(m.week_start);
+      // Détecte les comptes Google (pas de mot de passe Supabase)
+      const provider = data?.user?.app_metadata?.provider;
+      setIsGoogleUser(provider === "google");
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  async function savePref(key, val){
+    try{ await supabase.auth.updateUser({data:{[key]:val}}); }
+    catch(e){ console.warn("pref save failed",e); }
+  }
+
+  function Toggle({val,onToggle}){
+    return (
+      <button onClick={onToggle} style={{width:44,height:24,borderRadius:12,background:val?C.grn:"#ccc",border:"none",cursor:"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
+        <div style={{position:"absolute",top:2,left:val?22:2,width:20,height:20,borderRadius:10,background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.25)"}} />
+      </button>
+    );
+  }
+
+  function NotifRow({label,desc,val,onToggle}){
+    const row={display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`,marginBottom:8};
+    return (
+      <div style={row}>
+        <div style={{flex:1,marginRight:12}}>
+          <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{label}</div>
+          <div style={{fontSize:11,color:C.mut,marginTop:2}}>{desc}</div>
+        </div>
+        <Toggle val={val} onToggle={onToggle} />
+      </div>
+    );
+  }
+
+  async function changePassword(){
+    if(!pwOld){ setPwErr("Veuillez saisir votre mot de passe actuel."); return; }
+    const err = validatePassword(pw);
+    if(err){ setPwErr(err); return; }
+    if(pw !== pw2){ setPwErr("Les mots de passe ne correspondent pas."); return; }
+    setSaving(true); setPwErr("");
+    // Vérifier l'ancien mot de passe
+    const {error:signInErr} = await supabase.auth.signInWithPassword({
+      email: user?.email || "", password: pwOld,
+    });
+    if(signInErr){ setSaving(false); setPwErr("Mot de passe actuel incorrect."); return; }
+    const {error} = await supabase.auth.updateUser({password:pw});
+    setSaving(false);
+    if(error){ setPwErr("Erreur : "+error.message); return; }
+    // Email de confirmation
+    try{
+      await supabase.functions.invoke("notify-password-change", {body:{}}).catch(()=>{});
+    }catch{}
+    setPwOld(""); setPwOk("✅ Mot de passe mis à jour !"); setPwMode(false); setPw(""); setPw2("");
+    setShowPwOld(false); setShowPw(false); setShowPw2(false);
+    setTimeout(()=>setPwOk(""),3000);
+  }
+
+  async function changeEmail(){
+    if(!newEmail || !newEmail.includes("@")){ setEmailErr("Adresse email invalide."); return; }
+    if(newEmail === user?.email){ setEmailErr("C'est déjà votre adresse email actuelle."); return; }
+    setSavingEmail(true); setEmailErr("");
+    const {error} = await supabase.auth.updateUser({email: newEmail});
+    setSavingEmail(false);
+    if(error){ setEmailErr("Erreur : "+error.message); return; }
+    setEmailOk(`✅ Un email de confirmation a été envoyé à ${newEmail}. Cliquez sur le lien pour valider.`);
+    setEmailMode(false); setNewEmail("");
+    setTimeout(()=>setEmailOk(""),8000);
+  }
+
+  function exportRGPD(){
+    const data = {
+      export_date: new Date().toISOString(),
+      compte: {nom:user?.name, email:user?.email},
+      preferences: {langue:lang, devise:currency, premier_jour:weekStart, emails_messages:emailMsg, emails_depenses:emailExp, emails_coffre:emailVault},
+      abonnement: {plan:sub?.plan, depuis:sub?.premiumSince},
+    };
+    const blob = new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href=url; a.download="duvia-mes-donnees.json"; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const row = {display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`,cursor:"pointer",width:"100%",textAlign:"left"};
+
+  return (
+    <div>
+      {/* ── Langue ── */}
+      <div style={{marginBottom:28}}>
+        <StepLang lang={lang} setLang={setLang} />
+      </div>
+
+      {/* ── Notifications email ── */}
+      <div style={{marginBottom:28}}>
+        <div className="sec">📧 Notifications email</div>
+        <NotifRow label="Nouveau message reçu" desc="Email quand l'autre parent vous écrit"
+          val={emailMsg} onToggle={()=>{ const v=!emailMsg; setEmailMsg(v); savePref("email_notifs",v); }} />
+        <NotifRow label="Nouvelle dépense" desc="Email quand une dépense est ajoutée ou modifiée"
+          val={emailExp} onToggle={()=>{ const v=!emailExp; setEmailExp(v); savePref("email_expenses",v); }} />
+        <NotifRow label="Nouveau document (coffre)" desc="Email quand un document est ajouté au coffre-fort"
+          val={emailVault} onToggle={()=>{ const v=!emailVault; setEmailVault(v); savePref("email_vault",v); }} />
+      </div>
+
+      {/* ── Devise ── */}
+      <div style={{marginBottom:28}}>
+        <div className="sec">💰 Devise par défaut</div>
+        <div style={{display:"flex",gap:8}}>
+          {["€","$","CHF","£"].map(c=>(
+            <button key={c} onClick={()=>{ setCurrency(c); savePref("currency",c); }}
+              style={{flex:1,height:44,borderRadius:12,border:`2px solid ${currency===c?C.vio:C.bor}`,background:currency===c?`${C.vio}12`:C.sur,color:currency===c?C.vio:C.txt,fontSize:16,fontWeight:800,cursor:"pointer",transition:"all .15s"}}>
+              {c}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Premier jour de la semaine ── */}
+      <div style={{marginBottom:28}}>
+        <div className="sec">📅 Premier jour de la semaine</div>
+        <div style={{display:"flex",gap:8}}>
+          {[{k:"lundi",l:"Lundi"},{k:"dimanche",l:"Dimanche"}].map(({k,l})=>(
+            <button key={k} onClick={()=>{ setWeekStart(k); savePref("week_start",k); }}
+              style={{flex:1,height:44,borderRadius:12,border:`2px solid ${weekStart===k?C.vio:C.bor}`,background:weekStart===k?`${C.vio}12`:C.sur,color:weekStart===k?C.vio:C.txt,fontSize:13,fontWeight:700,cursor:"pointer",transition:"all .15s"}}>
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Sécurité ── */}
+      <div style={{marginBottom:28}}>
+        <div className="sec">🔒 Sécurité</div>
+        {isGoogleUser ? (
+          <div style={{padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`,display:"flex",alignItems:"center",gap:12}}>
+            <span style={{fontSize:20}}>🔗</span>
+            <div>
+              <div style={{fontSize:13,fontWeight:700,color:C.txt}}>Compte Google</div>
+              <div style={{fontSize:11,color:C.mut,marginTop:2}}>Votre email et mot de passe sont gérés par Google. Modifiez-les sur <a href="https://myaccount.google.com" target="_blank" rel="noreferrer" style={{color:C.vio}}>myaccount.google.com</a></div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {pwOk && <div style={{color:C.grn,fontSize:12,fontWeight:700,marginBottom:8,padding:"7px 12px",background:`${C.grn}12`,borderRadius:8}}>{pwOk}</div>}
+            {!pwMode ? (
+              <button onClick={()=>setPwMode(true)} style={{...row,marginBottom:8}}>
+                <span style={{fontSize:13,fontWeight:700,color:C.txt}}>🔒 Changer mon mot de passe</span>
+              </button>
+            ) : (
+              <div style={{background:C.sur,borderRadius:12,padding:16,border:`1px solid ${C.bor}`,marginBottom:8}}>
+                {[
+                  {val:pwOld,set:setPwOld,show:showPwOld,setShow:setShowPwOld,ph:"Mot de passe actuel"},
+                  {val:pw,   set:setPw,   show:showPw,   setShow:setShowPw,   ph:"Nouveau mot de passe (8 car. · majuscule · spécial)"},
+                  {val:pw2,  set:setPw2,  show:showPw2,  setShow:setShowPw2,  ph:"Confirmer le nouveau mot de passe"},
+                ].map(({val,set,show,setShow,ph},i)=>(
+                  <div key={i} style={{position:"relative",marginBottom:8}}>
+                    {i===1&&<div style={{height:1,background:C.bor,margin:"4px 0 12px"}}/>}
+                    <input type={show?"text":"password"} value={val} onChange={e=>set(e.target.value)}
+                      placeholder={ph}
+                      style={{width:"100%",height:42,borderRadius:8,border:`1.5px solid ${C.bor}`,padding:"0 40px 0 12px",fontSize:13,boxSizing:"border-box",fontFamily:"inherit"}} />
+                    <button onClick={()=>setShow(s=>!s)} type="button"
+                      style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:15,color:C.mut,padding:0,lineHeight:1}}>
+                      {show?"🙈":"👁️"}
+                    </button>
+                  </div>
+                ))}
+                {pwErr && <div style={{color:C.red,fontSize:12,marginBottom:8,padding:"6px 10px",background:`${C.red}10`,borderRadius:8}}>{pwErr}</div>}
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={changePassword} disabled={saving} style={{flex:1,height:38,background:C.vio,color:"#fff",borderRadius:8,fontSize:13,fontWeight:800,border:"none",cursor:"pointer",opacity:saving?.6:1}}>
+                    {saving?"…":"Confirmer"}
+                  </button>
+                  <button onClick={()=>{setPwMode(false);setPwOld("");setPw("");setPw2("");setPwErr("");setShowPwOld(false);setShowPw(false);setShowPw2(false);}} style={{height:38,padding:"0 16px",background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",fontSize:13,color:C.txt}}>
+                    Annuler
+                  </button>
+                </div>
+              </div>
+            )}
+            {/* ── Changer l'email ── */}
+            {emailOk && <div style={{color:C.grn,fontSize:12,fontWeight:700,marginBottom:8,padding:"7px 12px",background:`${C.grn}12`,borderRadius:8,lineHeight:1.5}}>{emailOk}</div>}
+            {!emailMode ? (
+              <button onClick={()=>setEmailMode(true)} style={{...row}}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:C.txt}}>✉️ Changer mon adresse email</div>
+                  <div style={{fontSize:11,color:C.mut,marginTop:2}}>Actuelle : {user?.email}</div>
+                </div>
+              </button>
+            ) : (
+              <div style={{background:C.sur,borderRadius:12,padding:16,border:`1px solid ${C.bor}`}}>
+                <input type="email" value={newEmail} onChange={e=>setNewEmail(e.target.value)}
+                  placeholder="Nouvelle adresse email"
+                  style={{width:"100%",height:42,borderRadius:8,border:`1.5px solid ${C.bor}`,padding:"0 12px",fontSize:13,marginBottom:8,boxSizing:"border-box",fontFamily:"inherit"}} />
+                {emailErr && <div style={{color:C.red,fontSize:12,marginBottom:8,padding:"6px 10px",background:`${C.red}10`,borderRadius:8}}>{emailErr}</div>}
+                <div style={{fontSize:11,color:C.mut,marginBottom:10,lineHeight:1.5}}>
+                  📩 Un email de confirmation sera envoyé à la nouvelle adresse. L'ancienne reste active jusqu'à validation.
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={changeEmail} disabled={savingEmail} style={{flex:1,height:38,background:C.vio,color:"#fff",borderRadius:8,fontSize:13,fontWeight:800,border:"none",cursor:"pointer",opacity:savingEmail?.6:1}}>
+                    {savingEmail?"…":"Envoyer la confirmation"}
+                  </button>
+                  <button onClick={()=>{setEmailMode(false);setNewEmail("");setEmailErr("");}} style={{height:38,padding:"0 16px",background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",fontSize:13,color:C.txt}}>
+                    Annuler
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* ── Export RGPD ── */}
+      <div style={{marginBottom:28}}>
+        <div className="sec">📋 Mes données (RGPD)</div>
+        <button onClick={exportRGPD} style={{...row}}>
+          <span style={{fontSize:13,fontWeight:700,color:C.txt}}>📤 Télécharger mes données</span>
+        </button>
+        <div style={{fontSize:11,color:C.mut,marginTop:6,paddingLeft:4}}>Format JSON · Vos données personnelles uniquement</div>
+      </div>
+
+      {/* ── Zone de danger ── */}
+      <div style={{marginBottom:8}}>
+        <div className="sec" style={{color:C.red}}>⚠️ Zone de danger</div>
+        <button onClick={()=>setConfirmDeleteAccount(true)} style={{...row,background:`${C.red}10`,border:`1px solid ${C.red}33`,color:C.red}}>
+          <span style={{fontSize:13,fontWeight:700}}>🗑️ Supprimer mon compte</span>
+        </button>
+        <div style={{fontSize:11,color:C.mut,marginTop:6,paddingLeft:4}}>Action définitive · Toutes vos données seront effacées</div>
+      </div>
+    </div>
+  );
+}
+
+function ConfigTab() {
+  const {C,t,cfg,setCfg,addHist,pushNotif,prem,perms,onUpgrade,apiData,apiLoading,sub,setSub,lang,setLang,msgs,setMsgs,setUsers,user,familySync,configStep:step,setConfigStep:setStep} = useApp();
+  const STEPS=[{i:"👤",l:t.stepId},{i:"👥",l:t.stepAccess},{i:"🗓️",l:t.stepDates},{i:"📆",l:t.stepGarde}];
+
+  // ── Invite modal state ─────────────────────────────────────────────────────
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [invitePhone, setInvitePhone] = useState("");
+  const [inviteErr, setInviteErr] = useState("");
+  const [sendingInvite, setSendingInvite] = useState(false);
+  const [inviteResult, setInviteResult] = useState(null); // {url,email,phone} une fois le lien généré
+
+  // ── Delete modals state ────────────────────────────────────────────────────
+  const [confirmDelIdx, setConfirmDelIdx] = useState(null);  // 1er modal: confirmation
+  const [emailSimIdx, setEmailSimIdx]     = useState(null);  // 2e modal: simulation email
+
+  function setParent(i,f,v){setCfg(c=>{const p=[...c.parents];p[i]={...p[i],[f]:v};return{...c,parents:p};});}
+  function setChild(i,f,v){setCfg(c=>{const ch=[...c.children];ch[i]={...ch[i],[f]:v};return{...c,children:ch};});}
+  function setChildHome(ci,f,v){setCfg(c=>{const ch=[...c.children];ch[ci]={...ch[ci],home:{...(ch[ci].home||{}),[ f]:v}};return{...c,children:ch};});}
+
+  function addParent(){
+    if(cfg.parents.length >= 2) return; // limite absolue de 2 parents
+    setInviteEmail(""); setInvitePhone(""); setInviteErr(""); setInviteResult(null);
+    setShowInviteModal(true);
+  }
+
+  // Réinviter un parent PARTI : on pré-remplit son email et on ouvre le modal.
+  // confirmInvite réutilisera SA fiche existante (par email) → ses dépenses/garde
+  // restent attribuées à lui. Contourne la limite « 2 parents » (même personne).
+  function reinviteParent(p){
+    setInviteEmail((p && (p.email || p.inviteEmail)) || "");
+    setInvitePhone((p && p.invitePhone) || "");
+    setInviteErr(""); setInviteResult(null);
+    setShowInviteModal(true);
+  }
+
+  async function confirmInvite(){
+    const em  = inviteEmail.trim();
+    const tel = invitePhone.trim();
+    if(!em && !tel){ setInviteErr("Saisis au moins un email ou un numéro de téléphone."); return; }
+    if(em && !em.includes("@")){ setInviteErr("Email invalide."); return; }
+    if(cfg.parents.some(p=>p.inviteStatus==="pending" && p.inviteEmail && p.inviteEmail===em)){ setInviteErr("Cet email a déjà une invitation en attente."); return; }
+    if(!familySync?.familyId){ setInviteErr("Famille introuvable, réessaie."); return; }
+    setSendingInvite(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      // 🔧 Ré-invitation : supprimer une éventuelle ancienne invitation pour ce
+      // même email dans cette famille (sinon conflit d'unicité → « Erreur lors
+      // de la génération du lien » quand on réinvite après un départ).
+      if (em) {
+        try {
+          // Récupère l'uid de l'ancien invité (via l'invitation déjà utilisée)
+          // pour nettoyer aussi son adhésion résiduelle ('removed'), sinon sa
+          // ré-inscription pourrait buter dessus.
+          const { data: oldInv } = await supabase.from("family_invitations")
+            .select("used_by").eq("family_id", familySync.familyId).eq("email", em)
+            .not("used_by", "is", null).maybeSingle();
+          if (oldInv?.used_by) {
+            await supabase.from("family_members")
+              .delete().eq("family_id", familySync.familyId).eq("user_id", oldInv.used_by);
+          }
+          await supabase.from("family_invitations")
+            .delete().eq("family_id", familySync.familyId).eq("email", em);
+        } catch (e) { console.warn("[Duvia] confirmInvite: nettoyage ancienne invitation:", e); }
+      }
+      const { data: inv, error } = await supabase
+        .from("family_invitations")
+        .insert({
+          family_id: familySync.familyId,
+          created_by: userData?.user?.id,
+          role: "parent",
+          email: em || null,
+          expires_at: new Date(Date.now() + 24*60*60*1000).toISOString(), // 24h
+        })
+        .select("token")
+        .single();
+      if (error || !inv?.token) throw error || new Error("no-token");
+      const inviteUrl = `${APP_URL}/?inv=${inv.token}`;
+      // 🔧 Si une fiche parent existe déjà pour cet email (ex. parent PARTI
+      // qu'on réinvite), on RÉUTILISE sa fiche (préserve l'historique
+      // dépenses/garde, indexé par position) au lieu d'en créer une nouvelle.
+      // Sinon, on ajoute une nouvelle fiche invitée.
+      setCfg(c=>{
+        const lc = (em||"").toLowerCase();
+        const exIdx = lc ? (c.parents||[]).findIndex(p => p && (((p.email||"").toLowerCase()===lc) || ((p.inviteEmail||"").toLowerCase()===lc))) : -1;
+        if (exIdx >= 0) {
+          const parents = c.parents.slice();
+          const { left, leftAt, userId, ...rest } = parents[exIdx] || {};
+          parents[exIdx] = { ...rest, inviteStatus:"pending", inviteEmail: em||null, invitePhone: tel||null, inviteCode: inv.token, inviteUrl };
+          return { ...c, parents };
+        }
+        return { ...c, parents:[...c.parents, {
+          id:Date.now(), name:"", gender:"M", birthDay:"", birthMonth:"",
+          color:PCOLS[c.parents.length%PCOLS.length],
+          inviteStatus:"pending", inviteEmail:em||null,
+          invitePhone: tel||null,
+          inviteCode: inv.token, inviteUrl,
+        }]};
+      });
+      setInviteResult({ url: inviteUrl, email: em||null, phone: tel||null });
+    } catch (e) {
+      console.error("[Duvia] confirmInvite error:", e);
+      setInviteErr("Erreur lors de la génération du lien. Réessaie.");
+    } finally {
+      setSendingInvite(false);
+    }
+  }
+
+  // Demander suppression → ouvre la confirmation, puis simulation email
+  function removeParent(i){
+    const p = cfg.parents[i];
+    if(!p) return;
+    // Bloqué si parent souscripteur premium
+    if(sub?.subscriberParentIdx === i){
+      alert("Ce parent est le souscripteur Premium. Il ne peut pas être supprimé."); return;
+    }
+    setConfirmDelIdx(i);
+  }
+
+  // « Quitter la famille » — pour le parent connecté (créateur OU invité).
+  async function quitterFamille(){
+    if(!window.confirm("Quitter cette famille ?\n\nVous repartirez sur une famille personnelle vierge. Une synthèse de vos données est conservée pour export.")) return;
+    const res = await familySync?.leaveFamily?.();
+    if(res?.ok){ duviaReload(); }
+    else { alert("⚠️ Impossible de quitter la famille.\n\nDétail : "+(res?.error||"inconnu")+"\n\n(Si l'erreur mentionne « leave_family », la migration SQL 0018 n'est pas encore exécutée sur Supabase.)"); }
+  }
+
+  // « Retirer l'invité » — réservé au créateur (parents[0]).
+  async function retirerInvite(i){
+    const p = cfg.parents[i];
+    if(!p?.userId){ alert("Cet invité n'a pas encore rejoint — utilisez « Retirer » sur l'invitation."); return; }
+    if(!window.confirm(`Retirer ${p.name||"l'invité"} de la famille ?\n\nIl repartira sur une famille personnelle vierge. Vous conservez la famille et son code.`)) return;
+    const res = await familySync?.removeFamilyMember?.(p.userId);
+    if(res?.ok){
+      setCfg(c=>({...c, parents:c.parents.filter((_,j)=>j!==i)}));
+    } else {
+      alert("⚠️ Impossible de retirer l'invité.\n\nDétail : "+(res?.error||"inconnu")+"\n\n(Si l'erreur mentionne « remove_family_member », la migration SQL 0017 n'est pas encore exécutée sur Supabase.)");
+    }
+  }
+
+  // Après confirmation → crée la demande + ouvre simulation email
+  function requestDeletion(i){
+    setCfg(c=>({...c, pendingDeletion:{ parentIdx:i, parentId:c.parents[i]?.id, parentName:c.parents[i]?.name, requestedAt:new Date().toISOString() }}));
+    setConfirmDelIdx(null);
+    setEmailSimIdx(i);
+  }
+
+  // Parent refuse → annuler
+  function cancelDeletion(){
+    setCfg(c=>({...c, pendingDeletion:null}));
+    setEmailSimIdx(null);
+  }
+
+  // Parent accepte → exécuter toutes les conséquences
+  function executeDeletion(i){
+    const parent = cfg.parents[i];
+    if(!parent) return;
+    const parentName = parent.name || `Parent ${i+1}`;
+    const parentEmail = parent.email || parent.inviteEmail || "";
+
+    // 0. 🔧 Retrait RÉEL côté serveur : on détache l'invité de la famille
+    //    (son adhésion passe à 'removed'). Sans ça, il restait membre actif et
+    //    continuait de voir l'inviteur. Nécessite son identifiant de compte
+    //    (userId), enregistré sur le créneau au moment de la validation.
+    if(parent.userId){
+      familySync?.removeFamilyMember?.(parent.userId).then(res=>{
+        if(res && !res.ok) console.warn("[Duvia] removeFamilyMember:", res.error);
+      });
+    } else {
+      console.warn("[Duvia] executeDeletion: pas de userId sur le parent — retrait serveur impossible.");
+    }
+
+    // 2. Désactiver le compte utilisateur lié
+    if(parentEmail){
+      setUsers(us => (us||[]).map(u =>
+        u.email === parentEmail ? {...u, disabled:true, familyRemoved:true} : u
+      ));
+    }
+
+    // 3. Modifier cfg en une seule opération
+    setCfg(c => {
+      // Planning garde : réinitialiser si ce parent était impliqué
+      const impacted = (c.custody?.pattern||[]).some(d => d.parentIdx === i);
+      // Dépenses : remise à zéro
+      // Contacts : auto-générés depuis cfg.parents → disparaissent automatiquement
+      // Historique : conservé
+      // Coffre-fort : géré via cfg.deletedParents dans VaultTab
+      return {
+        ...c,
+        parents: c.parents.filter((_,j) => j !== i),
+        expenses: [],
+        custody: impacted ? {
+          ...c.custody,
+          pattern: [],
+          confirmed: false,
+        } : c.custody,
+        deletedParents: [...(c.deletedParents||[]), {
+          id: parent.id, name: parentName, email: parentEmail,
+          deletedAt: new Date().toISOString(),
+        }],
+        pendingDeletion: null,
+      };
+    });
+
+    setEmailSimIdx(null);
+    pushNotif(`🗑️ ${parentName} a été supprimé de la famille.`);
+  }
+  function addChild(){if(cfg.children.length>=(perms?.maxChildren??1))return onUpgrade();setCfg(c=>({...c,children:[...c.children,{id:Date.now(),name:"",email:"",birthDay:"",birthMonth:"",birthYear:"",allergy:"",bloodType:"",home:{school:"",doctor:"",notes:"",emergencyContacts:""}}]}));}
+  function removeChild(i){setCfg(c=>{const children=c.children.filter((_,j)=>j!==i);return{...c,children,sameGuardAll:children.length<=1?true:c.sameGuardAll};});}
+  return (
+    <div>
+      {/* ── Modal 1 : Confirmation de suppression ─────────────────────────── */}
+      {confirmDelIdx !== null && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:340,width:"100%",border:`1.5px solid ${C.bor}`}}>
+            <div style={{fontSize:32,textAlign:"center",marginBottom:8}}>⚠️</div>
+            <div style={{fontSize:15,fontWeight:900,color:C.txt,textAlign:"center",marginBottom:6}}>Supprimer ce parent ?</div>
+            <div style={{fontSize:12,color:C.mut,textAlign:"center",marginBottom:6,lineHeight:1.6}}>
+              <strong style={{color:C.txt}}>{cfg.parents[confirmDelIdx]?.name||`Parent ${confirmDelIdx+1}`}</strong> recevra un email de confirmation.
+            </div>
+            <div style={{background:`${C.red}10`,border:`1px solid ${C.red}33`,borderRadius:10,padding:"10px 12px",marginBottom:18}}>
+              <div style={{fontSize:11,fontWeight:800,color:C.red,marginBottom:6}}>Conséquences si accepté :</div>
+              {["🗓️ Planning de garde remis à zéro si impacté","💰 Dépenses remises à zéro","📞 Supprimé des contacts","💬 Conversations conservées (marqué supprimé)","🗄️ Documents coffre conservés (marqué supprimé)","📋 Historique des modifications conservé"].map((l,i)=>(
+                <div key={i} style={{fontSize:11,color:C.mut,marginBottom:3}}>{l}</div>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setConfirmDelIdx(null)} style={{flex:1,height:44,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13}}>Annuler</button>
+              <button onClick={()=>requestDeletion(confirmDelIdx)} style={{flex:2,height:44,background:C.red,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13}}>
+                📨 Envoyer la demande
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal 2 : Simulation email de confirmation ───────────────────────── */}
+      {emailSimIdx !== null && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.card,borderRadius:20,padding:0,maxWidth:360,width:"100%",border:`1.5px solid ${C.bor}`,overflow:"hidden"}}>
+            {/* Header email simulé */}
+            <div style={{background:C.dark,padding:"14px 18px",display:"flex",gap:10,alignItems:"center"}}>
+              <span style={{fontSize:20}}>✉️</span>
+              <div>
+                <div style={{fontSize:11,fontWeight:800,color:"#94a3b8",marginBottom:1}}>Simulation — Email envoyé à</div>
+                <div style={{fontSize:12,color:"#e2e8f0",fontWeight:700}}>{cfg.parents[emailSimIdx]?.email||cfg.parents[emailSimIdx]?.inviteEmail||"parent@exemple.com"}</div>
+              </div>
+            </div>
+            {/* Corps email */}
+            <div style={{padding:"18px 20px"}}>
+              <div style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:8}}>Demande de suppression de compte</div>
+              <div style={{fontSize:12,color:C.mut,lineHeight:1.7,marginBottom:16}}>
+                Bonjour <strong>{cfg.parents[emailSimIdx]?.name||"Parent"}</strong>,<br/>
+                Vous avez reçu une demande de suppression de votre accès à la famille sur Duvia.<br/>
+                Souhaitez-vous confirmer cette suppression ?
+              </div>
+              <div style={{background:`${C.yel}15`,border:`1px solid ${C.yel}44`,borderRadius:8,padding:"8px 12px",marginBottom:16,fontSize:11,color:C.txt}}>
+                🎭 <strong>Mode prototype</strong> — Choisissez la réponse du parent 2
+              </div>
+              <div style={{display:"flex",gap:10}}>
+                <button onClick={cancelDeletion} style={{flex:1,height:44,background:`${C.grn}18`,color:C.grn,border:`1.5px solid ${C.grn}44`,borderRadius:12,fontWeight:800,fontSize:12}}>
+                  ✋ Refuser
+                </button>
+                <button onClick={()=>executeDeletion(emailSimIdx)} style={{flex:1,height:44,background:C.red,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:12}}>
+                  ✅ Accepter
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal invitation parent 2 ──────────────────────────────────────── */}
+      {showInviteModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:340,width:"100%",border:`1.5px solid ${C.bor}`}}>
+            {!inviteResult ? (
+              <>
+                <div style={{fontSize:28,textAlign:"center",marginBottom:6}}>👋</div>
+                <div style={{fontSize:16,fontWeight:900,color:C.txt,textAlign:"center",marginBottom:4}}>{t.inviteOtherParent}</div>
+                <div style={{fontSize:12,color:C.mut,textAlign:"center",marginBottom:20,lineHeight:1.5}}>
+                  {t.inviteFillField}<br/>{t.inviteLink24h}
+                </div>
+
+                <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:5,textTransform:"uppercase",letterSpacing:".06em"}}>
+                  ✉️ Email
+                </div>
+                <input
+                  value={inviteEmail}
+                  onChange={e=>{setInviteEmail(e.target.value);setInviteErr("");}}
+                  onKeyDown={e=>e.key==="Enter"&&confirmInvite()}
+                  placeholder="jean.dupont@email.com"
+                  type="email"
+                  autoFocus
+                  style={{width:"100%",height:44,boxSizing:"border-box",fontSize:14,marginBottom:14,borderColor:inviteErr?C.red:undefined}}
+                />
+
+                <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:5,textTransform:"uppercase",letterSpacing:".06em"}}>
+                  📞 Téléphone
+                </div>
+                <input
+                  value={invitePhone}
+                  onChange={e=>setInvitePhone(e.target.value)}
+                  placeholder="06 12 34 56 78"
+                  type="tel"
+                  style={{width:"100%",height:44,boxSizing:"border-box",fontSize:14,marginBottom:inviteErr?6:18}}
+                />
+                {inviteErr && <div style={{fontSize:12,color:C.red,marginBottom:12}}>{inviteErr}</div>}
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  <button disabled={sendingInvite} onClick={confirmInvite} style={{width:"100%",minHeight:44,padding:"10px 12px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13,whiteSpace:"normal",lineHeight:1.3,opacity:sendingInvite?0.6:1,cursor:sendingInvite?"not-allowed":"pointer"}}>
+                    {sendingInvite ? t.inviteGenerating : t.inviteGenerate}
+                  </button>
+                  <button onClick={()=>setShowInviteModal(false)} style={{width:"100%",height:40,background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13}}>{t.cancel}</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{fontSize:28,textAlign:"center",marginBottom:6}}>✅</div>
+                <div style={{fontSize:16,fontWeight:900,color:C.txt,textAlign:"center",marginBottom:4}}>{t.linkReady}</div>
+                <div style={{fontSize:12,color:C.mut,textAlign:"center",marginBottom:16,lineHeight:1.5}}>
+                  {t.chooseHowSend}
+                </div>
+                <ParentInviteShareBtns C={C} parent={{inviteUrl:inviteResult.url, inviteEmail:inviteResult.email, invitePhone:inviteResult.phone}} familyName={cfg.parents[0]?.name || "Votre famille"} />
+                <button onClick={()=>{
+                  navigator.clipboard.writeText(inviteResult.url);
+                  pushNotif("Lien copié !","info");
+                }} style={{width:"100%",height:40,background:C.sur,color:C.txt,border:`1.5px solid ${C.bor}`,borderRadius:10,fontWeight:700,fontSize:13,marginBottom:10}}>
+                  {t.copyInviteLink}
+                </button>
+                <button onClick={()=>{setShowInviteModal(false);setInviteResult(null);setInvitePhone("");setInviteEmail("");}} style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13}}>
+                  {t.doneBtn}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      {/* Step tabs — now rendered in the bottom nav bar */}
+      <div className="fi">
+        {step===0 && <StepId setParent={setParent} setChild={setChild} addParent={addParent} reinvite={reinviteParent} removeParent={removeParent} addChild={addChild} removeChild={removeChild} onShowEmailSim={setEmailSimIdx} quitterFamille={quitterFamille} retirerInvite={retirerInvite} />}
+        {step===1 && <StepAccess />}
+        {step===2 && <StepDates />}
+        {step===3 && <StepGarde />}
+      </div>
+      <div style={{display:"flex",justifyContent:"flex-end",marginTop:18,gap:10,paddingTop:14}}>
+        {step>0&&<button onClick={()=>setStep(s=>s-1)} style={{height:44,padding:"0 20px",background:C.sur,color:C.txt,border:`1.5px solid ${C.bor}`,borderRadius:10,fontWeight:700}}>{t.prev}</button>}
+        {step<3&&(()=>{
+          const namesOk=step!==0||([...cfg.parents,...cfg.children].every(x=>x.name.trim()));
+          return <button onClick={()=>namesOk&&setStep(s=>s+1)} style={{height:44,padding:"0 20px",background:namesOk?C.vio:`${C.vio}55`,color:"#fff",cursor:namesOk?"pointer":"not-allowed",opacity:namesOk?1:0.6,borderRadius:10}} title={!namesOk?(t.nameRequired||"Le nom est obligatoire."):undefined}>{t.next}</button>;
+        })()}
+
+      </div>
+    </div>
+  );
+}
+
+function CountryBadge({country}) {
+  const {C} = useApp();
+  const found = COUNTRIES.find(c => c.code === country);
+  if (!found) return null;
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:C.sur,borderRadius:10,marginTop:8}}>
+      <span style={{fontSize:22}}>{found.flag}</span>
+      <div>
+        <div style={{fontWeight:800,fontSize:14,color:C.txt}}>{found.name}</div>
+        <div style={{fontSize:11,color:C.mut}}>
+          {hasMultipleZones(country) ? `${(OH_SUBS_CATALOG[country]||[]).length} régions disponibles — OpenHolidays API` : "Vacances et fériés — OpenHolidays API"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── STEP 1: IDENTITIES ───────────────────────────────────────────────────────
+// ── Carte de synchronisation famille (cloud) ─────────────────────────────────
+function FamilySyncCard() {
+  const {C,t,cfg,familySync} = useApp();
+  const {syncStatus,joinFamily} = familySync;
+  const [joinCode,setJoinCode] = useState("");
+  const [joinMsg,setJoinMsg] = useState("");
+  const [joining,setJoining] = useState(false);
+  const [expanded,setExpanded] = useState(false);
+
+  async function handleJoin(){
+    if(!joinCode.trim()) return;
+    setJoining(true); setJoinMsg("");
+    const res = await joinFamily(joinCode);
+    setJoining(false);
+    if(res.ok){ setJoinMsg("ok"); setJoinCode(""); }
+    else setJoinMsg(res.error==="notfound" ? "notfound" : "error");
+  }
+
+  const SI = {
+    connecting:{icon:"⏳",color:C.yel,label:t.syncConnecting},
+    synced:{icon:"☁️",color:C.grn,label:t.syncSynced},
+    offline:{icon:"📴",color:C.mut,label:t.syncOffline},
+    error:{icon:"⚠️",color:C.red,label:t.syncError},
+  }[syncStatus] || {icon:"❔",color:C.mut,label:""};
+
+  const isSynced = syncStatus==="synced";
+  const showDetails = !isSynced || expanded;
+
+  return (
+    <div className="card" style={{marginBottom:16,borderColor:`${C.vio}55`}}>
+      <div onClick={()=>isSynced && setExpanded(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,cursor:isSynced?"pointer":"default",marginBottom:showDetails?8:0}}>
+        <div className="sec" style={{marginBottom:0}}>☁️ {t.familySyncTitle}</div>
+        <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"4px 10px",background:`${SI.color}15`,border:`1px solid ${SI.color}44`,borderRadius:10,fontSize:11,fontWeight:700,color:SI.color,flexShrink:0}}>
+          <span>{SI.icon}</span><span>{SI.label}</span>
+          {isSynced && <span style={{marginLeft:2,opacity:.6,fontSize:9}}>{expanded?"▲":"▼"}</span>}
+        </div>
+      </div>
+
+      {showDetails && (
+        <>
+          <div style={{fontSize:12,color:C.mut,marginBottom:12,lineHeight:1.5}}>{t.familySyncDesc}</div>
+
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+            <span style={{fontSize:11,color:C.mut,fontWeight:700}}>{t.familyCode} :</span>
+            <span style={{fontFamily:"JetBrains Mono",fontSize:15,fontWeight:800,letterSpacing:2,color:C.vio}}>{cfg.shareCode}</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+
+function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,removeChild,onShowEmailSim,quitterFamille,retirerInvite}) {
+  const {C,t,cfg,setCfg,prem,perms,onUpgrade,user,sub,familySync,isChild,isObs} = useApp();
+  const [touched,setTouched] = useState({});
+  const [pidActing,setPidActing] = useState(null); // userId en cours de validation/refus
+  const [creatingFamily,setCreatingFamily] = useState(false);
+
+  // Rafraîchir les demandes en attente à l'ouverture de la config (pour pouvoir
+  // valider l'invité directement depuis la carte Parent ci-dessous).
+  useEffect(()=>{ familySync?.refreshPendingMembers?.(); /* eslint-disable-next-line */ },[]);
+
+  // Auto-sync email du parent connecté dans son slot
+  useEffect(()=>{
+    if(!user||user.parentIdx===undefined) return;
+    const idx = user.parentIdx;
+    if(cfg.parents[idx] && cfg.parents[idx].email !== user.email){
+      setCfg(c=>{const p=[...c.parents];p[idx]={...p[idx],email:user.email};return{...c,parents:p};});
+    }
+  },[user]);
+  const markTouched = (key) => setTouched(v=>({...v,[key]:true}));
+
+  // Shared field styles for consistent height/alignment
+  const IH = 44;
+  const fieldBox = {display:"flex",flexDirection:"column",gap:0};
+  const lbl = {fontSize:10,fontWeight:700,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:4,minHeight:16};
+  const inp = {height:IH,boxSizing:"border-box",width:"100%"};
+
+  // Bulle d'aide — visible jusqu'à fermeture manuelle
+  const [showTip, setShowTip] = useState(true);
+  function dismissTip() { setShowTip(false); }
+
+  // Replier/déplier chaque fiche enfant (1er enfant ouvert par défaut)
+  const [expandedChildren, setExpandedChildren] = useState(()=>new Set([0]));
+  const toggleChild = i => setExpandedChildren(s => { const n=new Set(s); n.has(i)?n.delete(i):n.add(i); return n; });
+
+  return (
+    <div>
+      {/* ── Mes familles (multi-familles) — parents uniquement ── */}
+      {!isObs && !isChild && (
+      <>
+      <div className="sec">🏠 Mes familles</div>
+      <div className="card" style={{marginBottom:16}}>
+        {familySync.families.length > 0 && (
+          <div style={{marginBottom:10}}>
+            {familySync.families.map(f => (
+              <div key={f.id} style={{fontSize:13,fontWeight:f.id===familySync.familyId?800:600,color:f.id===familySync.familyId?C.vio:C.txt,padding:"4px 0"}}>
+                {f.id===familySync.familyId ? "📍 " : "・"}{f.label}
+              </div>
+            ))}
+          </div>
+        )}
+        <button
+          disabled={creatingFamily}
+          onClick={async ()=>{
+            if(!window.confirm("Créer une nouvelle famille distincte ? Tu pourras basculer entre tes familles depuis le menu en haut de l'app.")) return;
+            setCreatingFamily(true);
+            const myProfile = (typeof user?.parentIdx === "number" ? cfg.parents[user.parentIdx] : null) || {};
+            const prefillParent = {
+              name: myProfile.name || "",
+              gender: myProfile.gender || "F",
+              birthDay: myProfile.birthDay || "",
+              birthMonth: myProfile.birthMonth || "",
+              phone: myProfile.phone || "",
+              email: user?.email || myProfile.email || "", // verrouillé : lié au compte
+            };
+            const res = await familySync.createNewFamily(prefillParent);
+            setCreatingFamily(false);
+            if(!res.ok) alert("⚠️ Erreur lors de la création de la famille.");
+          }}
+          style={{width:"100%",height:44,background:C.sur,color:C.vio,border:`1.5px solid ${C.vio}`,borderRadius:10,fontWeight:800,fontSize:13,cursor:creatingFamily?"not-allowed":"pointer",opacity:creatingFamily?0.6:1}}>
+          {creatingFamily ? "⏳ Création…" : "➕ Créer une nouvelle famille"}
+        </button>
+      </div>
+      </>
+      )}
+
+      <FamilySyncCard />
+
+      <div className="sec">{t.parents}</div>
+      {cfg.parents.map((p,i)=>{
+        if(p?.left) return (
+          <div key={i} className="card" style={{marginBottom:12,borderColor:C.bor,borderStyle:"dashed"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+                <div style={{width:40,height:40,borderRadius:"50%",background:C.sur,border:`2px dashed ${C.bor}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,filter:"grayscale(1)",opacity:.8}}>🚪</div>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:800,color:C.mut,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.name||p.email||t.guestLabel}</div>
+                  <div style={{fontSize:11,color:C.mut}}>{(t.parentLeftOn||"A quitté la famille le {date}").replace("{date}", p.leftAt ? new Date(p.leftAt).toLocaleDateString() : "—")}</div>
+                </div>
+              </div>
+              <button onClick={()=>reinvite&&reinvite(p)} style={{padding:"7px 14px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:10,fontSize:12,fontWeight:800,cursor:"pointer",flexShrink:0}}>↩️ {t.reinvite}</button>
+            </div>
+          </div>
+        );
+        const pKey=`p${i}`; const pErr=touched[pKey]&&!p.name.trim();
+        // 🔒 Email = identifiant de connexion (« lié au compte »). Il n'est
+        // éditable QUE sur un créneau non encore réclamé par un compte (ex. le
+        // créateur saisit l'email du parent 2 à la main avant l'invitation).
+        // Verrouillé sinon : mon propre email, un parent qui a rejoint, OU le
+        // créateur (index 0, toujours un vrai compte) — ce qui empêche l'invité
+        // de modifier l'email de l'autre parent.
+        const emailLocked = isParentEmailLocked(p, i, user?.parentIdx);
+        const isMine = (i === user?.parentIdx)
+          || (!!p.email && !!user?.email && p.email.toLowerCase() === user.email.toLowerCase()); // je n'édite/vois en détail que MA fiche
+        const lockStyle = isMine ? undefined : { pointerEvents: "none", opacity: 0.75 };
+
+        // ── Carte "En attente" ─────────────────────────────────────────────
+        if(p.inviteStatus==="pending") return (
+          <div key={i} className="card" style={{marginBottom:12,borderColor:p.color,borderStyle:"dashed"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <span style={{fontSize:11,fontWeight:800,color:p.color,textTransform:"uppercase",letterSpacing:".06em"}}>{i===effectiveCreatorIdx(cfg.parents)?t.creatorLabel:t.guestLabel}</span>
+              <button onClick={()=>setCfg(c=>({...c,parents:c.parents.filter((_,j)=>j!==i)}))} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.remove}</button>
+            </div>
+            <div style={{display:"flex",gap:12,alignItems:"center",padding:"8px 0 14px"}}>
+              <div style={{width:44,height:44,borderRadius:"50%",background:`${p.color}22`,border:`2px dashed ${p.color}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>⏳</div>
+              <div>
+                <div style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:3}}>{t.waitingSignup}</div>
+                <div style={{fontSize:12,color:C.mut}}>
+                  {p.inviteEmail && <span>✉️ {p.inviteEmail}</span>}
+                  {p.inviteEmail && p.invitePhone && <span style={{margin:"0 6px",opacity:.4}}>·</span>}
+                  {p.invitePhone && <span>📞 {p.invitePhone}</span>}
+                </div>
+              </div>
+            </div>
+
+            {/* Boutons d'envoi du lien */}
+            {p.inviteUrl && (
+              <ParentInviteShareBtns C={C} parent={p} familyName={cfg.parents[0]?.name||"la famille"} />
+            )}
+
+            {/* ✅ Validation directe : si l'invité a déjà rejoint (en attente),
+                on peut le valider ICI, sans aller dans l'onglet Accès. */}
+            {(() => {
+              const pend = (familySync?.pendingMembers||[]).filter(mm => (mm.role||"parent")==="parent");
+              const m = pend.find(mm => mm.email && p.inviteEmail && mm.email.toLowerCase()===p.inviteEmail.toLowerCase()) || pend[0];
+              if(!m) return null;
+              const who = m.displayName || m.email || "Cette personne";
+              return (
+                <div style={{marginTop:14,paddingTop:14,borderTop:`1px solid ${C.bor}`}}>
+                  <div style={{fontSize:12.5,fontWeight:800,color:C.grn,marginBottom:9}}>
+                    🙋 {who} a rejoint — à valider
+                  </div>
+                  <div style={{display:"flex",gap:8}}>
+                    <button disabled={pidActing===m.userId} onClick={async()=>{
+                      setPidActing(m.userId);
+                      const res=await familySync.validateMember(m);
+                      setPidActing(null);
+                      if(!res.ok) alert("⚠️ Erreur lors de la validation.");
+                    }} style={{flex:1,height:40,background:C.grn,color:"#fff",borderRadius:9,fontSize:13,fontWeight:800,opacity:pidActing===m.userId?0.6:1}}>
+                      {pidActing===m.userId?"⏳…":"✅ Valider"}
+                    </button>
+                    <button disabled={pidActing===m.userId} onClick={async()=>{
+                      if(!window.confirm("Refuser cette demande ?")) return;
+                      setPidActing(m.userId);
+                      const res=await familySync.rejectMember(m.userId);
+                      setPidActing(null);
+                      if(!res.ok) alert("⚠️ Erreur lors du refus.");
+                    }} style={{height:40,padding:"0 14px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,borderRadius:9,fontSize:13,fontWeight:700,opacity:pidActing===m.userId?0.6:1}}>
+                      ❌
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        );
+
+        return (
+        <div key={i} className="card" style={{marginBottom:12,borderColor:pErr?C.red:p.color}}>
+          {/* Header */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontSize:11,fontWeight:800,color:p.color,textTransform:"uppercase",letterSpacing:".06em"}}>{i===effectiveCreatorIdx(cfg.parents)?t.creatorLabel:t.guestLabel}</span>
+              {sub?.subscriberParentIdx===i && (
+                <span style={{fontSize:9,fontWeight:900,background:`linear-gradient(135deg,${C.yel},${C.ora})`,color:"#fff",padding:"2px 7px",borderRadius:8,letterSpacing:".04em"}}>
+                  👑 Souscripteur Premium
+                </span>
+              )}
+              {cfg.pendingDeletion?.parentIdx===i && (
+                <span style={{fontSize:9,fontWeight:900,background:`${C.red}22`,color:C.red,border:`1px solid ${C.red}44`,padding:"2px 7px",borderRadius:8}}>
+                  ⏳ Suppression en attente
+                </span>
+              )}
+            </div>
+            {i===user?.parentIdx ? (
+              <button onClick={quitterFamille} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.leaveFamily}</button>
+            ) : (user?.parentIdx===0 && i===1) ? (
+              sub?.subscriberParentIdx===i
+                ? <span style={{fontSize:11,color:C.mut,fontStyle:"italic"}}>🔒 Protégé</span>
+                : <button onClick={()=>retirerInvite(i)} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>Retirer l'invité</button>
+            ) : null}
+          </div>
+
+          {/* Row 1 : Avatar | Nom | Genre | Couleur */}
+          <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:12}}>
+            {/* Avatar */}
+            <div style={{...fieldBox,flexShrink:0}}>
+              <span style={lbl}>Avatar</span>
+              <div style={{height:IH,display:"flex",alignItems:"center"}}>
+                <AvatarPicker current={p.avatar} color={p.color} pool={PARENT_AVATARS} onSelect={em=>setParent(i,"avatar",em)} />
+              </div>
+            </div>
+            {/* Nom */}
+            <div style={{...fieldBox,flex:2}}>
+              <span style={{...lbl,color:pErr?C.red:undefined}}>{t.name} <span style={{color:C.red}}>*</span></span>
+              <input value={p.name} onChange={e=>setParent(i,"name",e.target.value)} onBlur={()=>markTouched(pKey)} readOnly={!isMine}
+                style={{...inp,borderColor:pErr?C.red:undefined,outline:pErr?`1px solid ${C.red}`:undefined,...(isMine?{}:{background:C.sur,color:C.mut,cursor:"default"})}} />
+            </div>
+            {/* Genre */}
+            <div style={{...fieldBox,flex:1,...lockStyle}}>
+              <span style={lbl}>{t.gender}</span>
+              <CustomSelect value={p.gender} onChange={v=>setParent(i,"gender",v)} options={[
+                {value:"F",label:t.female||"Mère",icon:"🌸"},
+                {value:"M",label:t.male||"Père",icon:"🎩"},
+                {value:"O",label:t.other||"Autre",icon:"🧑"},
+              ]} />
+            </div>
+            {/* Couleur */}
+            <div style={{...fieldBox,flexShrink:0,...lockStyle}}>
+              <span style={lbl}>{t.color}</span>
+              <input type="color" value={p.color} onChange={e=>setParent(i,"color",e.target.value)}
+                style={{...inp,width:IH,padding:2,cursor:"pointer"}} />
+            </div>
+          </div>
+
+          {/* Lignes privées (naissance, téléphone, email) — visibles UNIQUEMENT
+              sur MA propre fiche. Un parent ne voit pas la fiche identité de
+              l'autre (vie privée des co-parents séparés). */}
+          {isMine && <>
+          {/* Row 2 : Jour naissance | Mois naissance */}
+          <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:12}}>
+            <div style={{...fieldBox,flex:1}}>
+              <span style={lbl}>{t.birthDay}</span>
+              <input type="number" min="1" max="31" value={p.birthDay} onChange={e=>setParent(i,"birthDay",e.target.value)} placeholder={t.dayPlaceholder||"JJ"} style={inp} />
+            </div>
+            <div style={{...fieldBox,flex:2}}>
+              <span style={lbl}>{t.birthMonth}</span>
+              <CustomSelect value={p.birthMonth} onChange={v=>setParent(i,"birthMonth",v)} options={[
+                {value:"",label:"--"},
+                ...(t.months||[]).map((m,j)=>({value:pad(j+1),label:m}))
+              ]} />
+            </div>
+          </div>
+
+          {/* Row 3 : Téléphone + Email */}
+          <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:0}}>
+            <div style={{...fieldBox,flex:1}}>
+              <span style={lbl}>📞 {t.contactsPhone||"Téléphone"}</span>
+              <input type="tel" value={p.phone||""} onChange={e=>setParent(i,"phone",e.target.value)} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} style={inp} />
+            </div>
+            <div style={{...fieldBox,flex:2}}>
+              <span style={lbl}>
+                ✉️ Email
+                {emailLocked &&
+                  <span style={{marginLeft:5,fontSize:9,background:`${C.grn}22`,color:C.grn,border:`1px solid ${C.grn}44`,padding:"1px 6px",borderRadius:6,fontWeight:800,verticalAlign:"middle"}}>
+                    {t.linkedAccount||"🔗 Lié au compte"}
+                  </span>
+                }
+              </span>
+              <input
+                type="email"
+                value={p.email||(p.inviteStatus==="accepted"?p.inviteEmail:"")}
+                onChange={e=>setParent(i,"email",e.target.value)}
+                readOnly={emailLocked}
+                placeholder="email@exemple.com"
+                style={{...inp,
+                  background:emailLocked?C.sur:undefined,
+                  color:emailLocked?C.mut:undefined,
+                  cursor:emailLocked?"default":undefined,
+                }}
+              />
+            </div>
+          </div>
+          </>}
+        </div>
+      );})}
+      {cfg.parents.length >= 2
+        ? <div style={{fontSize:12,color:C.mut,textAlign:"center",padding:"10px 0 14px",fontStyle:"italic"}}>
+            👥 Maximum 2 parents atteint
+          </div>
+        : <button onClick={addParent} style={{width:"100%",height:44,padding:"0 16px",background:"transparent",color:C.ora,border:`1.5px dashed ${C.ora}`,marginBottom:14}}>{t.addParent}</button>}
+
+      <div className="sec">{t.children}</div>
+      {cfg.children.map((ch,i)=>{
+        const cKey=`c${i}`; const cErr=touched[cKey]&&!ch.name.trim();
+        const isLocked = i >= (perms?.maxChildren ?? 1); // enfant hors limite du plan
+        return (
+        <div key={i} style={{position:"relative",marginBottom:12}}>
+          <div className="card" style={{borderColor:cErr?C.red:`${C.vio}55`, filter: isLocked ? "blur(3px)" : "none", pointerEvents: isLocked ? "none" : "auto", userSelect: isLocked ? "none" : "auto", opacity: isLocked ? 0.7 : 1, transition:"filter .2s,opacity .2s"}}>
+          {/* Header — cliquable pour plier/déplier */}
+          <div onClick={()=>toggleChild(i)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:expandedChildren.has(i)?12:0,cursor:"pointer",userSelect:"none"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:11,fontWeight:800,color:C.vio,textTransform:"uppercase",letterSpacing:".06em"}}>{t.childN} {i+1}{ch.name.trim()?` — ${ch.name.trim()}`:""}</span>
+              <span style={{fontSize:16,color:C.mut,transition:"transform .2s",display:"inline-block",transform:expandedChildren.has(i)?"rotate(180deg)":"rotate(0deg)"}}>⌄</span>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              {!isChild && <button onClick={e=>{e.stopPropagation();if(!window.confirm(`Retirer ${ch.name.trim()||`l'enfant ${i+1}`} de la famille ?`)) return;removeChild(i);}} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12}}>{t.remove}</button>}
+            </div>
+          </div>
+
+          {expandedChildren.has(i) && <>
+          {/* Row 1 : Avatar | Nom */}
+          <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:12}}>
+            <div style={{...fieldBox,flexShrink:0}}>
+              <span style={lbl}>Avatar</span>
+              <div style={{height:IH,display:"flex",alignItems:"center"}}>
+                <AvatarPicker current={ch.avatar} color={C.vio} pool={CHILD_AVATARS} onSelect={em=>setChild(i,"avatar",em)} />
+              </div>
+            </div>
+            <div style={{...fieldBox,flex:1}}>
+              <span style={{...lbl,color:cErr?C.red:undefined}}>{t.name} <span style={{color:C.red}}>*</span></span>
+              <input value={ch.name} onChange={e=>setChild(i,"name",e.target.value)} onBlur={()=>markTouched(cKey)}
+                style={{...inp,borderColor:cErr?C.red:undefined,outline:cErr?`1px solid ${C.red}`:undefined}} />
+              {cErr&&<div style={{fontSize:11,color:C.red,marginTop:3}}>{t.nameRequired||"Le nom est obligatoire."}</div>}
+            </div>
+          </div>
+
+          {/* Row 2 : Jour naissance | Mois naissance | Année */}
+          <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:12}}>
+            <div style={{...fieldBox,flex:1}}>
+              <span style={lbl}>{t.birthDay}</span>
+              <input type="number" min="1" max="31" value={ch.birthDay} onChange={e=>setChild(i,"birthDay",e.target.value)} placeholder={t.dayPlaceholder||"JJ"} style={inp} />
+            </div>
+            <div style={{...fieldBox,flex:2}}>
+              <span style={lbl}>{t.birthMonth}</span>
+              <CustomSelect value={ch.birthMonth} onChange={v=>setChild(i,"birthMonth",v)} options={[
+                {value:"",label:"--"},
+                ...(t.months||[]).map((m,j)=>({value:pad(j+1),label:m}))
+              ]} />
+            </div>
+            <div style={{...fieldBox,flex:1}}>
+              <span style={lbl}>{t.childBirthYear||"Année"}</span>
+              <select value={ch.birthYear||""} onChange={e=>setChild(i,"birthYear",e.target.value)} style={{...inp,height:IH}}>
+                <option value="">----</option>
+                {Array.from({length:25},(_,k)=>new Date().getFullYear()-5-k).map(y=>(
+                  <option key={y} value={String(y)}>{y}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Row 3 : Téléphone + Email */}
+          <div style={{display:"flex",gap:10,marginBottom:0}}>
+            <div style={{...fieldBox,flex:1}}>
+              <span style={lbl}>📞 {t.contactsPhone||"Téléphone"}</span>
+              <input type="tel" value={ch.phone||""} onChange={e=>setChild(i,"phone",e.target.value)} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} style={inp} />
+            </div>
+            <div style={{...fieldBox,flex:1}}>
+              <span style={lbl}>✉️ Email</span>
+              <input type="email" value={ch.email||""} onChange={e=>setChild(i,"email",e.target.value)} placeholder="email@exemple.com" style={inp} />
+            </div>
+          </div>
+
+          {/* Row 4 : Santé (champs communs) */}
+          <div style={{marginTop:14,paddingTop:12,borderTop:`1px solid ${C.bor}`}}>
+            <div style={{fontSize:11,fontWeight:800,color:C.vio,textTransform:"uppercase",letterSpacing:".06em",marginBottom:10}}>{t.childHealth}</div>
+            <div style={{display:"flex",gap:10,marginBottom:10}}>
+              <div style={{...fieldBox,flex:2}}>
+                <span style={lbl}>{t.childAllergy}</span>
+                <input value={ch.allergy||""} onChange={e=>setChild(i,"allergy",e.target.value)} placeholder={t.childAllergyPh} style={inp} />
+              </div>
+              <div style={{...fieldBox,flex:1}}>
+                <span style={lbl}>{t.childBloodType}</span>
+                <select value={ch.bloodType||""} onChange={e=>setChild(i,"bloodType",e.target.value)} style={{...inp,height:IH}}>
+                  {["","A+","A-","B+","B-","AB+","AB-","O+","O-"].map(v=><option key={v} value={v}>{v||"--"}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Row 5 : Infos communes (école, médecin, urgences, notes) */}
+          {(() => {
+            const home = (typeof ch.home === 'object' && !Array.isArray(ch.home)) ? ch.home : {school:"",doctor:"",notes:"",emergencyContacts:""};
+            const canEdit = !isChild;
+            return (
+              <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.bor}`}}>
+                <div style={{display:"flex",gap:10,marginBottom:10}}>
+                  <div style={{...fieldBox,flex:1}}>
+                    <span style={lbl}>{t.childSchool}</span>
+                    <input disabled={!canEdit} value={home.school||""} onChange={e=>setChildHome(i,"school",e.target.value)}
+                      placeholder={t.childSchoolPh} style={inp} />
+                  </div>
+                </div>
+                <div style={{...fieldBox,marginBottom:10}}>
+                  <span style={lbl}>{t.childDoctor}</span>
+                  <input disabled={!canEdit} value={home.doctor||""} onChange={e=>setChildHome(i,"doctor",e.target.value)}
+                    placeholder={t.childDoctorPh} style={inp} />
+                </div>
+                <div style={{...fieldBox,marginBottom:10}}>
+                  <span style={lbl}>{t.childEmergency}</span>
+                  <textarea disabled={!canEdit} rows={2} value={home.emergencyContacts||""} onChange={e=>setChildHome(i,"emergencyContacts",e.target.value)}
+                    placeholder={t.childEmergencyPh} style={{...inp,height:"auto",resize:"vertical",padding:10}} />
+                </div>
+                <div style={fieldBox}>
+                  <span style={lbl}>{t.childNotes}</span>
+                  <textarea disabled={!canEdit} rows={2} value={home.notes||""} onChange={e=>setChildHome(i,"notes",e.target.value)}
+                    placeholder={t.childNotesPh} style={{...inp,height:"auto",resize:"vertical",padding:10}} />
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Row 7 : Lien d'invitation enfant */}
+          {ch.name.trim() && (
+            <ChildInviteBtn childIdx={i} childName={ch.name} childPhone={ch.phone} childEmail={ch.email||""}
+              childBirthYear={ch.birthYear||""} childBirthMonth={ch.birthMonth||""} childBirthDay={ch.birthDay||""}
+              parentName={cfg.parents[user?.parentIdx??0]?.name||""} />
+          )}
+          </>}
+          </div>
+          {/* Overlay lock pour enfants hors limite */}
+          {isLocked && (
+            <div onClick={onUpgrade} style={{position:"absolute",inset:0,borderRadius:12,background:"rgba(0,0,0,.18)",backdropFilter:"blur(0px)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,zIndex:10,cursor:"pointer"}}>
+              <div style={{background:C.card,border:`1.5px solid ${C.vio}`,borderRadius:12,padding:"12px 20px",textAlign:"center",boxShadow:"0 4px 16px rgba(0,0,0,.18)"}}>
+                <div style={{fontSize:22,marginBottom:4}}>🔒</div>
+                <div style={{fontSize:12,fontWeight:900,color:C.vio,marginBottom:2}}>Enfant {i+1} — Plan supérieur requis</div>
+                <div style={{fontSize:11,color:C.mut,marginBottom:8}}>{i===1?"Trial Premium : jusqu'à 2 enfants":"Premium : enfants illimités"}</div>
+                <div style={{padding:"5px 14px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",borderRadius:8,fontSize:11,fontWeight:800}}>⭐ Passer au Premium</div>
+              </div>
+            </div>
+          )}
+        </div>
+      );})}
+      {(cfg.children.length>=(perms?.maxChildren??1))
+        ? <button onClick={onUpgrade} style={{width:"100%",height:44,padding:"0 16px",background:`${C.vio}11`,color:C.vio,border:`1.5px dashed ${C.vio}`,marginBottom:12}}>{t.lockChildren}</button>
+        : <button onClick={addChild} style={{width:"100%",height:44,padding:"0 16px",background:"transparent",color:C.vio,border:`1.5px dashed ${C.vio}`,marginBottom:12}}>{t.addChild}</button>}
+    </div>
+  );
+}
+
+// ─── PARENT INVITE SHARE BUTTONS ─────────────────────────────────────────────
+function ParentInviteShareBtns({ C, parent, familyName }) {
+  const { t } = useApp();
+  function cleanPhoneWA(phone) {
+    if (!phone) return null;
+    let p = phone.replace(/[\s.\-()+]/g, "");
+    if (p.startsWith("00")) p = p.slice(2);
+    else if (p.startsWith("0")) p = "33" + p.slice(1);
+    return p || null;
+  }
+
+  const msg = `Bonjour 👋\n${familyName} t'invite à rejoindre la famille sur Duvia.\nCrée ton compte ici :\n${parent.inviteUrl}`;
+
+  function handleSMS() {
+    const phone = parent.invitePhone ? parent.invitePhone.replace(/[\s.\-()+]/g,"") : "";
+    window.open(`sms:${phone}?&body=${encodeURIComponent(msg)}`, "_blank");
+  }
+
+  function handleWhatsApp() {
+    const phone = cleanPhoneWA(parent.invitePhone);
+    window.open(`https://wa.me/${phone||""}?text=${encodeURIComponent(msg)}`, "_blank");
+  }
+
+  function handleEmail() {
+    const subject = encodeURIComponent(`Rejoins notre famille sur Duvia 👨‍👩‍👧`);
+    const href = `mailto:${parent.inviteEmail||""}?subject=${subject}&body=${encodeURIComponent(msg)}`;
+    const a = document.createElement("a");
+    a.href = href;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  return (
+    <div style={{marginBottom:12,paddingBottom:12,borderBottom:`1px solid ${C.bor}`}}>
+      <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:8}}>
+        {t.sendInviteLink}
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <button onClick={handleSMS} style={{
+          padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",
+          background:"#25D36618",color:"#128C7E",border:"1.5px solid #25D36644",
+        }}>💬 SMS</button>
+        <button onClick={handleWhatsApp} style={{
+          padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",
+          background:"#25D36618",color:"#25D366",border:"1.5px solid #25D36644",
+        }}>📱 WhatsApp</button>
+        <button onClick={handleEmail} style={{
+          padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",
+          background:`${C.vio}12`,color:C.vio,border:`1.5px solid ${C.vio}44`,
+        }}>✉️ Email</button>
+      </div>
+      {!parent.invitePhone && (
+        <div style={{fontSize:10,color:C.mut,marginTop:5}}>
+          {t.reinviteNumberTip}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── CHILD INVITE BUTTON ─────────────────────────────────────────────────────
+function calcChildAge(year, month, day) {
+  if (!year || !parseInt(year)) return null;
+  const today = new Date();
+  const born = new Date(parseInt(year), parseInt(month||1)-1, parseInt(day||1));
+  let age = today.getFullYear() - born.getFullYear();
+  const m = today.getMonth() - born.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < born.getDate())) age--;
+  return age;
+}
+
+function ChildInviteBtn({ childIdx, childName, childPhone, childEmail, childBirthYear, childBirthMonth, childBirthDay, parentName }) {
+  const { C, t, familySync } = useApp();
+  const [inviteUrl, setInviteUrl] = useState("");
+  const [loading, setLoading]     = useState(false);
+  const [copied, setCopied]       = useState(false);
+  const [errMsg, setErrMsg]       = useState("");
+  const [showConsent, setShowConsent] = useState(false);
+  const [consented, setConsented]     = useState(false);
+  const childAge = calcChildAge(childBirthYear, childBirthMonth, childBirthDay);
+  const needsConsent = childAge !== null && childAge < 15;
+
+  function cleanPhoneWA(phone) {
+    if (!phone) return null;
+    let p = phone.replace(/[\s.\-()+]/g, "");
+    if (p.startsWith("00")) p = p.slice(2);
+    else if (p.startsWith("0")) p = "33" + p.slice(1);
+    return p || null;
+  }
+
+  // Génère un token via Supabase (invalide l'ancien pour cet enfant).
+  async function getOrGenUrl() {
+    if (inviteUrl) return inviteUrl;
+      if (needsConsent && !consented) { setShowConsent(true); return null; }
+      if (needsConsent && !consented) { setShowConsent(true); return null; }
+    setErrMsg(""); setLoading(true);
+    try {
+      const fid = familySync?.familyId;
+      if (!fid) return null;
+      const { data, error } = await supabase.rpc("create_child_invitation", {
+        p_family_id: fid,
+        p_child_idx: childIdx,
+        p_child_name: childName || "",
+      });
+      if (error || !data) { console.error("[Duvia] create_child_invitation:", error); setErrMsg(error?.message||"Erreur lors de la génération du lien. Vérifie que la migration SQL 0022 est appliquée."); return null; }
+      const qp = new URLSearchParams({ cinv: data });
+      if (childName) qp.set("cname", encodeURIComponent(childName));
+      if (childPhone) qp.set("cphone", encodeURIComponent(childPhone));
+      if (childBirthYear) qp.set("cborn", encodeURIComponent(childBirthYear));
+      if (needsConsent && consented) qp.set("cconsent", "1");
+      const url = `https://app.duvia.fr/?${qp.toString()}`;
+      setInviteUrl(url);
+      return url;
+    } finally { setLoading(false); }
+  }
+
+  function msgText(url) {
+    return `Bonjour ${childName} 👋\nRejoins notre famille sur Duvia !\nClique ici pour créer ton compte :\n${url}`;
+  }
+
+  async function handleSMS() {
+    const url = await getOrGenUrl(); if (!url) return;
+    const phone = childPhone ? childPhone.replace(/[\s.\-()+]/g,"") : "";
+    window.open(`sms:${phone}?&body=${encodeURIComponent(msgText(url))}`, "_blank");
+  }
+
+  async function handleWhatsApp() {
+    const url = await getOrGenUrl(); if (!url) return;
+    const phone = cleanPhoneWA(childPhone);
+    window.open(`https://wa.me/${phone||""}?text=${encodeURIComponent(msgText(url))}`, "_blank");
+  }
+
+  async function handleEmail() {
+    const url = await getOrGenUrl(); if (!url) return;
+    const subject = encodeURIComponent(`Rejoins notre famille sur Duvia 👨‍👩‍👧`);
+    const to = childEmail ? encodeURIComponent(childEmail) : "";
+    window.open(`mailto:${to}?subject=${subject}&body=${encodeURIComponent(msgText(url))}`, "_blank");
+  }
+
+  async function handleCopy() {
+    const url = await getOrGenUrl(); if (!url) return;
+    try { await navigator.clipboard.writeText(url); } catch { /* fallback silencieux */ }
+    setCopied(true); setTimeout(() => setCopied(false), 2500);
+  }
+
+  const invLabel = (t.childInviteTitle || "📨 Inviter {name} à rejoindre l'app").replace("{name}", childName || "");
+  const genLabel = loading
+    ? (t.childInviteGenerating || "⏳ Génération…")
+    : (t.childInviteGenerate || "🔗 Générer le lien pour {name}").replace("{name}", childName || "");
+
+  // ── Modale de consentement parental (< 15 ans) ──────────────────────────
+  if (showConsent) return (
+    <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.bor}`}}>
+      <div style={{background:`${C.ora}12`,border:`1.5px solid ${C.ora}55`,borderRadius:12,padding:16}}>
+        <div style={{fontSize:13,fontWeight:900,color:C.ora,marginBottom:10}}>⚠️ {t.childConsentTitle||"Autorisation parentale requise"}</div>
+        <label style={{display:"flex",gap:10,alignItems:"flex-start",cursor:"pointer",marginBottom:12}}>
+          <input type="checkbox" checked={consented} onChange={e=>setConsented(e.target.checked)}
+            style={{width:18,height:18,marginTop:2,flexShrink:0,accentColor:C.vio,cursor:"pointer"}} />
+          <span style={{fontSize:12,color:C.txt,lineHeight:1.7}}>
+            {(t.childConsentText||"Je soussigné(e), parent ou tuteur légal de {name}, autorise mon enfant mineur à accéder à l'application Duvia...").replace("{name}", childName||"l'enfant")}
+          </span>
+        </label>
+        <div style={{display:"flex",gap:8}}>
+          <button disabled={!consented} onClick={async()=>{setShowConsent(false);const url=await getOrGenUrl();if(!url)setShowConsent(true);}}
+            style={{flex:1,height:42,background:consented?`linear-gradient(135deg,${C.vio},${C.blu})`:C.bor,color:"#fff",border:"none",borderRadius:10,fontWeight:800,fontSize:13,cursor:consented?"pointer":"not-allowed"}}>
+            {t.childConsentConfirm||"Je confirme et génère le lien"}
+          </button>
+          <button onClick={()=>{setShowConsent(false);setConsented(false);}}
+            style={{height:42,padding:"0 16px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:10,fontWeight:700,fontSize:13}}>
+            {t.cancel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.bor}`}}>
+      <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:8}}>{invLabel}</div>
+      {errMsg && <div style={{fontSize:11,color:C.red,marginBottom:8,lineHeight:1.4}}>⚠️ {errMsg}</div>}
+      {!inviteUrl ? (
+        <button onClick={handleCopy} disabled={loading}
+          style={{width:"100%",height:38,background:loading?C.bor:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:10,fontWeight:800,fontSize:12,cursor:loading?"wait":"pointer",marginBottom:6}}>
+          {genLabel}
+        </button>
+      ) : (
+        <>
+          <div style={{fontSize:11,color:C.grn,marginBottom:8}}>✅ {t.childInviteValid||"Lien valable 30 jours."}</div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:6}}>
+            <button onClick={handleSMS} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:"#25D36618",color:"#128C7E",border:"1.5px solid #25D36644"}}>💬 SMS</button>
+            <button onClick={handleWhatsApp} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:"#25D36618",color:"#25D366",border:"1.5px solid #25D36644"}}><span style={{fontSize:14}}>📱</span> WhatsApp</button>
+            <button onClick={handleEmail} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:`${C.vio}18`,color:C.vio,border:`1.5px solid ${C.vio}44`}}>✉️ Email</button>
+            <button onClick={handleCopy} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:copied?`${C.grn}18`:C.sur,color:copied?C.grn:C.mut,border:`1.5px solid ${C.bor}`}}>
+              {copied ? "✅ Copié !" : "📋 Copier"}
+            </button>
+          </div>
+          <button onClick={()=>setInviteUrl("")} style={{fontSize:11,color:C.mut,background:"none",border:"none",cursor:"pointer",textDecoration:"underline",padding:0}}>↩️ Regénérer un lien</button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── NATIONAL HOLIDAYS PICKER ────────────────────────────────────────────────
+function NatHolPicker() {
+  const {C,t,cfg,setCfg} = useApp();
+  const fixed = NAT_HOLS_FIXED[cfg.country] || [];
+  const easterHols = NAT_HOLS_EASTER[cfg.country] || [];
+  const y = +cfg.custody.startYear || new Date().getFullYear();
+  const e = easterDate(y);
+  const addD = (dt, n) => { const r = new Date(dt); r.setDate(r.getDate() + n); return r; };
+
+  const allHols = [
+    ...fixed.map(h => ({
+      key: `${h.m}-${h.d}`,
+      name: h.n,
+      date: `${pad(h.d)}/${pad(h.m)}`,
+    })),
+    ...easterHols.map(([offset, name]) => {
+      const hd = addD(e, offset);
+      return {
+        key: `easter+${offset}`,
+        name,
+        date: `${pad(hd.getDate())}/${pad(hd.getMonth() + 1)}`,
+      };
+    }),
+  ];
+
+  const active = cfg.activeNatHols || allHols.map(h => h.key);
+
+  function toggle(key) {
+    const next = active.includes(key)
+      ? active.filter(k => k !== key)
+      : [...active, key];
+    setCfg(c => ({ ...c, activeNatHols: next }));
+  }
+
+  function toggleAll() {
+    const next = active.length === allHols.length ? [] : allHols.map(h => h.key);
+    setCfg(c => ({ ...c, activeNatHols: next }));
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <span style={{ fontSize: 13, fontWeight: 800, color: C.txt }}>📅 {t.natHols}</span>
+        <button onClick={toggleAll}
+          style={{ padding: "4px 10px", background: "transparent", color: C.vio, border: `1px solid ${C.vio}`, fontSize: 11, borderRadius: 8 }}>
+          {active.length === allHols.length ? t.applyNone : t.applyAll}
+        </button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(170px,1fr))", gap: 6 }}>
+        {allHols.map(h => {
+          const on = active.includes(h.key);
+          return (
+            <label key={h.key}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: on ? `${C.red}11` : C.bg, borderRadius: 8, border: `1.5px solid ${on ? C.red : C.bor}`, cursor: "pointer", transition: "all .15s" }}>
+              <input type="checkbox" checked={on} onChange={() => toggle(h.key)} />
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.txt }}>{h.name}</div>
+                <div style={{ fontSize: 10, color: C.mut, fontFamily: "JetBrains Mono" }}>{h.date}</div>
+              </div>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── ZONE DROPDOWN ────────────────────────────────────────────────────────────
+function ZoneDropdown({chCountry, chCurSub, chSubs, chSetZone, noZoneLabel, locked=false}) {
+  const {C, onUpgrade} = useApp();
+  const [open, setOpen] = useState(false);
+  const isFR = chCountry === "FR";
+  const frZoneOptions = isFR ? ["A","B","C"].map(zl => ({
+    zl,
+    code: chSubs.filter(s=>s.label.includes(`Zone ${zl}`))[0]?.code || "",
+    regions: chSubs.filter(s=>s.label.includes(`Zone ${zl}`)).map(s=>s.label.replace(/^Zone [ABC] — /,"")).join(", ")
+  })) : [];
+  const options = isFR
+    ? [{value:"", label: noZoneLabel}, ...frZoneOptions.map(o=>({value:o.zl, label:`Zone ${o.zl}`, sub:o.regions, code:o.code}))]
+    : [{value:"", label: noZoneLabel}, ...[...chSubs].sort((a,b)=>a.label.localeCompare(b.label,"fr",{sensitivity:"base"})).map(s=>({value:s.code, label:s.label, code:s.code}))];
+  const curValue = isFR
+    ? (chSubs.find(s=>s.code===chCurSub)?.label.match(/Zone ([ABC])/)?.[1] || "")
+    : chCurSub || "";
+  const curLabel = options.find(o=>o.value===curValue)?.label || noZoneLabel;
+
+  function select(opt) {
+    if(!opt.value) { chSetZone("",""); }
+    else if(isFR) { const fo=frZoneOptions.find(o=>o.zl===opt.value); if(fo) chSetZone(fo.code,""); }
+    else { chSetZone(opt.value,""); }
+    setOpen(false);
+  }
+
+  if(locked) return (
+    <button onClick={onUpgrade} style={{width:"100%",height:36,padding:"0 14px",background:`${C.ora}10`,border:`1.5px dashed ${C.ora}66`,borderRadius:10,display:"inline-flex",alignItems:"center",gap:8,fontSize:12,fontWeight:800,color:C.ora,cursor:"pointer",boxSizing:"border-box"}}>
+      <span>🔒</span><span>Réservé Premium</span>
+    </button>
+  );
+  return (
+    <div style={{position:"relative"}}>
+      {open && <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:199}} />}
+      <button onClick={()=>setOpen(v=>!v)}
+        style={{width:"100%",height:44,padding:"0 16px",background:C.card,border:`1.5px solid ${open?C.vio:C.bor}`,borderRadius:12,display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,color:C.txt,cursor:"pointer",boxSizing:"border-box"}}>
+        <span style={{flex:1,textAlign:"left",color:curValue?C.txt:C.mut,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{curLabel}</span>
+        <span style={{fontSize:10,color:C.mut,transition:"transform .2s",display:"inline-block",transform:open?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>▼</span>
+      </button>
+      {open && (
+        <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,right:0,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:16,zIndex:300,boxShadow:"0 12px 40px rgba(0,0,0,.2)",overflow:"hidden",maxHeight:260,overflowY:"auto"}}>
+          {options.map((opt,i)=>{
+            const isActive = opt.value === curValue;
+            return (
+              <button key={i} onClick={()=>select(opt)}
+                style={{width:"100%",padding:"0 16px",minHeight:opt.sub?52:44,background:isActive?`${C.vio}10`:"transparent",color:isActive?C.vio:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:i<options.length-1?`1px solid ${C.bor}`:"none",fontSize:13,fontWeight:isActive?700:600,borderRadius:0,cursor:"pointer",textAlign:"left",boxSizing:"border-box"}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{opt.label}</div>
+                  {opt.sub && <div style={{fontSize:10,color:C.mut,fontWeight:400,marginTop:1,whiteSpace:"normal",lineHeight:1.3}}>{opt.sub}</div>}
+                </div>
+                {isActive && <span style={{fontSize:14,color:C.vio,flexShrink:0}}>✓</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Toggle({checked, onChange}) {
+  const {C} = useApp();
+  return (
+    <div onClick={()=>onChange(!checked)} style={{width:44,height:24,borderRadius:12,background:checked?C.vio:`${C.mut}44`,cursor:"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
+      <div style={{position:"absolute",top:3,left:checked?22:3,width:18,height:18,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.25)",transition:"left .2s"}} />
+    </div>
+  );
+}
+
+function CustomSelect({value, onChange, options, style}) {
+  const {C} = useApp();
+  const [open, setOpen] = useState(false);
+  const cur = options.find(o=>String(o.value)===String(value)) || options[0];
+
+  return (
+    <div style={{position:"relative",...style}}>
+      {open && <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:199}} />}
+      <button onClick={()=>setOpen(v=>!v)}
+        style={{width:"100%",height:44,padding:"0 16px",background:C.card,border:`1.5px solid ${open?C.vio:C.bor}`,borderRadius:12,display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,color:C.txt,cursor:"pointer",boxSizing:"border-box"}}>
+        {cur?.icon && <span style={{fontSize:18,flexShrink:0}}>{cur.icon}</span>}
+        <span style={{flex:1,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cur?.label||""}</span>
+        <span style={{fontSize:10,color:C.mut,transition:"transform .2s",display:"inline-block",transform:open?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>▼</span>
+      </button>
+      {open && (
+        <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,right:0,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:16,zIndex:300,boxShadow:"0 12px 40px rgba(0,0,0,.2)",overflow:"hidden",maxHeight:Math.min(280,options.length*44+2),overflowY:"auto"}}>
+          {options.map((o,i)=>{
+            const isActive = String(o.value)===String(value);
+            return (
+              <button key={o.value} onClick={()=>{onChange(o.value);setOpen(false);}}
+                style={{width:"100%",padding:"0 16px",height:44,background:isActive?`${C.vio}10`:"transparent",color:isActive?C.vio:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:i<options.length-1?`1px solid ${C.bor}`:"none",fontSize:13,fontWeight:isActive?700:600,borderRadius:0,cursor:"pointer",boxSizing:"border-box"}}>
+                {o.icon && <span style={{fontSize:18,flexShrink:0}}>{o.icon}</span>}
+                <span style={{flex:1,textAlign:"left"}}>{o.label}</span>
+                {isActive && <span style={{fontSize:14,color:C.vio,flexShrink:0}}>✓</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CountryDropdown({value, onChange}) {
+  const {C} = useApp();
+  const [open, setOpen] = useState(false);
+  const sorted = [...COUNTRIES].sort((a,b)=>a.name.localeCompare(b.name,"fr",{sensitivity:"base"}));
+  const cur = COUNTRIES.find(c=>c.code===value) || COUNTRIES[0];
+  return (
+    <div style={{position:"relative"}}>
+      {open && <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:199}} />}
+      <button onClick={()=>setOpen(v=>!v)}
+        style={{width:"100%",height:44,padding:"0 16px",background:C.card,border:`1.5px solid ${open?C.vio:C.bor}`,borderRadius:12,display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,color:C.txt,cursor:"pointer",boxSizing:"border-box"}}>
+        <span style={{fontSize:18,flexShrink:0}}>{cur.flag}</span>
+        <span style={{flex:1,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cur.name}</span>
+        <span style={{fontSize:10,color:C.mut,transition:"transform .2s",display:"inline-block",transform:open?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>▼</span>
+      </button>
+      {open && (
+        <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,right:0,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:16,zIndex:300,boxShadow:"0 12px 40px rgba(0,0,0,.2)",overflow:"hidden",maxHeight:280,overflowY:"auto"}}>
+          {sorted.map((c,i)=>{
+            const isActive = c.code===value;
+            return (
+              <button key={c.code} onClick={()=>{onChange(c.code);setOpen(false);}}
+                style={{width:"100%",padding:"0 16px",height:44,background:isActive?`${C.vio}10`:"transparent",color:isActive?C.vio:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:i<sorted.length-1?`1px solid ${C.bor}`:"none",fontSize:13,fontWeight:isActive?700:600,borderRadius:0,cursor:"pointer",boxSizing:"border-box"}}>
+                <span style={{fontSize:18,flexShrink:0}}>{c.flag}</span>
+                <span style={{flex:1,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span>
+                {isActive && <span style={{fontSize:14,color:C.vio,flexShrink:0}}>✓</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── STEP 2: SPECIAL DATES ────────────────────────────────────────────────────
+function StepDates() {
+  const {C,t,cfg,setCfg,prem,perms,onUpgrade,apiData,apiLoading} = useApp();
+  const sd=cfg.specialDates;
+  const [openHol,setOpenHol]=useState(null);
+
+  // ── Mode multi-enfant ──────────────────────────────────────────────────────
+  const children = cfg.children || [];
+  const multiChild = !cfg.sameGuardAll && children.length > 1;
+
+  function updSD(f,v){setCfg(c=>({...c,specialDates:{...c.specialDates,[f]:v}}));}
+  function tSD(f,k,v){setCfg(c=>({...c,specialDates:{...c.specialDates,[f]:{...c.specialDates[f],[k]:v}}}));}
+  function setPB(i,f,v){setCfg(c=>{const a=[...(c.specialDates.parentBirths||[])];a[i]={...(a[i]||{}),[f]:v};return{...c,specialDates:{...c.specialDates,parentBirths:a}};});}
+  function setPCB(i,f,v){setCfg(c=>{const a=[...(c.specialDates.childBirths||[])];a[i]={...(a[i]||{}),[f]:v};return{...c,specialDates:{...c.specialDates,childBirths:a}};});}
+  // ── Per-child special dates helpers ──────────────────────────────────────
+  function getChildSD(childId) {
+    return cfg.specialDates?.perChild?.[childId] || {};
+  }
+  function setChildSD(childId, field, value) {
+    setCfg(c => ({...c, specialDates:{...c.specialDates,
+      perChild:{...(c.specialDates.perChild||{}),
+        [childId]:{...(c.specialDates.perChild?.[childId]||{}), [field]:value}
+      }
+    }}));
+  }
+  function setChildPB(childId, i, field, value) {
+    setCfg(c => {
+      const perChildEntry = c.specialDates?.perChild?.[childId] || {};
+      const pbs = [...(perChildEntry.parentBirths || [])];
+      pbs[i] = {...(pbs[i]||{}), [field]:value};
+      return {...c, specialDates:{...c.specialDates,
+        perChild:{...(c.specialDates.perChild||{}),
+          [childId]:{...perChildEntry, parentBirths:pbs}
+        }
+      }};
+    });
+  }
+  function setChildCB(childId, field, value) {
+    setCfg(c => ({...c, specialDates:{...c.specialDates,
+      perChild:{...(c.specialDates.perChild||{}),
+        [childId]:{...(c.specialDates.perChild?.[childId]||{}), [field]:value}
+      }
+    }}));
+  }
+  function getChildCountry(childId) {
+    return cfg.childrenCountry?.[childId] || cfg.country || "FR";
+  }
+  function setChildCountry(childId, country) {
+    setCfg(c => ({...c, childrenCountry:{...(c.childrenCountry||{}), [childId]:country}}));
+  }
+  function setHD(hn,ds,pi){
+    const det={...getHolDetails()};
+    if(pi===undefined){const copy={...(det[hn]||{})};delete copy[ds];det[hn]=copy;}
+    else{det[hn]={...(det[hn]||{}),[ds]:pi};}
+    setHolDetails(det);
+  }
+  const syr=schoolYearStart();
+  // Shared field styles — same as StepId
+  const IH = 36;
+  const fld = {display:"flex",flexDirection:"column"};
+  const lbl = {fontSize:10,fontWeight:700,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:4,minHeight:16};
+  const inp = {height:IH,boxSizing:"border-box",width:"100%"};
+
+  return (
+    <div>
+      {/* ── Même garde pour tous les enfants — caché si 1 seul enfant ──────── */}
+      {cfg.children.length > 1 && (
+      <div className="card" style={{marginBottom:16,borderColor:cfg.sameGuardAll?C.bor:C.vio,borderWidth:"1.5px"}}>
+        <label style={{display:"flex",alignItems:"center",gap:12,cursor:prem?"pointer":"not-allowed",opacity:prem?1:0.6}} onClick={!prem?onUpgrade:undefined}>
+          <div style={{
+            width:44,height:26,borderRadius:13,flexShrink:0,position:"relative",transition:"background .2s",
+            background:prem&&cfg.sameGuardAll?C.vio:C.bor,
+          }}>
+            <div style={{
+              position:"absolute",top:3,left:prem&&cfg.sameGuardAll?20:3,
+              width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left .2s",
+              boxShadow:"0 1px 3px rgba(0,0,0,.2)"
+            }}/>
+            <input type="checkbox" checked={prem?cfg.sameGuardAll:false} disabled={!prem}
+              onChange={e=>prem&&setCfg(c=>({...c,sameGuardAll:e.target.checked}))}
+              style={{position:"absolute",opacity:0,width:"100%",height:"100%",cursor:"pointer",margin:0}} />
+          </div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:14,fontWeight:800,color:C.txt,display:"flex",alignItems:"center",gap:6}}>
+              {t.sameGuard}
+              {!prem&&<span className="badge" style={{background:`${C.ora}10`,color:C.ora,border:`1px dashed ${C.ora}66`}}>🔒 Réservé Premium</span>}
+            </div>
+            <div style={{fontSize:11,color:C.mut,marginTop:2,lineHeight:1.4}}>
+              {prem&&cfg.sameGuardAll
+                ? "✅ Planning identique pour tous les enfants"
+                : prem
+                  ? "⚙️ Chaque enfant a sa propre zone scolaire et ses propres vacances"
+                  : "Passez en Premium pour personnaliser par enfant"}
+            </div>
+          </div>
+        </label>
+      </div>
+      )}
+
+      {/* Start date */}
+      <div className="sec">{t.startDate}</div>
+      <div className="card" style={{marginBottom:16}}>
+        <div style={{display:"flex",gap:10,alignItems:"flex-end"}}>
+          <div style={{...fld,flex:1}}>
+            <span style={lbl}>{t.month}</span>
+            <select value={cfg.custody.startMonth} onChange={e=>setCfg(c=>({...c,custody:{...c.custody,startMonth:e.target.value}}))} style={inp}>
+              {t.months.map((m,i)=><option key={i} value={pad(i+1)}>{m}</option>)}
+            </select>
+          </div>
+          <div style={{...fld,flex:1}}>
+            <span style={lbl}>{t.year}</span>
+            <input type="number" value={cfg.custody.startYear} onChange={e=>setCfg(c=>({...c,custody:{...c.custody,startYear:e.target.value}}))} style={inp} />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Bloc pays / zone : simplifié si garde identique pour tous ───────── */}
+      {!multiChild ? (
+        (() => {
+          const ch0 = children[0] || {id:"global"};
+          const chId = ch0.id;
+          const chCountry = getChildCountry(chId);
+          const chZone = { subdivisionCode: cfg.subdivisionCode||"", zone: cfg.zone||"" };
+          const chSubs = OH_SUBS_CATALOG[chCountry] || [];
+          const chCurSub = chZone.subdivisionCode || "";
+          const chHols = getHolsFromData(chCountry, apiData, chCurSub||chZone.zone);
+          const chOpen = openHol && !openHol.includes("::") ? openHol : null;
+          const setChOpen = (hn) => setOpenHol(hn || null);
+          const chGetHolDetails=()=> { return sd.schoolHolDetails || {}; };
+          const chSetHolDetails=(newDet)=> { setCfg(c=>({...c, specialDates:{...c.specialDates, schoolHolDetails:newDet}})); };
+          const chSetHD=(hn,ds,pi)=> { const det={...chGetHolDetails()}; if(pi===undefined){const copy={...(det[hn]||{})};delete copy[ds];det[hn]=copy;}else{det[hn]={...(det[hn]||{}),[ds]:pi};} chSetHolDetails(det); };
+          const chSetZone=(subdivisionCode, zone)=> { setCfg(c=>({...c, subdivisionCode, zone})); };
+          const chMD = sd.motherDay || {enabled:false};
+          const chFD = sd.fatherDay || {enabled:false};
+          const chPB = sd.parentBirths || [];
+          const chEvenIdx = sd.evenParentIdx ?? 0;
+          const chOddIdx = sd.oddParentIdx ?? 1;
+
+          return (
+            <div style={{marginBottom:16,border:`1.5px solid ${C.bor}`,borderRadius:14,overflow:"hidden"}}>
+              <div style={{padding:"14px 14px 4px"}}>
+
+                {/* Pays */}
+                <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>{t.country}</div>
+                <div style={{marginBottom:12}}>
+                  <CountryDropdown value={chCountry} onChange={v=>{
+                    setCfg(c=>({...c,country:v,activeNatHols:null,zone:"",subdivisionCode:""}));
+                    if(children[0]) setChildCountry(children[0].id, v);
+                  }} />
+                </div>
+
+                {/* Zone scolaire */}
+                <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>{t.zone} — {t.schoolYear} {syr}/{syr+1}</div>
+                <div style={{marginBottom:12}}>
+                  {chSubs.length > 0 ? (
+                    <ZoneDropdown chCountry={chCountry} chCurSub={chCurSub} chSubs={chSubs} chSetZone={chSetZone} noZoneLabel={t.noZone} locked={!perms?.zoneChoice} />
+                  ) : (
+                    <div style={{fontSize:12,color:C.mut,fontStyle:"italic"}}>{t.noZone} — {chCountry}</div>
+                  )}
+                </div>
+
+                {/* Vacances scolaires */}
+                {chHols.length > 0 && (
+                  <div style={{marginBottom:12}}>
+                    <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>{t.schoolHols}</div>
+                    {chHols.map((hol,hi)=>{
+                      const isOpen = chOpen === hol.n;
+                      const det = chGetHolDetails()[hol.n]||{};
+                      const days = daysRange(hol.s,hol.e);
+                      const assignedCount = Object.keys(det).length;
+                      return (
+                        <div key={hi} style={{marginBottom:6,border:`1.5px solid ${C.bor}`,borderRadius:10,overflow:"hidden"}}>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 11px",background:C.sur,cursor:"pointer"}} onClick={e=>{const s=nearestScroller(e.currentTarget);const restore=lockScroll(s);setChOpen(isOpen?null:hol.n);requestAnimationFrame(restore);}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <span style={{fontWeight:700,fontSize:12,color:C.grn}}>🌿 {hol.n}</span>
+                              <span style={{fontSize:10,color:C.mut,fontFamily:"JetBrains Mono"}}>{hol.s.slice(8)}/{hol.s.slice(5,7)} → {hol.e.slice(8)}/{hol.e.slice(5,7)}</span>
+                            </div>
+                            <div style={{display:"flex",alignItems:"center",gap:6}}>
+                              {assignedCount>0 && <span style={{fontSize:10,background:`${C.grn}22`,color:C.grn,padding:"2px 6px",borderRadius:6,fontWeight:700}}>{assignedCount}/{days.length}j</span>}
+                              <span style={{color:C.vio,fontSize:10}}>{isOpen?"▲":"▼"}</span>
+                            </div>
+                          </div>
+                          {isOpen && (
+                            <div style={{padding:"10px 11px"}}>
+                              {/* Boutons tout assigner */}
+                              <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
+                                {cfg.parents.map((p,pi)=>(
+                                  <button key={pi} onClick={()=>{const base=chGetHolDetails();const newDet={...base,[hol.n]:{...(base[hol.n]||{})}};days.forEach(d2=>{newDet[hol.n][d2]=pi;});chSetHolDetails(newDet);}} style={{padding:"4px 10px",background:`${p.color}22`,color:p.color,border:`1.5px solid ${p.color}`,borderRadius:20,fontSize:11,fontWeight:700}}>Tout → {p.name||`P${pi+1}`}</button>
+                                ))}
+                                <button onClick={()=>{const base=chGetHolDetails();chSetHolDetails({...base,[hol.n]:{}});}} style={{padding:"4px 8px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,borderRadius:20,fontSize:11}}>Effacer</button>
+                              </div>
+                              {/* Vue par semaines */}
+                              {(()=>{
+                                // Découper les jours en semaines (lun→dim)
+                                const weeks=[];
+                                let week=[];
+                                days.forEach(ds2=>{
+                                  const d2=new Date(ds2+"T12:00:00");
+                                  const dw2=dow(d2.getFullYear(),d2.getMonth(),d2.getDate());
+                                  week.push({ds:ds2,dw:dw2});
+                                  if(dw2===6||ds2===days[days.length-1]){weeks.push(week);week=[];}
+                                });
+                                return weeks.map((wk,wi)=>{
+                                  // Résumé de la semaine
+                                  const wkPiCounts={};
+                                  wk.forEach(({ds})=>{const pi=det[ds];if(pi!==undefined)wkPiCounts[pi]=(wkPiCounts[pi]||0)+1;});
+                                  const totalAssigned=Object.values(wkPiCounts).reduce((a,b)=>a+b,0);
+                                  const dominantPi=Object.keys(wkPiCounts).length===1?Number(Object.keys(wkPiCounts)[0]):undefined;
+                                  const wkLabel=`${wk[0].ds.slice(8)}/${wk[0].ds.slice(5,7)} → ${wk[wk.length-1].ds.slice(8)}/${wk[wk.length-1].ds.slice(5,7)}`;
+                                  const wkColor=dominantPi!==undefined?cfg.parents[dominantPi]?.color:C.bor;
+                                  return (
+                                    <WeekRow key={wi} wk={wk} wkPiCounts={wkPiCounts} dominantPi={dominantPi} wkColor={wkColor} wkLabel={wkLabel}
+                                      hol={hol} det={det} chGetHolDetails={chGetHolDetails} chSetHolDetails={chSetHolDetails} chSetHD={chSetHD}
+                                      cfg={cfg} C={C} t={t} />
+                                  );
+                                });
+                              })()}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Fêtes mères/pères */}
+                <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>{t.stepDates}</div>
+                <div style={{marginBottom:12,border:`1px solid ${C.bor}`,borderRadius:10,overflow:"hidden"}}>
+                  {[{k:"motherDay",l:t.motherDay,d:t.motherDayInfo,val:chMD},{k:"fatherDay",l:t.fatherDay,d:t.fatherDayInfo,val:chFD}].map(({k,l,d,val},ki)=>(
+                    <div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",borderBottom:ki===0?`1px solid ${C.bor}`:"none",background:C.card}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>{l}{!prem&&<span className="badge" style={{background:`${C.ora}10`,color:C.ora,border:`1px dashed ${C.ora}66`}}>🔒 Réservé Premium</span>}</div>
+                        <div style={{fontSize:11,color:C.mut}}>{d}</div>
+                      </div>
+                      {prem ? (
+                        <Toggle checked={!!val?.enabled} onChange={v=>updSD(k,{enabled:v})} />
+                      ) : (
+                        <button onClick={onUpgrade} style={{padding:"5px 10px",background:`${C.ora}10`,color:C.ora,border:`1.5px dashed ${C.ora}66`,borderRadius:8,fontSize:11,fontWeight:800}}>🔒 Réservé Premium</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Anniversaires des parents */}
+                <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>{t.parentBirthdays}</div>
+                <div style={{marginBottom:12,border:`1px solid ${C.bor}`,borderRadius:10,overflow:"hidden"}}>
+                  {cfg.parents.map((p,pi)=>{
+                    const pb = chPB[pi] || {enabled:false,parentIdx:pi};
+                    return (
+                      <div key={pi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",borderBottom:pi<cfg.parents.length-1?`1px solid ${C.bor}`:"none",background:C.card}}>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
+                            <span style={{width:8,height:8,borderRadius:"50%",background:p.color,flexShrink:0}}/>
+                            🎂 {p.name||`${t.parentN} ${pi+1}`}
+                            {p.birthDay&&p.birthMonth&&<span style={{fontSize:11,color:C.mut,fontFamily:"JetBrains Mono"}}>{p.birthDay}/{p.birthMonth}</span>}
+                            {!prem&&<span className="badge" style={{background:`${C.ora}10`,color:C.ora,border:`1px dashed ${C.ora}66`}}>🔒 Réservé Premium</span>}
+                          </div>
+                          <div style={{fontSize:11,color:C.mut}}>{t.forced||"Garde forcée"}</div>
+                        </div>
+                        {prem ? (
+                          <Toggle checked={!!pb.enabled} onChange={v=>setPB(pi,"enabled",v)} />
+                        ) : (
+                          <button onClick={onUpgrade} style={{padding:"5px 10px",background:`${C.ora}10`,color:C.ora,border:`1.5px dashed ${C.ora}66`,borderRadius:8,fontSize:11,fontWeight:800}}>🔒 Réservé Premium</button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Anniversaire de l'enfant */}
+                {children.length > 0 && (<>
+                  <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>{t.childBirthdays}</div>
+                  <div style={{marginBottom:14,padding:"10px 12px",background:C.card,border:`1px solid ${C.bor}`,borderRadius:10}}>
+                    <div style={{fontSize:12,color:C.mut,marginBottom:10,lineHeight:1.5}}>{t.childBirthdaysInfo}</div>
+                    <div style={{display:"flex",gap:10,alignItems:"flex-end"}}>
+                      <div style={{...fld,flex:1}}><span style={lbl}>{t.evenYears}</span>
+                        <CustomSelect value={chEvenIdx} onChange={v=>updSD("evenParentIdx",+v)} options={[
+                          {value:-1,label:t.allParents},
+                          ...cfg.parents.map((p,pi)=>({value:pi,label:p.name||`P${pi+1}`}))
+                        ]} />
+                      </div>
+                      <div style={{...fld,flex:1}}><span style={lbl}>{t.oddYears}</span>
+                        <CustomSelect value={chOddIdx} onChange={v=>updSD("oddParentIdx",+v)} options={[
+                          {value:-1,label:t.allParents},
+                          ...cfg.parents.map((p,pi)=>({value:pi,label:p.name||`P${pi+1}`}))
+                        ]} />
+                      </div>
+                    </div>
+                  </div>
+                </>)}
+
+              </div>
+            </div>
+          );
+        })()
+      ) : (
+      children.map((ch, chi) => {
+        const chId = ch.id;
+        const chSD = getChildSD(chId);
+        const chCountry = getChildCountry(chId);
+        // Zone effective
+        const chZone = multiChild && cfg.childrenZones?.[chId]
+          ? cfg.childrenZones[chId]
+          : { subdivisionCode: cfg.subdivisionCode||"", zone: cfg.zone||"" };
+        const chSubs = OH_SUBS_CATALOG[chCountry] || [];
+        const chCurSub = chZone.subdivisionCode || "";
+        // School hols for this child
+        const chHols = getHolsFromData(chCountry, apiData, chCurSub||chZone.zone);
+        // Open state per child
+        const [chOpen, setChOpen] = [
+          openHol && openHol.startsWith(chId+"::") ? openHol.slice((chId+"::").length) : null,
+          (hn) => setOpenHol(hn ? chId+"::"+hn : null)
+        ];
+        const chGetHolDetails=()=> {
+          if(multiChild) return (sd.schoolHolDetailsPerChild?.[chId]) || {};
+          return sd.schoolHolDetails || {};
+        };
+        const chSetHolDetails=(newDet)=> {
+          if(multiChild) {
+            setCfg(c=>({...c, specialDates:{...c.specialDates,
+              schoolHolDetailsPerChild:{...(c.specialDates.schoolHolDetailsPerChild||{}), [chId]:newDet}
+            }}));
+          } else {
+            setCfg(c=>({...c, specialDates:{...c.specialDates, schoolHolDetails:newDet}}));
+          }
+        };
+        const chSetHD=(hn,ds,pi)=> {
+          const det={...chGetHolDetails()};
+          if(pi===undefined){const copy={...(det[hn]||{})};delete copy[ds];det[hn]=copy;}
+          else{det[hn]={...(det[hn]||{}),[ds]:pi};}
+          chSetHolDetails(det);
+        };
+        const chSetZone=(subdivisionCode, zone)=> {
+          if(multiChild) {
+            setCfg(c=>({...c, childrenZones:{...c.childrenZones, [chId]:{subdivisionCode,zone}}}));
+          } else {
+            setCfg(c=>({...c, subdivisionCode, zone}));
+          }
+        };
+        // Per-child special dates
+        const chMD = chSD.motherDay || {enabled:false};
+        const chFD = chSD.fatherDay || {enabled:false};
+        const chPB = chSD.parentBirths || [];
+        const chEvenIdx = chSD.evenParentIdx ?? 0;
+        const chOddIdx = chSD.oddParentIdx ?? 1;
+
+        return (
+          <div key={chId} style={{marginBottom:16,border:`2px solid ${C.bor}`,borderRadius:16,overflow:"hidden"}}>
+            {/* Enfant header */}
+            <div style={{padding:"10px 14px",background:C.sur,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`}}>
+              <span style={{fontSize:18}}>{ch.avatar||"🧒"}</span>
+              <div style={{flex:1}}>
+                <div style={{fontSize:14,fontWeight:900,color:C.txt}}>{ch.name||`${t.childN} ${chi+1}`}</div>
+                {ch.birthDay&&ch.birthMonth&&<div style={{fontSize:11,color:C.mut,fontFamily:"JetBrains Mono"}}>{ch.birthDay}/{ch.birthMonth}</div>}
+              </div>
+              {chCurSub && <span style={{fontSize:10,background:`${C.vio}22`,color:C.vio,padding:"2px 8px",borderRadius:6,fontWeight:700}}>📍 {chCountry==="FR" ? (chSubs.find(s=>s.code===chCurSub)?.label.match(/Zone [ABC]/)?.[0]||chCurSub) : chSubs.find(s=>s.code===chCurSub)?.label||chCurSub}</span>}
+            </div>
+            <div style={{padding:"14px 14px 4px"}}>
+
+              {/* Pays */}
+              <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>{t.country}</div>
+              <div style={{marginBottom:12}}>
+                <CountryDropdown value={chCountry} onChange={v=>{
+                  if(multiChild) setChildCountry(chId, v);
+                  else setCfg(c=>({...c,country:v,activeNatHols:null,zone:"",subdivisionCode:""}));
+                }} />
+              </div>
+
+              {/* Zone scolaire */}
+              <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>{t.zone} — {t.schoolYear} {syr}/{syr+1}</div>
+              <div style={{marginBottom:12}}>
+                {chSubs.length > 0 ? (
+                  <ZoneDropdown
+                    chCountry={chCountry}
+                    chCurSub={chCurSub}
+                    chSubs={chSubs}
+                    chSetZone={chSetZone}
+                    noZoneLabel={t.noZone}
+                    locked={!perms?.zoneChoice}
+                  />
+                ) : (
+                  <div style={{fontSize:12,color:C.mut,fontStyle:"italic"}}>{t.noZone} — {chCountry}</div>
+                )}
+              </div>
+
+              {/* Vacances scolaires */}
+              {chHols.length > 0 && (
+                <div style={{marginBottom:12}}>
+                  <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>{t.schoolHols}</div>
+                  {chHols.map((hol,hi)=>{
+                    const isOpen = chOpen === hol.n;
+                    const det = chGetHolDetails()[hol.n]||{};
+                    const days = daysRange(hol.s,hol.e);
+                    const assignedCount = Object.keys(det).length;
+                    return (
+                      <div key={hi} style={{marginBottom:6,border:`1.5px solid ${C.bor}`,borderRadius:10,overflow:"hidden"}}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 11px",background:C.sur,cursor:"pointer"}} onClick={e=>{const s=nearestScroller(e.currentTarget);const restore=lockScroll(s);setChOpen(isOpen?null:hol.n);requestAnimationFrame(restore);}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <span style={{fontWeight:700,fontSize:12,color:C.grn}}>🌿 {hol.n}</span>
+                            <span style={{fontSize:10,color:C.mut,fontFamily:"JetBrains Mono"}}>{hol.s.slice(8)}/{hol.s.slice(5,7)} → {hol.e.slice(8)}/{hol.e.slice(5,7)}</span>
+                          </div>
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            {assignedCount>0 && <span style={{fontSize:10,background:`${C.grn}22`,color:C.grn,padding:"2px 6px",borderRadius:6,fontWeight:700}}>{assignedCount}/{days.length}j</span>}
+                            <span style={{color:C.vio,fontSize:10}}>{isOpen?"▲":"▼"}</span>
+                          </div>
+                        </div>
+                        {isOpen && (
+                          <div style={{padding:"10px 11px"}}>
+                            <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
+                              {cfg.parents.map((p,pi)=>(
+                                <button key={pi} onClick={()=>{const base=chGetHolDetails();const newDet={...base,[hol.n]:{...(base[hol.n]||{})}};days.forEach(d2=>{newDet[hol.n][d2]=pi;});chSetHolDetails(newDet);}} style={{padding:"4px 10px",background:`${p.color}22`,color:p.color,border:`1.5px solid ${p.color}`,borderRadius:20,fontSize:11,fontWeight:700}}>Tout → {p.name||`P${pi+1}`}</button>
+                              ))}
+                              <button onClick={()=>{const base=chGetHolDetails();chSetHolDetails({...base,[hol.n]:{}});}} style={{padding:"4px 8px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,borderRadius:20,fontSize:11}}>Effacer</button>
+                            </div>
+                            {(()=>{
+                              const weeks=[];let week=[];
+                              days.forEach(ds2=>{
+                                const d2=new Date(ds2+"T12:00:00");
+                                const dw2=dow(d2.getFullYear(),d2.getMonth(),d2.getDate());
+                                week.push({ds:ds2,dw:dw2});
+                                if(dw2===6||ds2===days[days.length-1]){weeks.push(week);week=[];}
+                              });
+                              return weeks.map((wk,wi)=>{
+                                const wkPiCounts={};
+                                wk.forEach(({ds})=>{const pi=det[ds];if(pi!==undefined)wkPiCounts[pi]=(wkPiCounts[pi]||0)+1;});
+                                const totalAssigned=Object.values(wkPiCounts).reduce((a,b)=>a+b,0);
+                                const dominantPi=Object.keys(wkPiCounts).length===1?Number(Object.keys(wkPiCounts)[0]):undefined;
+                                const wkLabel=`${wk[0].ds.slice(8)}/${wk[0].ds.slice(5,7)} → ${wk[wk.length-1].ds.slice(8)}/${wk[wk.length-1].ds.slice(5,7)}`;
+                                const wkColor=dominantPi!==undefined?cfg.parents[dominantPi]?.color:C.bor;
+                                return (
+                                  <WeekRow key={wi} wk={wk} wkPiCounts={wkPiCounts} dominantPi={dominantPi} wkColor={wkColor} wkLabel={wkLabel}
+                                    hol={hol} det={det} chGetHolDetails={chGetHolDetails} chSetHolDetails={chSetHolDetails} chSetHD={chSetHD}
+                                    cfg={cfg} C={C} t={t} />
+                                );
+                              });
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Fêtes mères/pères */}
+              <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>{t.stepDates}</div>
+              <div style={{marginBottom:12,border:`1px solid ${C.bor}`,borderRadius:10,overflow:"hidden"}}>
+                {[{k:"motherDay",l:t.motherDay,d:t.motherDayInfo,val:chMD},{k:"fatherDay",l:t.fatherDay,d:t.fatherDayInfo,val:chFD}].map(({k,l,d,val},ki)=>(
+                  <div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",borderBottom:ki===0?`1px solid ${C.bor}`:"none",background:C.card}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
+                        {l}{!prem&&<span className="badge" style={{background:`${C.ora}10`,color:C.ora,border:`1px dashed ${C.ora}66`}}>🔒 Réservé Premium</span>}
+                      </div>
+                      <div style={{fontSize:11,color:C.mut}}>{d}</div>
+                    </div>
+                    {prem ? (
+                      <Toggle checked={!!val?.enabled} onChange={v=>setChildSD(chId,k,{enabled:v})} />
+                    ) : (
+                      <button onClick={onUpgrade} style={{padding:"5px 10px",background:`${C.ora}10`,color:C.ora,border:`1.5px dashed ${C.ora}66`,borderRadius:8,fontSize:11,fontWeight:800}}>🔒 Réservé Premium</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Anniversaires des parents */}
+              <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>{t.parentBirthdays}</div>
+              <div style={{marginBottom:12,border:`1px solid ${C.bor}`,borderRadius:10,overflow:"hidden"}}>
+                {cfg.parents.map((p,pi)=>{
+                  const pb = chPB[pi] || {enabled:false,parentIdx:pi};
+                  return (
+                    <div key={pi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",borderBottom:pi<cfg.parents.length-1?`1px solid ${C.bor}`:"none",background:C.card}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
+                          <span style={{width:8,height:8,borderRadius:"50%",background:p.color,flexShrink:0}}/>
+                          🎂 {p.name||`${t.parentN} ${pi+1}`}
+                          {p.birthDay&&p.birthMonth&&<span style={{fontSize:11,color:C.mut,fontFamily:"JetBrains Mono"}}>{p.birthDay}/{p.birthMonth}</span>}
+                          {!prem&&<span className="badge" style={{background:`${C.ora}10`,color:C.ora,border:`1px dashed ${C.ora}66`}}>🔒 Réservé Premium</span>}
+                        </div>
+                        <div style={{fontSize:11,color:C.mut}}>{t.forced||"Garde forcée"}</div>
+                      </div>
+                      {prem ? (
+                        <Toggle checked={!!pb.enabled} onChange={v=>setChildPB(chId,pi,"enabled",v)} />
+                      ) : (
+                        <button onClick={onUpgrade} style={{padding:"5px 10px",background:`${C.ora}10`,color:C.ora,border:`1.5px dashed ${C.ora}66`,borderRadius:8,fontSize:11,fontWeight:800}}>🔒 Réservé Premium</button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Anniversaire de cet enfant */}
+              <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>{t.childBirthdays}</div>
+              <div style={{marginBottom:14,padding:"10px 12px",background:C.card,border:`1px solid ${C.bor}`,borderRadius:10}}>
+                <div style={{fontSize:12,color:C.mut,marginBottom:10,lineHeight:1.5}}>{t.childBirthdaysInfo}</div>
+                <div style={{display:"flex",gap:10,alignItems:"flex-end"}}>
+                  <div style={{...fld,flex:1}}>
+                    <span style={lbl}>{t.evenYears}</span>
+                    <CustomSelect value={chEvenIdx} onChange={v=>setChildCB(chId,"evenParentIdx",+v)} options={[
+                      {value:-1,label:t.allParents},
+                      ...cfg.parents.map((p,pi)=>({value:pi,label:p.name||`P${pi+1}`}))
+                    ]} />
+                  </div>
+                  <div style={{...fld,flex:1}}>
+                    <span style={lbl}>{t.oddYears}</span>
+                    <CustomSelect value={chOddIdx} onChange={v=>setChildCB(chId,"oddParentIdx",+v)} options={[
+                      {value:-1,label:t.allParents},
+                      ...cfg.parents.map((p,pi)=>({value:pi,label:p.name||`P${pi+1}`}))
+                    ]} />
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        );
+      }))}
+
+      {/* Custom dates — locked */}
+      <div className="card" style={{position:"relative"}}>
+        <div className="sec">{t.customDates} {!prem&&<span className="badge" style={{background:`${C.ora}10`,color:C.ora,border:`1px dashed ${C.ora}66`,marginLeft:4}}>🔒 Réservé Premium</span>}</div>
+        {!prem&&(
+          <div style={{borderRadius:10,background:`${C.bg}cc`,backdropFilter:"blur(3px)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,zIndex:2,cursor:"pointer",padding:"24px 16px"}} onClick={onUpgrade}>
+            <div style={{fontSize:24}}>🔒</div>
+            <div style={{fontWeight:800,fontSize:14,color:C.txt}}>{t.lockSection}</div>
+            <div style={{fontSize:12,color:C.mut,textAlign:"center",padding:"0 20px"}}>{t.lockDesc}</div>
+            <button style={{height:44,padding:"0 20px",background:C.ora,color:"#fff",borderRadius:10,fontSize:13}}>{t.seeOffers}</button>
+          </div>
+        )}
+        {(cfg.specialDates?.custom||[]).map((cd,i)=>{
+          const updCd=(field,val)=>{
+            setCfg(prev=>{
+              const arr=[...(prev.specialDates?.custom||[])];
+              arr[i]={...arr[i],[field]:val};
+              return {...prev,specialDates:{...prev.specialDates,custom:arr}};
+            });
+          };
+          const children = cfg.children.length > 0 ? cfg.children : [];
+          const parents = cfg.parents.length > 0 ? cfg.parents : [];
+          return (
+            <div key={i} style={{marginBottom:12,padding:"12px",background:C.sur,borderRadius:10,border:`1.5px solid ${C.bor}`}}>
+              {/* Header */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <div style={{fontSize:12,fontWeight:800,color:C.vio}}>📌 Date {i+1}</div>
+                <button onClick={()=>{if(!prem)return;setCfg(prev=>{const arr=[...(prev.specialDates?.custom||[])];arr.splice(i,1);return {...prev,specialDates:{...prev.specialDates,custom:arr}};});}} style={{padding:"3px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:11}}>✕</button>
+              </div>
+              {/* Label */}
+              <div style={{...fld,marginBottom:10}}>
+                <span style={lbl}>Nom de l'événement</span>
+                <input value={cd.label||""} onChange={e=>updCd("label",e.target.value)} placeholder="Ex: Vacances ski, Mariage..." disabled={!prem} style={inp} />
+              </div>
+              {/* Date row */}
+              <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:10}}>
+                <div style={{...fld,flex:1}}>
+                  <span style={lbl}>Jour</span>
+                  <input type="number" min="1" max="31" value={cd.day||""} onChange={e=>updCd("day",e.target.value)} placeholder={t.dayPlaceholder||"JJ"} disabled={!prem} style={inp} />
+                </div>
+                <div style={{...fld,flex:2}}>
+                  <span style={lbl}>Mois</span>
+                  <select value={cd.month||""} onChange={e=>updCd("month",e.target.value)} disabled={!prem} style={inp}>
+                    <option value="">--</option>
+                    {t.months.map((m,j)=><option key={j} value={pad(j+1)}>{m}</option>)}
+                  </select>
+                </div>
+                <div style={{...fld,flex:1}}>
+                  <span style={lbl}>Année</span>
+                  <input type="number" min="2020" max="2099" value={cd.year||""} onChange={e=>updCd("year",e.target.value)} placeholder={cd.yearly?"—":new Date().getFullYear()} disabled={!prem||cd.yearly} style={{...inp,opacity:cd.yearly?0.4:1}} />
+                </div>
+              </div>
+              {/* Who has custody */}
+              <div className="field">
+                <label className="lbl">🧒 Concerne</label>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  <button onClick={()=>updCd("childId","all")} style={{padding:"6px 14px",background:(!cd.childId||cd.childId==="all")?C.vio:C.sur,color:(!cd.childId||cd.childId==="all")?"#fff":C.mut,border:`1.5px solid ${(!cd.childId||cd.childId==="all")?C.vio:C.bor}`,borderRadius:20,fontSize:12,fontWeight:700}}>
+                    Tous
+                  </button>
+                  {children.map(ch=>(
+                    <button key={ch.id} onClick={()=>updCd("childId",String(ch.id))} style={{padding:"6px 14px",background:cd.childId===String(ch.id)?C.vio:C.sur,color:cd.childId===String(ch.id)?"#fff":C.mut,border:`1.5px solid ${cd.childId===String(ch.id)?C.vio:C.bor}`,borderRadius:20,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
+                      {ch.avatar&&<span>{ch.avatar}</span>}{ch.name||`Enfant ${ch.id}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Which parent */}
+              <div className="field">
+                <label className="lbl">👤 Garde chez</label>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  {parents.map(p=>(
+                    <button key={p.id} onClick={()=>updCd("parentId",String(p.id))} style={{flex:1,minWidth:80,padding:"9px",background:cd.parentId===String(p.id)?p.color:C.sur,color:cd.parentId===String(p.id)?"#fff":C.mut,border:`2px solid ${cd.parentId===String(p.id)?p.color:C.bor}`,borderRadius:10,fontSize:13,fontWeight:800,display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>
+                      {p.avatar&&(typeof p.avatar==="string"&&p.avatar.startsWith("http")
+                        ? <img src={p.avatar} alt="" style={{width:22,height:22,borderRadius:"50%",objectFit:"cover",verticalAlign:"middle"}} />
+                        : <span style={{fontSize:18}}>{p.avatar}</span>)}{p.name||`Parent ${p.id}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Yearly recurrence */}
+              <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13}}>
+                <input type="checkbox" checked={!!cd.yearly} onChange={e=>updCd("yearly",e.target.checked)} />
+                <span>🔁 Reconduire tous les ans</span>
+              </label>
+            </div>
+          );
+        })}
+        <button onClick={()=>prem?setCfg(c=>({...c,specialDates:{...c.specialDates,custom:[...(c.specialDates.custom||[]),{label:"",day:"",month:"",year:"",parentIdx:0,childIdx:"all",yearly:false}]}})):onUpgrade()} style={{width:"100%",height:44,padding:"0 16px",background:"transparent",color:prem?C.vio:C.mut,border:`1.5px dashed ${prem?C.vio:C.bor}`,fontSize:13}}>
+          {prem?t.addDate:`🔒 ${t.addDate} — Premium`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── STEP 3: CUSTODY ─────────────────────────────────────────────────────────
+function StepGarde() {
+  const {C,t,cfg,setCfg,addHist,pushNotif} = useApp();
+  const {parents} = cfg;
+  const children = cfg.children || [];
+
+  // ── Sélecteur d'enfant (actif seulement si sameGuardAll=false) ─────────────
+  const multiChild = !cfg.sameGuardAll && children.length > 1;
+  const [selChildId, setSelChildId] = useState(children[0]?.id || null);
+
+  // Charger le bon planning selon le mode
+  function loadCustody(childId) {
+    if(!cfg.sameGuardAll && childId && cfg.custodyPerChild?.[childId]) {
+      return cfg.custodyPerChild[childId];
+    }
+    return cfg.custody;
+  }
+
+  const activeCustody = loadCustody(multiChild ? selChildId : null);
+
+  const D14=Array.from({length:14},(_,i)=>({label:t.dayShort[i%7],name:t.dayNames[i%7],num:i+1,we:i>=5&&i<=6||i>=12}));
+  const [type,setType]=useState(activeCustody.type||"weekAlt");
+  const [wA,setWA]=useState(activeCustody.weekAlt||{evenIdx:0});
+  const [ex,setEx]=useState(activeCustody.exclusive||{mainIdx:0,weIdx:1,parity:"even"});
+  const [pat,setPat]=useState(()=>activeCustody.pattern.length?[...activeCustody.pattern]:D14.map(()=>({parentIdx:undefined,timeType:"full",startTime:"",endTime:"",location:""})));
+  const [confirmed,setConfirmed]=useState(activeCustody.confirmed);
+
+  // ── Re-synchronisation automatique depuis cfg (ex: MAJ Supabase depuis l'autre parent) ──
+  const prevCustodyRef = useRef(activeCustody);
+  useEffect(() => {
+    const fresh = loadCustody(multiChild ? selChildId : null);
+    const prev = prevCustodyRef.current;
+    // On ne ré-injecte que si cfg a vraiment changé (comparaison par JSON pour éviter les boucles)
+    if (JSON.stringify(fresh) !== JSON.stringify(prev)) {
+      prevCustodyRef.current = fresh;
+      setType(fresh.type||"weekAlt");
+      setWA(fresh.weekAlt||{evenIdx:0});
+      setEx(fresh.exclusive||{mainIdx:0,weIdx:1,parity:"even"});
+      setPat(fresh.pattern?.length?[...fresh.pattern]:D14.map(()=>({parentIdx:undefined,timeType:"full",startTime:"",endTime:"",location:""})));
+      setConfirmed(fresh.confirmed||false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cfg, selChildId]);
+
+  // Rechargement quand on change d'enfant
+  function switchChild(childId) {
+    // Sauvegarder l'enfant courant avant de switcher
+    if(selChildId && selChildId !== childId) {
+      const draft = { type, weekAlt:wA, exclusive:ex, pattern:pat, confirmed, startMonth:cfg.custody.startMonth, startYear:cfg.custody.startYear };
+      setCfg(c=>({...c, custodyPerChild:{...c.custodyPerChild, [selChildId]:draft}}));
+    }
+    // Charger l'enfant suivant
+    setSelChildId(childId);
+    const c = loadCustody(childId);
+    setType(c.type||"weekAlt");
+    setWA(c.weekAlt||{evenIdx:0});
+    setEx(c.exclusive||{mainIdx:0,weIdx:1,parity:"even"});
+    setPat(c.pattern?.length?[...c.pattern]:D14.map(()=>({parentIdx:undefined,timeType:"full",startTime:"",endTime:"",location:""})));
+    setConfirmed(c.confirmed||false);
+  }
+
+  function setDay(idx,pi){
+    setPat(prev=>{
+      const next=prev.map(d=>({...d}));
+      // Sélection parent : efface obsId sur ce jour
+      next[idx]={...next[idx],parentIdx:pi,obsId:null,obsName:null};
+      // Autofill des jours sans sélection entre le dernier jour du même parent et idx
+      const last=prev.reduce((acc,d,i)=>(d?.parentIdx===pi&&!d?.obsId&&i<idx?i:acc),-1);
+      if(last>=0) for(let j=last+1;j<idx;j++){
+        if(next[j]?.parentIdx===undefined&&!next[j]?.obsId) next[j]={...next[j],parentIdx:pi,obsId:null};
+      }
+      return next;
+    });
+  }
+  function setDayObs(idx,obsId,obsName){
+    setPat(prev=>{
+      const next=prev.map(d=>({...d}));
+      if(next[idx]?.obsId===obsId){
+        // Toggle : désélectionne si déjà sélectionné
+        next[idx]={...next[idx],obsId:null,obsName:null};
+      } else {
+        // Sélection gardien : efface parentIdx sur ce jour
+        next[idx]={...next[idx],parentIdx:undefined,obsId,obsName};
+      }
+      return next;
+    });
+  }
+
+  function confirm(){
+    const newCustody = {
+      ...(multiChild ? (cfg.custodyPerChild?.[selChildId]||cfg.custody) : cfg.custody),
+      type, weekAlt:wA, exclusive:ex, pattern:pat, confirmed:true
+    };
+    if(multiChild && selChildId) {
+      setCfg(c=>({...c, custodyPerChild:{...c.custodyPerChild,[selChildId]:newCustody}}));
+      const childName = children.find(ch=>ch.id===selChildId)?.name||"Enfant";
+      addHist(t.stepGarde, childName, "cal");
+      pushNotif(`📆 Planning de ${childName} confirmé`);
+    } else {
+      setCfg(c=>({...c, custody:newCustody}));
+      addHist(t.stepGarde,"","cal"); pushNotif("📆 "+t.confirmed);
+    }
+    setConfirmed(true);
+  }
+  return (
+    <div>
+      {/* ── Sélecteur d'enfant (mode garde individuelle) ──────────────────── */}
+      {multiChild && (
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>
+            Planning de garde pour :
+          </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {children.map(ch=>{
+              const hasCustody = cfg.custodyPerChild?.[ch.id]?.confirmed;
+              return (
+                <button key={ch.id} onClick={()=>switchChild(ch.id)}
+                  style={{padding:"7px 14px",background:selChildId===ch.id?C.vio:C.sur,
+                    color:selChildId===ch.id?"#fff":C.mut,
+                    border:`1.5px solid ${selChildId===ch.id?C.vio:C.bor}`,
+                    borderRadius:10,fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
+                  {ch.name||`Enfant`}
+                  {hasCustody
+                    ? <span style={{fontSize:10,background:"#fff3",borderRadius:4,padding:"1px 5px"}}>✅</span>
+                    : <span style={{fontSize:10,opacity:.6}}>⏳</span>
+                  }
+                </button>
+              );
+            })}
+          </div>
+          {cfg.custodyPerChild && Object.keys(cfg.custodyPerChild).length > 0 && (
+            <div style={{marginTop:8,fontSize:11,color:C.mut,fontStyle:"italic"}}>
+              {Object.keys(cfg.custodyPerChild).length}/{children.length} enfant(s) configuré(s)
+            </div>
+          )}
+        </div>
+      )}
+
+      {!cfg.sameGuardAll && !multiChild && children.length === 1 && (
+        <div style={{marginBottom:12,padding:"8px 12px",background:`${C.vio}10`,border:`1px solid ${C.vio}22`,borderRadius:10,fontSize:12,color:C.mut}}>
+          📋 Planning individuel activé pour <strong style={{color:C.txt}}>{children[0]?.name||"l'enfant"}</strong>
+        </div>
+      )}
+
+      <div className="sec">{t.patternTitle}</div>
+      <div className="card" style={{marginBottom:14}}>
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+          <div style={{display:"flex",gap:8}}>
+            {[["weekAlt",t.patWeekAlt],["exclusive",t.patExclusive]].map(([tp,lb])=>(
+              <button key={tp} onClick={()=>{setType(tp);setConfirmed(false);}} style={{flex:1,padding:"12px 10px",background:type===tp?C.vio:C.sur,color:type===tp?"#fff":C.mut,border:`1.5px solid ${type===tp?C.vio:C.bor}`,borderRadius:10,fontSize:12,fontWeight:700,textAlign:"center"}}>{lb}</button>
+            ))}
+          </div>
+          <button onClick={()=>{setType("custom");setConfirmed(false);}} style={{width:"100%",padding:"12px 14px",background:type==="custom"?C.vio:C.sur,color:type==="custom"?"#fff":C.mut,border:`1.5px solid ${type==="custom"?C.vio:C.bor}`,borderRadius:10,fontSize:13,fontWeight:700,textAlign:"left"}}>{t.patCustom}</button>
+        </div>
+
+        {type==="weekAlt"&&(
+          <div className="fi" style={{background:C.bg,borderRadius:10,padding:14,marginBottom:14}}>
+            <div style={{fontSize:12,color:C.mut,marginBottom:10,fontWeight:700}}>{t.patWeekAltQ}</div>
+            <div style={{display:"flex",gap:8}}>
+              {parents.map((p,pi)=>(
+                <button key={pi} onClick={()=>setWA({evenIdx:pi})} style={{flex:1,padding:"9px",background:wA.evenIdx===pi?p.color:C.sur,color:wA.evenIdx===pi?"#fff":C.mut,border:`2px solid ${wA.evenIdx===pi?p.color:C.bor}`,borderRadius:10,fontWeight:700}}>
+                  {p.name||`P${pi+1}`}
+                </button>
+              ))}
+            </div>
+            <div style={{marginTop:10,fontSize:12,color:C.mut,padding:"8px 12px",background:`${C.vio}11`,borderRadius:8}}>
+              <strong style={{color:C.vio}}>{parents[wA.evenIdx]?.name||`P${wA.evenIdx+1}`}</strong> → {t.evenWeek} | <strong style={{color:parents[1-wA.evenIdx]?.color}}>{parents[1-wA.evenIdx]?.name||`P${2-wA.evenIdx}`}</strong> → {t.oddWeek}
+            </div>
+          </div>
+        )}
+
+        {type==="exclusive"&&(
+          <div className="fi" style={{background:C.bg,borderRadius:10,padding:14,marginBottom:14}}>
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:12,color:C.mut,marginBottom:8,fontWeight:700}}>{t.patExcMainQ}</div>
+              <div style={{display:"flex",gap:8}}>{parents.map((p,pi)=>(
+                <button key={pi} onClick={()=>setEx(e=>({...e,mainIdx:pi}))} style={{flex:1,padding:"9px",background:ex.mainIdx===pi?p.color:C.sur,color:ex.mainIdx===pi?"#fff":C.mut,border:`2px solid ${ex.mainIdx===pi?p.color:C.bor}`,borderRadius:10,fontWeight:700}}>{p.name||`P${pi+1}`}</button>
+              ))}</div>
+            </div>
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:12,color:C.mut,marginBottom:8,fontWeight:700}}>{t.patExcWEQ}</div>
+              <div style={{display:"flex",gap:8}}>{parents.map((p,pi)=>(
+                <button key={pi} onClick={()=>setEx(e=>({...e,weIdx:pi}))} style={{flex:1,padding:"9px",background:ex.weIdx===pi?p.color:C.sur,color:ex.weIdx===pi?"#fff":C.mut,border:`2px solid ${ex.weIdx===pi?p.color:C.bor}`,borderRadius:10,fontWeight:700}}>{p.name||`P${pi+1}`}</button>
+              ))}</div>
+            </div>
+            <div>
+              <div style={{fontSize:12,color:C.mut,marginBottom:8,fontWeight:700}}>{t.patExcParityQ}</div>
+              <div style={{display:"flex",gap:8}}>
+                {[["even",t.evenWeek],["odd",t.oddWeek]].map(([v,lb])=>(
+                  <button key={v} onClick={()=>setEx(e=>({...e,parity:v}))} style={{flex:1,padding:"9px",background:ex.parity===v?C.vio:C.sur,color:ex.parity===v?"#fff":C.mut,border:`1.5px solid ${ex.parity===v?C.vio:C.bor}`,borderRadius:10,fontWeight:700,fontSize:13}}>{lb}</button>
+                ))}
+              </div>
+            </div>
+            <div style={{marginTop:12,fontSize:12,color:C.mut,padding:"8px 12px",background:`${C.vio}11`,borderRadius:8,lineHeight:1.7}}>
+              📋 <strong style={{color:C.vio}}>{parents[ex.mainIdx]?.name||`P${ex.mainIdx+1}`}</strong> — semaine<br/>
+              🏠 <strong style={{color:parents[ex.weIdx]?.color}}>{parents[ex.weIdx]?.name||`P${ex.weIdx+1}`}</strong> — WE {ex.parity==="even"?t.evenWeek:t.oddWeek}
+            </div>
+          </div>
+        )}
+
+        {type==="custom"&&(
+          <div className="fi">
+            <div style={{overflowX:"auto"}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(14,1fr)",gap:3,minWidth:520,marginBottom:4}}>
+                <div style={{gridColumn:"1 / span 7",textAlign:"center",fontSize:9,fontWeight:800,color:C.vio,background:`${C.vio}12`,borderRadius:6,padding:"3px 0",textTransform:"uppercase",letterSpacing:".05em"}}>{t.evenWeek}</div>
+                <div style={{gridColumn:"8 / span 7",textAlign:"center",fontSize:9,fontWeight:800,color:C.blu,background:`${C.blu}12`,borderRadius:6,padding:"3px 0",textTransform:"uppercase",letterSpacing:".05em"}}>{t.oddWeek}</div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(14,1fr)",gap:3,minWidth:520}}>
+                {D14.map((d,i)=>(
+                  <div key={i} style={{textAlign:"center"}}>
+                    <div style={{fontSize:9,color:d.we?C.yel:C.mut,marginBottom:3,fontFamily:"JetBrains Mono",fontWeight:700,lineHeight:1.2}}>{d.label}<br/><span style={{fontSize:8}}>{d.num}</span></div>
+                    {parents.map((p,pi)=>(
+                      <button key={pi} onClick={()=>setDay(i,pi)} style={{width:"100%",padding:"4px 1px",marginBottom:2,background:pat[i]?.parentIdx===pi?p.color:C.sur,color:pat[i]?.parentIdx===pi?"#fff":C.mut,border:`1.5px solid ${pat[i]?.parentIdx===pi?p.color:C.bor}`,borderRadius:6,fontSize:8,fontWeight:800}}>
+                        {p.name?p.name.split(" ")[0].slice(0,4):`P${pi+1}`}
+                      </button>
+                    ))}
+                    {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=>(
+                      <button key={o.id} onClick={()=>setDayObs(i,o.id,obsLabel(o))}
+                        style={{width:"100%",padding:"4px 1px",marginBottom:2,background:pat[i]?.obsId===o.id?"#f59e0b":C.sur,color:pat[i]?.obsId===o.id?"#fff":"#f59e0b",border:"1.5px solid #f59e0b",borderRadius:6,fontSize:8,fontWeight:800}}>
+                        🏠{obsLabel(o).slice(0,3)}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {D14.map((d,i)=>pat[i]?.parentIdx!==undefined&&(
+              <div key={i} style={{display:"flex",gap:6,alignItems:"center",marginBottom:6,padding:"6px",background:C.bg,borderRadius:8,marginTop:i===0?12:0}}>
+                <span style={{fontFamily:"JetBrains Mono",fontSize:10,color:C.mut,minWidth:30}}>{d.label}{d.num}</span>
+                <span style={{width:8,height:8,borderRadius:"50%",background:parents[pat[i].parentIdx]?.color,flexShrink:0}} />
+                <select value={pat[i]?.timeType||"full"} onChange={e=>{const p=[...pat];p[i]={...p[i],timeType:e.target.value};setPat(p);}} style={{flex:1,fontSize:11}}>
+                  <option value="full">{t.wholeDay}</option><option value="start">{t.pickup}</option><option value="end">{t.dropoff}</option><option value="split">{t.both}</option>
+                </select>
+                {(pat[i]?.timeType==="start"||pat[i]?.timeType==="split")&&<input type="time" value={pat[i]?.startTime||""} onChange={e=>{const p=[...pat];p[i]={...p[i],startTime:e.target.value};setPat(p);}} style={{flex:1,fontSize:11}} />}
+                {(pat[i]?.timeType==="end"||pat[i]?.timeType==="split")&&<input type="time" value={pat[i]?.endTime||""} onChange={e=>{const p=[...pat];p[i]={...p[i],endTime:e.target.value};setPat(p);}} style={{flex:1,fontSize:11}} />}
+                {pat[i]?.timeType!=="full"&&<input value={pat[i]?.location||""} onChange={e=>{const p=[...pat];p[i]={...p[i],location:e.target.value};setPat(p);}} placeholder={t.place} style={{flex:2,fontSize:11}} />}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {!confirmed?(
+        <div className="card" style={{borderColor:C.yel}}>
+          <div style={{fontSize:13,color:C.yel,marginBottom:12}}>⚠️ {t.confirmQ}</div>
+          <button onClick={confirm} style={{height:44,padding:"0 24px",background:C.grn,color:"#fff",borderRadius:10}}>{t.confirmBtn}</button>
+        </div>
+      ):(
+        <div className="card" style={{borderColor:C.grn,display:"flex",alignItems:"center",gap:10}}>
+          <span style={{color:C.grn,fontSize:20}}>✓</span>
+          <span style={{color:C.grn,fontWeight:700}}>{t.confirmed}</span>
+          <button onClick={()=>setConfirmed(false)} style={{marginLeft:"auto",height:36,padding:"0 14px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:12,borderRadius:8}}>{t.editModel}</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── WEEK ROW (school holidays) ───────────────────────────────────────────────
+function WeekRow({wk, wkPiCounts, dominantPi, wkColor, wkLabel, hol, det, chGetHolDetails, chSetHolDetails, chSetHD, cfg, C, t}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{marginBottom:6,border:`1.5px solid ${wkColor}`,borderRadius:10,overflow:"hidden"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 10px",background:dominantPi!==undefined?`${wkColor}15`:C.sur}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:11,fontWeight:800,color:C.txt,fontFamily:"JetBrains Mono"}}>{wkLabel}</span>
+          <span style={{fontSize:10,color:C.mut}}>{wk.length}j</span>
+        </div>
+        <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
+          {cfg.parents.map((p,pi)=>(
+            <button key={pi}
+              onClick={()=>{const base=chGetHolDetails();const nd={...base,[hol.n]:{...(base[hol.n]||{})}};wk.forEach(({ds})=>{nd[hol.n][ds]=pi;});chSetHolDetails(nd);setOpen(false);}}
+              style={{padding:"3px 9px",background:wkPiCounts[pi]===wk.length?p.color:`${p.color}22`,color:wkPiCounts[pi]===wk.length?"#fff":p.color,border:`1.5px solid ${p.color}`,borderRadius:20,fontSize:11,fontWeight:800}}>
+              {p.name?p.name.split(" ")[0].slice(0,6):`P${pi+1}`}
+            </button>
+          ))}
+          {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=>(
+            <button key={o.id}
+              onClick={()=>{const base=chGetHolDetails();const nd={...base,[hol.n]:{...(base[hol.n]||{})}};wk.forEach(({ds})=>{nd[hol.n][ds]=`obs:${o.id}`;});chSetHolDetails(nd);setOpen(false);}}
+              style={{padding:"3px 9px",background:"#f59e0b22",color:"#f59e0b",border:"1.5px solid #f59e0b",borderRadius:20,fontSize:11,fontWeight:800}}>
+              🏠 {obsLabel(o)}
+            </button>
+          ))}
+          <button onClick={()=>setOpen(o=>!o)}
+            style={{padding:"3px 8px",background:open?`${C.vio}18`:"transparent",color:open?C.vio:C.mut,border:`1.5px solid ${open?C.vio:C.bor}`,borderRadius:20,fontSize:10,fontWeight:700}}>
+            {open?"▲":"✏️"}
+          </button>
+        </div>
+      </div>
+      {open && (
+        <div style={{display:"flex",gap:0,background:C.bg,borderTop:`1px solid ${C.bor}`}}>
+          {wk.map(({ds,dw},di)=>{
+            const aPi=det[ds];
+            const aP=aPi!==undefined?cfg.parents[aPi]:null;
+            const isWE=dw>=5;
+            const guardians=(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard);
+            const allChoices=[...cfg.parents.map((_,pi)=>({type:"parent",pi})),...guardians.map(o=>({type:"obs",id:o.id,name:obsLabel(o)}))];
+            const currentChoiceIdx=aPi===undefined?-1:typeof aPi==="string"&&aPi.startsWith("obs:")?allChoices.findIndex(c=>c.type==="obs"&&c.id===aPi.slice(4)):allChoices.findIndex(c=>c.type==="parent"&&c.pi===aPi);
+            const cycleDay=()=>{
+              const nextIdx=currentChoiceIdx>=allChoices.length-1?undefined:currentChoiceIdx+1;
+              chSetHD(hol.n,ds,nextIdx===undefined?undefined:allChoices[nextIdx].type==="parent"?allChoices[nextIdx].pi:`obs:${allChoices[nextIdx].id}`);
+            };
+            const isObs=typeof aPi==="string"&&aPi?.startsWith("obs:");
+            const obsGuard=isObs?guardians.find(o=>o.id===aPi.slice(4)):null;
+            const cellColor=isObs?"#f59e0b":aP?aP.color:C.bor;
+            const cellBg=isObs?"#f59e0b22":aP?`${aP.color}22`:"transparent";
+            const cellLabel=isObs?(obsGuard?.name||(obsGuard?.email||"").split("@")[0]||"🏠").slice(0,2):aP?(aP.name?aP.name[0].toUpperCase():"P"):"?";
+            return (
+              <div key={ds} onClick={cycleDay}
+                style={{flex:1,padding:"8px 4px",textAlign:"center",cursor:"pointer",background:cellBg,borderRight:di<wk.length-1?`1px solid ${C.bor}`:"none",transition:"background .12s"}}>
+                <div style={{fontSize:9,fontWeight:800,color:isWE?C.yel:C.mut,marginBottom:2}}>{t.dayShort[dw]}</div>
+                <div style={{fontSize:9,color:C.mut,fontFamily:"JetBrains Mono",marginBottom:4}}>{ds.slice(8)}</div>
+                <div style={{width:22,height:22,borderRadius:"50%",margin:"0 auto",background:cellColor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:(aP||isObs)?"#fff":C.sur}}>
+                  {cellLabel}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── STEP 4: ACCESS ───────────────────────────────────────────────────────────
+function StepAccess() {
+  const {C,t,cfg,setCfg,pushNotif,prem,perms,onUpgrade,user,familySync,isObs,isChild} = useApp();
+  const [pendingActionId,setPendingActionId] = useState(null);
+  useEffect(()=>{ familySync.refreshPendingMembers(); },[familySync.familyId]);
+  const [email,setEmail]=useState("");
+  const [phone,setPhone]=useState("");
+  const [address,setAddress]=useState("");
+  const [role,setRole]=useState("grandparent");
+  const [sent,setSent]=useState(false);
+  const [canGuard,setCanGuard]=useState(false);
+  const [copied,setCopied]=useState(false);
+  const obs=cfg.observers||[];
+  const pending=obs.filter(o=>o.status==="pending");
+  const active=obs.filter(o=>!o.status||o.status==="active"||o.status==="pending_invite"||o.status==="pending");
+  const rl={grandparent:t.grandparent,"uncle-aunt":t.uncleAunt,sibling:t.sibling,childcare:t.childcareRole,other:t.otherFamily};
+
+  // Nettoie le numéro pour WhatsApp (supprime espaces/tirets, gère le 0 → 33)
+  function cleanPhoneWA(p) {
+    if (!p) return null;
+    let c = p.replace(/[\s.\-()+]/g, "");
+    if (c.startsWith("00")) c = c.slice(2);
+    else if (c.startsWith("0")) c = "33" + c.slice(1);
+    return c || null;
+  }
+
+  const [genLoading, setGenLoading] = useState(false);
+  const [genErr, setGenErr]         = useState("");
+
+  // 🆕 Génération Supabase-backed (token + URL ?oinv=)
+  async function sendInvite(){
+    if(!email && !phone){ return; }
+    setGenLoading(true); setGenErr("");
+    try {
+      const fid = familySync?.familyId;
+      if (!fid) throw new Error("no_family");
+      const { data: token, error } = await supabase.rpc("create_observer_invitation", {
+        p_family_id: fid, p_obs_role: role, p_can_guard: canGuard,
+        p_email: email||"", p_phone: phone||"",
+      });
+      if (error || !token) throw error || new Error("no_token");
+      const qp = new URLSearchParams({ oinv: token });
+      if (email) qp.set("oemail", encodeURIComponent(email));
+      if (phone) qp.set("ophone", encodeURIComponent(phone));
+      const inviteUrl = `https://app.duvia.fr/?${qp.toString()}`;
+      setSent(inviteUrl);
+      // 🆕 Afficher l'obs dans la liste immédiatement (statut "en attente du lien")
+      setCfg(c => {
+        const alreadyThere = (c.observers||[]).some(o =>
+          (email && (o.email===email||o.userId===email)) ||
+          (phone && o.phone===phone)
+        );
+        if (alreadyThere) return c;
+        return { ...c, observers: [...(c.observers||[]), {
+          id: `invite-${token.slice(0,8)}`, inviteToken: token,
+          name: email||phone||"Observateur invité",
+          email: email||"", phone: phone||"",
+          address: address||"", role, canGuard,
+          status: "pending_invite",
+        }]};
+      });
+    } catch(e){
+      setGenErr("⚠️ Erreur lors de la génération du lien. Vérifiez que la migration SQL 0023 est appliquée.");
+      console.error("[Duvia] create_observer_invitation:", e);
+    } finally { setGenLoading(false); }
+  }
+
+  const inviteMsg = (url) =>
+    `Bonjour 👋\n${(cfg.parents?.[0]?.name)||""} t'invite à rejoindre la famille sur Duvia en tant qu'observateur.\nCrée ton compte ici :\n${url}`;
+
+  function handleSendEmail(){
+    if(!sent) return;
+    const subject = encodeURIComponent("Rejoins notre famille sur Duvia 👨‍👩‍👧");
+    const body    = encodeURIComponent(inviteMsg(sent));
+    const a = document.createElement("a");
+    a.href = `mailto:${email||""}?subject=${subject}&body=${body}`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }
+
+  function handleSendSMS(){
+    if(!sent) return;
+    const p = phone ? phone.replace(/[\s.\-()+]/g,"") : "";
+    window.open(`sms:${p}?&body=${encodeURIComponent(inviteMsg(sent))}`, "_blank");
+  }
+
+  function handleSendWhatsApp(){
+    if(!sent) return;
+    const p = cleanPhoneWA(phone);
+    window.open(`https://wa.me/${p||""}?text=${encodeURIComponent(inviteMsg(sent))}`, "_blank");
+  }
+
+  // DEMO ONLY — simulate the invited person opening the link and registering,
+  // so the "pending approval" flow can be tested end-to-end without a backend.
+
+  function copyInvite(){
+    navigator.clipboard.writeText(sent).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);});
+  }
+
+  function approveObs(id){
+    setCfg(c=>({...c,observers:c.observers.map(o=>o.id===id?{...o,status:"active"}:o)}));
+    const obs=cfg.observers.find(o=>o.id===id);
+    pushNotif(`${t.obsApproved} — ${obs?.name||obs?.email}`,"obs");
+  }
+
+  function rejectObs(id){
+    const obs=cfg.observers.find(o=>o.id===id);
+    setCfg(c=>({...c,observers:c.observers.filter(o=>o.id!==id)}));
+    pushNotif(`${obs?.name||obs?.email} — ${t.obsRejected}`,"info");
+  }
+
+  return (
+    <div>
+      {/* ── Demandes en attente (repliée si vide) — parents uniquement ── */}
+      {!isObs && !isChild && familySync.pendingMembers.length > 0 && (
+      <>
+      <div className="sec" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span>👋 Demandes en attente ({familySync.pendingMembers.length})</span>
+        <button onClick={()=>familySync.refreshPendingMembers()} style={{background:"transparent",color:C.vio,fontSize:11,fontWeight:700,padding:"2px 8px"}}>🔄 Actualiser</button>
+      </div>
+      <div className="card" style={{marginBottom:16}}>
+        {familySync.pendingMembers.map(m => (
+          <div key={m.userId} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${C.bor}`}}>
+            <div style={{width:36,height:36,borderRadius:"50%",background:`${m.role==="observer"?C.ora:C.yel}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{m.role==="observer"?"👴":"⏳"}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:800,fontSize:13}}>{m.displayName || m.email || (m.role==="observer" ? (t.roleObs||"Observateur") : "Parent invité")}</div>
+              {m.displayName && m.email && <div style={{fontSize:10,color:C.mut}}>{m.email}</div>}
+              <div style={{fontSize:11,color:C.mut}}>{m.role==="observer"?`${t.roleObs||"Observateur"} — ${t.obsPendingInfo||"souhaite rejoindre la famille"}`:t.obsPendingInfo||"Souhaite rejoindre cette famille"}</div>
+            </div>
+            <button disabled={pendingActionId===m.userId} onClick={async ()=>{
+              setPendingActionId(m.userId);
+              // 🔧 Cherche la carte observateur correspondante par token (fiable) ou email
+              const obsCard = m.role==="observer" ? (cfg.observers||[]).find(o=>
+                (m.inviteToken && o.inviteToken && m.inviteToken===o.inviteToken) ||
+                (m.email && o.email && o.email===m.email) ||
+                (m.displayName && (o.email===m.displayName || o.name===m.displayName))
+              ) : null;
+              const res = await familySync.validateMember(obsCard ? {...m, obsCardId: obsCard.id} : m);
+              setPendingActionId(null);
+              if(!res.ok) alert("⚠️ Erreur lors de la validation.");
+            }} style={{padding:"7px 12px",background:C.grn,color:"#fff",borderRadius:8,fontSize:12,fontWeight:800,opacity:pendingActionId===m.userId?0.6:1}}>Valider</button>
+            <button disabled={pendingActionId===m.userId} onClick={async ()=>{
+              if(!window.confirm("Refuser cette demande ?")) return;
+              setPendingActionId(m.userId);
+              const res = await familySync.rejectMember(m.userId);
+              setPendingActionId(null);
+              if(!res.ok) alert("⚠️ Erreur lors du refus.");
+            }} style={{padding:"7px 12px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,borderRadius:8,fontSize:12,fontWeight:700,opacity:pendingActionId===m.userId?0.6:1}}>❌</button>
+          </div>
+        ))}
+      </div>
+      </>
+      )}
+
+      {/* Pending approvals déplacés dans les fiches observateurs ci-dessous */}
+
+      {/* ── Invite form ── */}
+      <div className="sec">📨 {t.obsInviteTitle}</div>
+      <div className="card" style={{marginBottom:16,position:"relative"}}>
+        {!prem&&<div style={{position:"absolute",inset:0,background:`${C.bg}cc`,backdropFilter:"blur(3px)",borderRadius:13,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,zIndex:5,cursor:"pointer"}} onClick={onUpgrade}><div style={{fontSize:24}}>📨</div><div style={{fontWeight:800,color:C.ora}}>🔒 {t.lockSection}</div><div style={{fontSize:11,color:C.mut}}>{t.lockDesc}</div></div>}
+        {!sent?(
+          <>
+            <div className="row">
+              <div className="field"><label className="lbl">{t.obsInviteEmail} <span style={{color:C.mut,fontWeight:400}}>({t.optional||"optionnel"})</span></label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="mamie@exemple.fr" /></div>
+              <div className="field"><label className="lbl">📞 {t.obsInvitePhone||"Téléphone"} <span style={{color:C.mut,fontWeight:400}}>({t.optional||"optionnel"})</span></label><input type="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} /></div>
+            </div>
+            <div style={{fontSize:11,color:C.mut,marginTop:-6,marginBottom:10}}>{t.obsInviteContactHint||"Renseignez au moins un moyen de contact (email ou téléphone)."}</div>
+            {/* Adresse postale */}
+            <div style={{marginBottom:10}}>
+              <label style={{fontSize:11,fontWeight:700,color:C.mut,textTransform:"uppercase",letterSpacing:".05em",display:"block",marginBottom:6}}>📍 {t.obsAddress||"Adresse postale"}</label>
+              <input value={address} onChange={e=>setAddress(e.target.value)} placeholder={t.obsAddressPh||"Numéro, rue, code postal, ville"} style={{width:"100%",boxSizing:"border-box",padding:"10px 14px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:13,background:C.sur,color:C.txt}} />
+            </div>
+            <div className="field"><label className="lbl">{t.obsInviteType}</label>
+              <CustomSelect value={role} onChange={v=>setRole(v)} options={[
+                {value:"grandparent",label:t.grandparent,icon:"👴"},
+                {value:"uncle-aunt",label:t.uncleAunt,icon:"👨‍👩‍👦"},
+                {value:"sibling",label:t.sibling,icon:"🧑‍🤝‍🧑"},
+                {value:"childcare",label:t.childcareRole,icon:"🍼"},
+                {value:"other",label:t.otherFamily,icon:"🧑"},
+              ]} />
+            </div>
+            <div onClick={()=>setCanGuard(v=>!v)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",marginBottom:10,background:canGuard?`#f59e0b18`:`${C.sur}`,border:`1.5px solid ${canGuard?"#f59e0b":C.bor}`,borderRadius:10,cursor:"pointer",transition:"all .15s"}}>
+              <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${canGuard?"#f59e0b":C.bor}`,background:canGuard?"#f59e0b":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>
+                {canGuard&&<span style={{color:"#fff",fontSize:13,fontWeight:900}}>✓</span>}
+              </div>
+              <div>
+                <div style={{fontSize:13,fontWeight:700,color:canGuard?"#f59e0b":C.txt}}>🏠 Peut être gardien</div>
+                <div style={{fontSize:11,color:C.mut}}>Apparaît dans le calendrier comme option de garde</div>
+              </div>
+            </div>
+            <button onClick={sendInvite} disabled={(!email&&!phone)||genLoading}
+              style={{width:"100%",height:44,background:((!email&&!phone)||genLoading)?C.bor:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:14,fontWeight:800,borderRadius:12,cursor:((!email&&!phone)||genLoading)?"not-allowed":"pointer"}}>
+              {genLoading?"⏳ Génération…":(t.obsInviteGenerate||t.obsInviteSend)}
+            </button>
+            {genErr && <div style={{fontSize:11,color:C.red,marginTop:8,lineHeight:1.4}}>{genErr}</div>}
+          </>
+        ):null}
+      </div>
+      {sent && (
+        <button onClick={()=>{setSent(false);setCopied(false);setEmail("");setPhone("");setAddress("");setRole("grandparent");setCanGuard(false);}}
+          style={{width:"100%",height:38,marginBottom:16,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13,borderRadius:10}}>{t.addObsBtn} →</button>
+      )}
+
+      {/* ── Active observers list ── */}
+      <div className="sec">{t.observersTitle} ({active.length})</div>
+      {active.length===0?<div style={{textAlign:"center",padding:28,color:C.mut}}><div style={{fontSize:32,marginBottom:8}}>👥</div>{t.noObs}</div>:active.map(o=>{
+        const setObsField=(field,val)=>setCfg(c=>({...c,observers:c.observers.map(x=>x.id===o.id?{...x,[field]:val}:x)}));
+        // Observer pending validation (clicked the link, awaiting parent approval)
+        // Match par email (family_invitations.used_by) OU displayName (email souvent stocké
+        // comme display_name dans family_members par accept_observer_invitation)
+        const matchingPending = familySync.pendingMembers.find(m=>
+          m.role==="observer" && (
+            (m.inviteToken && o.inviteToken && m.inviteToken===o.inviteToken) ||
+            (m.email && o.email && m.email===o.email) ||
+            String(m.userId)===String(o.userId) ||
+            (m.displayName && (m.displayName===o.email || m.displayName===o.name))
+          )
+        );
+        // Invite link sent for this specific card
+        const cardSentUrl = (sent && o.inviteToken && typeof sent==="string" && sent.includes(o.inviteToken)) ? sent : null;
+        return (
+        <div key={o.id} className="card" style={{marginBottom:12,borderColor:matchingPending?`${C.grn}88`:o.status==="pending_invite"?`${C.yel}55`:`${C.ora}55`}}>
+          {/* Header */}
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+            {o.status==="pending_invite"
+              ? <div style={{width:40,height:40,borderRadius:"50%",background:`${C.mut}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,filter:"grayscale(1)"}}>📨</div>
+              : <AvatarPicker current={o.avatar||(o.role==="grandparent"?"👴":"👥")} color={C.ora} pool={OBS_AVATARS} onSelect={av=>setObsField("avatar",av)} />
+            }
+            <div style={{flex:1}}>
+              <div style={{fontWeight:800,fontSize:14,color:C.txt}}>{o.name}</div>
+              {matchingPending
+                ? <span className="badge" style={{background:`${C.grn}22`,color:C.grn,display:"inline-block",marginTop:2}}>🔔 A rejoint — en attente de validation</span>
+                : o.status==="pending_invite"
+                  ? <span className="badge" style={{background:`${C.yel}22`,color:C.yel,display:"inline-block",marginTop:2}}>⏳ En attente — lien non encore cliqué</span>
+                  : <span className="badge" style={{background:`${C.grn}22`,color:C.grn,display:"inline-block",marginTop:2}}>{rl[o.role]||o.role} · {t.obsStatusActive}</span>
+              }
+            </div>
+            <button onClick={async()=>{
+              if(!window.confirm(`Retirer ${o.name||o.email||"cet observateur"} de la famille ?`)) return;
+              // Supprimer de Supabase si l'observateur a un compte (userId)
+              if(o.userId){ await familySync.removeFamilyMember(o.userId); }
+              // Supprimer de cfg local
+              setCfg(c=>({...c,observers:c.observers.filter(x=>x.id!==o.id)}));
+            }} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.remove}</button>
+          </div>
+          {/* Contact */}
+          <div style={{display:"flex",gap:10,marginBottom:10}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>✉️ Email</div>
+              <input value={o.email||""} onChange={e=>setObsField("email",e.target.value)} placeholder="email@exemple.com" style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt}} />
+            </div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>📞 {t.contactsPhone||"Téléphone"}</div>
+              <input value={o.phone||""} onChange={e=>setObsField("phone",e.target.value)} placeholder="06 12 34 56 78" style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt}} />
+            </div>
+          </div>
+          {/* Lien de parenté + Adresse */}
+          <div style={{display:"flex",gap:10,marginBottom:10}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>{t.obsRelationship||"Lien avec l'enfant"}</div>
+              <input value={o.relationship||""} onChange={e=>setObsField("relationship",e.target.value)} placeholder={t.obsRelationshipPh||"ex : Grand-père de…"} style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt}} />
+            </div>
+          </div>
+          <div style={{marginBottom:10}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>🏠 {t.obsAddress||"📍 Adresse postale"}</div>
+            <input value={o.address||""} onChange={e=>setObsField("address",e.target.value)} placeholder={t.obsAddressPh||"Numéro, rue, code postal, ville"} style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt}} />
+          </div>
+          {/* Notes supprimées (simplification UX) */}
+          {/* canGuard toggle dans la fiche active */}
+          <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",marginTop:10,padding:"10px 14px",borderRadius:10,background:o.canGuard?`#f59e0b18`:`${C.bor}22`,border:`1.5px solid ${o.canGuard?"#f59e0b":C.bor}`,transition:"all .2s"}}>
+            <input type="checkbox" checked={!!o.canGuard} onChange={e=>setObsField("canGuard",e.target.checked)}
+              style={{width:18,height:18,accentColor:"#f59e0b",cursor:"pointer",flexShrink:0}} />
+            <div>
+              <div style={{fontSize:13,fontWeight:800,color:o.canGuard?"#f59e0b":C.txt}}>🏠 {t.obsCanGuard||"Peut être gardien"}</div>
+              <div style={{fontSize:11,color:C.mut}}>{t.obsCanGuardDesc||"Apparaît dans le calendrier comme option de garde"}</div>
+            </div>
+          </label>
+          {/* Liens rapides — appel uniquement */}
+          {o.phone && !matchingPending && <div style={{display:"flex",gap:8,marginTop:10}}>
+            <a href={`tel:${o.phone.replace(/\s/g,"")}`} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:8,background:`${C.grn}18`,border:`1.5px solid ${C.grn}44`,color:C.grn,textDecoration:"none",fontSize:12,fontWeight:700}}>📞 {t.contactsPhone||"Appeler"}</a>
+          </div>}
+          {/* Boutons envoi lien (déplacés depuis le bloc invite) */}
+          {cardSentUrl && (
+            <div style={{marginTop:12,padding:"10px 12px",borderRadius:10,background:`${C.yel}10`,border:`1.5px solid ${C.yel}44`}}>
+              <div style={{fontSize:11,color:C.grn,marginBottom:8,fontWeight:700}}>✅ {t.obsInviteExpiry||"Lien généré — partagez-le :"}</div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                <button onClick={handleSendSMS} disabled={!o.phone} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:o.phone?"pointer":"not-allowed",opacity:o.phone?1:.4,background:"#25D36618",color:"#128C7E",border:"1.5px solid #25D36644"}}>💬 SMS</button>
+                <button onClick={handleSendWhatsApp} disabled={!o.phone} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:o.phone?"pointer":"not-allowed",opacity:o.phone?1:.4,background:"#25D36618",color:"#25D366",border:"1.5px solid #25D36644"}}><span style={{fontSize:14}}>📱</span> WhatsApp</button>
+                <button onClick={handleSendEmail} disabled={!o.email} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:o.email?"pointer":"not-allowed",opacity:o.email?1:.4,background:`${C.vio}18`,color:C.vio,border:`1.5px solid ${C.vio}44`}}>✉️ Email</button>
+                <button onClick={copyInvite} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:copied?`${C.grn}18`:C.sur,color:copied?C.grn:C.mut,border:`1.5px solid ${C.bor}`}}>
+                  {copied ? "✅ Copié !" : "📋 Copier"}
+                </button>
+              </div>
+            </div>
+          )}
+          {/* Valider / Refuser l'observateur (sur sa fiche) */}
+          {matchingPending && (
+            <div style={{marginTop:12,display:"flex",gap:8}}>
+              <button disabled={pendingActionId===matchingPending.userId} onClick={async()=>{
+                setPendingActionId(matchingPending.userId);
+                const res = await familySync.validateMember({...matchingPending, obsCardId: o.id});
+                setPendingActionId(null);
+                if(!res.ok) alert("⚠️ Erreur lors de la validation.");
+              }} style={{flex:1,height:42,background:C.grn,color:"#fff",fontSize:13,fontWeight:800,borderRadius:10,opacity:pendingActionId===matchingPending.userId?0.6:1}}>{t.obsApprove||"Accepter"}</button>
+              <button disabled={pendingActionId===matchingPending.userId} onClick={async()=>{
+                if(!window.confirm("Refuser cette demande ?")) return;
+                setPendingActionId(matchingPending.userId);
+                const res = await familySync.rejectMember(matchingPending.userId);
+                setPendingActionId(null);
+                if(!res.ok) alert("⚠️ Erreur lors du refus.");
+              }} style={{padding:"0 16px",height:42,background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,fontSize:13,fontWeight:700,borderRadius:10,opacity:pendingActionId===matchingPending.userId?0.6:1}}>{t.obsReject||"Refuser"}</button>
+            </div>
+          )}
+        </div>
+      );})}
+    </div>
+  );
+}
+
+// Helper: Nth weekday of a month (weekday 0=Sun...6=Sat, n=1,2,3,-1=last)
+function nthWeekday(y, month, weekday, n) {
+  if (n > 0) {
+    let d = new Date(y, month, 1), count = 0;
+    while (count < n) { if (d.getDay() === weekday) count++; if (count < n) d.setDate(d.getDate() + 1); }
+    return d;
+  } else { // last
+    let d = new Date(y, month + 1, 0);
+    while (d.getDay() !== weekday) d.setDate(d.getDate() - 1);
+    return d;
+  }
+}
+
+// ─── FÊTES FAMILIALES PAR PAYS ────────────────────────────────────────────────
+// Format: [month(0-based), weekday(0=Sun), nth] | {fixed:[month,day]} | null
+
+const MOTHERS_DAY = {
+  FR:  [4, 0, -1],       // dernier dimanche de mai
+  BE:  [4, 0, -1],       // dernier dimanche de mai
+  LU:  [4, 0, -1],       // dernier dimanche de mai
+  CH:  [4, 0,  2],       // 2e dimanche de mai
+  AT:  [4, 0,  2],       // 2e dimanche de mai
+  DE:  [4, 0,  2],       // 2e dimanche de mai
+  NL:  [4, 0,  2],       // 2e dimanche de mai
+  IT:  [4, 0,  2],       // 2e dimanche de mai
+  ES:  [4, 0,  1],       // 1er dimanche de mai
+  PT:  [4, 0,  1],       // 1er dimanche de mai
+  GB:  [2, 0,  4],       // 4e dimanche de mars (Mothering Sunday)
+  IE:  [2, 0,  4],       // 4e dimanche de mars
+  CA:  [4, 0,  2],       // 2e dimanche de mai
+  PL:  {fixed:[4, 26]},  // 26 mai
+  CZ:  [4, 0,  2],       // 2e dimanche de mai
+  SK:  [4, 0,  2],       // 2e dimanche de mai
+  HR:  {fixed:[4, 22]},  // 22 mai
+};
+
+const FATHERS_DAY = {
+  FR:  [5, 0,  3],       // 3e dimanche de juin
+  BE:  [5, 0,  2],       // 2e dimanche de juin
+  LU:  [5, 0,  3],       // 3e dimanche de juin
+  CH:  [5, 0,  3],       // 3e dimanche de juin
+  AT:  [5, 0,  2],       // 2e dimanche de juin
+  DE:  null,             // Ascension (Himmelfahrt) — calculé séparément
+  NL:  [5, 0,  3],       // 3e dimanche de juin
+  IT:  {fixed:[2, 19]},  // 19 mars (Saint-Joseph)
+  ES:  {fixed:[2, 19]},  // 19 mars (Saint-Joseph)
+  PT:  {fixed:[2, 19]},  // 19 mars
+  GB:  [5, 0,  3],       // 3e dimanche de juin
+  IE:  [5, 0,  3],       // 3e dimanche de juin
+  CA:  [5, 0,  3],       // 3e dimanche de juin
+  PL:  {fixed:[5, 23]},  // 23 juin
+  CZ:  [5, 0,  3],       // 3e dimanche de juin
+  SK:  [5, 0,  3],       // 3e dimanche de juin
+  HR:  [5, 0,  3],       // 3e dimanche de juin
+};
+
+// Fête des grands-parents par pays
+const GRANDPARENTS_DAY = {
+  FR:  [2, 0,  1],       // 1er dimanche de mars
+  BE:  [2, 0,  1],       // 1er dimanche de mars
+  LU:  [2, 0,  1],       // 1er dimanche de mars
+  IT:  {fixed:[9,  2]},  // 2 octobre
+  ES:  {fixed:[7, 26]},  // 26 juillet (Saint-Joachim et Sainte-Anne)
+  PT:  {fixed:[7, 26]},  // 26 juillet
+  DE:  {fixed:[9,  9]},  // World Grandparents Day (ONU)
+  CH:  {fixed:[9,  9]},
+  AT:  {fixed:[9,  9]},
+  NL:  {fixed:[9,  9]},
+  GB:  [9, 0,  1],       // 1er dimanche d'octobre
+  IE:  [9, 0,  1],
+  CA:  [9, 0,  1],       // 1er dimanche d'octobre (après la fête du travail)
+  PL:  {fixed:[0, 21]},  // 21 janvier (Dzień Babci) — grand-mère
+  CZ:  {fixed:[9,  9]},
+  SK:  {fixed:[9,  9]},
+  HR:  {fixed:[9,  9]},
+};
+
+// Fête des grand-mères spécifique (Pologne, Russia-influenced)
+const GRANDMOTHER_DAY = {
+  PL: {fixed:[0, 21]},   // 21 janvier — Dzień Babci
+};
+const GRANDFATHER_DAY = {
+  PL: {fixed:[0, 22]},   // 22 janvier — Dzień Dziadka
+};
+
+function getEventDate(y, rule) {
+  if (!rule) return null;
+  if (rule.fixed) return new Date(y, rule.fixed[0], rule.fixed[1]);
+  const [month, weekday, nth] = rule;
+  return nthWeekday(y, month, weekday, nth);
+}
+
+function getMothersDayDate(y, country) {
+  const base = getEventDate(y, MOTHERS_DAY[country] || MOTHERS_DAY["FR"]);
+  // 🇫🇷 Règle légale française (art. D215-1 CASF) : dernier dimanche de mai,
+  // SAUF si ce dimanche coïncide avec la Pentecôte (Pâques + 49 j), auquel cas
+  // la Fête des Mères est reportée au 1er dimanche de juin.
+  if (country === "FR" && base) {
+    const easter = easterDate(y);
+    const pentecost = new Date(easter); pentecost.setDate(easter.getDate() + 49);
+    if (sameDay(base, pentecost)) return nthWeekday(y, 5, 0, 1); // 1er dimanche de juin
+  }
+  return base;
+}
+function getFathersDayDate(y, country) {
+  if (country === "DE") {
+    // Himmelfahrt = Ascension = Pâques + 39 jours
+    const easter = easterDate(y);
+    const asc = new Date(easter); asc.setDate(easter.getDate() + 39);
+    return asc;
+  }
+  return getEventDate(y, FATHERS_DAY[country]);
+}
+function getGrandparentsDayDate(y, country) {
+  return getEventDate(y, GRANDPARENTS_DAY[country]);
+}
+function getGrandmotherDayDate(y, country) {
+  return getEventDate(y, GRANDMOTHER_DAY[country]);
+}
+function getGrandfatherDayDate(y, country) {
+  return getEventDate(y, GRANDFATHER_DAY[country]);
+}
+
+function sameDay(d1, d2ref) {
+  return d1 && d2ref && d1.getFullYear()===d2ref.getFullYear() && d1.getMonth()===d2ref.getMonth() && d1.getDate()===d2ref.getDate();
+}
+
+// Retourne les événements spéciaux d'une date (anniversaires, fêtes)
+function getSpecialEvents(date, cfg) {
+  const events = [];
+  const m = date.getMonth() + 1, d2 = date.getDate(), y = date.getFullYear();
+  const country = cfg.country || "FR";
+
+  // Parents birthdays
+  cfg.parents.forEach((p, i) => {
+    if (p.birthDay && p.birthMonth && +p.birthDay === d2 && +p.birthMonth === m) {
+      events.push({ label: `🎂 ${p.name||"Parent "+(i+1)}`, color: p.color });
+    }
+  });
+  // Children birthdays
+  cfg.children.forEach((ch, i) => {
+    if (ch.birthDay && ch.birthMonth && +ch.birthDay === d2 && +ch.birthMonth === m) {
+      events.push({ label: `🎁 ${ch.name||"Enfant "+(i+1)}`, color: "#bc8cff" });
+    }
+  });
+
+  // ── Fêtes familiales — toujours affichées dans le calendrier ──────────────
+  const md = getMothersDayDate(y, country);
+  if (sameDay(md, date)) {
+    const label = country==="GB"||country==="IE" ? "🌸 Mothering Sunday"
+                : country==="DE" ? "🌸 Muttertag"
+                : country==="ES" ? "🌸 Día de la Madre"
+                : country==="PT" ? "🌸 Dia da Mãe"
+                : country==="IT" ? "🌸 Festa della Mamma"
+                : country==="NL" ? "🌸 Moederdag"
+                : country==="PL" ? "🌸 Dzień Matki"
+                : "🌸 Fête des Mères";
+    events.push({ label, color: "#ff6bb5" });
+  }
+
+  const fd = getFathersDayDate(y, country);
+  if (sameDay(fd, date)) {
+    const label = country==="GB"||country==="IE" ? "🎩 Father's Day"
+                : country==="DE" ? "🎩 Vatertag (Himmelfahrt)"
+                : country==="ES"||country==="PT"||country==="IT" ? "🎩 Día del Padre / San Giuseppe"
+                : country==="NL" ? "🎩 Vaderdag"
+                : country==="PL" ? "🎩 Dzień Ojca"
+                : "🎩 Fête des Pères";
+    events.push({ label, color: "#4a9eff" });
+  }
+
+  // Fête des grands-parents (générique)
+  const gpd = getGrandparentsDayDate(y, country);
+  if (sameDay(gpd, date)) {
+    const label = country==="IT" ? "👴 Festa dei Nonni"
+                : country==="ES"||country==="PT" ? "👴 Día de los Abuelos"
+                : country==="DE"||country==="CH"||country==="AT" ? "👴 Großelterntag"
+                : country==="GB"||country==="IE"||country==="CA" ? "👴 Grandparents Day"
+                : country==="NL" ? "👴 Grootoudersdag"
+                : "👴 Fête des Grands-Parents";
+    events.push({ label, color: "#f5a623" });
+  }
+
+  // Grand-mère spécifique (Pologne)
+  const gmd = getGrandmotherDayDate(y, country);
+  if (sameDay(gmd, date)) events.push({ label: "👵 Dzień Babci", color: "#f5a623" });
+
+  // Grand-père spécifique (Pologne)
+  const gfd = getGrandfatherDayDate(y, country);
+  if (sameDay(gfd, date)) events.push({ label: "👴 Dzień Dziadka", color: "#f5a623" });
+
+  // Custom dates
+  (cfg.specialDates?.custom||[]).forEach(cd => {
+    if (!cd.label || !cd.day || !cd.month) return;
+    const dayMatch = +cd.day === d2;
+    const monthMatch = +cd.month === m;
+    const yearMatch = cd.yearly || !cd.year || +cd.year === y;
+    if (dayMatch && monthMatch && yearMatch) {
+      const p = cfg.parents.find(p=>String(p.id)===String(cd.parentId)) || cfg.parents[0];
+      events.push({ label: `📌 ${cd.label}${p?.name?" → "+p.name.split(" ")[0]:""}`, color: p?.color||"#f5c842" });
+    }
+  });
+  return events;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CALENDAR TAB
+// ═══════════════════════════════════════════════════════════════════════════════
+function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
+  const {C,t,cfg,updateCal: ctxUpdateCal,apiData,setMenuTab,setConfigStep,prem,perms,onUpgrade,isObs,isChild,user,sub} = useApp();
+  const premFull = isPremFull(sub); // PDF calendrier réservé full premium uniquement
+  const editBlocked = !canEdit;
+  const updateCal = updateCalProp !== undefined ? updateCalProp : ctxUpdateCal;
+  // Persiste la position du calendrier dans localStorage pour survivre aux changements d'onglet et rechargements JSX
+  const [_calMs, _setCalMs] = useLocalStorage("duvia_cal_pos", ()=>{ const t=new Date(); return new Date(t.getFullYear(),t.getMonth(),1).getTime(); });
+  const [cur,setCurRaw]=useState(()=>{ const saved=_calMs; const d=new Date(saved); const now=new Date(); return (d.getFullYear()===now.getFullYear()&&Math.abs(d.getMonth()-now.getMonth())<=24)?new Date(d.getFullYear(),d.getMonth(),1):new Date(now.getFullYear(),now.getMonth(),1); });
+  const setCur=useCallback((v)=>{ setCurRaw(prev=>{ const next=typeof v==="function"?v(prev):v; _setCalMs(next.getTime()); return next; }); },[_setCalMs]);
+  const [inlineDs,setInlineDs]=useState(null);
+  const [fullDs,setFullDs]=useState(null);
+  const [showLegend,setShowLegend]=useState(false);
+  const [calView,setCalView]=useLocalStorage("duvia_cal_view","list");
+  const calViewDir=useRef("right"); // "right" = list→grid, "left" = grid→list
+  function switchCalView(v){ calViewDir.current=v==="grid"?"right":"left"; setCalView(v); }
+  const editRef=useRef(null);
+  const y=cur.getFullYear(),m=cur.getMonth();
+  const dc=dInMonth(y,m);
+  const multiChild = !cfg.sameGuardAll && cfg.children?.length > 1;
+  const [selChildId,setSelChildId]=useState(()=>cfg.children?.[0]?.id||null);
+  const activeChildId = multiChild ? selChildId : (cfg.children?.[0]?.id||null);
+
+  // ── Export calendrier PDF ─────────────────────────────────────────────────
+  const [calExportHtml, setCalExportHtml] = useState(null);
+  const calIframeRef = useRef(null);
+
+  function generateCalendarPDF() {
+    if(!premFull){ onUpgrade(); return; }
+    const p0 = cfg.parents[0]||{}, p1 = cfg.parents[1]||{};
+    const col0 = p0.color||"#f97316", col1 = p1.color||"#06b6d4";
+    const cols = [col0, col1];
+    const DAY_LTR = ["D","L","M","M","J","V","S"];
+    const MONTHS  = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+    const pubHols = new Set((apiData?.publicHols||[]).map(h=>h.date));
+    // Zone scolaire active (même logique que l'affichage du calendrier)
+    const activeCountry = (multiChild && activeChildId && cfg.childrenCountry?.[activeChildId]) || cfg.country || "FR";
+    const activeZoneData = (multiChild && activeChildId && cfg.childrenZones?.[activeChildId]) || {subdivisionCode:cfg.subdivisionCode||"",zone:cfg.zone||""};
+    const scoZone = activeZoneData.subdivisionCode || activeZoneData.zone;
+    const schoolHolPeriods = getHolsFromData(activeCountry, apiData, scoZone);
+
+    const today = new Date();
+    const startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    function buildMonth(mi){
+      const md = new Date(startDate.getFullYear(), startDate.getMonth()+mi, 1);
+      const yr = md.getFullYear(), mo = md.getMonth();
+      const nDays = dInMonth(yr,mo);
+      let rows="", lastWk=-1;
+
+      for(let d=1;d<=nDays;d++){
+        const date = new Date(yr,mo,d);
+        const ds   = toStr(date); // 🔧 Fix : toISOString() décale d'1 jour pour les fuseaux UTC+1/+2 (France) — toStr() garde la date locale.
+        const dow  = date.getDay();
+        const wk   = wkNum(date);
+        const isWE = dow===0||dow===6;
+        const isFH = pubHols.has(ds);
+        const isSH = schoolHolPeriods.some(h=>ds>=h.s&&ds<=h.e);
+        const guard= resolveGuard(ds,cfg,activeChildId);
+        const pIdx = guard?.parentIdx;
+        const isFullDay = !guard?.timeType || guard?.timeType === "full";
+
+        // Couleur de garde
+        let custBg;
+        if(isFH)       custBg = "#ef444488";
+        else if(pIdx===0) custBg = col0+"99";
+        else if(pIdx===1) custBg = col1+"99";
+        else            custBg = "#f0f0f0";
+
+        // Couleur vacances scolaires (vert)
+        const vacBg = isSH ? "#22c55ecc" : "transparent";
+
+        // Jour férié → 1ère et 2ème colonnes (lettre + numéro du jour) en rouge
+        const dlClass = `dl${isFH?" fer":""}`;
+        const dnClass = `dn${isFH?" fer":""}`;
+
+        const wkCell = wk!==lastWk
+          ? `<td class="wk">${wk}</td>`
+          : `<td class="wk"></td>`;
+        lastWk=wk;
+
+        if(isFullDay || !guard){
+          // Journée entière → 1 seule ligne
+          rows+=`<tr class="${isWE?"we":""}">
+            ${wkCell}
+            <td class="${dlClass}">${DAY_LTR[dow]}</td>
+            <td class="${dnClass}">${d}</td>
+            <td class="vac" style="background:${vacBg}"></td>
+            <td class="cu" colspan="2" style="background:${custBg}"></td>
+          </tr>`;
+        } else {
+          // Journée partagée → couleur variable selon le parent qui prend/rend la garde
+          const refIdx = (pIdx===0||pIdx===1) ? pIdx : 0;
+          const otherIdx = refIdx===0 ? 1 : 0;
+          let changeTime, firstColor, secondColor;
+          if(guard.timeType==="end"){
+            // ce parent garde l'enfant jusqu'à l'heure indiquée, puis passage à l'autre
+            changeTime  = guard.endTime || "12:00";
+            firstColor  = cols[refIdx];
+            secondColor = cols[otherIdx];
+          } else {
+            // "start" ou "split" : prise de garde par ce parent à l'heure indiquée
+            changeTime  = guard.startTime || guard.endTime || "12:00";
+            firstColor  = cols[otherIdx];
+            secondColor = cols[refIdx];
+          }
+          rows+=`<tr class="${isWE?"we":""}">
+            ${wkCell}
+            <td class="${dlClass}">${DAY_LTR[dow]}</td>
+            <td class="${dnClass}">${d}</td>
+            <td class="vac" style="background:${vacBg}"></td>
+            <td class="cu" style="background:${firstColor+"99"}">→${changeTime}</td>
+            <td class="cu" style="background:${secondColor+"99"}"></td>
+          </tr>`;
+        }
+      }
+
+      return `<div class="mo">
+        <div class="mhdr">${MONTHS[mo].toUpperCase()} ${yr}</div>
+        <table><tbody>${rows}</tbody></table>
+      </div>`;
+    }
+
+    let page1Months="", page2Months="";
+    for(let mi=0;mi<6;mi++)  page1Months += buildMonth(mi);
+    for(let mi=6;mi<12;mi++) page2Months += buildMonth(mi);
+
+    // Bornes des deux périodes (pour les sous-titres et le certificat)
+    const m1Start = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    const m1End   = new Date(startDate.getFullYear(), startDate.getMonth()+5, 1);
+    const m2Start = new Date(startDate.getFullYear(), startDate.getMonth()+6, 1);
+    const m2End   = new Date(startDate.getFullYear(), startDate.getMonth()+11, 1);
+    const periodLabel = (a,b) => `${MONTHS[a.getMonth()]} ${a.getFullYear()} – ${MONTHS[b.getMonth()]} ${b.getFullYear()}`;
+
+    const legendHTML = `<div class="leg">
+      <span><i class="lc" style="background:${col0}aa"></i>${p0.name||"Parent 1"}</span>
+      <span><i class="lc" style="background:${col1}aa"></i>${p1.name||"Parent 2"}</span>
+      <span><i class="lc fer-lc"></i>Jour férié</span>
+      <span><i class="lc" style="background:#22c55ecc"></i>Vacances scolaires</span>
+    </div>`;
+
+    const childrenNames = (cfg.children||[]).map(c=>c.name).filter(Boolean).join(", ") || "—";
+    const todayLabel = new Date().toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"});
+
+    const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Planning de garde — Duvia</title>
+<style>
+@page{size:A4 landscape;margin:0}
+@page certpage{size:A4 portrait;margin:0}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#999}
+body{font-family:Arial,sans-serif;font-size:8px;-webkit-print-color-adjust:exact;print-color-adjust:exact;display:flex;flex-direction:column;align-items:center;gap:8mm;padding:8mm 0}
+.page{width:297mm;height:210mm;padding:5mm;background:#fff;box-shadow:0 0 6px rgba(0,0,0,.35);page-break-after:always;overflow:hidden;display:flex;flex-direction:column}
+.page:last-child{page-break-after:auto}
+.page.cert{width:210mm;height:297mm;page:certpage}
+@media print{
+  html,body{background:#fff;padding:0;gap:0}
+  .page{box-shadow:none;width:auto;height:auto}
+  .page.cert{width:auto;height:auto}
+}
+h1{text-align:center;font-size:12px;font-weight:900;margin-bottom:2px}
+.sub{text-align:center;font-size:7.5px;color:#666;margin-bottom:3px}
+.leg{display:flex;gap:14px;justify-content:center;margin-bottom:4px;flex-wrap:wrap}
+.leg span{display:flex;align-items:center;gap:4px;font-size:7.5px;font-weight:700}
+.lc{width:13px;height:8px;border-radius:2px;display:inline-block;border:1px solid rgba(0,0,0,.15)}
+.fer-lc{background:#ef444488}
+.cal{flex:1;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:4px;min-height:0}
+.mo{border:1px solid #e0e0e0;border-radius:3px;overflow:hidden;display:flex;flex-direction:column}
+.mhdr{flex:none;font-weight:900;font-size:8px;text-align:center;padding:2px 2px;background:#fef3c7;color:#92400e;border-bottom:1px solid #e0e0e0;letter-spacing:.02em}
+table{flex:1;width:100%;border-collapse:collapse;table-layout:fixed}
+tr{height:10px}
+td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:nowrap;border-bottom:1px solid rgba(0,0,0,.04)}
+.wk{font-size:5px;color:#bbb;background:#fafafa;width:10px;text-align:center;border-right:1px solid #eee;font-weight:600}
+.dl{width:9px;text-align:center;font-weight:800;color:#333;font-size:7px}
+.dn{width:13px;text-align:right;padding-right:1px;font-weight:600;font-size:6.5px}
+.dl.fer,.dn.fer{background:#ef444433;color:#7f1d1d}
+.vac{width:6px;border-right:1px solid rgba(0,0,0,.07)}
+.cu{font-size:6px;color:#222;padding:0 2px}
+.we .dl{color:#888;font-style:italic}
+.we .dn{color:#888}
+.we{background:rgba(0,0,0,.018)}
+.cert{display:flex;align-items:center;justify-content:center;height:100%;min-height:185mm}
+.certbox{width:100%;max-width:680px;border:2px solid #c2745a;border-radius:10px;padding:34px 46px;text-align:center}
+.certbox h1{font-size:22px;margin-bottom:6px}
+.cert-sub{font-size:11px;color:#666;margin-bottom:24px}
+.cert-body{font-size:12.5px;line-height:1.8;text-align:left;color:#333}
+.cert-parents{display:flex;justify-content:center;gap:36px;margin:16px 0;font-weight:800;font-size:13px}
+.cert-parents .dot{width:12px;height:12px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:middle}
+.cert-note{font-size:10px;color:#666;font-style:italic;margin-top:14px}
+.cert-sign{display:flex;justify-content:space-around;margin-top:46px}
+.cert-sign-block{width:42%;font-size:11px;text-align:center}
+.cert-sign-line{border-bottom:1px solid #999;height:54px;margin-bottom:6px}
+.cert-footer{margin-top:34px;font-size:9px;color:#999}
+</style></head><body>
+
+<div class="page">
+  <h1>&#128197; Planning de garde &mdash; ${p0.name||"Parent 1"} &amp; ${p1.name||"Parent 2"}</h1>
+  <div class="sub">Page 1/2 &middot; ${periodLabel(m1Start,m1End)} &middot; Généré par Duvia le ${todayLabel}</div>
+  ${legendHTML}
+  <div class="cal">${page1Months}</div>
+</div>
+
+<div class="page">
+  <h1>&#128197; Planning de garde &mdash; ${p0.name||"Parent 1"} &amp; ${p1.name||"Parent 2"}</h1>
+  <div class="sub">Page 2/2 &middot; ${periodLabel(m2Start,m2End)} &middot; Généré par Duvia le ${todayLabel}</div>
+  ${legendHTML}
+  <div class="cal">${page2Months}</div>
+</div>
+
+<div class="page cert">
+  <div class="certbox">
+    <h1>&#128196; Certificat de planning de garde</h1>
+    <div class="cert-sub">Document généré automatiquement par l'application Duvia</div>
+    <div class="cert-body">
+      <p>Le présent document atteste du planning de garde alternée établi entre :</p>
+      <div class="cert-parents">
+        <div><span class="dot" style="background:${col0}"></span>${p0.name||"Parent 1"}</div>
+        <div><span class="dot" style="background:${col1}"></span>${p1.name||"Parent 2"}</div>
+      </div>
+      <p>Pour l'enfant / les enfants : <strong>${childrenNames}</strong></p>
+      <p>Période couverte par ce document : <strong>${periodLabel(m1Start,m2End)}</strong></p>
+      <p class="cert-note">Ce planning reflète l'organisation de la garde convenue entre les parents au moment de son édition. Toute modification ultérieure doit faire l'objet d'un accord mutuel entre les deux parents.</p>
+    </div>
+    <div class="cert-sign">
+      <div class="cert-sign-block"><div class="cert-sign-line"></div><div>${p0.name||"Parent 1"}<br/>Date et signature</div></div>
+      <div class="cert-sign-block"><div class="cert-sign-line"></div><div>${p1.name||"Parent 2"}<br/>Date et signature</div></div>
+    </div>
+    <div class="cert-footer">Document généré le ${todayLabel} via Duvia</div>
+  </div>
+</div>
+
+<script>window.addEventListener('message',e=>{if(e.data==='DUVIA_PRINT')window.print();});</script>
+</body></html>`;
+
+    setCalExportHtml(html);
+  }
+
+  return (
+    <div>
+      {/* ── Prévisualisation PDF calendrier ── */}
+      {calExportHtml && (
+        <div style={{position:"fixed",inset:0,zIndex:700,display:"flex",flexDirection:"column",background:"#111"}}>
+          <div style={{display:"flex",gap:8,padding:"10px 14px",background:"#1a1a2e",alignItems:"center",flexShrink:0}}>
+            <div style={{flex:1,fontSize:13,fontWeight:700,color:"#ede9fe"}}>📅 Planning de garde annuel — Duvia</div>
+            <button
+              onClick={()=>calIframeRef.current?.contentWindow?.postMessage("DUVIA_PRINT","*")}
+              style={{padding:"7px 16px",background:"#7B7CF5",color:"#fff",border:"none",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              🖨️ Imprimer → PDF
+            </button>
+            <button
+              onClick={()=>setCalExportHtml(null)}
+              style={{padding:"7px 12px",background:"rgba(255,255,255,.15)",color:"#fff",border:"none",borderRadius:8,fontSize:13,cursor:"pointer",fontWeight:700}}>
+              ✕
+            </button>
+          </div>
+          <iframe ref={calIframeRef} srcDoc={calExportHtml}
+            style={{flex:1,border:"none",background:"white"}}
+            title="Planning PDF Duvia"
+            sandbox="allow-same-origin allow-scripts allow-modals allow-popups" />
+        </div>
+      )}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+        <div>
+          <div style={{fontSize:16,fontWeight:900}}>📅 {t.tabCal||"Calendrier"}</div>
+          <div style={{fontSize:11,color:C.mut}}>{t.calSub||"Planning de garde mensuel"}</div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          {!isObs && !isChild && (
+            <>
+              <button onClick={()=>downloadICS(cfg)}
+                title="Exporter dans Google Calendar / Apple Calendar"
+                style={{display:"flex",alignItems:"center",gap:3,padding:"3px 7px",background:`${C.grn}15`,border:`1px solid ${C.grn}44`,borderRadius:6,cursor:"pointer",transition:"all .15s"}}>
+                <span style={{fontSize:10}}>📅</span>
+                <span style={{fontSize:9,color:C.grn,fontWeight:800}}>iCal</span>
+              </button>
+              <button onClick={()=>{ if(!premFull){ onUpgrade(); return; } generateCalendarPDF(); }}
+                title={premFull ? "Exporter le planning annuel en PDF" : "Réservé aux membres Premium abonnés"}
+                style={{display:"flex",alignItems:"center",gap:3,padding:"3px 7px",background:premFull?`${C.vio}15`:`${C.mut}15`,border:`1px solid ${premFull?C.vio:C.mut}44`,borderRadius:6,cursor:"pointer",transition:"all .15s",opacity:premFull?1:.6}}>
+                <span style={{fontSize:10}}>{premFull?"📄":"🔒"}</span>
+                <span style={{fontSize:9,color:premFull?C.vio:C.mut,fontWeight:800}}>PDF</span>
+              </button>
+            </>
+          )}
+          <InfoBubble C={C} tipKey={`duvia_caltip_${user?.id||"x"}`} title={t.tabCal||"Calendrier"} autoOpen={false}>
+            {t.calTipBody||"Visualisez et gérez le planning de garde mensuel. Il est visible par tous les membres de la famille."}
+            <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid rgba(255,255,255,.25)"}}>
+              {t.calTipGuardians||"🏠 Gardiens : un proche invité avec l'option « Peut être gardien » (Configuration → Accès) apparaît ici en orange. Vous pouvez alors lui attribuer une journée de garde — par exemple quand les grands-parents gardent les enfants à la place d'un parent."}
+            </div>
+          </InfoBubble>
+        </div>
+      </div>
+      {/* Sélecteur d'enfant */}
+      {multiChild && (
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+          {cfg.children.map(ch=>{
+            const isActive = selChildId===ch.id;
+            const confirmed = cfg.custodyPerChild?.[ch.id]?.confirmed;
+            return (
+              <button key={ch.id} onClick={()=>setSelChildId(ch.id)}
+                style={{padding:"7px 14px",background:isActive?C.vio:C.sur,color:isActive?"#fff":C.mut,
+                  border:`1.5px solid ${isActive?C.vio:C.bor}`,borderRadius:10,fontSize:13,fontWeight:700,
+                  display:"flex",alignItems:"center",gap:6}}>
+                {ch.avatar||"🧒"} {ch.name||`Enfant`}
+                {confirmed
+                  ? <span style={{fontSize:10,opacity:.8}}>✅</span>
+                  : <span style={{fontSize:10,opacity:.5}}>⏳</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {/* Bulle d'info : modèle de garde non validé */}
+      {(() => {
+        const hasUnconfirmed = multiChild
+          ? cfg.children?.some(ch => !cfg.custodyPerChild?.[ch.id]?.confirmed)
+          : !cfg.custody?.confirmed;
+        if (!hasUnconfirmed) return null;
+        return (
+          <button onClick={()=>{ setMenuTab("config"); setConfigStep(3); }}
+            style={{
+              width:"100%",display:"flex",alignItems:"center",gap:10,
+              background:`${C.yel}18`,border:`1.5px solid ${C.yel}88`,
+              borderRadius:12,padding:"10px 14px",marginBottom:14,
+              cursor:"pointer",textAlign:"left",
+            }}>
+            <span style={{fontSize:20,flexShrink:0}}>⏳</span>
+            <span style={{flex:1,fontSize:13,fontWeight:700,color:C.yel,lineHeight:1.4}}>
+              {t.calValidateGuardModel || "Veuillez valider le modèle de garde"}
+            </span>
+            <span style={{fontSize:16,color:C.yel,opacity:.8,flexShrink:0}}>→</span>
+          </button>
+        );
+      })()}
+
+      {/* Bannière freemium lock */}
+      {editBlocked && !isObs && !isChild && (
+        <div onClick={onUpgrade} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",marginBottom:14,background:`${C.vio}10`,border:`1.5px dashed ${C.vio}55`,borderRadius:14,cursor:"pointer"}}>
+          <span style={{fontSize:20,flexShrink:0}}>🔒</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:12,fontWeight:800,color:C.vio}}>Édition détaillée — Premium</div>
+            <div style={{fontSize:11,color:C.mut,marginTop:1}}>Horaires, lieu, notes : disponibles avec Premium.</div>
+          </div>
+          <div style={{flexShrink:0,padding:"5px 10px",background:`${C.vio}22`,color:C.vio,borderRadius:8,fontSize:11,fontWeight:800}}>⭐ Premium</div>
+        </div>
+      )}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <button onClick={()=>setCur(d=>new Date(d.getFullYear(),d.getMonth()-1,1))} style={{padding:4,background:"transparent",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <svg width="44" height="44" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="gradLeft" x1="64" y1="32" x2="0" y2="32" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#7AC8FF"/>
+                <stop offset="1" stopColor="#C68BFF"/>
+              </linearGradient>
+              <filter id="glowLeft" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="4" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+            <path d="M44 16L20 32L44 48" stroke="url(#gradLeft)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" filter="url(#glowLeft)"/>
+          </svg>
+        </button>
+        <div style={{textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+          <div style={{fontSize:19,fontWeight:900}}>{t.months[m]} {y}</div>
+          {(() => {
+            const now = new Date();
+            const isCurrentMonth = now.getFullYear()===y && now.getMonth()===m;
+            return !isCurrentMonth ? (
+              <button onClick={()=>setCur(new Date(now.getFullYear(),now.getMonth(),1))}
+                style={{padding:"3px 12px",background:C.vio,color:"#fff",fontSize:11,fontWeight:800,borderRadius:20,border:"none"}}>
+                📍 {t.calToday||"Aujourd'hui"}
+              </button>
+            ) : (
+              <div style={{fontSize:10,color:C.vio,fontWeight:700}}>📍 {t.calCurrentMonth||"Mois actuel"}</div>
+            );
+          })()}
+          {readOnly&&<div style={{fontSize:10,color:C.ora,fontWeight:700}}>{t.readOnly}</div>}
+        </div>
+        <button onClick={()=>setCur(d=>new Date(d.getFullYear(),d.getMonth()+1,1))} style={{padding:4,background:"transparent",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <svg width="44" height="44" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="gradRight" x1="0" y1="32" x2="64" y2="32" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#7AC8FF"/>
+                <stop offset="1" stopColor="#C68BFF"/>
+              </linearGradient>
+              <filter id="glowRight" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="4" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+            <path d="M20 16L44 32L20 48" stroke="url(#gradRight)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" filter="url(#glowRight)"/>
+          </svg>
+        </button>
+      </div>
+      <div style={{marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
+        <div>
+          <button onClick={()=>setShowLegend(v=>!v)} style={{padding:"1px 10px",height:24,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:20,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
+            <span>🏷️ {t.calLegend||"Légende"}</span>
+            <span style={{fontSize:9,transition:"transform .2s",display:"inline-block",transform:showLegend?"rotate(180deg)":"rotate(0deg)"}}>▼</span>
+          </button>
+          {showLegend&&(
+            <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap",padding:"8px 12px",background:C.sur,borderRadius:8,border:`1.5px solid ${C.bor}`}}>
+              <span className="chip" style={{fontSize:11}}><span style={{fontSize:11,fontWeight:900,color:C.red,marginRight:4}}>14</span>{t.holiday}</span>
+              <span className="chip" style={{fontSize:11}}><span style={{width:14,height:14,borderRadius:4,border:`2px solid ${C.grn}`,display:"inline-block",marginRight:4,verticalAlign:"middle"}} />{t.vacation}</span>
+              <span className="chip" style={{fontSize:11}}>🌸 {t.motherDay?.replace(/^🌸\s*/,"")||"Fête des Mères"}</span>
+              <span className="chip" style={{fontSize:11}}>🎩 {t.fatherDay?.replace(/^🎩\s*/,"")||"Fête des Pères"}</span>
+              <span className="chip" style={{fontSize:11}}>👴 {t.calGrandparents||"Grands-Parents"}</span>
+              {cfg.parents.map((p,i)=>p.name&&<span key={i} className="chip" style={{fontSize:11,borderColor:p.color,background:`${p.color}20`,color:p.color,fontWeight:700}}><span style={{width:8,height:8,borderRadius:"50%",background:p.color,display:"inline-block",marginRight:4,flexShrink:0}} />{p.name}</span>)}
+              {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=><span key={o.id} className="chip" style={{fontSize:11,borderColor:"#f59e0b"}}><span style={{width:8,height:8,borderRadius:"50%",background:"#f59e0b",display:"inline-block",marginRight:4}} />🏠 {obsLabel(o)}</span>)}
+            </div>
+          )}
+        </div>
+        <div style={{display:"flex",gap:2,background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:20,padding:2,flexShrink:0}}>
+          <button onClick={()=>switchCalView("list")}
+            style={{padding:"0 12px",height:26,background:calView==="list"?C.vio:"transparent",color:calView==="list"?"#fff":C.mut,border:"none",borderRadius:18,fontSize:11,fontWeight:800,display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}>
+            ☰ {t.calViewList||"Détaillée"}
+          </button>
+          <button onClick={()=>switchCalView("grid")}
+            style={{padding:"0 12px",height:26,background:calView==="grid"?C.vio:"transparent",color:calView==="grid"?"#fff":C.mut,border:"none",borderRadius:18,fontSize:11,fontWeight:800,display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}>
+            ▦ {t.calViewGrid||"Mois"}
+          </button>
+        </div>
+      </div>
+      <style>{`
+        @keyframes calSlideInRight{from{opacity:0;transform:translateX(32px) scale(0.98)}to{opacity:1;transform:translateX(0) scale(1)}}
+        @keyframes calSlideInLeft{from{opacity:0;transform:translateX(-32px) scale(0.98)}to{opacity:1;transform:translateX(0) scale(1)}}
+      `}</style>
+      {calView==="grid" && (
+        <div style={{animation:`calSlideIn${calViewDir.current==="right"?"Right":"Left"} 0.28s cubic-bezier(.22,.68,0,1.2) both`}}>
+        <MonthGridCalendar
+          y={y} m={m} dc={dc} cfg={cfg} t={t} C={C} apiData={apiData}
+          multiChild={multiChild} activeChildId={activeChildId}
+          readOnly={readOnly} editBlocked={editBlocked}
+          inlineDs={inlineDs} setInlineDs={setInlineDs}
+          setFullDs={setFullDs}
+        />
+        </div>
+      )}
+      {calView==="list" && (
+        <div style={{animation:`calSlideIn${calViewDir.current==="left"?"Left":"Right"} 0.28s cubic-bezier(.22,.68,0,1.2) both`}}>
+      <div className="card" style={{padding:0,overflow:"hidden"}}>
+        <div style={{display:"grid",gridTemplateColumns:"32px 96px 1fr 1fr",background:C.sur,padding:"8px 12px",fontSize:10,color:C.mut,fontWeight:800,letterSpacing:".1em",textTransform:"uppercase",borderBottom:`1.5px solid ${C.bor}`}}>
+          <span>{t.wk}</span><span>{t.day}</span><span>{t.info}</span>
+          <span>{t.guard} {!readOnly&&<span style={{color:C.vio,fontSize:9,fontWeight:400,textTransform:"none"}}>{t.tapToEdit}</span>}</span>
+        </div>
+        {Array.from({length:dc},(_,i)=>{
+          const day=i+1,date=new Date(y,m,day),dw=dow(y,m,day),isWE=dw>=5;
+          const activeCountry = (multiChild && activeChildId && cfg.childrenCountry?.[activeChildId]) || cfg.country || "FR";
+          const activeZoneData = (multiChild && activeChildId && cfg.childrenZones?.[activeChildId]) || {subdivisionCode:cfg.subdivisionCode||"",zone:cfg.zone||""};
+          const ds=toStr(date),ferName=getPublicHolName(ds,activeCountry,apiData),fer=!!ferName,scoZone=activeZoneData.subdivisionCode||activeZoneData.zone,scoName=getHolName(ds,scoZone,activeCountry,apiData),sco=!!scoName,specials=getSpecialEvents(date,cfg);
+          const guard=resolveGuard(ds,cfg,activeChildId),wk=wkNum(date),isInl=inlineDs===ds;
+          const todayStr=toStr(new Date()),isToday=ds===todayStr;
+          return (
+            <div key={i}>
+              <div style={{display:"grid",gridTemplateColumns:"32px 96px 1fr 1fr",padding:"8px 12px",borderBottom:`1px solid ${C.bor}`,background:isInl?C.sur:isToday?`${C.vio}18`:isWE?`${C.yel}11`:"transparent",transition:"background .15s",borderLeft:isToday?`3px solid ${C.vio}`:"3px solid transparent"}}>
+                <span style={{fontFamily:"JetBrains Mono",fontSize:10,color:C.mut,alignSelf:"center"}}>{dw===0?wk:""}</span>
+                <div style={{alignSelf:"center"}}>
+                  <div style={{fontFamily:"JetBrains Mono",fontSize:13,fontWeight:700,color:isToday?C.vio:isWE?C.yel:C.txt,display:"flex",alignItems:"center",gap:5}}>
+                    {pad(day)}
+                    {isToday&&<span style={{fontSize:9,background:C.vio,color:"#fff",padding:"1px 5px",borderRadius:6,fontWeight:800,fontFamily:"Nunito"}}>{t.calTodayBadge||"Auj."}</span>}
+                  </div>
+                  <div style={{fontSize:11,color:isToday?C.vio:isWE?C.yel:C.mut,fontWeight:600}}>{t.dayNames[dw]}</div>
+                </div>
+                <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
+                  {fer&&<span className="badge" style={{background:`${C.red}22`,color:C.red,maxWidth:90,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={ferName||t.holiday}>{ferName||t.holiday}</span>}
+                  {sco&&<span className="badge" style={{background:`${C.grn}22`,color:C.grn,maxWidth:110,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={scoName}>{scoName}</span>}
+                  {specials.map((ev,ei)=>(
+                    <span key={ei} className="badge" style={{background:`${ev.color}22`,color:ev.color,maxWidth:110,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={ev.label}>{ev.label}</span>
+                  ))}
+                </div>
+                <GuardCell guard={guard} readOnly={readOnly} isOpen={isInl}
+                  onClick={()=>{if(!readOnly){setInlineDs(isInl?null:ds);setFullDs(null);}}}
+                  onFull={()=>{if(!editBlocked){setFullDs(ds);setInlineDs(null);}}} />
+              </div>
+              {isInl&&!readOnly&&<InlinePicker ds={ds} guard={guard} onClose={()=>setInlineDs(null)} onFull={!editBlocked?()=>{setFullDs(ds);setInlineDs(null);}:null} />}
+            </div>
+          );
+        })}
+      </div>
+      </div>
+      )}
+      {fullDs&&!readOnly&&!editBlocked&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setFullDs(null)}><div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto",borderRadius:18}}><EditDay ds={fullDs} onClose={()=>setFullDs(null)} editRef={editRef} /></div></div>)}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VUE GRILLE MENSUELLE (calendrier "façon papier" — cases colorées par parent)
+// ═══════════════════════════════════════════════════════════════════════════════
+function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,readOnly,editBlocked,inlineDs,setInlineDs,setFullDs}) {
+  const {weekStart="lundi"} = useApp();
+  const sunFirst = weekStart === "dimanche";
+  const activeCountry = (multiChild && activeChildId && cfg.childrenCountry?.[activeChildId]) || cfg.country || "FR";
+  const activeZoneData = (multiChild && activeChildId && cfg.childrenZones?.[activeChildId]) || {subdivisionCode:cfg.subdivisionCode||"",zone:cfg.zone||""};
+  const scoZone = activeZoneData.subdivisionCode || activeZoneData.zone;
+  const todayStr = toStr(new Date());
+
+  // Nombre de cases vides avant le 1er du mois (selon premier jour de semaine)
+  const firstDow = sunFirst
+    ? new Date(y,m,1).getDay()     // Sun=0, Mon=1, ..., Sat=6
+    : dow(y,m,1);                  // Mon=0, ..., Sun=6 (ISO)
+
+  // Pré-calcule la garde + infos de chaque jour du mois
+  const days = Array.from({length:dc},(_,i)=>{
+    const day=i+1, date=new Date(y,m,day), ds=toStr(date), dw=dow(y,m,day);
+    const ferName=getPublicHolName(ds,activeCountry,apiData), fer=!!ferName;
+    const scoName=getHolName(ds,scoZone,activeCountry,apiData), sco=!!scoName;
+    const specials=getSpecialEvents(date,cfg);
+    const isBirthday=specials.some(ev=>ev.label?.includes("🎂")||ev.label?.includes("🎁"));
+    const guard=resolveGuard(ds,cfg,activeChildId);
+    return {day,ds,dw,fer,ferName,sco,scoName,specials,isBirthday,guard,isToday:ds===todayStr,isWE:dw>=5};
+  });
+
+  // Le badge rond résume "qui garde cette semaine" : on l'affiche le dimanche (fin de semaine,
+  // comme dans le calendrier papier de référence), ou sur le dernier jour du mois si celui-ci
+  // tombe avant un dimanche. On l'affiche aussi sur tout jour où la garde change réellement par
+  // rapport à la veille (utile pour les alternances non hebdomadaires : garde alternée par jour, etc.).
+  function parentKey(g){ if(!g) return null; if(g.allParents) return "all"; if(g.obsId) return `obs:${g.obsId}`; if(g.parentIdx>=0) return `p:${g.parentIdx}`; return null; }
+  days.forEach((d,i)=>{
+    const prevKey = i>0 ? parentKey(days[i-1].guard) : null;
+    const isRealChange = parentKey(d.guard) !== prevKey;
+    const isWeekEnd = d.dw===6 || i===days.length-1;
+    d.isChangeDay = isWeekEnd || isRealChange;
+    d.isRealChange = isRealChange; // changement effectif de gardien (pas juste dimanche)
+  });
+
+  function cellBg(g){
+    if(!g) return C.sur;
+    if(g.allParents) return "#a855f730";
+    if(g.obsId) return "#f59e0b30";
+    if(g.parentIdx>=0){ const p=cfg.parents[g.parentIdx]; return p?.color ? p.color+"30" : C.sur; }
+    return C.sur;
+  }
+  function badgeColor(g){
+    if(!g) return C.mut;
+    if(g.allParents) return "#a855f7";
+    if(g.obsId) return "#f59e0b";
+    if(g.parentIdx>=0){ const p=cfg.parents[g.parentIdx]; return p?.color || C.vio; }
+    return C.mut;
+  }
+  // Convertit "HH:MM" en pourcentage de la journée (00:00=0%, 12:00=50%, 24:00=100%)
+  function timeToPercent(hm){
+    if(!hm) return 50;
+    const [h,mi]=hm.split(":").map(Number);
+    if(Number.isNaN(h)) return 50;
+    return Math.max(0,Math.min(100,((h*60+(mi||0))/1440)*100));
+  }
+  // Jours avec prise/fin de garde à heure précise : dégradé vertical au prorata de l'heure
+  // (ex: prise à 07:55 → la couleur du matin occupe ~33% du haut de la case, le reste en bas).
+  days.forEach((d,i)=>{
+    d.splitBefore=null; d.splitAfter=null; d.splitPercent=null;
+    const g=d.guard;
+    let before=null, after=null, pct=null;
+    if(g && g.timeType==="start" && g.startTime){
+      before = badgeColor(i>0 ? days[i-1].guard : null);
+      after  = badgeColor(g);
+      pct    = timeToPercent(g.startTime);
+    } else if(g && g.timeType==="end" && g.endTime){
+      before = badgeColor(g);
+      after  = badgeColor(i<days.length-1 ? days[i+1].guard : null);
+      pct    = timeToPercent(g.endTime);
+    }
+    if(before && after && before!==after){
+      d.splitBefore=before; d.splitAfter=after; d.splitPercent=pct;
+    }
+  });
+  function badgeLabel(g){
+    if(!g) return "";
+    if(g.allParents) return "★";
+    if(g.obsId){ return "🏠"; }
+    if(g.parentIdx>=0){
+      const p=cfg.parents[g.parentIdx];
+      if(p?.name?.trim()) return p.name.trim().charAt(0).toUpperCase();
+      return String.fromCharCode(65+g.parentIdx); // A, B, C... si pas de prénom renseigné
+    }
+    return "";
+  }
+
+  const dayLettersBase = (t.dayNames||["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"])
+    .map(n=>(n.slice(0,3)+".").toUpperCase());
+  // Si dimanche en premier : [DIM., LUN., MAR., MER., JEU., VEN., SAM.]
+  const dayLetters = sunFirst
+    ? [dayLettersBase[6], ...dayLettersBase.slice(0,6)]
+    : dayLettersBase;
+
+  function openDay(ds){
+    if(readOnly) return;
+    setInlineDs(inlineDs===ds?null:ds);
+  }
+
+  return (
+    <div className="card" style={{padding:14,overflow:"hidden",width:"100%",boxSizing:"border-box"}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5,marginBottom:6,width:"100%",boxSizing:"border-box"}}>
+        {dayLetters.map((lbl,i)=>(
+          <div key={i} style={{textAlign:"center",fontSize:10,fontWeight:800,letterSpacing:".04em",color:C.mut,padding:"2px 0",minWidth:0,overflow:"hidden"}}>{lbl}</div>
+        ))}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5,width:"100%",boxSizing:"border-box"}}>
+        {Array.from({length:firstDow}).map((_,i)=>(
+          <div key={`pad-${i}`} style={{aspectRatio:"1",borderRadius:10,background:`${C.sur}66`,minWidth:0,boxSizing:"border-box"}} />
+        ))}
+        {days.map(d=>{
+          const hasSplit = d.splitBefore && d.splitAfter;
+          const bg = hasSplit
+            ? `linear-gradient(180deg, ${d.splitBefore}30 0%, ${d.splitBefore}30 ${d.splitPercent}%, ${d.splitAfter}30 ${d.splitPercent}%, ${d.splitAfter}30 100%)`
+            : (d.isToday ? `${C.vio}22` : cellBg(d.guard));
+          // Priorité couleur du numéro : férié (rouge gras) > week-end (gris foncé gras) > normal
+          const numColor = d.fer ? C.red : d.isWE ? "#52525b" : (d.isToday ? C.vio : C.txt);
+          const numWeight = (d.fer || d.isWE || d.isToday) ? 900 : 700;
+          // Détection icône spéciale (fête des mères, pères, grands-parents)
+          const specialIcon = !d.isBirthday && !d.fer && !d.sco
+            ? d.specials.find(ev => ev.label?.includes("🌸") || ev.label?.includes("🎩") || ev.label?.includes("👴") || ev.label?.includes("👵"))
+            : null;
+          const specialIconChar = specialIcon
+            ? (specialIcon.label?.match(/🌸|🎩|👴|👵/)?.[0] || null)
+            : null;
+          // Point coloré uniquement si ni vacances, ni jour férié, ni icône spéciale, ni anniversaire
+          const dotColor = !d.isBirthday && !d.fer && !d.sco && !specialIconChar
+            ? d.specials[0]?.color
+            : null;
+          // Encadrement vert si vacances scolaires (priorité sur bordure today/inline)
+          const scoBorder = d.sco ? `2px solid ${C.grn}` : null;
+          const activeBorder = d.isToday ? `1.5px solid ${C.vio}` : inlineDs===d.ds ? `1.5px solid ${C.vio}` : "1.5px solid transparent";
+          // Heure + lieu du rendez-vous de garde (ex: "12:00 → 14:00" / "📍 MANTES")
+          const g = d.guard;
+          let cellTime = "";
+          if(g && g.timeType && g.timeType!=="full"){
+            const st=g.startTime, et=g.endTime;
+            if(g.timeType==="start"&&st) cellTime=`▶ ${st}`;
+            else if(g.timeType==="end"&&et) cellTime=`⏹ ${et}`;
+            else if(g.timeType==="split"&&st&&et) cellTime=`${st} → ${et}`;
+            else if(g.timeType==="split"&&st) cellTime=`▶ ${st}`;
+            else if(g.timeType==="split"&&et) cellTime=`⏹ ${et}`;
+          }
+          const cellLocation = g?.location || "";
+          // 🔄 masqué si une heure de prise/fin est déjà affichée (lisibilité)
+          const hasBadge = d.isRealChange && d.guard && !d.isBirthday && !cellTime;
+          return (
+            <div key={d.ds} onClick={()=>openDay(d.ds)}
+              title={d.ferName||d.scoName||d.specials[0]?.label||undefined}
+              style={{
+                aspectRatio:"1",borderRadius:10,background:bg,padding:"6px 6px",
+                display:"flex",flexDirection:"column",justifyContent:"space-between",
+                cursor:readOnly?"default":"pointer",position:"relative",
+                border:scoBorder || activeBorder,
+                transition:"transform .12s, box-shadow .12s",
+                minWidth:0,boxSizing:"border-box",overflow:"hidden",
+              }}>
+              <span style={{display:"flex",alignItems:"center",gap:3}}>
+                <span style={{fontSize:13,fontWeight:numWeight,color:numColor}}>{d.day}</span>
+                {d.isBirthday && <span style={{fontSize:11,lineHeight:1}}>🎂</span>}
+              </span>
+              {(cellTime || cellLocation) && (
+                <span style={{textAlign:"center",minWidth:0,overflow:"hidden"}}>
+                  {cellTime && <span style={{display:"block",fontSize:9,fontWeight:800,color:C.vio,fontFamily:"JetBrains Mono",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cellTime}</span>}
+                  {cellLocation && <span style={{display:"block",fontSize:8,fontWeight:700,color:C.pin,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {cellLocation}</span>}
+                </span>
+              )}
+              {specialIconChar && (
+                <span style={{position:"absolute",top:5,right:5,fontSize:12,lineHeight:1}}>{specialIconChar}</span>
+              )}
+              {dotColor && (
+                <span style={{position:"absolute",top:7,right:7,width:6,height:6,borderRadius:"50%",background:dotColor}} />
+              )}
+              {hasBadge && (
+                <span style={{
+                  position:"absolute",bottom:5,right:5,
+                  fontSize:11,lineHeight:1,opacity:0.75,
+                }}>🔄</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {inlineDs && !readOnly && (() => {
+        const d = days.find(d=>d.ds===inlineDs);
+        if(!d) return null;
+        const dayInfo = [];
+        if(d.fer) dayInfo.push({icon:"📍",label:d.ferName||t.holiday||"Férié",color:C.red});
+        if(d.sco) dayInfo.push({icon:"🌿",label:d.scoName||t.vacation||"Vacances",color:C.grn});
+        d.specials.forEach(ev=>dayInfo.push({icon:"",label:ev.label,color:ev.color}));
+        return (
+          <div style={{marginTop:10}}>
+            <InlinePicker ds={inlineDs} guard={d.guard} onClose={()=>setInlineDs(null)} dayInfo={dayInfo}
+              onFull={!editBlocked?()=>{setFullDs(inlineDs);setInlineDs(null);}:null} />
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+function GuardCell({guard,readOnly,isOpen,onClick,onFull}) {
+  const {C,t,cfg} = useApp();
+  const parents = cfg.parents;
+  const gP=guard?.allParents ? null : (guard?.parentIdx!==undefined && guard.parentIdx>=0 ? parents[guard.parentIdx] : null);
+  const gObs=guard?.obsId ? (cfg.observers||[]).find(o=>String(o.id)===String(guard.obsId)) : null;
+  const isAllParents = guard?.allParents === true;
+  const borderColor = gObs?"#f59e0b":gP?.color||"#a855f7";
+  return (
+    <div onClick={readOnly?undefined:onClick} style={{display:"flex",alignItems:"center",gap:7,cursor:readOnly?"default":"pointer",padding:"4px 7px",borderRadius:8,border:`1.5px solid ${isOpen&&(gP||isAllParents||gObs)?borderColor:isOpen?C.vio:"transparent"}`,background:isOpen?`${borderColor}11`:"transparent",transition:"all .15s"}}>
+      {isAllParents?(
+        <div style={{display:"flex",alignItems:"center",gap:7,width:"100%"}}>
+          <div style={{display:"flex",gap:2,flexShrink:0}}>
+            {parents.map((p,i)=><span key={i} style={{width:8,height:8,borderRadius:"50%",background:p.color}} />)}
+          </div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:12,fontWeight:700,color:C.txt}}>{parents.map(p=>p.name).filter(Boolean).join(" & ")||"Tous"}</div>
+            <div style={{fontSize:9,color:"#bc8cff",fontWeight:700}}>🎁 Ensemble</div>
+          </div>
+          {!readOnly&&<span style={{fontSize:10,color:C.vio}}>✎</span>}
+        </div>
+      ) : gObs?(
+        <div style={{display:"flex",alignItems:"center",gap:7,width:"100%"}}>
+          <span style={{width:10,height:10,borderRadius:"50%",background:"#f59e0b",flexShrink:0}} />
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{gObs.name||guard.obsName||"Gardien"}</div>
+            <div style={{fontSize:9,color:"#f59e0b",fontWeight:700}}>🏠 Gardien</div>
+          </div>
+          {!readOnly&&<span style={{fontSize:10,color:C.vio}}>✎</span>}
+        </div>
+      ) : gP?(
+        <div style={{display:"flex",alignItems:"center",gap:7,width:"100%"}}>
+          <span style={{width:10,height:10,borderRadius:"50%",background:gP.color,flexShrink:0}} />
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{gP.name||`P${guard.parentIdx+1}`}</div>
+            {guard.source==="schoolHol"&&<div style={{fontSize:9,color:C.grn,fontWeight:700}}>🌿 {t.calSchoolHol||"Vacances"}</div>}
+            {guard.source==="parentBirthday"&&<div style={{fontSize:9,color:"#f97316",fontWeight:700}}>🎂</div>}
+            {guard.source==="childBirthday"&&<div style={{fontSize:9,color:"#bc8cff",fontWeight:700}}>🎁</div>}
+            {guard.timeType&&guard.timeType!=="full"&&(()=>{
+              const st=guard.startTime; const et=guard.endTime;
+              let timeStr="";
+              if(guard.timeType==="start"&&st) timeStr=`▶ ${st}`;
+              else if(guard.timeType==="end"&&et) timeStr=`⏹ ${et}`;
+              else if(guard.timeType==="split"&&st&&et) timeStr=`${st} → ${et}`;
+              else if(guard.timeType==="split"&&st) timeStr=`▶ ${st}`;
+              else if(guard.timeType==="split"&&et) timeStr=`⏹ ${et}`;
+              return timeStr?(
+                <div style={{fontSize:10,color:C.vio,fontWeight:700}}>
+                  {timeStr}{guard.location&&<span style={{color:C.mut,fontWeight:400}}> 📍{guard.location}</span>}
+                </div>
+              ):null;
+            })()}
+          </div>
+          {!readOnly&&<span style={{fontSize:10,color:C.vio}}>✎</span>}
+        </div>
+      ):(
+        <span style={{fontSize:12,color:C.mut}}>{readOnly?"—":t.whichParent}</span>
+      )}
+    </div>
+  );
+}
+
+function InlinePicker({ds,guard,onClose,onFull,dayInfo}) {
+  const {C,t,cfg,updateCal} = useApp();
+  const guardianObs=(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard);
+  // Résumé heure/lieu du rendez-vous (même logique que GuardCell), affiché dans le panneau rapide
+  const timeStr = (()=>{
+    if(!guard || !guard.timeType || guard.timeType==="full") return "";
+    const st=guard.startTime, et=guard.endTime;
+    if(guard.timeType==="start"&&st) return `▶ ${st}`;
+    if(guard.timeType==="end"&&et) return `⏹ ${et}`;
+    if(guard.timeType==="split"&&st&&et) return `${st} → ${et}`;
+    if(guard.timeType==="split"&&st) return `▶ ${st}`;
+    if(guard.timeType==="split"&&et) return `⏹ ${et}`;
+    return "";
+  })();
+  const hasRdv = !!(timeStr || guard?.location || guard?.note);
+  return (
+    <div className="fi" style={{background:C.sur,borderBottom:`1.5px solid ${C.bor}`,padding:"9px 12px 12px",display:"flex",flexDirection:"column",gap:8}}>
+      {dayInfo && dayInfo.length>0 && (
+        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+          {dayInfo.map((info,i)=>(
+            <span key={i} style={{display:"flex",alignItems:"center",gap:4,padding:"3px 9px",borderRadius:14,background:`${info.color}1f`,color:info.color,fontSize:11,fontWeight:800}}>
+              {info.icon} {info.label}
+            </span>
+          ))}
+        </div>
+      )}
+      {hasRdv && (
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:12,background:`${C.vio}14`,border:`1.5px solid ${C.vio}33`,flexWrap:"wrap"}}>
+          {timeStr && <span style={{fontSize:14,fontWeight:900,color:C.vio,fontFamily:"JetBrains Mono"}}>{timeStr}</span>}
+          {guard?.location && (
+            <span style={{fontSize:12,fontWeight:800,color:C.pin,display:"flex",alignItems:"center",gap:3}}>
+              📍 {guard.location}
+            </span>
+          )}
+          {guard?.note && (
+            <span style={{fontSize:11,color:C.mut,fontStyle:"italic",width:"100%"}}>📝 {guard.note}</span>
+          )}
+        </div>
+      )}
+      <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
+        {cfg.parents.map((p,pi)=>(
+          <button key={pi} onClick={()=>{updateCal(ds,{parentIdx:pi,obsId:undefined,timeType:"full",startTime:"",endTime:"",location:"",note:""});onClose();}}
+            style={{padding:"5px 12px",background:guard?.parentIdx===pi&&!guard?.obsId?p.color:`${p.color}22`,color:guard?.parentIdx===pi&&!guard?.obsId?"#fff":p.color,border:`2px solid ${p.color}`,borderRadius:20,fontSize:13,fontWeight:700}}>
+            {p.name||`P${pi+1}`}
+          </button>
+        ))}
+        {guardianObs.map(o=>(
+          <button key={o.id} onClick={()=>{updateCal(ds,{parentIdx:undefined,obsId:o.id,obsName:o.name,timeType:"full",startTime:"",endTime:"",location:"",note:""});onClose();}}
+            style={{padding:"5px 12px",background:guard?.obsId===o.id?"#f59e0b":"#f59e0b18",color:guard?.obsId===o.id?"#fff":"#f59e0b",border:"2px solid #f59e0b",borderRadius:20,fontSize:13,fontWeight:700}}>
+            🏠 {obsLabel(o)}
+          </button>
+        ))}
+        <button onClick={()=>{updateCal(ds,{parentIdx:undefined,obsId:undefined});onClose();}} style={{padding:"5px 10px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:20,fontSize:12}}>✕</button>
+        {onFull
+          ? <button onClick={onFull} style={{padding:"5px 10px",background:"transparent",color:C.vio,border:`1.5px solid ${C.vio}`,borderRadius:20,fontSize:12,marginLeft:"auto"}}>{t.fullEdit}</button>
+          : <button disabled style={{padding:"5px 10px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:20,fontSize:12,marginLeft:"auto",opacity:.6,cursor:"not-allowed",display:"flex",alignItems:"center",gap:5}}>🔒 {t.fullEdit}</button>
+        }
+      </div>
+    </div>
+  );
+}
+
+function EditDay({ds,onClose,editRef}) {
+  const {C,t,cfg,updateCal} = useApp();
+  const ex=cfg.overrides[ds]||{};
+  const [pi,setPi]=useState(ex.obsId?`obs:${ex.obsId}`:(ex.parentIdx!==undefined?String(ex.parentIdx):""));
+  const [tt,setTt]=useState(ex.timeType||"full");
+  const [st,setSt]=useState(ex.startTime||"");
+  const [et,setEt]=useState(ex.endTime||"");
+  const [loc,setLoc]=useState(ex.location||"");
+  const [note,setNote]=useState(ex.note||"");
+  const guardianObs=(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard);
+  function save(){
+    if(pi.startsWith("obs:")){
+      const obsId=pi.slice(4);
+      const obs=guardianObs.find(o=>String(o.id)===obsId);
+      updateCal(ds,{parentIdx:undefined,obsId,obsName:obs?.name||"",timeType:tt,startTime:st,endTime:et,location:loc,note});
+    } else {
+      updateCal(ds,{parentIdx:pi===""?undefined:+pi,obsId:undefined,obsName:undefined,timeType:tt,startTime:st,endTime:et,location:loc,note});
+    }
+    onClose();
+  }
+  return (
+    <div ref={editRef} className="card fi" style={{marginTop:12,borderColor:C.vio,scrollMarginTop:12}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
+        <span style={{fontWeight:800}}>✏️ {t.editDay} — {ds.split("-").reverse().join("/")}</span>
+        <button onClick={onClose} style={{background:"transparent",color:C.mut,fontSize:18}}>×</button>
+      </div>
+      <div className="row">
+        <div className="field" style={{flex:1}}><label className="lbl">{t.guardParent}</label>
+          <select value={pi} onChange={e=>setPi(e.target.value)}>
+            <option value="">--</option>
+            {cfg.parents.map((p,i)=><option key={i} value={String(i)}>{p.name||`${t.parentN} ${i+1}`}</option>)}
+            {guardianObs.length>0&&<optgroup label="🏠 Gardiens">
+              {guardianObs.map(o=><option key={o.id} value={`obs:${o.id}`}>🏠 {obsLabel(o)}</option>)}
+            </optgroup>}
+          </select>
+        </div>
+        <div className="field" style={{flex:1}}><label className="lbl">{t.schedule}</label><select value={tt} onChange={e=>setTt(e.target.value)}><option value="full">{t.wholeDay}</option><option value="start">{t.pickup}</option><option value="end">{t.dropoff}</option><option value="split">{t.both}</option></select></div>
+      </div>
+      {(tt==="start"||tt==="split")&&<div className="field"><label className="lbl">{t.pickupTime}</label><input type="time" value={st} onChange={e=>setSt(e.target.value)} /></div>}
+      {(tt==="end"||tt==="split")&&<div className="field"><label className="lbl">{t.dropoffTime}</label><input type="time" value={et} onChange={e=>setEt(e.target.value)} /></div>}
+      {tt!=="full"&&<div className="field"><label className="lbl">{t.place}</label><input value={loc} onChange={e=>setLoc(e.target.value)} /></div>}
+      <div className="field"><label className="lbl">{t.note}</label><input value={note} onChange={e=>setNote(e.target.value)} /></div>
+      <button onClick={save} style={{width:"100%",padding:"10px",background:C.vio,color:"#fff"}}>{t.saveDay}</button>
+    </div>
+  );
+}
+
+// ─── RATING ──────────────────────────────────────────────────────────────────
+// Formate le nom affiché publiquement dans les avis : "Prénom I." (ex. "Lea D.")
+// plutôt que le nom de compte/connexion (ex. "Sissi1"), pour rester pudique
+// dans une section visible par d'autres utilisateurs.
+function formatPublicReviewName(fullName) {
+  if (!fullName) return "Anonyme";
+  const parts = String(fullName).trim().split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return parts[0] || "Anonyme";
+  const first = parts[0];
+  const lastInitial = parts[parts.length - 1].charAt(0).toUpperCase();
+  return `${first} ${lastInitial}.`;
+}
+
+function RatingTab() {
+  const {C,t,cfg,user,sub,familySync,myUid} = useApp();
+  const [hovered, setHovered] = useState(0);
+  const [selected, setSelected] = useState(0);
+  const [comment, setComment] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+  const [avgStats, setAvgStats] = useState(null);
+  const [existingRating, setExistingRating] = useState(null);
+  const [publicReviews, setPublicReviews] = useState([]);
+
+  useEffect(()=>{
+    // Charge la moyenne globale
+    supabase.rpc("get_ratings_summary")
+      .then(({data})=>{ if(data?.total_count>0) setAvgStats(data); })
+      .catch(()=>{});
+
+    // Charge les avis publics
+    supabase.rpc("get_public_ratings",{max_count:5}).then(({data})=>{ if(data?.length) setPublicReviews(data); }).catch(()=>{});
+
+    // Charge l'avis existant de cet utilisateur
+    if(!myUid) return;
+    supabase.from("ratings").select("stars,comment").eq("user_id", myUid).maybeSingle()
+      .then(({data})=>{
+        if(data){
+          setExistingRating(data);
+          setSelected(data.stars);
+          setComment(data.comment||"");
+        }
+      }).catch(()=>{});
+  },[myUid]);
+
+  const EMOJIS  = ['', '😔', '😐', '🙂', '😊', '😍'];
+  const PLACEHOLDERS = t.ratingPlaceholders || ['', 'Qu\'est-ce qui vous a déçu ?', 'Qu\'est-ce qui pourrait être amélioré ?', 'Qu\'avez-vous apprécié ?', 'Qu\'est-ce que vous aimez le plus ?', 'Qu\'est-ce que vous aimez le plus ?'];
+  const emoji   = selected ? EMOJIS[selected] : '🌟';
+  const message = selected >= 4 ? (t.ratingMsgHigh||'Merci beaucoup ! 😍') : (t.ratingMsgLow||'Merci 🙏 Dites-nous comment améliorer');
+  const canSend = selected > 0 && !sending;
+
+  async function handleSubmit() {
+    if (!canSend) return;
+    setSending(true);
+    setSubmitError(null);
+    try {
+      if(!myUid) throw new Error("Non connecté");
+      // Nom AFFICHÉ de la famille (ex. "Lea Durant"), pas le login du compte
+      // (ex. "Sissi1") — voir RatingTab plus haut pour le même souci côté Coffre.
+      const familyDisplayName = (cfg?.parents||[]).find(p=>p.email && p.email===user?.email)?.name
+        || user?.name || user?.email || "Anonyme";
+      const publicName = formatPublicReviewName(familyDisplayName);
+      const { error: upsertError } = await supabase.from("ratings").upsert({
+        family_id: familySync?.familyId || null,
+        user_id:   myUid,
+        stars:     selected,
+        comment:   comment.trim(),
+        user_name: publicName,
+        plan:      sub?.plan || "unknown",
+      }, { onConflict: "user_id" });
+      if (upsertError) throw upsertError; // supabase-js ne lève pas d'exception, il faut vérifier le champ error nous-mêmes
+      setSubmitted(true);
+      // Recharge les avis publics pour refléter immédiatement le nom corrigé
+      supabase.rpc("get_public_ratings",{max_count:5}).then(({data})=>{ if(data?.length) setPublicReviews(data); }).catch(()=>{});
+    } catch(e) {
+      console.error("Rating submit error:", e);
+      setSubmitError(e?.message || "Échec de l'envoi. Réessayez.");
+      // On NE met plus submitted à true ici : on ne veut pas afficher
+      // "Merci !" alors que l'enregistrement a réellement échoué.
+    }
+    setSending(false);
+  }
+
+  if (submitted) return (
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 20px",gap:14,animation:"ratingAppear .45s cubic-bezier(.34,1.56,.64,1) both"}}>
+      <style>{`@keyframes ratingAppear{from{opacity:0;transform:scale(.88) translateY(12px)}to{opacity:1;transform:none}}`}</style>
+      <span style={{fontSize:54}}>🎉</span>
+      <div style={{fontSize:18,fontWeight:800,color:C.txt}}>{t.ratingThanks||"Merci pour votre retour !"}</div>
+      <div style={{fontSize:13,color:C.mut}}>{"★".repeat(selected)}{"☆".repeat(5-selected)} ({selected}/5)</div>
+      {comment && <div style={{marginTop:8,fontSize:13,color:C.mut,fontStyle:"italic",textAlign:"center",maxWidth:260,lineHeight:1.5}}>"{comment}"</div>}
+      {avgStats?.total_count>0 && <div style={{marginTop:12,fontSize:12,color:C.mut}}>⭐ {avgStats.avg_stars}/5 · {avgStats.total_count} avis au total</div>}
+      {publicReviews.length>0 && (
+        <div style={{marginTop:20,width:"100%",textAlign:"left"}}>
+          <div style={{fontSize:11,fontWeight:800,color:C.mut,marginBottom:10,textTransform:"uppercase",letterSpacing:".5px"}}>Ce que disent les utilisateurs</div>
+          {publicReviews.map((r,i)=>(
+            <div key={i} style={{background:C.sur,borderRadius:10,padding:"10px 12px",marginBottom:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                <span style={{color:"#FFB800",fontSize:12}}>{"★".repeat(r.stars)}{"☆".repeat(5-r.stars)}</span>
+                <span style={{fontSize:11,fontWeight:700,color:C.txt}}>{r.display_name}</span>
+              </div>
+              <div style={{fontSize:12,color:C.mut,fontStyle:"italic",lineHeight:1.4}}>"{r.comment}"</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div style={{padding:"8px 0"}}>
+      <style>{`
+        @keyframes ratingAppear{from{opacity:0;transform:scale(.88) translateY(12px)}to{opacity:1;transform:none}}
+        .duvia-star{font-size:40px;cursor:pointer;color:#dde1ec;transition:color .15s,transform .15s cubic-bezier(.34,1.56,.64,1),filter .15s;user-select:none;line-height:1}
+        .duvia-star.active{color:#FFB800;filter:drop-shadow(0 2px 6px rgba(255,184,0,.45))}
+        .duvia-star.picked{transform:scale(1.18)}
+        .duvia-textarea:focus{outline:none;border-color:#FFB800 !important;box-shadow:0 0 0 3px rgba(255,184,0,.15)}
+      `}</style>
+
+      {avgStats?.total_count>0 && (
+        <div style={{textAlign:"center",marginBottom:16,fontSize:12,color:C.mut}}>
+          ⭐ <strong style={{color:C.txt}}>{avgStats.avg_stars}/5</strong> · {avgStats.total_count} avis Duvia
+        </div>
+      )}
+      <div style={{background:C.card,borderRadius:20,padding:"32px 24px 28px",textAlign:"center",boxShadow:`0 4px 24px rgba(0,0,0,.07)`,animation:"ratingAppear .45s cubic-bezier(.34,1.56,.64,1) both"}}>
+
+        {existingRating && !submitted && (
+          <div style={{background:`${C.grn}12`,border:`1px solid ${C.grn}33`,borderRadius:8,padding:"8px 12px",marginBottom:16,fontSize:12,color:C.grn,textAlign:"left"}}>
+            ✏️ Vous avez déjà soumis un avis ({existingRating.stars}★). Modifiez-le ci-dessous.
+          </div>
+        )}
+        {/* Emoji */}
+        <div style={{fontSize:44,marginBottom:12,lineHeight:1,transition:"all .2s"}}>{emoji}</div>
+        <div style={{fontSize:17,fontWeight:800,color:C.txt,marginBottom:4,letterSpacing:"-.2px"}}>{t.ratingHeading||"Votre avis compte"}</div>
+        <div style={{fontSize:13,color:C.mut,marginBottom:26}}>{t.ratingSubheading||"Comment évaluez-vous votre expérience ?"}</div>
+
+        {/* Stars */}
+        <div style={{display:"flex",justifyContent:"center",gap:10,marginBottom:22}}>
+          {[1,2,3,4,5].map(v => (
+            <span
+              key={v}
+              className={`duvia-star${(hovered||selected)>=v?" active":""}${selected===v?" picked":""}`}
+              onMouseEnter={()=>setHovered(v)}
+              onMouseLeave={()=>setHovered(0)}
+              onClick={()=>setSelected(v)}
+            >★</span>
+          ))}
+        </div>
+
+        {/* Feedback message */}
+        <div style={{fontSize:14,fontWeight:600,color:C.txt,opacity:selected?1:0,transform:selected?"translateY(0)":"translateY(6px)",transition:"opacity .25s,transform .25s",marginBottom:selected?18:0,minHeight:selected?20:0}}>
+          {selected ? message : ""}
+        </div>
+
+        {/* Comment textarea — appears after star selection */}
+        {selected > 0 && (
+          <div style={{textAlign:"left",marginBottom:20,animation:"ratingAppear .3s cubic-bezier(.34,1.56,.64,1) both"}}>
+            <label style={{fontSize:12,fontWeight:700,color:C.mut,display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:".5px"}}>{t.ratingCommentLabel||"Votre commentaire"} <span style={{fontWeight:400,textTransform:"none",letterSpacing:0}}>{t.ratingOptional||"(optionnel)"}</span></label>
+            <textarea
+              className="duvia-textarea"
+              value={comment}
+              onChange={e=>setComment(e.target.value)}
+              placeholder={PLACEHOLDERS[selected]}
+              rows={3}
+              style={{width:"100%",padding:"12px 14px",borderRadius:12,border:`1.5px solid ${C.bor}`,background:C.sur,color:C.txt,fontSize:14,lineHeight:1.5,resize:"none",fontFamily:"inherit",transition:"border-color .2s,box-shadow .2s"}}
+            />
+          </div>
+        )}
+
+        {/* Erreur d'envoi */}
+        {submitError && (
+          <div style={{background:"#FF453A12",border:"1px solid #FF453A33",borderRadius:8,padding:"8px 12px",marginBottom:16,fontSize:12,color:"#FF453A",textAlign:"left"}}>
+            ⚠️ {submitError}
+          </div>
+        )}
+
+        {/* Submit button */}
+        <button
+          onClick={handleSubmit}
+          style={{width:"100%",padding:"14px",border:"none",borderRadius:14,background:canSend?"linear-gradient(135deg,#FFB800,#FF8C00)":C.sur,color:canSend?"#fff":C.mut,fontSize:15,fontWeight:700,cursor:canSend?"pointer":"default",opacity:canSend?1:.5,transition:"all .25s",letterSpacing:".2px"}}
+        >
+          {sending ? "⏳ Envoi…" : existingRating ? "💾 Mettre à jour mon avis" : (t.ratingSubmit||"Envoyer mon avis")}
+        </button>
+      </div>
+    </div>
+  );
+}
+// ─── RATING END ───────────────────────────────────────────────────────────────
+
+// ─── HISTORY ─────────────────────────────────────────────────────────────────
+function HistTab() {
+  const {C,t,cfg,setTab,setMenuTab,history:ctxHistory} = useApp();
+  const history = ctxHistory || [];
+  const TYPE_MAP   = {"cal":0,"schedule":1,"exp":2,"contacts":3,"vault":4,"msg":5};
+  const TYPE_ICON  = {"cal":"📅","schedule":"🏫","exp":"💰","contacts":"📞","vault":"🗄️","msg":"💬"};
+  const TYPE_LABEL = {"cal":"Calendrier","schedule":"EDT","exp":"Dépenses","contacts":"Contacts","vault":"Coffre","msg":"Messages"};
+
+  const [filterType,setFilterType] = useState("all");
+  const presentTypes = [...new Set(history.map(h=>h.type).filter(Boolean))];
+  const filtered = filterType==="all" ? history : history.filter(h=>h.type===filterType);
+
+  function handleClick(h) {
+    const idx = TYPE_MAP[h.type];
+    if(idx === undefined) return;
+    setMenuTab(null); setTab(idx);
+  }
+
+  return (
+    <div>
+      {/* ── Titre style Calendrier ── */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+        <div>
+          <div style={{fontSize:16,fontWeight:900}}>📋 {t.historyTitle||"Historique"}</div>
+          <div style={{fontSize:11,color:C.mut}}>{t.histSub||"Journal des modifications"} · {history.length} entrée{history.length!==1?"s":""}</div>
+        </div>
+      </div>
+
+      {/* ── Bandeau info permanence ── */}
+      <div style={{display:"flex",gap:8,alignItems:"flex-start",background:`${C.grn}0d`,border:`1px solid ${C.grn}33`,borderRadius:10,padding:"10px 12px",marginBottom:14}}>
+        <span style={{fontSize:16,flexShrink:0}}>🔒</span>
+        <div style={{fontSize:11,color:C.mut,lineHeight:1.5}}>
+          L'historique est <strong style={{color:C.txt}}>permanent, non modifiable, horodaté par le serveur</strong>. Il est conservé même si un parent quitte la famille.
+        </div>
+      </div>
+
+
+
+      {/* ── Filtres (uniquement si plusieurs types présents) ── */}
+      {presentTypes.length>1&&(
+        <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+          <button onClick={()=>setFilterType("all")} style={{padding:"4px 10px",background:filterType==="all"?C.vio:C.sur,color:filterType==="all"?"#fff":C.mut,border:`1.5px solid ${filterType==="all"?C.vio:C.bor}`,borderRadius:20,fontSize:11,fontWeight:700}}>Tous</button>
+          {presentTypes.map(type=>(
+            <button key={type} onClick={()=>setFilterType(type)} style={{padding:"4px 10px",background:filterType===type?C.vio:C.sur,color:filterType===type?"#fff":C.mut,border:`1.5px solid ${filterType===type?C.vio:C.bor}`,borderRadius:20,fontSize:11,fontWeight:700}}>
+              {TYPE_ICON[type]} {TYPE_LABEL[type]||type}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Liste ── */}
+      {filtered.length===0
+        ? <div style={{textAlign:"center",padding:40,color:C.mut}}><div style={{fontSize:36,marginBottom:8}}>📋</div>Aucune entrée</div>
+        : filtered.map((h,i)=>{
+            const d=new Date(h.createdAt||h.date);
+            const isClickable = h.type && TYPE_MAP[h.type] !== undefined;
+            const lines = (h.detail||"").split("\n").filter(Boolean);
+            return (
+              <div key={i} onClick={isClickable?()=>handleClick(h):undefined}
+                className="card"
+                style={{marginBottom:10,display:"flex",gap:12,cursor:isClickable?"pointer":"default",border:`1.5px solid ${C.bor}`}}>
+                <div style={{background:C.sur,borderRadius:"50%",width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
+                  {TYPE_ICON[h.type]||"📝"}
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:700,fontSize:14,marginBottom:2}}>{h.action}</div>
+                  {lines.map((line,li)=>(
+                    <div key={li} style={{color:C.mut,fontSize:12,lineHeight:1.4}}>{line}</div>
+                  ))}
+                  <div style={{color:C.mut,fontSize:10,marginTop:4,fontFamily:"JetBrains Mono"}}>
+                    Saisi par <strong style={{color:C.txt}}>{h.who}</strong> · {d.toLocaleDateString("fr-FR")} {d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}
+                  </div>
+                </div>
+                {isClickable && <span style={{fontSize:12,color:C.mut,alignSelf:"center",flexShrink:0}}>→</span>}
+              </div>
+            );
+          })
+      }
+    </div>
+  );
+}
+
+// ─── EXPENSES ─────────────────────────────────────────────────────────────────
+function ExpTab() {
+  const {C,t,cfg,setCfg,addHist,pushNotif,user,prem,perms,onUpgrade,isAdm,setActivity,sub,simDate,setExpSubmittedPopup,addRefAction,currency="€",expenses:ctxExpenses,reimbursements:ctxReimbursements,expMethods,history:ctxHistory,familySync} = useApp();
+  const premFull = isPremFull(sub); // PDF réservé full premium uniquement
+  const now = simDate ? new Date(simDate) : new Date();
+  const todayStr = toStr(now);
+  const [showAdd,setShowAdd]=useState(false);
+  const [editId,setEditId]=useState(null);
+  const [catF,setCatF]=useState("all");
+  const [viewer,setViewer]=useState(null);
+  const [viewerUrl,setViewerUrl]=useState(null);
+  const [detailExp,setDetailExp]=useState(null);
+  const [detailUrls,setDetailUrls]=useState({});
+  const [formErr,setFormErr]=useState("");
+  const [shakeLabel,setShakeLabel]=useState(false);
+  function _triggerShakeLabel(){ setShakeLabel(true); setTimeout(()=>setShakeLabel(false),600); }
+  const [attErr,setAttErr]=useState("");
+  const [attLoading,setAttLoading]=useState(false);
+  const [dragOver,setDragOver]=useState(false);
+  const fileRef=useRef(null);
+  const formRef=useRef(null);
+  const reimFormRef=useRef(null);
+  const [showReim,setShowReim]=useState(false);
+  const myIdx = user?.role==="parent" && user?.parentIdx!==undefined ? user.parentIdx : 0;
+  const otherIdx = cfg.parents.length>1 ? (myIdx===0?1:0) : 0;
+  const emptyReim={from:myIdx,to:otherIdx,amount:"",date:toStr(new Date()),note:""};
+  const [reimForm,setReimForm]=useState(emptyReim);
+  const [reimErr,setReimErr]=useState("");
+  const [editReimId,setEditReimId]=useState(null);
+  const [recurringEditModal,setRecurringEditModal]=useState(null);
+  const [recurringDelModal,setRecurringDelModal]=useState(null);
+  const [editScope,setEditScope]=useState(null);
+  const [showExportModal,setShowExportModal]=useState(false);
+  const [exportFrom,setExportFrom]=useState(()=>{const d=new Date();d.setMonth(d.getMonth()-3);return toStr(d);});
+  const [exportTo,setExportTo]=useState(toStr(new Date()));
+  const [exportGenerating,setExportGenerating]=useState(false);
+  const [exportHtml,setExportHtml]=useState(null);
+  const iframePdfRef=useRef(null);
+
+  const emptyForm={label:"",amount:"",paidBy:myIdx,split:50,category:t.cats[0],date:toStr(new Date()),note:"",attachments:[],recurring:false,recurringFreq:"monthly",recurringEnd:""};
+  const [form,setForm]=useState(emptyForm);
+  const expenses=(ctxExpenses||[]).filter(e => !e.date || e.date <= todayStr);
+
+  // ── Attachment helpers ────────────────────────────────────────────────────
+  const MAX_MB=2; const MAX_BYTES=MAX_MB*1024*1024; const MAX_ATT=3;
+  const ALLOWED_TYPES=['image/jpeg','image/png','image/webp','image/heic','image/heif','application/pdf'];
+  const ALLOWED_EXT=['.jpg','.jpeg','.png','.webp','.heic','.heif','.pdf'];
+
+  async function compressImage(file,maxW=1200,quality=0.82){
+    return new Promise(resolve=>{
+      const img=new Image();
+      const url=URL.createObjectURL(file);
+      img.onload=()=>{
+        URL.revokeObjectURL(url);
+        const ratio=Math.min(1,maxW/Math.max(img.width,1));
+        const canvas=document.createElement('canvas');
+        canvas.width=Math.round(img.width*ratio);
+        canvas.height=Math.round(img.height*ratio);
+        canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+        resolve(canvas.toDataURL('image/jpeg',quality));
+      };
+      img.onerror=()=>{URL.revokeObjectURL(url);resolve(null);};
+      img.src=url;
+    });
+  }
+
+  async function toBase64(file){
+    return new Promise(resolve=>{
+      const r=new FileReader();
+      r.onload=()=>resolve(r.result);
+      r.readAsDataURL(file);
+    });
+  }
+
+  function fmtSize(bytes){
+    if(bytes<1024)return `${bytes} o`;
+    if(bytes<1024*1024)return `${(bytes/1024).toFixed(0)} Ko`;
+    return `${(bytes/1024/1024).toFixed(1)} Mo`;
+  }
+
+  // ── Admin: inject a fake test attachment ──────────────────────────────────
+  function simulatePhoto(){
+    const SAMPLES=[
+      {label:"Facture médicale",color:"#4a9eff",emoji:"🏥"},
+      {label:"Reçu pharmacie",color:"#3ecf8e",emoji:"💊"},
+      {label:"Note de frais école",color:"#f5c842",emoji:"🏫"},
+      {label:"Ticket restaurant",color:"#ff9f43",emoji:"🍽️"},
+    ];
+    const s=SAMPLES[Math.floor(Math.random()*SAMPLES.length)];
+    const canvas=document.createElement('canvas');
+    canvas.width=320; canvas.height=240;
+    const ctx=canvas.getContext('2d');
+    // Background
+    ctx.fillStyle=s.color+'33'; ctx.fillRect(0,0,320,240);
+    ctx.strokeStyle=s.color; ctx.lineWidth=3; ctx.strokeRect(4,4,312,232);
+    // Emoji
+    ctx.font='64px serif'; ctx.textAlign='center';
+    ctx.fillText(s.emoji,160,110);
+    // Label
+    ctx.font='bold 16px sans-serif'; ctx.fillStyle=s.color;
+    ctx.fillText(s.label,160,150);
+    // Admin badge
+    ctx.font='12px sans-serif'; ctx.fillStyle='#888';
+    ctx.fillText('👑 Simulation Admin · '+new Date().toLocaleDateString(),160,180);
+    const data=canvas.toDataURL('image/jpeg',0.85);
+    const thumb=canvas.toDataURL('image/jpeg',0.5);
+    const att={id:Date.now()+Math.random(),name:`${s.label.replace(/ /g,'_')}_sim.jpg`,type:'image/jpeg',data,thumb,originalSize:8192,compressedSize:Math.round(data.length*0.75)};
+    setForm(f=>({...f,attachments:[...(f.attachments||[]),att].slice(0,MAX_ATT)}));
+    setAttErr("");
+  }
+
+  async function handleFiles(rawFiles){
+    setAttErr(""); setAttLoading(true);
+    const current=form.attachments||[];
+    const fid=familySync?.familyId;
+    if(!fid){ setAttErr("Famille non prête."); setAttLoading(false); return; }
+    if(current.length>=MAX_ATT){
+      setAttErr(`Max ${MAX_ATT} ${t.expAttErrMax||"pièces jointes par dépense."}`);
+      setAttLoading(false); return;
+    }
+    const newAtts=[...current];
+    for(const file of Array.from(rawFiles)){
+      if(newAtts.length>=MAX_ATT){setAttErr(`Max ${MAX_ATT} ${t.expAttErrMaxShort||"pièces jointes."}`);break;}
+      const isImage=file.type.startsWith("image/");
+      const isPdf=file.type==="application/pdf";
+      const extOk=ALLOWED_EXT.some(e=>file.name.toLowerCase().endsWith(e));
+      if(!ALLOWED_TYPES.includes(file.type)&&!extOk){
+        setAttErr(`${t.expAttErrFormat||"Format non supporté"} : ${file.name}. ${t.expAttErrAccepted||"Acceptés : JPG, PNG, WEBP, HEIC, PDF."}`);
+        continue;
+      }
+      if(file.size>MAX_BYTES){
+        setAttErr(`${file.name} ${t.expAttErrSize||"dépasse"} ${MAX_MB} Mo (${fmtSize(file.size)}).`);
+        continue;
+      }
+      try{
+        // Vérification quota stockage avant upload
+        const { data: usedBytes, error: quotaErr } = await supabase.rpc("get_family_storage_bytes", { fid });
+        if(!quotaErr){
+          const limitBytes = (perms.maxStorageMB||50) * 1024 * 1024;
+          const remaining  = limitBytes - (usedBytes||0);
+          if(file.size > remaining){
+            const usedMB = ((usedBytes||0)/1024/1024).toFixed(1);
+            setAttErr(`Quota atteint (${usedMB} Mo / ${perms.maxStorageMB} Mo). ${!prem?"Passez en Premium pour 500 Mo.":"Supprimez des fichiers pour libérer de l'espace."}`);
+            break;
+          }
+        }
+        let uploadFile=file;
+        let thumb=null;
+        if(isImage){
+          // Compresse avant upload (réduit la bande passante et le stockage)
+          const blob=await compressImageToBlob(file,1000,0.72);
+          if(blob) uploadFile=new File([blob],file.name,{type:"image/jpeg"});
+          thumb=await compressImage(file,96,0.65); // miniature base64 pour affichage rapide
+        }
+        const storagePath=await uploadAttToStorage(uploadFile,fid);
+        newAtts.push({
+          id:String(Date.now()+Math.random()),
+          name:file.name,
+          type:isPdf?"application/pdf":(isImage?"image/jpeg":file.type),
+          storagePath,
+          thumb, // null pour les PDF
+          size:file.size,
+        });
+      }catch(err){
+        setAttErr(`Erreur upload : ${file.name}. ${err.message||""}`);
+      }
+    }
+    setForm(f=>({...f,attachments:newAtts}));
+    setAttLoading(false);
+  }
+
+  const ATT_BUCKET = "expense-attachments";
+
+  async function getAttSignedUrl(storagePath) {
+    const { data, error } = await supabase.storage.from(ATT_BUCKET).createSignedUrl(storagePath, 3600);
+    if (error) throw error;
+    return data.signedUrl;
+  }
+
+  async function uploadAttToStorage(file, fid) {
+    const safeName = file.name.replace(/[^\w.\-]/g, "_").slice(0, 100);
+    const path = `${fid}/expenses/${Date.now()}-${safeName}`;
+    const { error } = await supabase.storage.from(ATT_BUCKET).upload(path, file, { contentType: file.type, upsert: false });
+    if (error) throw error;
+    return path;
+  }
+
+  async function compressImageToBlob(file, maxW=1000, quality=0.72) {
+    return new Promise(resolve => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const ratio = Math.min(1, maxW / Math.max(img.width, 1));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(blob => {
+          if(!blob){ resolve(null); return; }
+          // Si encore > 800 Ko, 2ème passe plus agressive
+          if(blob.size > 800*1024){
+            canvas.toBlob(blob2 => resolve(blob2||blob), "image/jpeg", 0.50);
+          } else {
+            resolve(blob);
+          }
+        }, "image/jpeg", quality);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+      img.src = url;
+    });
+  }
+
+  function removeAtt(id){
+    const att=(form.attachments||[]).find(a=>a.id===id);
+    if(att?.storagePath) supabase.storage.from(ATT_BUCKET).remove([att.storagePath]).catch(console.error);
+    setForm(f=>({...f,attachments:(f.attachments||[]).filter(a=>a.id!==id)}));
+  }
+
+  async function openDetail(e){
+    setDetailExp(e);
+    setDetailUrls({});
+    const atts=(e.attachments||[]).filter(a=>a.storagePath);
+    if(atts.length===0) return;
+    const map={};
+    await Promise.all(atts.map(async a=>{
+      try{ map[a.storagePath]=await getAttSignedUrl(a.storagePath); }catch{}
+    }));
+    setDetailUrls(map);
+  }
+
+  async function openViewer(att){
+    setViewer(att);
+    setViewerUrl(null);
+    if(att.storagePath){
+      try { setViewerUrl(await getAttSignedUrl(att.storagePath)); } catch(e){ console.error(e); }
+    } else {
+      setViewerUrl(att.data||null);
+    }
+  }
+
+  async function downloadAtt(att){
+    try{
+      let url = att.data || null;
+      if(att.storagePath) url = await getAttSignedUrl(att.storagePath);
+      if(!url) return;
+      const a=document.createElement("a");
+      a.href=url; a.download=att.name; a.target="_blank"; a.click();
+    }catch(e){ console.error("Download error:",e); }
+  }
+
+  // ── Expense CRUD ──────────────────────────────────────────────────────────
+
+  // Génère les dates d'occurrences entre start et end selon la fréquence
+  function getOccurrences(startDate, endDate, freq) {
+    const dates = [];
+    let cur = new Date(startDate + "T12:00:00");
+    const end = new Date(endDate + "T12:00:00");
+    while (cur <= end && dates.length < 120) {
+      dates.push(toStr(cur));
+      if (freq === "weekly")       cur = new Date(cur.getTime() + 7*24*3600*1000);
+      else if (freq === "monthly") { cur = new Date(cur); cur.setMonth(cur.getMonth()+1); }
+      else if (freq === "yearly")  { cur = new Date(cur); cur.setFullYear(cur.getFullYear()+1); }
+      else break;
+    }
+    return dates;
+  }
+
+  async function add(){
+    if(!form.label){setFormErr(t.expErrDesc||"⚠️ La description est obligatoire.");return;}
+    if(!form.amount||isNaN(parseFloat(form.amount))){setFormErr(t.expErrAmount||"⚠️ Le montant est obligatoire.");return;}
+    // ── Validations sécurité ────────────────────────────────────────
+    const amt = parseFloat(form.amount);
+    if(amt < LIMITS.AMOUNT_MIN){ setFormErr(`⚠️ Montant minimum : ${LIMITS.AMOUNT_MIN}${currency}`); return; }
+    if(amt > LIMITS.AMOUNT_MAX){ setFormErr(`⚠️ Montant maximum : ${LIMITS.AMOUNT_MAX}${currency}`); return; }
+    const cleanLabel = sanitize(form.label).slice(0, LIMITS.LABEL_MAX);
+    if(!cleanLabel){ setFormErr("⚠️ La description contient des caractères invalides."); return; }
+    if(!isCleanText(cleanLabel)){ _triggerShakeLabel(); setFormErr("⚠️ La description contient des mots inappropriés."); return; }
+    if(form.recurring && !form.recurringEnd){setFormErr("⚠️ La date de fin est obligatoire pour une dépense récurrente.");return;}
+    if(form.recurring && form.recurringEnd < form.date){setFormErr("⚠️ La date de fin doit être après la date de début.");return;}
+    setFormErr("");
+    if(!prem&&!editId&&expenses.length>=1){} // no limit
+    const payload={...form,label:cleanLabel,amount:amt,split:form.split||50,attachments:form.attachments||[]};
+
+    try {
+      if(editId){
+        if(editScope==="series"){
+          const existing=(ctxExpenses||[]).find(x=>x.id===editId);
+          const rid=existing?.recurringId;
+          if(rid && form.recurring && form.recurringEnd){
+            const occurrences=getOccurrences(form.date,form.recurringEnd,form.recurringFreq);
+            const newExpenses=occurrences.map((d)=>({...payload,date:d,recurringId:rid,recurringFreq:form.recurringFreq,recurringStart:form.date,recurringEnd:form.recurringEnd,status:"pending",createdBy:user?.parentIdx??0}));
+            await expMethods.updateExpensesBySeries(rid,newExpenses);
+            { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`🔄 ${cleanLabel} · série (${occurrences.length} occ.) — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
+            pushNotif(`✏️ ${form.label} — série modifiée, revalidation requise`,"exp");
+          } else {
+            await expMethods.updateExpense(editId,{...payload,status:"pending",createdBy:user?.parentIdx??0});
+            { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
+            pushNotif(`✏️ ${form.label} (${amt.toFixed(2)} ${currency}) modifiée — revalidation requise`,"exp");
+          }
+        } else {
+          await expMethods.updateExpense(editId,{...payload,status:"pending",createdBy:user?.parentIdx??0});
+          { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
+          pushNotif(`✏️ ${form.label} (${amt.toFixed(2)} ${currency}) modifiée — revalidation requise`,"exp");
+        }
+      } else if(form.recurring) {
+        const occurrences = getOccurrences(form.date, form.recurringEnd, form.recurringFreq);
+        const recurringId = String(Date.now());
+        const newExpenses = occurrences.map((d) => ({...payload,date:d,recurringId,recurringFreq:form.recurringFreq,recurringStart:form.date,recurringEnd:form.recurringEnd,status:"pending",createdBy:user?.parentIdx??0}));
+        await expMethods.addExpenses(newExpenses);
+        { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.newExpense||"Nouvelle dépense",`🔄 ${cleanLabel} · ${occurrences.length} occ. — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
+        pushNotif(`🔄 ${form.label} — ${occurrences.length} occurrence${occurrences.length>1?"s":""}` ,"exp");
+        setActivity(a=>({...a,expenses:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
+        setExpSubmittedPopup(true);
+      } else {
+        const e={...payload,status:"pending",createdBy:user?.parentIdx??0};
+        await expMethods.addExpense(e);
+        { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.newExpense||"Nouvelle dépense",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
+        pushNotif(`💰 ${form.label} (${form.amount}${currency})`,"exp");
+        setActivity(a=>({...a,expenses:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
+        addRefAction("ADD_EXPENSE");
+        if((ctxExpenses||[]).length===0 && !sub?.refUsed) setTimeout(()=>{ try{ window.__setShowRefPrompt && window.__setShowRefPrompt(true); }catch(e){} },1200);
+        setExpSubmittedPopup(true);
+      }
+    } catch(err) {
+      setFormErr(`⚠️ Erreur lors de l'enregistrement : ${err?.message||"Veuillez réessayer."}`);
+      return false;
+    }
+    setShowAdd(false); setEditId(null); setEditScope(null); setForm(emptyForm); setAttErr(""); setFormErr("");
+    setTimeout(()=>{ try{ document.getElementById("duvia-scroll")?.scrollTo({top:0,behavior:"smooth"}); }catch(e){} }, 60);
+    return true;
+  }
+
+  function startEdit(e){
+    if(e.recurringId){ setRecurringEditModal(e); return; }
+    openEditForm(e,"single");
+  }
+
+  function openEditForm(e, scope){
+    setEditScope(scope);
+    if(scope==="series"){
+      const seriesItems=(ctxExpenses||[]).filter(x=>x.recurringId===e.recurringId);
+      const first=seriesItems.reduce((a,b)=>a.date<=b.date?a:b,seriesItems[0]);
+      const last=seriesItems.reduce((a,b)=>a.date>=b.date?a:b,seriesItems[0]);
+      setForm({label:e.label,amount:String(e.amount),paidBy:e.paidBy,split:e.split||50,category:e.category,
+        date:first.date,note:e.note||"",attachments:e.attachments||[],
+        recurring:true,recurringFreq:e.recurringFreq||"monthly",recurringEnd:last.date});
+    } else {
+      setForm({label:e.label,amount:String(e.amount),paidBy:e.paidBy,split:e.split||50,category:e.category,
+        date:e.date||toStr(new Date()),note:e.note||"",attachments:e.attachments||[],
+        recurring:false,recurringFreq:"monthly",recurringEnd:""});
+    }
+    setEditId(e.id); setShowAdd(true); setAttErr(""); setRecurringEditModal(null);
+    setTimeout(()=>formRef.current?.scrollIntoView({behavior:"smooth",block:"start"}),60);
+  }
+
+  function cancelForm(){setShowAdd(false);setEditId(null);setEditScope(null);setForm(emptyForm);setAttErr("");}
+
+  function del(id){
+    const e=(ctxExpenses||[]).find(x=>x.id===id);
+    if(e?.recurringId){ setRecurringDelModal(e); return; }
+    doDelete(id,"single");
+  }
+
+  async function deleteAttFiles(items){
+    const paths=(items||[]).flatMap(it=>(it.attachments||[]).filter(a=>a.storagePath).map(a=>a.storagePath));
+    if(paths.length>0) await supabase.storage.from(ATT_BUCKET).remove(paths).catch(console.error);
+  }
+
+  async function doDelete(id, scope){
+    const e=(ctxExpenses||[]).find(x=>x.id===id);
+    if(scope==="series" && e?.recurringId){
+      const seriesItems=(ctxExpenses||[]).filter(x=>x.recurringId===e.recurringId);
+      await deleteAttFiles(seriesItems);
+      await expMethods.deleteExpensesBySeries(e.recurringId);
+      addHist("Dépense supprimée",`🔄 Série : ${e?.label||""} — ${(e?.amount||0).toFixed(2)} ${currency}`,"exp");
+      pushNotif("🔄 Série supprimée","exp");
+    } else {
+      await deleteAttFiles([e]);
+      await expMethods.deleteExpense(id);
+      addHist("Dépense supprimée",`${e?.label||""} — ${(e?.amount||0).toFixed(2)} ${currency}`,"exp");
+      pushNotif(t.expDeleted||"💰 Dépense supprimée","exp");
+    }
+    setRecurringDelModal(null);
+  }
+
+  // ── Totals ────────────────────────────────────────────────────────────────
+  const reimbursements=ctxReimbursements||[];
+  // Backward compat: expenses without status are treated as confirmed
+  const confirmedExpenses=expenses.filter(e=>!e.status||e.status==="confirmed");
+  const total=confirmedExpenses.reduce((s,e)=>s+e.amount,0);
+  const totals=cfg.parents.map((_,i)=>confirmedExpenses.filter(e=>e.paidBy===i).reduce((s,e)=>s+e.amount,0));
+  const owed=cfg.parents.map((_,i)=>confirmedExpenses.reduce((s,e)=>{
+    const sp=e.split||50;
+    return s+e.amount*(i===e.paidBy?(100-sp)/100:sp/100);
+  },0));
+  // Reimbursements adjust the net balance: only confirmed ones are counted
+  const confirmedReims=reimbursements.filter(r=>r.status==="confirmed");
+  const reimSent=cfg.parents.map((_,i)=>confirmedReims.filter(r=>r.from===i).reduce((s,r)=>s+r.amount,0));
+  const reimReceived=cfg.parents.map((_,i)=>confirmedReims.filter(r=>r.to===i).reduce((s,r)=>s+r.amount,0));
+  const balance=cfg.parents.map((_,i)=>(totals[i]||0)-(owed[i]||0)+(reimSent[i]||0)-(reimReceived[i]||0));
+
+  // ── Reimbursement CRUD ────────────────────────────────────────────────────
+  async function addReim(){
+    if(!reimForm.amount||isNaN(parseFloat(reimForm.amount))||parseFloat(reimForm.amount)<=0){
+      setReimErr(t.expErrReimAmount||"⚠️ Montant invalide.");return;
+    }
+    if(reimForm.from===reimForm.to){setReimErr(t.expErrReimSame||"⚠️ Les deux parents doivent être différents.");return;}
+    setReimErr("");
+    const fromName=cfg.parents[reimForm.from]?.name||`P${reimForm.from+1}`;
+    const toName=cfg.parents[reimForm.to]?.name||`P${reimForm.to+1}`;
+    if(editReimId){
+      await expMethods.updateReimbursement(editReimId,{...reimForm,amount:parseFloat(reimForm.amount),status:"pending"});
+      addHist(t.expReimTitle||"Remboursement",`Modifié · ${fromName} → ${toName} · ${reimForm.amount}${currency}`,"exp");
+      pushNotif(`✏️ Remboursement de ${fromName} modifié (${reimForm.amount}${currency}) — revalidation requise`,"exp");
+      setEditReimId(null);
+    } else {
+      await expMethods.addReimbursement({...reimForm,amount:parseFloat(reimForm.amount),status:"pending"});
+      addHist(t.expReimTitle||"Remboursement",`${fromName} → ${toName} · ${reimForm.amount}${currency}`,"exp");
+      pushNotif(`💸 ${fromName} ${t.expReimAdded||"a remboursé"} ${toName} (${reimForm.amount}${currency})`,"exp");
+    }
+    setShowReim(false);
+    setReimForm(emptyReim);
+  }
+  function delReim(id){ expMethods.deleteReimbursement(id); }
+  function confirmReim(id){
+    const r=reimbursements.find(x=>x.id===id);
+    expMethods.confirmReim(id);
+    if(r){ const fromName=cfg.parents[r.from]?.name||`P${r.from+1}`; pushNotif(`✅ Remboursement de ${fromName} (${r.amount}${currency}) confirmé`,"exp"); addHist("Remboursement confirmé",`${fromName} → ${r.amount}${currency}`,"exp"); }
+  }
+  function rejectReim(id){
+    const r=reimbursements.find(x=>x.id===id);
+    expMethods.rejectReim(id);
+    if(r){ const fromName=cfg.parents[r.from]?.name||`P${r.from+1}`; pushNotif(`❌ Remboursement de ${fromName} (${r.amount}${currency}) refusé`,"exp"); addHist("Remboursement refusé",`${fromName} → ${r.amount} ${currency}`,"exp"); }
+  }
+
+  function confirmExp(id){
+    const e=(ctxExpenses||[]).find(x=>x.id===id);
+    expMethods.confirmExp(id);
+    if(e){ const sA=e.split||50; const sB=100-sA; pushNotif(`${t.expConfirmedNotif||"✅ Dépense confirmée"} : ${e.label} (${e.amount} ${currency})`,"exp"); addHist(t.expConfirmedNotif||"Dépense confirmée",`${e.label} — ${Number(e.amount).toFixed(2)} ${currency} · ${sA}/${sB}`,"exp"); }
+  }
+  function rejectExp(id){
+    const e=(ctxExpenses||[]).find(x=>x.id===id);
+    expMethods.rejectExp(id);
+    if(e){ const sA=e.split||50; const sB=100-sA; pushNotif(`${t.expRejectedNotif||"❌ Dépense refusée"} : ${e.label}`,"exp"); addHist(t.expRejectedNotif||"Dépense refusée",`${e.label} — ${Number(e.amount).toFixed(2)} ${currency} · ${sA}/${sB}`,"exp"); }
+  }
+
+  const filtered=catF==="all"?expenses:expenses.filter(e=>e.category===catF);
+  // Unified list: expenses + reimbursements sorted by date desc
+  const allItems=[
+    ...filtered.map(e=>({...e,_type:"expense"})),
+    ...(catF==="all"?reimbursements.map(r=>({...r,_type:"reim"})):[])
+  ].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+
+  // ── PDF Export ───────────────────────────────────────────────────────────
+  async function generateLegalPDF(){
+    if(!premFull){ onUpgrade(); return; } // Réservé aux membres Premium abonnés
+    setExportGenerating(true);
+    try{
+      const from=exportFrom; const to=exportTo;
+      const filteredExpenses=(ctxExpenses||[]).filter(e=>{const d=e.date||"";return(!from||d>=from)&&(!to||d<=to);});
+      const filteredReims=(ctxReimbursements||[]).filter(r=>{const d=r.date||"";return(!from||d>=from)&&(!to||d<=to);});
+      const filteredHistory=(ctxHistory||[]).filter(h=>{const d=(h.createdAt||h.date||"").slice(0,10);return(!from||d>=from)&&(!to||d<=to);});
+      const now2=new Date();
+      const fmtDate=d=>d?new Date(d+"T12:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}):"—";
+      const fmtDateTime=d=>d?new Date(d).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}):"—";
+      const confirmedExp=filteredExpenses.filter(e=>!e.status||e.status==="confirmed");
+      const totalConfirmed=confirmedExp.reduce((s,e)=>s+e.amount,0);
+      const pendingExp=filteredExpenses.filter(e=>e.status==="pending");
+      const rejectedExp=filteredExpenses.filter(e=>e.status==="rejected");
+      const confirmedReims=filteredReims.filter(r=>r.status==="confirmed");
+      const totalReims=confirmedReims.reduce((s,r)=>s+r.amount,0);
+      const totalsPerParent=cfg.parents.map((_,i)=>confirmedExp.filter(e=>e.paidBy===i).reduce((s,e)=>s+e.amount,0));
+      const owedPerParent=cfg.parents.map((_,i)=>confirmedExp.reduce((s,e)=>{const sp=e.split||50;return s+e.amount*(i===e.paidBy?(100-sp)/100:sp/100);},0));
+      const reimSent2=cfg.parents.map((_,i)=>confirmedReims.filter(r=>r.from===i).reduce((s,r)=>s+r.amount,0));
+      const reimReceived2=cfg.parents.map((_,i)=>confirmedReims.filter(r=>r.to===i).reduce((s,r)=>s+r.amount,0));
+      const balances=cfg.parents.map((_,i)=>(totalsPerParent[i]||0)-(owedPerParent[i]||0)+(reimSent2[i]||0)-(reimReceived2[i]||0));
+      const exportDateStr=now2.toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"});
+      const exportTimeStr=now2.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+      const periodLabel=`${from?fmtDate(from):"Début"} au ${to?fmtDate(to):"Aujourd'hui"}`;
+      const totalRecords=filteredExpenses.length+filteredReims.length;
+      const statusBadge=s=>{
+        if(!s||s==="confirmed") return '<span style="background:#dcfce7;color:#166534;padding:2px 7px;border-radius:4px;font-size:9px;font-weight:700;">✓ Confirmé</span>';
+        if(s==="pending") return '<span style="background:#fef9c3;color:#854d0e;padding:2px 7px;border-radius:4px;font-size:9px;font-weight:700;">⏳ En attente</span>';
+        if(s==="rejected") return '<span style="background:#fee2e2;color:#991b1b;padding:2px 7px;border-radius:4px;font-size:9px;font-weight:700;">✗ Refusé</span>';
+        return s||"—";
+      };
+      // Attachments section
+      // Pré-charger les URLs signées des pièces jointes (Storage)
+      const attUrlMap={};
+      for(const exp of filteredExpenses){
+        for(const a of (exp.attachments||[])){
+          if(a.storagePath && a.type?.startsWith("image/")){
+            try{ attUrlMap[a.storagePath]=await getAttSignedUrl(a.storagePath); }catch{}
+          } else if(a.data){ attUrlMap[a.id||a.storagePath]=a.data; } // legacy base64
+        }
+      }
+      let attachmentsHtml="";
+      const expWithAtt=filteredExpenses.filter(e=>(e.attachments||[]).length>0);
+      if(expWithAtt.length>0){
+        attachmentsHtml=`<div class="page-break"></div><div class="doc-header"><div class="doc-header-left">Duvia — Rapport de dépenses partagées</div><div class="doc-header-right">Période : ${periodLabel} · Export : ${exportDateStr}</div></div><div class="section-title">4. Justificatifs (${expWithAtt.length} dépenses avec pièce jointe)</div><p style="color:#666;font-size:10px;margin-bottom:16px;">Pièces jointes aux dépenses enregistrées sur la période sélectionnée.</p>`;
+        expWithAtt.forEach(e=>{
+          const pName=cfg.parents[e.paidBy]?.name||`Parent ${e.paidBy+1}`;
+          attachmentsHtml+=`<div style="margin-bottom:24px;page-break-inside:avoid;"><div style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:6px;padding:8px 14px;margin-bottom:8px;font-size:10px;"><strong>${e.label||"—"}</strong> — ${pName} — ${fmtDate(e.date)} — ${(e.amount||0).toFixed(2)} ${currency}</div><div style="display:flex;flex-wrap:wrap;gap:10px;">`;
+          (e.attachments||[]).forEach(a=>{
+            { const imgSrc=a.storagePath?attUrlMap[a.storagePath]:(attUrlMap[a.id]||a.data);
+              if(imgSrc&&a.type&&a.type.startsWith("image/")) attachmentsHtml+=`<img src="${imgSrc}" style="max-width:200px;max-height:160px;border:1px solid #dee2e6;border-radius:4px;object-fit:contain;" alt="${a.name||"pièce jointe"}">`;
+              else if(a.type==="application/pdf") attachmentsHtml+=`<div style="width:110px;height:80px;border:1px solid #dee2e6;border-radius:4px;display:flex;align-items:center;justify-content:center;background:#f8f9fa;font-size:10px;color:#666;text-align:center;padding:6px;">📄 PDF<br><span style="font-size:8px;">${(a.name||"").slice(0,18)}</span></div>`; }
+          });
+          attachmentsHtml+=`</div></div>`;
+        });
+      }
+      const expRows=filteredExpenses.slice().sort((a,b)=>new Date(a.date||0)-new Date(b.date||0)).map(e=>{
+        const pName=cfg.parents[e.paidBy]?.name||`Parent ${e.paidBy+1}`;
+        const creatorName=e.createdBy!==undefined?(cfg.parents[e.createdBy]?.name||`Parent ${e.createdBy+1}`):pName;
+        const idTs=e.id?new Date(e.id):null;
+        const dateSaisie=idTs&&!isNaN(idTs)?idTs.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}):"—";
+        const heureSaisie=idTs&&!isNaN(idTs)?idTs.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"—";
+        const sp=e.split||50;
+        const hasAtt=(e.attachments||[]).length>0;
+        return `<tr><td>${fmtDate(e.date)}</td><td>${dateSaisie}<br><span style="font-size:8px;color:#888;">${heureSaisie}</span></td><td>${e.category||"—"}</td><td><strong>${(e.label||"—").replace(/</g,"&lt;")}</strong>${e.note?`<br><span style="font-size:8px;color:#888;">${e.note.replace(/</g,"&lt;")}</span>`:""}</td><td style="text-align:right;font-weight:700;">${(e.amount||0).toFixed(2)} ${currency}</td><td>${pName}</td><td style="text-align:center;font-size:9px;">${sp}%/${100-sp}%</td><td>${statusBadge(e.status)}</td><td style="font-size:9px;">${creatorName}${hasAtt?" 📎":""}</td></tr>`;
+      }).join("");
+      const reimRows=filteredReims.slice().sort((a,b)=>new Date(a.date||0)-new Date(b.date||0)).map(r=>{
+        const fromName=cfg.parents[r.from]?.name||`Parent ${r.from+1}`;
+        const toName=cfg.parents[r.to]?.name||`Parent ${r.to+1}`;
+        const idTs=r.id?new Date(r.id):null;
+        const dateSaisie=idTs&&!isNaN(idTs)?idTs.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}):"—";
+        const heureSaisie=idTs&&!isNaN(idTs)?idTs.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"—";
+        return `<tr><td>${fmtDate(r.date)}</td><td>${dateSaisie}<br><span style="font-size:8px;color:#888;">${heureSaisie}</span></td><td>${fromName}</td><td>${toName}</td><td style="text-align:right;font-weight:700;">${(r.amount||0).toFixed(2)} ${currency}</td><td style="font-size:9px;">${(r.note||"—").replace(/</g,"&lt;")}</td><td>${statusBadge(r.status)}</td></tr>`;
+      }).join("");
+      const histRows=filteredHistory.slice().sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)).map(h=>`<tr><td>${fmtDateTime(h.createdAt||h.date)}</td><td>${(h.who||"Système").replace(/</g,"&lt;")}</td><td>${(h.action||"—").replace(/</g,"&lt;")}</td><td style="font-size:9px;">${(h.detail||"—").replace(/</g,"&lt;")}</td></tr>`).join("");
+      const exportId=Date.now().toString(36).toUpperCase()+"-DUVIA";
+
+      const html=`<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Duvia — Rapport de dépenses partagées</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;color:#1a1a2e;background:white;}
+@page{size:A4;margin:18mm 14mm 18mm 14mm;}
+@media print{.no-print{display:none!important;}.page-break{page-break-before:always;}body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+.cover{min-height:240mm;display:flex;flex-direction:column;justify-content:space-between;padding:10mm 0;}
+.cover-logo{display:flex;align-items:center;gap:12px;margin-bottom:36px;}
+.cover-logo img{width:56px;height:56px;border-radius:12px;object-fit:contain;background:white;border:1px solid #e5e7eb;}
+.cover-appname{font-size:30px;font-weight:900;color:#7B7CF5;letter-spacing:-1px;}
+.cover-appsub{font-size:11px;color:#9ca3af;margin-top:3px;}
+.cover-badge{display:inline-flex;align-items:center;gap:6px;background:#1a1a2e;color:white;font-size:9px;font-weight:800;padding:4px 14px;border-radius:20px;margin-bottom:20px;letter-spacing:1px;text-transform:uppercase;}
+.cover-title{font-size:30px;font-weight:900;color:#17103A;line-height:1.15;margin-bottom:8px;}
+.cover-sub{font-size:13px;color:#7269A8;margin-bottom:32px;}
+.cover-meta-box{background:#F2EDFF;border:1.5px solid #C6B8EE;border-radius:12px;padding:20px 24px;margin-bottom:24px;}
+.cover-meta-row{display:flex;align-items:flex-start;gap:8px;margin-bottom:10px;font-size:11px;}
+.cover-meta-row:last-child{margin-bottom:0;}
+.cml{font-weight:700;color:#7269A8;min-width:130px;flex-shrink:0;}
+.cmv{color:#17103A;font-weight:600;}
+.cover-legal{font-size:8.5px;color:#9ca3af;line-height:1.7;border-top:1px solid #e5e7eb;padding-top:12px;}
+.page-break{page-break-before:always;}
+.doc-header{display:flex;align-items:center;justify-content:space-between;padding-bottom:8px;border-bottom:2px solid #7B7CF5;margin-bottom:18px;}
+.doc-header-left{font-size:9px;font-weight:800;color:#7B7CF5;text-transform:uppercase;letter-spacing:.5px;}
+.doc-header-right{font-size:8px;color:#9ca3af;}
+.section-title{font-size:14px;font-weight:800;color:#17103A;border-bottom:2px solid #7B7CF5;padding-bottom:7px;margin-bottom:14px;}
+.subsection-title{font-size:10px;font-weight:800;color:#7269A8;margin:14px 0 8px;text-transform:uppercase;letter-spacing:.5px;}
+.summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;}
+.sc{background:#F2EDFF;border:1px solid #C6B8EE;border-radius:8px;padding:12px 14px;}
+.sc .sl{font-size:8px;font-weight:700;color:#7269A8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+.sc .sv{font-size:17px;font-weight:900;color:#17103A;}
+.sc .ss{font-size:8px;color:#9ca3af;margin-top:2px;}
+.parties-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:14px;}
+.party-card{border:1px solid #e5e7eb;border-radius:8px;padding:13px;background:#fafafa;}
+.party-name{font-size:12px;font-weight:800;color:#17103A;margin-bottom:7px;}
+.party-row{font-size:9.5px;color:#6b7280;margin-bottom:3px;}
+.party-row span{font-weight:600;color:#374151;}
+table{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:9.5px;}
+thead tr{background:#17103A;color:white;}
+thead th{padding:6px 8px;text-align:left;font-size:8px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;}
+tbody tr:nth-child(even){background:#f9fafb;}
+tbody td{padding:5px 7px;border-bottom:1px solid #f0f0f0;vertical-align:top;line-height:1.4;}
+tfoot td{padding:6px 8px;font-size:9.5px;}
+.no-data{text-align:center;padding:24px;color:#9ca3af;font-style:italic;font-size:10px;}
+.audit-table thead tr{background:#374151;}
+.cert-page{min-height:200mm;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:20mm 15mm;}
+.cert-seal{width:72px;height:72px;border-radius:50%;border:3px solid #7B7CF5;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 18px;background:#F2EDFF;}
+.cert-title{font-size:18px;font-weight:900;color:#17103A;margin-bottom:6px;}
+.cert-sub{font-size:11px;color:#7269A8;margin-bottom:28px;}
+.cert-box{background:#F2EDFF;border:1.5px solid #C6B8EE;border-radius:12px;padding:20px 28px;display:inline-block;min-width:280px;margin-bottom:20px;text-align:left;}
+.cr{display:flex;justify-content:space-between;gap:20px;margin-bottom:9px;font-size:10px;}
+.cr:last-child{margin-bottom:0;}
+.cr .crl{color:#7269A8;font-weight:600;}
+.cr .crv{font-weight:800;color:#17103A;}
+.cert-hash{font-family:monospace;font-size:8px;color:#c4b5fd;background:#17103A;padding:5px 12px;border-radius:6px;margin-top:14px;letter-spacing:1px;}
+.cert-warn{font-size:8.5px;color:#9ca3af;max-width:360px;line-height:1.7;margin-top:20px;}
+.print-btn{position:fixed;bottom:20px;right:20px;background:linear-gradient(135deg,#7B7CF5,#FF6CB8);color:white;border:none;border-radius:12px;padding:11px 18px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(123,124,245,.4);z-index:999;}
+</style>
+</head>
+<body>
+<button class="no-print" onclick="window.print()" style="position:fixed;bottom:20px;right:20px;background:linear-gradient(135deg,#7B7CF5,#FF6CB8);color:white;border:none;border-radius:12px;padding:12px 20px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(123,124,245,.4);z-index:999;">🖨️ Imprimer / PDF</button>
+
+<!-- ═══════════════ COUVERTURE ═══════════════ -->
+<div class="cover">
+<div>
+  <div class="cover-logo">
+    <img src="${APP_LOGO_PNG}" alt="Duvia">
+    <div><div class="cover-appname">Duvia</div><div class="cover-appsub">Two homes. One family.</div></div>
+  </div>
+  <div class="cover-badge">📊 Export Duvia</div>
+  <div class="cover-title">Rapport de dépenses<br>partagées</div>
+  <div class="cover-sub">Garde alternée — Export des données Duvia</div>
+  <div class="cover-meta-box">
+    <div class="cover-meta-row"><div class="cml">📅 Période couverte&nbsp;:</div><div class="cmv">${periodLabel}</div></div>
+    <div class="cover-meta-row"><div class="cml">🗓️ Date d'export&nbsp;:</div><div class="cmv">${exportDateStr} à ${exportTimeStr}</div></div>
+    <div class="cover-meta-row"><div class="cml">👨‍👩‍👧 Famille&nbsp;:</div><div class="cmv">${cfg.parents.map(p=>(p.name||"—").replace(/</g,"&lt;")).join(" / ")}</div></div>
+    <div class="cover-meta-row"><div class="cml">📊 Dépenses&nbsp;:</div><div class="cmv">${filteredExpenses.length} entrée${filteredExpenses.length!==1?"s":""} · Total confirmé ${totalConfirmed.toFixed(2)} ${currency}</div></div>
+    <div class="cover-meta-row"><div class="cml">💸 Remboursements&nbsp;:</div><div class="cmv">${filteredReims.length} entrée${filteredReims.length!==1?"s":""} · Total confirmé ${totalReims.toFixed(2)} ${currency}</div></div>
+    <div class="cover-meta-row"><div class="cml">🔑 ID Export&nbsp;:</div><div class="cmv" style="font-family:monospace;font-size:9px;">${exportId}</div></div>
+  </div>
+</div>
+<div class="cover-legal">Ce rapport a été généré automatiquement par l'application Duvia le ${exportDateStr} à ${exportTimeStr}. Il présente les dépenses partagées et remboursements saisis par les utilisateurs pour la période indiquée.\n⚠️ Duvia est un outil d'aide à l'organisation familiale. Les données et rapports générés par cette application n'ont aucune valeur juridique et ne constituent pas des pièces légales. Ils ne remplacent pas un accord homologué, une décision judiciaire ou l'avis d'un professionnel du droit.</div>
+</div>
+
+<!-- ═══════════════ RÉSUMÉ EXÉCUTIF ═══════════════ -->
+<div class="page-break"></div>
+<div class="doc-header"><div class="doc-header-left">Duvia — Rapport de dépenses partagées</div><div class="doc-header-right">Période : ${periodLabel} · Export : ${exportDateStr}</div></div>
+<div class="section-title">1. Résumé exécutif</div>
+<div class="summary-grid">
+  <div class="sc"><div class="sl">Total confirmé</div><div class="sv">${totalConfirmed.toFixed(2)} ${currency}</div><div class="ss">${confirmedExp.length} dépense${confirmedExp.length!==1?"s":""}</div></div>
+  <div class="sc"><div class="sl">Remboursements</div><div class="sv">${totalReims.toFixed(2)} ${currency}</div><div class="ss">${confirmedReims.length} confirmé${confirmedReims.length!==1?"s":""}</div></div>
+  <div class="sc"><div class="sl">En attente</div><div class="sv">${pendingExp.length}</div><div class="ss">Non validées</div></div>
+  <div class="sc"><div class="sl">Refusées</div><div class="sv">${rejectedExp.length}</div><div class="ss">Sur la période</div></div>
+  <div class="sc"><div class="sl">Total enregistrements</div><div class="sv">${totalRecords}</div><div class="ss">Dépenses + remb.</div></div>
+  <div class="sc"><div class="sl">Modifications</div><div class="sv">${filteredHistory.length}</div><div class="ss">Entrées historique</div></div>
+</div>
+<div class="subsection-title">Soldes par parent</div>
+<table>
+  <thead><tr><th>Parent</th><th style="text-align:right;">Total payé</th><th style="text-align:right;">Quote-part due</th><th style="text-align:right;">Remb. envoyés</th><th style="text-align:right;">Remb. reçus</th><th style="text-align:right;">Solde net</th></tr></thead>
+  <tbody>${cfg.parents.map((p,i)=>`<tr><td style="font-weight:700;">${(p.name||`Parent ${i+1}`).replace(/</g,"&lt;")}</td><td style="text-align:right;">${(totalsPerParent[i]||0).toFixed(2)} ${currency}</td><td style="text-align:right;">${(owedPerParent[i]||0).toFixed(2)} ${currency}</td><td style="text-align:right;">${(reimSent2[i]||0).toFixed(2)} ${currency}</td><td style="text-align:right;">${(reimReceived2[i]||0).toFixed(2)} ${currency}</td><td style="text-align:right;font-weight:800;color:${balances[i]>0.01?"#166534":balances[i]<-0.01?"#991b1b":"#374151"};">${balances[i]>0?"+":" "}${(balances[i]||0).toFixed(2)} ${currency}</td></tr>`).join("")}</tbody>
+</table>
+
+<!-- ═══════════════ PARTIES ═══════════════ -->
+<div class="page-break"></div>
+<div class="doc-header"><div class="doc-header-left">Duvia — Rapport de dépenses partagées</div><div class="doc-header-right">Période : ${periodLabel} · Export : ${exportDateStr}</div></div>
+<div class="section-title">2. Informations des parties</div>
+<div class="subsection-title">Parents / Détenteurs de l'autorité parentale</div>
+<div class="parties-grid">${cfg.parents.map((p,i)=>`<div class="party-card" style="border-left:4px solid ${p.color||"#7B7CF5"};"><div class="party-name">${(p.name||`Parent ${i+1}`).replace(/</g,"&lt;")}</div><div class="party-row">Rôle&nbsp;: <span>${p.gender==="female"?"Mère":p.gender==="male"?"Père":"Parent"}</span></div><div class="party-row">Téléphone&nbsp;: <span>${(p.phone||"Non renseigné").replace(/</g,"&lt;")}</span></div><div class="party-row">Email&nbsp;: <span>${(p.email||p.inviteEmail||"Non renseigné").replace(/</g,"&lt;")}</span></div></div>`).join("")}</div>
+<div class="subsection-title">Enfants concernés</div>
+${(cfg.children||[]).length===0?'<p style="color:#9ca3af;font-style:italic;font-size:10px;">Aucun enfant enregistré.</p>':`<div class="parties-grid">${(cfg.children||[]).map((c,i)=>`<div class="party-card"><div class="party-name">👶 ${(c.name||`Enfant ${i+1}`).replace(/</g,"&lt;")}</div>${c.birthDay&&c.birthMonth?`<div class="party-row">Naissance&nbsp;: <span>${String(c.birthDay).padStart(2,"0")}/${String(c.birthMonth).padStart(2,"0")}</span></div>`:""}</div>`).join("")}</div>`}
+
+<!-- ═══════════════ DÉPENSES ═══════════════ -->
+<div class="page-break"></div>
+<div class="doc-header"><div class="doc-header-left">Duvia — Rapport de dépenses partagées</div><div class="doc-header-right">Période : ${periodLabel} · Export : ${exportDateStr}</div></div>
+<div class="section-title">3. Détail des dépenses et remboursements</div>
+<div class="subsection-title">3.1 Dépenses (${filteredExpenses.length})</div>
+${filteredExpenses.length===0?'<div class="no-data">Aucune dépense sur cette période.</div>':`<table><thead><tr><th>Date</th><th>Saisie / Heure</th><th>Catégorie</th><th>Description</th><th style="text-align:right;">Montant</th><th>Payé par</th><th>Répart.</th><th>Statut</th><th>Créé par</th></tr></thead><tbody>${expRows}</tbody><tfoot><tr style="background:#17103A;color:white;"><td colspan="4" style="font-weight:800;padding:6px 8px;">TOTAL CONFIRMÉ</td><td style="text-align:right;font-weight:800;padding:6px 8px;">${totalConfirmed.toFixed(2)} ${currency}</td><td colspan="4"></td></tr></tfoot></table>`}
+<div class="subsection-title" style="margin-top:20px;">3.2 Remboursements (${filteredReims.length})</div>
+${filteredReims.length===0?'<div class="no-data">Aucun remboursement sur cette période.</div>':`<table><thead><tr><th>Date</th><th>Saisie / Heure</th><th>De (rembourseur)</th><th>À (bénéficiaire)</th><th style="text-align:right;">Montant</th><th>Note</th><th>Statut</th></tr></thead><tbody>${reimRows}</tbody><tfoot><tr style="background:#17103A;color:white;"><td colspan="4" style="font-weight:800;padding:6px 8px;">TOTAL CONFIRMÉ</td><td style="text-align:right;font-weight:800;padding:6px 8px;">${totalReims.toFixed(2)} ${currency}</td><td colspan="2"></td></tr></tfoot></table>`}
+
+${attachmentsHtml}
+
+<!-- ═══════════════ AUDIT ═══════════════ -->
+<div class="page-break"></div>
+<div class="doc-header"><div class="doc-header-left">Duvia — Rapport de dépenses partagées</div><div class="doc-header-right">Période : ${periodLabel} · Export : ${exportDateStr}</div></div>
+<div class="section-title">5. Historique des modifications (${filteredHistory.length} entrées)</div>
+<p style="color:#666;font-size:10px;margin-bottom:14px;">Retraçage complet des créations, modifications et validations de dépenses sur la période.</p>
+${filteredHistory.length===0?'<div class="no-data">Aucune entrée d\'audit sur cette période.</div>':`<table class="audit-table"><thead><tr><th>Date / Heure</th><th>Utilisateur</th><th>Action</th><th>Détail</th></tr></thead><tbody>${histRows}</tbody></table>`}
+
+<!-- ═══════════════ CERTIFICATION ═══════════════ -->
+<div class="page-break"></div>
+<div class="cert-page">
+  <div class="cert-seal">🏛️</div>
+  <div class="cert-title">Certification d'authenticité</div>
+  <div class="cert-sub">Document généré par Duvia · Application de gestion de garde alternée</div>
+  <div class="cert-box">
+    <div class="cr"><span class="crl">Date de génération</span><span class="crv">${exportDateStr} à ${exportTimeStr}</span></div>
+    <div class="cr"><span class="crl">Période couverte</span><span class="crv">${periodLabel}</span></div>
+    <div class="cr"><span class="crl">Famille</span><span class="crv">${cfg.parents.map(p=>(p.name||"—").replace(/</g,"&lt;")).join(" / ")}</span></div>
+    <div class="cr"><span class="crl">Dépenses exportées</span><span class="crv">${filteredExpenses.length}</span></div>
+    <div class="cr"><span class="crl">Remboursements exportés</span><span class="crv">${filteredReims.length}</span></div>
+    <div class="cr"><span class="crl">Total enregistrements</span><span class="crv">${totalRecords}</span></div>
+    <div class="cr"><span class="crl">Entrées historique</span><span class="crv">${filteredHistory.length}</span></div>
+    <div class="cr"><span class="crl">Généré par</span><span class="crv">${(user?.name||"Utilisateur").replace(/</g,"&lt;")}</span></div>
+  </div>
+  <div class="cert-hash">ID EXPORT : ${exportId}</div>
+  <div class="cert-warn">Ce rapport reflète les données saisies par les utilisateurs dans l'application Duvia pour la période sélectionnée. ⚠️ Duvia est un outil d'aide à l'organisation familiale. Les rapports et données de cette application n'ont aucune valeur juridique. Ils ne remplacent pas un accord légal, une décision judiciaire ou l'avis d'un professionnel du droit.</div>
+</div>
+<script>
+window.addEventListener('message',function(e){
+  if(e.data==='DUVIA_PRINT'){window.print();}
+});
+</script>
+</body></html>`;
+
+      setExportHtml(html);
+      setExportGenerating(false);
+      setShowExportModal(false);
+    }catch(err){
+      console.error("PDF Export error:",err);
+      setExportGenerating(false);
+    }
+  }
+
+  // ── Attachment drop zone UI ───────────────────────────────────────────────
+  function AttachZone(){
+    const atts=form.attachments||[];
+    return (
+      <div className="field">
+        <label className="lbl">{t.expAttLabel||"📎 Pièces jointes"} (max {MAX_ATT} · {MAX_MB} Mo · JPG PNG WEBP HEIC PDF)</label>
+        {/* Drop zone */}
+        <div
+          onClick={()=>fileRef.current?.click()}
+          onDragOver={e=>{e.preventDefault();setDragOver(true);}}
+          onDragLeave={()=>setDragOver(false)}
+          onDrop={e=>{e.preventDefault();setDragOver(false);handleFiles(e.dataTransfer.files);}}
+          style={{border:`2px dashed ${dragOver?C.vio:C.bor}`,borderRadius:12,padding:"14px 12px",textAlign:"center",cursor:"pointer",background:dragOver?`${C.vio}0a`:C.sur,transition:"all .15s",marginBottom:8}}
+        >
+          {attLoading
+            ? <div style={{color:C.mut,fontSize:13}}>{t.expAttProcessing||"⏳ Traitement…"}</div>
+            : <div>
+                <div style={{fontSize:26,marginBottom:4}}>📂</div>
+                <div style={{fontSize:12,color:C.mut}}>{t.expAttClick||"Cliquer ou glisser-déposer"}</div>
+                <div style={{fontSize:10,color:C.mut,marginTop:2}}>{t.expAttFormats||"JPG · PNG · WEBP · HEIC · PDF · max"} {MAX_MB} Mo</div>
+              </div>
+          }
+        </div>
+        <input ref={fileRef} type="file" multiple accept={ALLOWED_EXT.join(',')} style={{display:"none"}}
+          onChange={e=>{handleFiles(e.target.files);e.target.value="";}} />
+        {isAdm&&(form.attachments||[]).length<MAX_ATT&&(
+          <button onClick={simulatePhoto} style={{width:"100%",padding:"7px",background:"linear-gradient(135deg,#FFD70022,#ff9f4322)",border:"1.5px dashed #FFD700",borderRadius:8,color:"#b45309",fontSize:11,fontWeight:800,marginTop:4,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            {t.expAttSimulate||"👑 Simuler une pièce jointe"} <span style={{fontWeight:400,opacity:.7}}>{t.expAttSimulateNote||"(admin only)"}</span>
+          </button>
+        )}
+        {attErr&&<div style={{fontSize:11,color:C.red,marginBottom:6,padding:"5px 8px",background:`${C.red}12`,borderRadius:6}}>⚠️ {attErr}</div>}
+        {/* Preview list */}
+        {atts.length>0&&(
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:4}}>
+            {atts.map(a=>(
+              <div key={a.id} style={{position:"relative",width:72,height:72,borderRadius:10,overflow:"hidden",border:`1.5px solid ${C.bor}`,background:C.sur,cursor:"pointer",flexShrink:0}} onClick={()=>openViewer(a)}>
+                {a.thumb
+                  ? <img src={a.thumb} alt={a.name} style={{width:"100%",height:"100%",objectFit:"cover"}} />
+                  : <div style={{width:"100%",height:"100%",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2}}>
+                      <span style={{fontSize:26}}>{a.type==='application/pdf'?'📄':'🖼️'}</span>
+                      <span style={{fontSize:8,color:C.mut,textAlign:"center",padding:"0 4px",wordBreak:"break-all",lineHeight:1.2}}>{a.name.slice(0,16)}</span>
+                    </div>
+                }
+                <button onClick={ev=>{ev.stopPropagation();removeAtt(a.id);}}
+                  style={{position:"absolute",top:2,right:2,width:18,height:18,borderRadius:"50%",background:"rgba(0,0,0,.6)",color:"#fff",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>
+                <div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,.45)",color:"#fff",fontSize:8,textAlign:"center",padding:"2px 3px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                  {fmtSize(a.compressedSize||a.originalSize)}
+                </div>
+              </div>
+            ))}
+            {atts.length<MAX_ATT&&(
+              <div onClick={()=>fileRef.current?.click()} style={{width:72,height:72,borderRadius:10,border:`2px dashed ${C.bor}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.mut,fontSize:26,flexShrink:0}}>+</div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{position:"relative"}}>
+      {/* ── Detail modal ── */}
+      {detailExp&&(()=>{
+        const e=detailExp;
+        const atts=e.attachments||[];
+        const st=e.status||"confirmed";
+        const stLabel=st==="confirmed"?(t.expStatusConfirmed||"✅ Accepté"):st==="rejected"?(t.expStatusRejected||"❌ Refusé"):(t.expStatusPending||"⏳ En attente");
+        const stColor=st==="confirmed"?C.grn:st==="rejected"?C.red:C.yel;
+        const payer=cfg.parents[e.paidBy];
+        const creator=cfg.parents[e.createdBy];
+        const sA=e.split||50; const sB=100-sA;
+        const iAmSender=user?.role==="parent"&&e.createdBy!==undefined&&user?.parentIdx===e.createdBy;
+        const iAmReceiver=user?.role==="parent"&&e.createdBy!==undefined&&user?.parentIdx!==e.createdBy;
+        const isPending=st==="pending";
+        return(
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:490,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setDetailExp(null)}>
+            <div onClick={ev=>ev.stopPropagation()} style={{background:C.card,borderRadius:"18px 18px 0 0",width:"100%",maxWidth:560,maxHeight:"88vh",overflowY:"auto",padding:"20px 18px 32px"}}>
+              {/* Header */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:18,fontWeight:900,color:C.txt,wordBreak:"break-word"}}>
+                    {e.recurringId&&<span style={{background:`${C.vio}18`,color:C.vio,borderRadius:4,padding:"1px 5px",fontSize:11,fontWeight:800,marginRight:6}}>🔄</span>}
+                    {e.label}
+                  </div>
+                  <div style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 10px",background:`${stColor}15`,border:`1px solid ${stColor}44`,borderRadius:20,marginTop:6}}>
+                    <span style={{fontSize:12,fontWeight:700,color:stColor}}>{stLabel}</span>
+                  </div>
+                </div>
+                <button onClick={()=>setDetailExp(null)} style={{background:"transparent",border:"none",fontSize:20,color:C.mut,padding:"0 4px",flexShrink:0}}>✕</button>
+              </div>
+
+              {/* Montant */}
+              <div style={{background:C.sur,borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div>
+                  <div style={{fontSize:28,fontWeight:900,color:C.blu,fontFamily:"JetBrains Mono"}}>{Number(e.amount).toFixed(2)} <span style={{fontSize:16}}>{currency}</span></div>
+                  <div style={{fontSize:12,color:C.mut,marginTop:2}}>{t.expPaidBy||"Payé par"} <strong style={{color:payer?.color||C.grn}}>{payer?.name||`P${e.paidBy+1}`}</strong></div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{sA}/{sB}</div>
+                  <div style={{fontSize:11,color:C.mut}}>répartition</div>
+                </div>
+              </div>
+              {/* Part de chaque parent */}
+              <div style={{display:"flex",gap:8,marginBottom:12}}>
+                {cfg.parents.map((p,i)=>{
+                  const pct = i===0?sA:sB;
+                  const amt = (Number(e.amount)*pct/100).toFixed(2);
+                  return(
+                    <div key={i} style={{flex:1,background:C.sur,borderRadius:10,padding:"8px 10px",textAlign:"center",border:`1.5px solid ${i===e.paidBy?p.color||C.grn:C.bor}`}}>
+                      <div style={{fontSize:11,color:C.mut,marginBottom:2}}>{p.name||`P${i+1}`}</div>
+                      <div style={{fontSize:17,fontWeight:900,color:p.color||C.txt}}>{amt} {currency}</div>
+                      <div style={{fontSize:10,color:C.mut}}>{pct}%{i===e.paidBy?" · a payé":""}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Infos */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+                <div style={{background:C.sur,borderRadius:10,padding:"10px 12px"}}>
+                  <div style={{fontSize:10,color:C.mut,fontWeight:700,marginBottom:2}}>CATÉGORIE</div>
+                  <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{e.category||"—"}</div>
+                </div>
+                <div style={{background:C.sur,borderRadius:10,padding:"10px 12px"}}>
+                  <div style={{fontSize:10,color:C.mut,fontWeight:700,marginBottom:2}}>DATE</div>
+                  <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{e.date?(e.date.split("-").reverse().join("/")):"—"}</div>
+                </div>
+                {e.note&&(
+                  <div style={{background:C.sur,borderRadius:10,padding:"10px 12px",gridColumn:"1/-1"}}>
+                    <div style={{fontSize:10,color:C.mut,fontWeight:700,marginBottom:2}}>NOTE</div>
+                    <div style={{fontSize:13,color:C.txt}}>{e.note}</div>
+                  </div>
+                )}
+                {creator&&(
+                  <div style={{background:C.sur,borderRadius:10,padding:"10px 12px",gridColumn:"1/-1"}}>
+                    <div style={{fontSize:10,color:C.mut,fontWeight:700,marginBottom:2}}>AJOUTÉ PAR</div>
+                    <div style={{fontSize:13,fontWeight:700,color:creator.color||C.txt}}>{creator.name}</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Pièces jointes */}
+              {atts.length>0&&(
+                <div style={{marginBottom:12}}>
+                  <div style={{fontSize:11,fontWeight:800,color:C.mut,marginBottom:8}}>📎 PIÈCES JOINTES ({atts.length})</div>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    {atts.map(a=>{
+                      const url=a.storagePath?detailUrls[a.storagePath]:(a.data||null);
+                      return(
+                        <div key={a.id} onClick={()=>openViewer(a)} style={{width:80,height:80,borderRadius:10,overflow:"hidden",border:`1.5px solid ${C.bor}`,background:C.sur,cursor:"pointer",flexShrink:0}}>
+                          {(a.thumb||url)&&a.type!=="application/pdf"
+                            ? <img src={a.thumb||url} alt={a.name} style={{width:"100%",height:"100%",objectFit:"cover"}} />
+                            : <div style={{width:"100%",height:"100%",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2}}>
+                                <span style={{fontSize:24}}>{a.type==="application/pdf"?"📄":"🖼️"}</span>
+                                <span style={{fontSize:8,color:C.mut,textAlign:"center",padding:"0 4px"}}>{(a.name||"").slice(0,12)}</span>
+                              </div>
+                          }
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              {isPending&&iAmReceiver&&(
+                <div style={{display:"flex",gap:8,marginBottom:10}}>
+                  <button onClick={()=>{confirmExp(e.id);setDetailExp(null);}} style={{flex:1,padding:"12px",background:C.grn,color:"#fff",borderRadius:12,fontWeight:800,fontSize:14}}>✅ {t.expValidateBtn||"Valider"}</button>
+                  <button onClick={()=>{rejectExp(e.id);setDetailExp(null);}} style={{flex:1,padding:"12px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,borderRadius:12,fontWeight:700,fontSize:14}}>❌ {t.expRejectBtn||"Refuser"}</button>
+                </div>
+              )}
+              {(iAmSender||isAdm)&&(
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={()=>{startEdit(e);setDetailExp(null);}} style={{flex:1,padding:"12px",background:C.sur,color:C.txt,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13}}>✎ Modifier</button>
+                  <button onClick={()=>{del(e.id);setDetailExp(null);}} style={{flex:1,padding:"12px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,borderRadius:12,fontWeight:700,fontSize:13}}>🗑 Supprimer</button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Viewer modal ── */}
+      {viewer&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:500,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>{setViewer(null);setViewerUrl(null);}}>
+          <div onClick={e=>e.stopPropagation()} style={{maxWidth:"min(94vw,680px)",maxHeight:"88vh",display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+              <span style={{color:"#fff",fontSize:13,fontWeight:700,wordBreak:"break-all"}}>{viewer.name}</span>
+              <div style={{display:"flex",gap:8,flexShrink:0}}>
+                <button onClick={()=>downloadAtt(viewer)} style={{padding:"6px 14px",background:C.vio,color:"#fff",borderRadius:8,fontSize:12,fontWeight:700}}>{t.expDownload||"⬇ Télécharger"}</button>
+                <button onClick={()=>{setViewer(null);setViewerUrl(null);}} style={{padding:"6px 12px",background:"rgba(255,255,255,.15)",color:"#fff",borderRadius:8,fontSize:12}}>✕</button>
+              </div>
+            </div>
+            {viewer.type==='application/pdf'
+              ? <div style={{background:C.card,borderRadius:12,padding:24,textAlign:"center"}}>
+                  <div style={{fontSize:56,marginBottom:12}}>📄</div>
+                  <div style={{fontSize:14,color:C.txt,marginBottom:6,fontWeight:700}}>{viewer.name}</div>
+                  <div style={{fontSize:12,color:C.mut,marginBottom:14}}>{fmtSize(viewer.size||viewer.compressedSize||viewer.originalSize)}</div>
+                  <button onClick={()=>downloadAtt(viewer)} style={{padding:"10px 24px",background:C.vio,color:"#fff",borderRadius:10,fontSize:14,fontWeight:800}}>{t.expDownloadPdf||"⬇ Télécharger le PDF"}</button>
+                </div>
+              : viewerUrl
+                ? <img src={viewerUrl} alt={viewer.name} style={{maxWidth:"100%",maxHeight:"75vh",borderRadius:12,objectFit:"contain"}} />
+                : <div style={{color:"#fff",padding:20,textAlign:"center"}}>⏳ Chargement…</div>
+            }
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal choix modification récurrente ── */}
+      {recurringEditModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:320,width:"100%",border:`1.5px solid ${C.vio}`,boxShadow:"0 12px 40px rgba(0,0,0,.25)"}}>
+            <div style={{fontSize:32,textAlign:"center",marginBottom:10}}>🔄</div>
+            <div style={{fontSize:15,fontWeight:800,marginBottom:6,textAlign:"center"}}>Modifier la dépense récurrente</div>
+            <div style={{fontSize:13,color:C.mut,marginBottom:20,textAlign:"center",lineHeight:1.5}}>
+              <strong style={{color:C.vio}}>{recurringEditModal.label}</strong><br/>
+              Voulez-vous modifier uniquement cette occurrence ou toute la série ?
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <button onClick={()=>openEditForm(recurringEditModal,"single")}
+                style={{padding:"13px",background:C.sur,color:C.txt,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:14,textAlign:"left",display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:20}}>📌</span>
+                <div>
+                  <div>Cette occurrence uniquement</div>
+                  <div style={{fontSize:11,color:C.mut,fontWeight:400}}>Le {(recurringEditModal.date||"").split("-").reverse().join("/")}</div>
+                </div>
+              </button>
+              <button onClick={()=>openEditForm(recurringEditModal,"series")}
+                style={{padding:"13px",background:`${C.vio}10`,color:C.vio,border:`1.5px solid ${C.vio}`,borderRadius:12,fontWeight:700,fontSize:14,textAlign:"left",display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:20}}>🔄</span>
+                <div>
+                  <div>Toute la série</div>
+                  <div style={{fontSize:11,color:C.mut,fontWeight:400}}>Toutes les occurrences seront recalculées</div>
+                </div>
+              </button>
+              <button onClick={()=>setRecurringEditModal(null)}
+                style={{padding:"10px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:10,fontWeight:700,fontSize:13}}>
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal choix suppression récurrente ── */}
+      {recurringDelModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:320,width:"100%",border:`1.5px solid ${C.red}`,boxShadow:"0 12px 40px rgba(0,0,0,.25)"}}>
+            <div style={{fontSize:32,textAlign:"center",marginBottom:10}}>🗑️</div>
+            <div style={{fontSize:15,fontWeight:800,marginBottom:6,textAlign:"center"}}>Supprimer la dépense récurrente</div>
+            <div style={{fontSize:13,color:C.mut,marginBottom:20,textAlign:"center",lineHeight:1.5}}>
+              <strong style={{color:C.red}}>{recurringDelModal.label}</strong><br/>
+              Supprimer uniquement cette occurrence ou toute la série ?
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <button onClick={()=>doDelete(recurringDelModal.id,"single")}
+                style={{padding:"13px",background:C.sur,color:C.txt,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:14,textAlign:"left",display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:20}}>📌</span>
+                <div>
+                  <div>Cette occurrence uniquement</div>
+                  <div style={{fontSize:11,color:C.mut,fontWeight:400}}>Le {(recurringDelModal.date||"").split("-").reverse().join("/")}</div>
+                </div>
+              </button>
+              <button onClick={()=>doDelete(recurringDelModal.id,"series")}
+                style={{padding:"13px",background:`${C.red}10`,color:C.red,border:`1.5px solid ${C.red}`,borderRadius:12,fontWeight:700,fontSize:14,textAlign:"left",display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:20}}>🔄</span>
+                <div>
+                  <div>Toute la série</div>
+                  <div style={{fontSize:11,color:C.mut,fontWeight:400}}>Toutes les occurrences seront supprimées</div>
+                </div>
+              </button>
+              <button onClick={()=>setRecurringDelModal(null)}
+                style={{padding:"10px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:10,fontWeight:700,fontSize:13}}>
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+        <div>
+          <div style={{fontSize:16,fontWeight:900}}>💰 {t.tabExp||"Dépenses"}</div>
+          <div style={{fontSize:11,color:C.mut}}>{t.expSub||"Suivi des dépenses partagées"}</div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          <button
+            onClick={()=>{ if(!premFull){ onUpgrade(); return; } setShowExportModal(true); }}
+            title={premFull ? (t.exportPDF||"Exporter en PDF") : (t.premiumSubscribersOnly||"Réservé aux membres Premium abonnés")}
+            style={{display:"flex",alignItems:"center",gap:3,padding:"3px 7px",background:premFull?`${C.vio}15`:`${C.mut}15`,border:`1px solid ${premFull?C.vio:C.mut}44`,borderRadius:6,cursor:"pointer",transition:"all .15s",opacity:premFull?1:.6}}
+          >
+            <span style={{fontSize:10}}>{premFull?"📄":"🔒"}</span>
+            <span style={{fontSize:9,color:premFull?C.vio:C.mut,fontWeight:800}}>PDF</span>
+          </button>
+          <InfoBubble C={C} tipKey={`duvia_exptip_${user?.id||"x"}`} title={t.tabExp||"Dépenses"}>
+            {t.expTipBody||"Suivez et partagez les dépenses de l'enfant. Cette section est visible uniquement par les parents."}
+          </InfoBubble>
+        </div>
+      </div>
+
+      {/* ── Freemium / Trial notice ── */}
+      {!prem && (
+        <div onClick={onUpgrade} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",marginBottom:14,background:`${C.vio}10`,border:`1.5px dashed ${C.vio}55`,borderRadius:14,cursor:"pointer"}}>
+          <span style={{fontSize:20,flexShrink:0}}>🔒</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:12,fontWeight:800,color:C.vio}}>Soldes — Premium</div>
+            <div style={{fontSize:11,color:C.mut,marginTop:1}}>Les montants des soldes sont floutés. Passez en Premium pour les voir en clair.</div>
+          </div>
+          <div style={{flexShrink:0,padding:"5px 10px",background:`${C.vio}22`,color:C.vio,borderRadius:8,fontSize:11,fontWeight:800}}>⭐ Premium</div>
+        </div>
+      )}
+
+      {/* ── Totals cards ── */}
+      <div style={{display:"grid",gridTemplateColumns:`repeat(${Math.min(cfg.parents.length+1,4)},1fr)`,gap:8,marginBottom:14}}>
+        {cfg.parents.map((p,i)=>(
+          <div key={i} className="card" style={{borderColor:p.color,textAlign:"center",padding:12}}>
+            <div style={{fontSize:10,color:C.mut,textTransform:"uppercase",marginBottom:4,fontWeight:800}}>{p.name||`P${i+1}`}</div>
+            <div style={{fontSize:18,fontWeight:900,color:p.color}}>{(totals[i]||0).toFixed(2)} {currency}</div>
+            <div style={{fontSize:10,color:C.mut,marginTop:2}}>{t.expPaid||"payé"}: {(totals[i]||0).toFixed(2)} {currency}</div>
+            <div style={{fontSize:10,color:balance[i]>0.01?C.grn:balance[i]<-0.01?C.red:C.mut,fontWeight:700,filter:!perms?.balanceVisible?"blur(5px)":"none",userSelect:!perms?.balanceVisible?"none":"auto"}}>
+              {balance[i]>0.01?`+${balance[i].toFixed(2)} ${currency}`:balance[i]<-0.01?`${balance[i].toFixed(2)} ${currency}`:t.even}
+            </div>
+          </div>
+        ))}
+        <div className="card" style={{textAlign:"center",padding:12}}>
+          <div style={{fontSize:10,color:C.mut,textTransform:"uppercase",marginBottom:4,fontWeight:800}}>{t.total}</div>
+          <div style={{fontSize:18,fontWeight:900,color:C.blu}}>{total.toFixed(2)} {currency}</div>
+          <div style={{fontSize:10,color:C.mut}}>{expenses.length} {expenses.length!==1?(t.expCountPlural||"dépenses"):(t.expCount||"dépense")}</div>
+        </div>
+      </div>
+
+      {/* ── Who owes whom ── */}
+      {(()=>{
+        if(cfg.parents.length<2) return null;
+        const creditor=balance.reduce((best,b,i)=>b>balance[best]?i:best,0);
+        const debtor=balance.reduce((best,b,i)=>b<balance[best]?i:best,0);
+        const diff=balance[creditor]-balance[debtor];
+        const isBalanced=diff<0.01;
+        const balBlur = !perms?.balanceVisible;
+        return (
+          <div style={{marginBottom:14,padding:"10px 14px",borderRadius:12,background:isBalanced?`${C.grn}12`:`${C.ora}12`,border:`1.5px solid ${isBalanced?C.grn:C.ora}`,display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:20}}>{isBalanced?"✅":"💳"}</span>
+            {isBalanced
+              ? <span style={{fontSize:13,fontWeight:800,color:C.grn}}>{t.expBalanced||"Comptes équilibrés — aucun remboursement nécessaire"}</span>
+              : <span style={{fontSize:13,fontWeight:700,color:C.txt,lineHeight:1.4,display:"flex",alignItems:"center",flexWrap:"wrap",gap:4}}>
+                  <span style={{color:cfg.parents[debtor]?.color,fontWeight:900}}>{cfg.parents[debtor]?.name||`P${debtor+1}`}</span>
+                  {" "}{t.expOwes||"doit"}{" "}
+                  {balBlur
+                    ? <span onClick={onUpgrade} style={{fontFamily:"JetBrains Mono",fontWeight:900,color:C.ora,filter:"blur(5px)",cursor:"pointer",userSelect:"none",background:`${C.ora}18`,borderRadius:6,padding:"1px 6px"}}>99,99€</span>
+                    : <span style={{fontFamily:"JetBrains Mono",fontWeight:900,color:C.ora}}>{(diff/2).toFixed(2)} {currency}</span>
+                  }
+                  {" "}{t.expTo||"à"}{" "}
+                  <span style={{color:cfg.parents[creditor]?.color,fontWeight:900}}>{cfg.parents[creditor]?.name||`P${creditor+1}`}</span>
+                  {balBlur && <span onClick={onUpgrade} style={{fontSize:10,color:C.ora,fontWeight:800,cursor:"pointer",marginLeft:4}}>🔒 Premium</span>}
+                </span>
+            }
+          </div>
+        );
+      })()}
+      <div style={{display:"flex",gap:8,marginBottom:12}}>
+        <button onClick={()=>{if(showAdd&&!editId){cancelForm();setShowReim(false);}else if(!showAdd){setShowAdd(true);setShowReim(false);}else{cancelForm();setShowReim(false);}}}
+          style={{flex:2,height:44,background:showAdd?C.sur:C.vio,color:showAdd?C.mut:"#fff",border:showAdd?`1.5px solid ${C.bor}`:"none",borderRadius:10}}>
+          {showAdd?(editId?(t.expEditCancel||"✕ Annuler"):t.cancelAdd):t.addExpense}
+        </button>
+        <button onClick={()=>{setShowReim(r=>!r);setShowAdd(false);cancelForm();setReimErr("");}}
+          style={{flex:1,height:44,background:showReim?C.sur:`${C.grn}18`,color:showReim?C.mut:C.grn,border:`1.5px solid ${showReim?C.bor:C.grn+"66"}`,borderRadius:10,fontWeight:700,fontSize:13}}>
+          {showReim?(t.expReimCancel||"✕ Annuler"):(t.expReimBtn||"💸 Remboursement")}
+        </button>
+      </div>
+
+      {/* ── Reimbursement form ── */}
+      {showReim&&(
+        <div ref={reimFormRef} className="card fi" style={{marginBottom:12,borderColor:C.grn,scrollMarginTop:12}}>
+          <div className="sec">{editReimId?"✏️ Modifier le remboursement":(t.expReimSectionTitle||"💸 Ajouter un remboursement")}</div>
+          <div style={{fontSize:12,color:C.mut,marginBottom:12,lineHeight:1.5}}>
+            {t.expReimDesc||"Un remboursement enregistre qu'un parent a rendu de l'argent à l'autre et ajuste automatiquement le solde."}
+          </div>
+          <div className="row">
+            <div className="field" style={{flex:1}}>
+              <label className="lbl">{t.expReimFrom||"De (qui rembourse)"}</label>
+              <select value={reimForm.from} onChange={e=>{const v=+e.target.value;setReimForm(f=>({...f,from:v,to:f.to===v?(v===0?1:0):f.to}));}}>
+                {cfg.parents.map((p,i)=><option key={i} value={i}>{p.name||`P${i+1}`}</option>)}
+              </select>
+            </div>
+            <div style={{display:"flex",alignItems:"center",paddingBottom:14,fontSize:18}}>→</div>
+            <div className="field" style={{flex:1}}>
+              <label className="lbl">{t.expReimTo||"À (qui reçoit)"}</label>
+              <select value={reimForm.to} onChange={e=>{const v=+e.target.value;setReimForm(f=>({...f,to:v,from:f.from===v?(v===0?1:0):f.from}));}}>
+                {cfg.parents.map((p,i)=><option key={i} value={i}>{p.name||`P${i+1}`}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="row">
+            <div className="field" style={{flex:1}}><label className="lbl">{(t.amount||"Montant").replace("(€)",`(${currency})`)}</label><input type="number" step="0.01" min="0.01" value={reimForm.amount} onChange={e=>setReimForm(f=>({...f,amount:e.target.value}))} placeholder="0.00" /></div>
+            <div className="field" style={{flex:1}}><label className="lbl">{t.date}</label><input type="date" value={reimForm.date} onChange={e=>setReimForm(f=>({...f,date:e.target.value}))} /></div>
+          </div>
+          <div className="field"><label className="lbl">{t.note}</label><input value={reimForm.note} onChange={e=>setReimForm(f=>({...f,note:e.target.value}))} /></div>
+          {reimErr&&<div style={{fontSize:12,color:C.red,padding:"7px 10px",background:`${C.red}12`,borderRadius:8,marginBottom:8}}>{reimErr}</div>}
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>{setShowReim(false);setReimForm(emptyReim);setReimErr("");setEditReimId(null);}} style={{flex:1,padding:"11px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontWeight:700}}>{t.cancel||"Annuler"}</button>
+            <button onClick={addReim} style={{flex:2,padding:"11px",background:C.grn,color:"#fff",fontWeight:800,fontSize:14}}>{t.expReimSave||"💸 Enregistrer le remboursement"}</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Form ── */}
+      {showAdd&&(
+        <div ref={formRef} className="card fi" style={{marginBottom:12,borderColor:editId?C.ora:C.vio,scrollMarginTop:12}}>
+          <div className="sec">{editId?(editScope==="series"?"🔄 Modifier toute la série":(t.expEditTitle||"✏️ Modifier la dépense")):t.newExpense}</div>
+          <div className="field"><label className="lbl">{t.description}</label><input value={form.label} onChange={e=>setForm(f=>({...f,label:e.target.value}))} className={shakeLabel?"duvia-shake":""} /></div>
+          <div className="row">
+            <div className="field" style={{flex:1}}><label className="lbl">{(t.amount||"Montant").replace("(€)",`(${currency})`)}</label><input type="number" step="0.01" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} /></div>
+            <div className="field" style={{flex:1}}><label className="lbl">{t.paidBy}</label><select value={form.paidBy} onChange={e=>setForm(f=>({...f,paidBy:+e.target.value}))}>{cfg.parents.map((p,i)=><option key={i} value={i}>{p.name||`P${i+1}`}</option>)}</select></div>
+          </div>
+          <div className="row">
+            <div className="field" style={{flex:1}}><label className="lbl">{t.category}</label><select value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}>{t.cats.map(c=><option key={c}>{c}</option>)}</select></div>
+            {!form.recurring && (
+              <div className="field" style={{flex:1}}>
+                <label className="lbl">{t.date}</label>
+                <input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))} />
+              </div>
+            )}
+          </div>
+
+          {/* ── Récurrence ─────────────────────────────────────────────────── */}
+          {(!editId || editScope==="series") && (
+            <div style={{marginBottom:10}}>
+              {editScope!=="series" && (
+              <button type="button" onClick={()=>setForm(f=>({...f,recurring:!f.recurring,recurringEnd:""}))}
+                style={{display:"flex",alignItems:"center",gap:8,padding:"9px 14px",width:"100%",
+                  background:form.recurring?`${C.vio}18`:C.sur,
+                  border:`1.5px solid ${form.recurring?C.vio:C.bor}`,
+                  borderRadius:10,cursor:"pointer",transition:"all .15s"}}>
+                <span style={{fontSize:16}}>🔄</span>
+                <span style={{flex:1,fontSize:13,fontWeight:700,color:form.recurring?C.vio:C.mut,textAlign:"left"}}>
+                  Dépense récurrente
+                </span>
+                <span style={{width:20,height:20,borderRadius:10,
+                  background:form.recurring?C.vio:C.bor,
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontSize:11,color:"#fff",fontWeight:900,flexShrink:0}}>
+                  {form.recurring?"✓":""}
+                </span>
+              </button>
+              )}
+              {form.recurring && (
+                <div style={{background:`${C.vio}08`,border:`1px solid ${C.vio}22`,borderRadius:"0 0 10px 10px",padding:"12px 14px",display:"flex",flexDirection:"column",gap:10}}>
+                  {/* Fréquence */}
+                  <div>
+                    <div style={{fontSize:10,fontWeight:700,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>Fréquence</div>
+                    <div style={{display:"flex",gap:8}}>
+                      {[["weekly","Hebdo."],["monthly","Mensuelle"],["yearly","Annuelle"]].map(([k,l])=>(
+                        <button key={k} type="button" onClick={()=>setForm(f=>({...f,recurringFreq:k}))}
+                          style={{flex:1,padding:"7px 4px",fontSize:12,fontWeight:700,
+                            background:form.recurringFreq===k?C.vio:C.sur,
+                            color:form.recurringFreq===k?"#fff":C.mut,
+                            border:`1.5px solid ${form.recurringFreq===k?C.vio:C.bor}`,
+                            borderRadius:8,cursor:"pointer"}}>
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Date de début / Date de fin */}
+                  <div style={{display:"flex",gap:10}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:10,fontWeight:700,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>🗓️ Date de début</div>
+                      <input type="date" value={form.date}
+                        onChange={e=>setForm(f=>({...f,date:e.target.value,recurringEnd:f.recurringEnd&&f.recurringEnd<e.target.value?"":f.recurringEnd}))}
+                        style={{width:"100%",height:36,boxSizing:"border-box",fontSize:14}} />
+                    </div>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:10,fontWeight:700,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>📅 Date de fin</div>
+                      <input type="date" value={form.recurringEnd} min={form.date}
+                        onChange={e=>setForm(f=>({...f,recurringEnd:e.target.value}))}
+                        style={{width:"100%",height:36,boxSizing:"border-box",fontSize:14}} />
+                    </div>
+                  </div>
+                  {/* Aperçu occurrences */}
+                  {form.recurringEnd && form.recurringEnd >= form.date && (()=>{
+                    const n = getOccurrences(form.date, form.recurringEnd, form.recurringFreq).length;
+                    const amt = parseFloat(form.amount)||0;
+                    return (
+                      <div style={{background:`${C.grn}12`,border:`1px solid ${C.grn}33`,borderRadius:8,padding:"8px 12px",display:"flex",gap:8,alignItems:"center"}}>
+                        <span style={{fontSize:16}}>📊</span>
+                        <div style={{fontSize:12,color:C.txt}}>
+                          <strong>{n} occurrence{n>1?"s":""}</strong> générée{n>1?"s":""}
+                          {amt>0 && <> · Total <strong style={{color:C.grn}}>{(n*amt).toFixed(2)} {currency}</strong></>}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="field">
+            <label className="lbl">{t.expShareLabel||"⚖️ Partage de la dépense"}</label>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+              <div style={{fontSize:12,fontWeight:800,color:cfg.parents[form.paidBy]?.color||C.vio,minWidth:80,textAlign:"center"}}>
+                {cfg.parents[form.paidBy]?.name||"P1"}<br/><span style={{fontSize:16}}>{100-(form.split||50)}%</span>
+              </div>
+              <input type="range" min="0" max="100" step="5" value={form.split||50} onChange={e=>setForm(f=>({...f,split:+e.target.value}))} style={{flex:1,accentColor:C.vio}} />
+              <div style={{fontSize:12,fontWeight:800,color:C.mut,minWidth:80,textAlign:"center"}}>
+                {cfg.parents.find((_,i)=>i!==form.paidBy)?.name||"P2"}<br/><span style={{fontSize:16,color:C.txt}}>{form.split||50}%</span>
+              </div>
+            </div>
+            {(()=>{
+              const amt=parseFloat(form.amount)||0;
+              const sp=form.split||50;
+              const payerAmt=amt*(100-sp)/100;
+              const otherAmt=amt*sp/100;
+              const payerName=cfg.parents[form.paidBy]?.name||"P1";
+              const otherName=cfg.parents.find((_,i)=>i!==form.paidBy)?.name||"P2";
+              const payerColor=cfg.parents[form.paidBy]?.color||C.vio;
+              return (
+                <div style={{display:"flex",gap:8}}>
+                  <div style={{flex:1,background:`${payerColor}14`,border:`1px solid ${payerColor}44`,borderRadius:8,padding:"6px 10px",textAlign:"center"}}>
+                    <div style={{fontSize:10,color:payerColor,fontWeight:800,marginBottom:2}}>{payerName}</div>
+                    <div style={{fontSize:15,fontWeight:900,color:payerColor,fontFamily:"JetBrains Mono"}}>
+                      {amt>0?`${payerAmt.toFixed(2)} ${currency}`:"–"}
+                    </div>
+                    <div style={{fontSize:9,color:C.mut}}>{100-sp}% · {t.expSharePayer||"part payeur"}</div>
+                  </div>
+                  <div style={{flex:1,background:`${C.bor}55`,border:`1px solid ${C.bor}`,borderRadius:8,padding:"6px 10px",textAlign:"center"}}>
+                    <div style={{fontSize:10,color:C.mut,fontWeight:800,marginBottom:2}}>{otherName}</div>
+                    <div style={{fontSize:15,fontWeight:900,color:C.txt,fontFamily:"JetBrains Mono"}}>
+                      {amt>0?`${otherAmt.toFixed(2)} ${currency}`:"–"}
+                    </div>
+                    <div style={{fontSize:9,color:C.mut}}>{sp}% · {t.expShareDue||"part due"}</div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+          <div className="field"><label className="lbl">{t.note}</label><input value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))} /></div>
+          <AttachZone />
+          {formErr&&<div style={{fontSize:12,color:C.red,padding:"7px 10px",background:`${C.red}12`,borderRadius:8,marginBottom:6}}>{formErr}</div>}
+          <div style={{display:"flex",gap:8,alignItems:"flex-start",background:`${C.vio}0c`,border:`1px solid ${C.vio}33`,borderRadius:8,padding:"8px 10px",marginBottom:10}}>
+            <span style={{fontSize:14,flexShrink:0}}>ℹ️</span>
+            <div style={{fontSize:11,color:C.mut,lineHeight:1.5}}>
+              Toute dépense ajoutée est <strong style={{color:C.yel}}>⏳ en attente</strong> jusqu'à validation par l'autre parent. Une fois <strong style={{color:C.grn}}>✅ acceptée</strong>, elle est comptabilisée. Si <strong style={{color:C.red}}>❌ refusée</strong>, elle reste visible mais exclue des totaux. Chaque action est enregistrée dans l'historique.
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8,marginTop:4}}>
+            {editId && (
+              <button onClick={cancelForm} style={{flex:1,padding:"10px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontWeight:700}}>{t.cancel||"Annuler"}</button>
+            )}
+            <button onClick={async()=>{ await add(); }} style={{flex:2,padding:"10px",background:editId?C.ora:C.grn,color:"#fff",fontWeight:700,borderRadius:10}}>{editId?(t.expEditSave||"💾 Enregistrer les modifications"):(t.saveDay||"Enregistrer")}</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Category filter — seulement les catégories avec des dépenses ── */}
+      {(()=>{ const activeCats=new Set((ctxExpenses||[]).map(e=>e.category).filter(Boolean));
+        const visibleCats=[{k:"all",l:t.all||"Tous"},...(t.cats||[]).filter(c=>activeCats.has(c)).map(c=>({k:c,l:c}))];
+        if(visibleCats.length<=1) return null;
+        return(
+        <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
+          {visibleCats.map(({k,l})=>(
+            <button key={k} onClick={()=>setCatF(k)} style={{padding:"4px 10px",background:catF===k?C.vio:C.sur,color:catF===k?"#fff":C.mut,border:`1.5px solid ${catF===k?C.vio:C.bor}`,borderRadius:20,fontSize:11,fontWeight:700}}>{l}</button>
+          ))}
+        </div>
+      );})()}
+
+      {/* ── Expense list ── */}
+      {allItems.length===0
+        ? <div style={{textAlign:"center",padding:40,color:C.mut}}><div style={{fontSize:40,marginBottom:12}}>💰</div>{t.noExpenses}</div>
+        : allItems.map(item=>{
+            if(item._type==="reim"){
+              const fromP=cfg.parents[item.from]; const toP=cfg.parents[item.to];
+              const st=item.status||"confirmed"; // backward compat: old items without status = confirmed
+              const iAmReceiver = user?.role==="parent" && user?.parentIdx===item.to;
+              const iAmSender   = user?.role==="parent" && user?.parentIdx===item.from;
+              const borderCol = st==="confirmed"?`${C.grn}66`:st==="rejected"?`${C.red}66`:`${C.yel}66`;
+              const statusLabel = st==="confirmed"?"✅ Accepté":st==="rejected"?"❌ Refusé":"⏳ En attente";
+              const statusColor = st==="confirmed"?C.grn:st==="rejected"?C.red:C.yel;
+              return (
+                <div key={item.id} className="card" style={{marginBottom:10,borderColor:borderCol}}>
+                  <div style={{display:"flex",alignItems:"center",gap:11}}>
+                    <div style={{background:st==="rejected"?`${C.red}18`:`${C.grn}18`,borderRadius:10,padding:"7px 9px",textAlign:"center",minWidth:58,flexShrink:0}}>
+                      <div style={{fontFamily:"JetBrains Mono",fontSize:14,fontWeight:700,color:st==="rejected"?C.red:C.grn}}>{item.amount.toFixed(2)}</div>
+                      <div style={{fontSize:9,color:C.mut}}>{currency}</div>
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:700,fontSize:14,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                        <span style={{fontSize:16}}>💸</span>
+                        <span style={{color:fromP?.color||C.grn}}>{fromP?.name||`P${item.from+1}`}</span>
+                        <span style={{color:C.mut,fontWeight:400}}>→</span>
+                        <span style={{color:toP?.color||C.txt}}>{toP?.name||`P${item.to+1}`}</span>
+                      </div>
+                      <div style={{fontSize:11,color:C.mut,marginTop:2}}>{(item.date||"").split("-").reverse().join("/")} · {t.expReimBadge||"Remboursement"}</div>
+                      {item.note&&<div style={{fontSize:11,color:C.mut,marginTop:2}}>{item.note}</div>}
+                      <div style={{marginTop:5,display:"inline-flex",alignItems:"center",gap:4,padding:"2px 8px",background:`${statusColor}15`,border:`1px solid ${statusColor}44`,borderRadius:20}}>
+                        <span style={{fontSize:11,fontWeight:700,color:statusColor}}>{statusLabel}</span>
+                      </div>
+                    </div>
+                    {(iAmSender||isAdm) && st==="pending" && (
+                      <div style={{display:"flex",gap:5,flexShrink:0}}>
+                        <button onClick={()=>{setEditReimId(item.id);setReimForm({from:item.from,to:item.to,amount:String(item.amount),date:item.date,note:item.note||""});setShowReim(true);setTimeout(()=>reimFormRef.current?.scrollIntoView({behavior:"smooth",block:"start"}),60);}} style={{padding:"5px 9px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12}}>✎</button>
+                        <button onClick={()=>delReim(item.id)} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12}}>✕</button>
+                      </div>
+                    )}
+                    {(iAmSender||isAdm) && st!=="pending" && (
+                      <button onClick={()=>delReim(item.id)} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12,flexShrink:0}}>✕</button>
+                    )}
+                  </div>
+                  {/* Receiver action buttons */}
+                  {iAmReceiver && st==="pending" && (
+                    <div style={{marginTop:12,padding:"12px 14px",background:`${C.yel}0d`,border:`1px solid ${C.yel}44`,borderRadius:10}}>
+                      <div style={{fontSize:13,color:C.txt,marginBottom:10,lineHeight:1.5}}>
+                        <strong style={{color:fromP?.color||C.grn}}>{fromP?.name||`P${item.from+1}`}</strong> vous a envoyé un remboursement de <strong>{item.amount.toFixed(2)} {currency}</strong> le {(item.date||"").split("-").reverse().join("/")}.<br/>
+                        Pouvez-vous confirmer la réception ?
+                      </div>
+                      <div style={{display:"flex",gap:8}}>
+                        <button onClick={()=>confirmReim(item.id)}
+                          style={{flex:1,padding:"10px",background:C.grn,color:"#fff",borderRadius:10,fontWeight:800,fontSize:13}}>
+                          ✅ Valider
+                        </button>
+                        <button onClick={()=>rejectReim(item.id)}
+                          style={{flex:1,padding:"10px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,borderRadius:10,fontWeight:700,fontSize:13}}>
+                          ❌ Refuser
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            const e=item; const atts=e.attachments||[];
+            const expSt=e.status||"confirmed"; // backward compat: old items = confirmed
+            const iAmExpSender  = user?.role==="parent" && e.createdBy!==undefined && user?.parentIdx===e.createdBy;
+            const iAmExpReceiver= user?.role==="parent" && e.createdBy!==undefined && user?.parentIdx!==e.createdBy;
+            const expBorderCol  = expSt==="confirmed"?C.bor:expSt==="rejected"?`${C.red}66`:`${C.yel}66`;
+            const expStatusLabel= expSt==="confirmed"?(t.expStatusConfirmed||"✅ Accepté"):expSt==="rejected"?(t.expStatusRejected||"❌ Refusé"):(t.expStatusPending||"⏳ En attente");
+            const expStatusColor= expSt==="confirmed"?C.grn:expSt==="rejected"?C.red:C.yel;
+            return (
+              <div key={e.id} className="card" style={{marginBottom:10,borderColor:expBorderCol,cursor:"pointer"}} onClick={()=>openDetail(e)}>
+                <div style={{display:"flex",alignItems:"center",gap:11}}>
+                  <div style={{background:C.sur,borderRadius:10,padding:"7px 9px",textAlign:"center",minWidth:58,flexShrink:0}}>
+                    <div style={{fontFamily:"JetBrains Mono",fontSize:14,fontWeight:700,color:expSt==="rejected"?C.red:C.blu}}>{e.amount.toFixed(2)}</div>
+                    <div style={{fontSize:9,color:C.mut}}>{currency}</div>
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:700,fontSize:14,display:"flex",alignItems:"center",gap:6}}>
+                      {e.recurringId&&<span style={{background:`${C.vio}18`,color:C.vio,borderRadius:4,padding:"1px 5px",fontSize:10,fontWeight:800,flexShrink:0}}>🔄</span>}
+                      {e.label}
+                      {atts.length>0&&<span style={{background:`${C.vio}18`,color:C.vio,borderRadius:4,padding:"1px 6px",fontSize:10,fontWeight:800,flexShrink:0}}>📎 {atts.length}</span>}
+                    </div>
+                    <div style={{fontSize:12,color:C.mut,marginTop:2}}>
+                      <span style={{color:cfg.parents[e.paidBy]?.color}}>{cfg.parents[e.paidBy]?.name||`P${e.paidBy+1}`}</span>
+                      {" · "}{e.category}{" · "}{(e.date||"").split("-").reverse().join("/")}
+                      {e.split&&e.split!==50?<span style={{marginLeft:4,background:`${C.vio}18`,color:C.vio,borderRadius:4,padding:"1px 5px",fontSize:10,fontWeight:800}}>⚖️ {100-e.split}%/{e.split}%</span>:""}
+                    </div>
+                    {e.note&&<div style={{fontSize:11,color:C.mut,marginTop:2}}>{e.note}</div>}
+                    {/* Status badge — toujours visible */}
+                    <div style={{marginTop:5,display:"inline-flex",alignItems:"center",gap:4,padding:"2px 8px",background:`${expStatusColor}15`,border:`1px solid ${expStatusColor}44`,borderRadius:20}}>
+                      <span style={{fontSize:11,fontWeight:700,color:expStatusColor}}>{expStatusLabel}</span>
+                    </div>
+                  </div>
+                  {/* Boutons émetteur */}
+                  {(iAmExpSender||isAdm) && expSt==="pending" && (
+                    <div style={{display:"flex",gap:5,flexShrink:0}}>
+                      <button onClick={ev=>{ev.stopPropagation();startEdit(e);}} style={{padding:"5px 9px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12}}>✎</button>
+                      <button onClick={ev=>{ev.stopPropagation();del(e.id);}} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12}}>✕</button>
+                    </div>
+                  )}
+                  {(iAmExpSender||isAdm) && expSt!=="pending" && (
+                    <div style={{display:"flex",gap:5,flexShrink:0}}>
+                      <button onClick={ev=>{ev.stopPropagation();startEdit(e);}} style={{padding:"5px 9px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12}}>✎</button>
+                      <button onClick={ev=>{ev.stopPropagation();del(e.id);}} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12}}>✕</button>
+                    </div>
+                  )}
+                  {/* Receiver sans createdBy (legacy) ou admin sans rôle parent */}
+                  {!iAmExpSender && !iAmExpReceiver && isAdm && expSt==="confirmed" && (
+                    <div style={{display:"flex",gap:5,flexShrink:0}}>
+                      <button onClick={()=>startEdit(e)} style={{padding:"5px 9px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12}}>✎</button>
+                      <button onClick={()=>del(e.id)} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12}}>✕</button>
+                    </div>
+                  )}
+                </div>
+                {/* Zone validation receveur */}
+                {iAmExpReceiver && expSt==="pending" && (
+                  <div style={{marginTop:12,padding:"12px 14px",background:`${C.yel}0d`,border:`1px solid ${C.yel}44`,borderRadius:10}}>
+                    <div style={{fontSize:13,color:C.txt,marginBottom:10,lineHeight:1.5}}>
+                      <strong style={{color:cfg.parents[e.createdBy]?.color||C.blu}}>{cfg.parents[e.createdBy]?.name||`P${(e.createdBy||0)+1}`}</strong>{" "}
+                      {t.expPendingConfirmMsg||"a ajouté une dépense de"}{" "}
+                      <strong>{e.amount.toFixed(2)} {currency}</strong> ({e.label}).{" "}
+                      {t.expPendingConfirmQ||"Pouvez-vous confirmer ?"}
+                    </div>
+                    <div style={{display:"flex",gap:8}}>
+                      <button onClick={ev=>{ev.stopPropagation();confirmExp(e.id);}}
+                        style={{flex:1,padding:"10px",background:C.grn,color:"#fff",borderRadius:10,fontWeight:800,fontSize:13}}>
+                        {t.expValidateBtn||"✅ Valider"}
+                      </button>
+                      <button onClick={ev=>{ev.stopPropagation();rejectExp(e.id);}}
+                        style={{flex:1,padding:"10px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,borderRadius:10,fontWeight:700,fontSize:13}}>
+                        {t.expRejectBtn||"❌ Refuser"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {atts.length>0&&(
+                  <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
+                    {atts.map(a=>(
+                      <div key={a.id} onClick={ev=>{ev.stopPropagation();openViewer(a);}} style={{width:56,height:56,borderRadius:8,overflow:"hidden",border:`1.5px solid ${C.bor}`,background:C.sur,cursor:"pointer",position:"relative",flexShrink:0}}>
+                        {a.thumb
+                          ? <img src={a.thumb} alt={a.name} style={{width:"100%",height:"100%",objectFit:"cover"}} />
+                          : <div style={{width:"100%",height:"100%",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+                              <span style={{fontSize:20}}>{a.type==='application/pdf'?'📄':'🖼️'}</span>
+                            </div>
+                        }
+                        <div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,.45)",color:"#fff",fontSize:8,textAlign:"center",padding:"2px"}}>
+                          {a.type==='application/pdf'?'PDF':a.name.split('.').pop().toUpperCase()}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })
+      }
+
+      {/* ── PDF Preview fullscreen ── */}
+      {exportHtml&&(
+        <div style={{position:"fixed",inset:0,zIndex:700,display:"flex",flexDirection:"column",background:"#111"}}>
+          <div style={{display:"flex",gap:8,padding:"10px 14px",background:"#1a1a2e",alignItems:"center",flexShrink:0}}>
+            <div style={{flex:1,fontSize:13,fontWeight:700,color:"#ede9fe"}}>📄 Rapport de dépenses — Duvia</div>
+            <button
+              onClick={()=>{
+                iframePdfRef.current?.contentWindow?.postMessage('DUVIA_PRINT','*');
+              }}
+              style={{padding:"7px 16px",background:"#7B7CF5",color:"#fff",border:"none",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",letterSpacing:".2px"}}>
+              🖨️ Imprimer → PDF
+            </button>
+            <button
+              onClick={()=>setExportHtml(null)}
+              style={{padding:"7px 12px",background:"rgba(255,255,255,.15)",color:"#fff",border:"none",borderRadius:8,fontSize:13,cursor:"pointer",fontWeight:700}}>
+              ✕
+            </button>
+          </div>
+          <iframe ref={iframePdfRef} srcDoc={exportHtml} style={{flex:1,border:"none",background:"white"}} title="Rapport PDF Duvia" sandbox="allow-same-origin allow-scripts allow-modals allow-popups allow-downloads" />
+        </div>
+      )}
+
+
+      {/* ── Export Modal ── */}
+      {showExportModal&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:400,width:"100%",border:`1.5px solid ${C.bor}`,boxShadow:"0 20px 50px rgba(0,0,0,.35)",maxHeight:"90vh",overflowY:"auto"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
+              <div>
+                <div style={{fontSize:17,fontWeight:900}}>📄 Export PDF <span style={{fontSize:11,background:`${C.vio}18`,color:C.vio,border:`1px solid ${C.vio}33`,borderRadius:6,padding:"2px 8px",fontWeight:800,verticalAlign:"middle"}}>Premium</span></div>
+                <div style={{fontSize:11,color:C.mut,marginTop:3}}>Rapport A4 — données de l'application</div>
+              </div>
+              <button onClick={()=>setShowExportModal(false)} style={{padding:"6px 12px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:13,fontWeight:700,flexShrink:0}}>✕</button>
+            </div>
+            <div style={{background:`${C.vio}0c`,border:`1px solid ${C.vio}33`,borderRadius:12,padding:"14px 16px",marginBottom:16}}>
+              <div style={{fontSize:11,fontWeight:800,color:C.vio,marginBottom:10}}>📅 Période à exporter</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
+                {[
+                  {label:"Ce mois",fn:()=>{const n=new Date();setExportFrom(toStr(new Date(n.getFullYear(),n.getMonth(),1)));setExportTo(toStr(new Date(n.getFullYear(),n.getMonth()+1,0)));}},
+                  {label:"Mois dernier",fn:()=>{const n=new Date();setExportFrom(toStr(new Date(n.getFullYear(),n.getMonth()-1,1)));setExportTo(toStr(new Date(n.getFullYear(),n.getMonth(),0)));}},
+                  {label:"3 mois",fn:()=>{const n=new Date();setExportFrom(toStr(new Date(n.getFullYear(),n.getMonth()-3,1)));setExportTo(toStr(n));}},
+                  {label:"6 mois",fn:()=>{const n=new Date();setExportFrom(toStr(new Date(n.getFullYear(),n.getMonth()-6,1)));setExportTo(toStr(n));}},
+                  {label:"Cette année",fn:()=>{const n=new Date();setExportFrom(toStr(new Date(n.getFullYear(),0,1)));setExportTo(toStr(n));}},
+                  {label:"Tout",fn:()=>{setExportFrom("");setExportTo("");}},
+                ].map(({label,fn})=>(
+                  <button key={label} onClick={fn} style={{padding:"4px 10px",background:C.sur,color:C.txt,border:`1px solid ${C.bor}`,borderRadius:6,fontSize:10,fontWeight:700,cursor:"pointer"}}>{label}</button>
+                ))}
+              </div>
+              <div style={{display:"flex",gap:10}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:10,fontWeight:700,color:C.mut,marginBottom:4}}>Du</div>
+                  <input type="date" value={exportFrom} onChange={e=>setExportFrom(e.target.value)} style={{width:"100%",padding:"8px 10px",border:`1px solid ${C.bor}`,borderRadius:8,background:C.inp,color:C.txt,fontSize:12}} />
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:10,fontWeight:700,color:C.mut,marginBottom:4}}>Au</div>
+                  <input type="date" value={exportTo} onChange={e=>setExportTo(e.target.value)} style={{width:"100%",padding:"8px 10px",border:`1px solid ${C.bor}`,borderRadius:8,background:C.inp,color:C.txt,fontSize:12}} />
+                </div>
+              </div>
+            </div>
+            <div style={{background:C.sur,borderRadius:10,padding:"12px 14px",marginBottom:20}}>
+              <div style={{fontSize:10,fontWeight:800,color:C.txt,marginBottom:8}}>📋 Contenu du rapport</div>
+              {["Page de couverture — logo, période, date","Résumé & soldes par parent","Informations parents + enfants","Tableau dépenses (date, heure, catégorie…)","Tableau des remboursements","Justificatifs / pièces jointes","Historique des modifications","Récapitulatif de l'export"].map(item=>(
+                <div key={item} style={{fontSize:10,color:C.mut,display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                  <span style={{color:C.grn,fontWeight:800}}>✓</span>{item}
+                </div>
+              ))}
+            </div>
+            <button onClick={generateLegalPDF} disabled={exportGenerating}
+              style={{width:"100%",padding:"13px",background:`linear-gradient(135deg,${C.vio},${C.pin||C.red})`,color:"#fff",border:"none",borderRadius:12,fontSize:14,fontWeight:800,cursor:exportGenerating?"not-allowed":"pointer",opacity:exportGenerating?.6:1,boxShadow:`0 4px 16px ${C.vio}44`}}>
+              {exportGenerating?"⏳ Génération en cours…":"📄 Générer le PDF"}
+            </button>
+            <div style={{fontSize:9,color:C.mut,textAlign:"center",marginTop:8}}>Une nouvelle fenêtre s'ouvrira — utilisez Ctrl+P / Cmd+P pour sauvegarder en PDF</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ─── SYSTÈME SUIVI FILLEUL ───────────────────────────────────────────────────
+// Actions pondérées
+const REF_ACTION_WEIGHTS = {
+  ADD_EXPENSE:1, SEND_MESSAGE:1, UPLOAD_DOC:1, ADD_EVENT:1, ADD_CONTACT:1,
+  PARENT_ACCEPTED:1, OBSERVER_ACCEPTED:1,
+  ADD_CHILD:0.5, CHANGE_ZONE:0.5, ACTIVATE_EVENT:0.5,
+};
+const REF_STRONG = new Set(["ADD_EXPENSE","SEND_MESSAGE","UPLOAD_DOC","ADD_EVENT","ADD_CONTACT","PARENT_ACCEPTED","OBSERVER_ACCEPTED"]);
+const REF_ACTION_META = {
+  ADD_EXPENSE:      {label:"Dépense ajoutée",     icon:"💸"},
+  SEND_MESSAGE:     {label:"Message envoyé",       icon:"💬"},
+  UPLOAD_DOC:       {label:"Document partagé",     icon:"📎"},
+  ADD_EVENT:        {label:"Événement créé",        icon:"📅"},
+  ADD_CONTACT:      {label:"Contact ajouté",        icon:"👤"},
+  PARENT_ACCEPTED:  {label:"Parent accepté",        icon:"✅"},
+  OBSERVER_ACCEPTED:{label:"Observateur accepté",   icon:"✅"},
+  ADD_CHILD:        {label:"Enfant ajouté",          icon:"🧒"},
+  CHANGE_ZONE:      {label:"Zone modifiée",          icon:"📍"},
+  ACTIVATE_EVENT:   {label:"Événement activé",       icon:"🔔"},
+};
+const REF_SCORE_TARGET = 5;
+const REF_STRONG_MIN   = 2;
+
+function refCalcScore(actions){ return actions.reduce((s,a)=>s+(REF_ACTION_WEIGHTS[a]||0),0); }
+function refCountStrong(actions){ return actions.filter(a=>REF_STRONG.has(a)).length; }
+function refIsUnlocked(actions){ return refCalcScore(actions)>=REF_SCORE_TARGET && refCountStrong(actions)>=REF_STRONG_MIN; }
+
+function useReferralTracking() {
+  // Délègue au contexte applicatif (état centralisé dans App)
+  const { refActions, showReferreePopup, setShowReferreePopup, showReferrerPopup, setShowReferrerPopup } = useApp();
+  const actions = refActions || [];
+  return {
+    actions,
+    score: refCalcScore(actions),
+    strongCount: refCountStrong(actions),
+    unlocked: refIsUnlocked(actions),
+    showReferreePopup, setShowReferreePopup,
+    showReferrerPopup, setShowReferrerPopup,
+  };
+}
+
+// ─── POPUPS BONUS ─────────────────────────────────────────────────────────────
+function ReferralBonusPopup({C, variant, onClose}) {
+  const isReferree = variant==="referree";
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:999,background:"rgba(23,16,58,.6)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:C.card,borderRadius:24,padding:"32px 28px",maxWidth:340,width:"100%",textAlign:"center",border:`2px solid ${C.vio}44`,boxShadow:`0 20px 60px ${C.vio}33`,animation:"popIn .35s cubic-bezier(.34,1.56,.64,1)"}}>
+        <div style={{fontSize:52,marginBottom:12}}>{isReferree?"🎉":"🎁"}</div>
+        <div style={{fontSize:20,fontWeight:800,marginBottom:8,background:`linear-gradient(90deg,${C.vio},${C.blu})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
+          {isReferree?"Bonus débloqué !":"Bonne nouvelle !"}
+        </div>
+        <div style={{fontSize:14,color:C.mut,lineHeight:1.6,marginBottom:24}}>
+          {isReferree
+            ? `Félicitations ! Tu as complété toutes les actions requises. Tu passes en "Premium – ${FILLEUL_BONUS_DAYS}j restants" 🎉 Ton parrain reçoit également son bonus !`
+            : `La personne que tu as parrainée a validé son compte. Ton bonus (jours + 🎰 tour de roue) est maintenant crédité sur ton compte !`
+          }
+        </div>
+        <button onClick={onClose} style={{width:"100%",padding:"13px 0",borderRadius:12,border:"none",background:`linear-gradient(90deg,${C.vio},${C.blu})`,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",boxShadow:`0 4px 14px ${C.vio}44`}}>
+          Super, merci ! 🙌
+        </button>
+      </div>
+      <style>{`@keyframes popIn{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}`}</style>
+    </div>
+  );
+}
+
+// ─── CARTE PROGRESSION FILLEUL ────────────────────────────────────────────────
+function ReferralProgressCard({C, refTracking}) {
+  const {score,unlocked,showReferreePopup,setShowReferreePopup,showReferrerPopup,setShowReferrerPopup} = refTracking;
+  const pct = Math.min((score/REF_SCORE_TARGET)*100,100);
+
+  return (
+    <>
+      {showReferreePopup && <ReferralBonusPopup C={C} variant="referree" onClose={()=>setShowReferreePopup(false)} />}
+      {showReferrerPopup && <ReferralBonusPopup C={C} variant="referrer" onClose={()=>setShowReferrerPopup(false)} />}
+
+      <div style={{marginBottom:14,borderRadius:16,border:`1.5px solid ${unlocked?C.grn+"66":C.vio+"33"}`,background:unlocked?`${C.grn}08`:`${C.vio}06`,padding:"14px 16px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+          <span style={{fontSize:16}}>{unlocked?"🏅":"🎯"}</span>
+          <div style={{flex:1,fontSize:13,fontWeight:800,color:C.txt}}>Progression filleul</div>
+          <span style={{fontSize:12,fontWeight:700,color:unlocked?C.grn:C.mut}}>{score.toFixed(1)} / {REF_SCORE_TARGET} pts</span>
+        </div>
+        <div style={{position:"relative",height:8,borderRadius:99,background:C.sur,overflow:"hidden",marginBottom:10}}>
+          <div style={{position:"absolute",inset:0,right:`${100-pct}%`,background:`linear-gradient(90deg,${C.vio},${C.blu})`,borderRadius:99,transition:"right .5s cubic-bezier(.4,0,.2,1)",boxShadow:pct>0?`0 0 6px ${C.vio}55`:"none"}}/>
+        </div>
+        <div style={{fontSize:12,fontWeight:700,color:unlocked?C.grn:C.mut,textAlign:"center"}}>
+          {unlocked?"🎉 Bonus débloqué !":"Continue pour débloquer la récompense"}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── PREMIUM TAB & PARRAINAGE ────────────────────────────────────────────────
+function ParrainageSection() {
+  const {C,t,sub,setSub,user,setUsers,users,st,days,addRefAction,refActions,showReferreePopup,setShowReferreePopup,showReferrerPopup,setShowReferrerPopup} = useApp();
+  const isPremium = sub.plan==="premium" || sub._admin;
+  const isEarned  = sub.plan==="earned_premium";
+  const isTrial   = sub.plan==="trial_premium";
+  const isFreemium= st==="freemium";
+
+  const [copied,setCopied]         = useState(false);
+  const [copiedLink,setCopiedLink] = useState(false);
+  const [showInvite,setShowInvite] = useState(false);
+  const [showDemo,setShowDemo]     = useState(false);
+  const [demoStep,setDemoStep]     = useState(0);
+
+  const code             = sub.refCode || user?.refCode || "—";
+  const inviteLink       = `${APP_URL}?ref=${code}`;
+  const refCount         = Math.max(sub.refCount||0, user?.refCount||0);
+  const validatedCount   = Math.max(sub.validatedRefCount||0, user?.validatedRefCount||0);
+  const daysEarned       = sub.trialExtension||0;
+  const pendingSpins     = sub.pendingSpins||0;
+  const isFilleul        = !!(user?.refUsed || sub.refUsed);
+  const score            = refActions ? refActions.reduce((s,a)=>s+(REF_ACTION_WEIGHTS[a]||0),0) : 0;
+  const unlocked         = refIsUnlocked(refActions||[]);
+  const scorePct         = Math.min((score/REF_SCORE_TARGET)*100,100);
+
+  // Bonus prochain filleul
+  const bonusNext = isPremium
+    ? refBonusDaysPremium((sub.monthlyRefCount||0)+1)
+    : refBonusDaysTrial(validatedCount+1, daysEarned);
+
+  function copyCode(){
+    try{ navigator.clipboard.writeText(code); }catch(e){}
+    const el=document.createElement("textarea"); el.value=code;
+    document.body.appendChild(el); el.select(); document.execCommand("copy"); document.body.removeChild(el);
+    setCopied(true); setTimeout(()=>setCopied(false),2000);
+  }
+  function copyLink(){
+    try{ navigator.clipboard.writeText(inviteLink); }catch(e){}
+    const el=document.createElement("textarea"); el.value=inviteLink;
+    document.body.appendChild(el); el.select(); document.execCommand("copy"); document.body.removeChild(el);
+    setCopiedLink(true); setTimeout(()=>setCopiedLink(false),2000);
+  }
+  function shareViaEmail(){
+    const subj=encodeURIComponent("Rejoins-moi sur Duvia 🏡");
+    const body=encodeURIComponent(`Salut !\n\nJe t'invite sur Duvia, l'app qui simplifie la coparentalité.\n\nTélécharge l'app : ${inviteLink}\nCode parrain : ${code}\n\nÀ bientôt sur Duvia !`);
+    window.open(`mailto:?subject=${subj}&body=${body}`);
+  }
+  function shareViaSMS(){
+    const body=encodeURIComponent(`Rejoins-moi sur Duvia 🏡 ${inviteLink} — Code : ${code}`);
+    window.open(`sms:?body=${body}`);
+  }
+
+  function simulateReferral(){
+    setShowDemo(true); setDemoStep(1);
+    setTimeout(()=>{
+      const newValidated = validatedCount+1;
+      const bonus = isPremium
+        ? refBonusDaysPremium((sub.monthlyRefCount||0)+1)
+        : refBonusDaysTrial(newValidated, daysEarned);
+      setSub(s=>({...s,
+        validatedRefCount:newValidated,
+        pendingSpins:(s.pendingSpins||0)+SPIN_PER_REF,
+        trialExtension:(s.trialExtension||0)+bonus,
+        plan:(!isPremium&&newValidated>=1)?"earned_premium":s.plan,
+      }));
+      if(user) setUsers(us=>us.map(u=>u.id===user.id?{...u,
+        validatedRefCount:newValidated,
+        pendingSpins:(u.pendingSpins||0)+SPIN_PER_REF,
+        trialExtension:(u.trialExtension||0)+bonus,
+        plan:(!isPremium&&newValidated>=1)?"earned_premium":u.plan,
+      }:u));
+      setDemoStep(2);
+    },1400);
+  }
+
+  // ── Badge statut ─────────────────────────────────────────────────────────
+  const statusBadge = isPremium
+    ? {label:"Premium Actif ⭐", color:"#7B7CF5", bg:"#7B7CF533"}
+    : isEarned
+    ? {label:`Premium – ${days}j restants 🎁`, color:"#2DD4A8", bg:"#2DD4A833"}
+    : isTrial
+    ? {label:`Trial Premium – ${days}j restants`, color:"#5B98F2", bg:"#5B98F233"}
+    : {label:"Freemium", color:"#7269A8", bg:"#7269A833"};
+
+  return (
+    <div>
+      {/* Popups bonus */}
+      {showReferreePopup && (
+        <div style={{position:"fixed",inset:0,zIndex:999,background:"rgba(23,16,58,.65)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.card,borderRadius:24,padding:"32px 24px",maxWidth:320,width:"100%",textAlign:"center",border:`2px solid ${C.grn}44`,boxShadow:`0 20px 60px ${C.grn}33`}}>
+            <div style={{fontSize:52,marginBottom:10}}>🎉</div>
+            <div style={{fontSize:20,fontWeight:900,color:C.grn,marginBottom:8}}>Félicitations !</div>
+            <div style={{fontSize:14,color:C.mut,lineHeight:1.6,marginBottom:20}}>
+              Tu as complété les actions requises et passes en <strong style={{color:C.grn}}>Premium – {FILLEUL_BONUS_DAYS}j restants</strong> ! Ton parrain reçoit également son bonus 💜
+            </div>
+            <button onClick={()=>setShowReferreePopup(false)} style={{width:"100%",padding:"13px 0",borderRadius:12,border:"none",background:`linear-gradient(90deg,${C.grn},${C.blu})`,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer"}}>
+              Super, merci ! 🙌
+            </button>
+          </div>
+        </div>
+      )}
+      {showReferrerPopup && (
+        <div style={{position:"fixed",inset:0,zIndex:999,background:"rgba(23,16,58,.65)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.card,borderRadius:24,padding:"32px 24px",maxWidth:320,width:"100%",textAlign:"center",border:`2px solid ${C.vio}44`,boxShadow:`0 20px 60px ${C.vio}33`}}>
+            <div style={{fontSize:52,marginBottom:10}}>🎁</div>
+            <div style={{fontSize:20,fontWeight:900,color:C.vio,marginBottom:8}}>Bonne nouvelle !</div>
+            <div style={{fontSize:14,color:C.mut,lineHeight:1.6,marginBottom:20}}>
+              La personne que tu as parrainée a validé son compte. Ton bonus jours + 🎰 tour de roue est crédité !
+            </div>
+            <button onClick={()=>setShowReferrerPopup(false)} style={{width:"100%",padding:"13px 0",borderRadius:12,border:"none",background:`linear-gradient(90deg,${C.vio},${C.pin})`,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer"}}>
+              Super ! 🙌
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Statut actuel ──────────────────────────────────────────────── */}
+      <div style={{marginBottom:12,padding:"12px 14px",background:statusBadge.bg,borderRadius:14,border:`1.5px solid ${statusBadge.color}44`,display:"flex",alignItems:"center",gap:10}}>
+        <div style={{flex:1,fontSize:13,fontWeight:800,color:statusBadge.color}}>{statusBadge.label}</div>
+        {(isTrial||isEarned) && (
+          <div style={{fontSize:11,color:C.mut,textAlign:"right"}}>
+            Plafond<br/><strong style={{color:statusBadge.color}}>{TRIAL_MAX_DAYS}j</strong> depuis J0
+          </div>
+        )}
+      </div>
+
+      {/* ── Mon code & boutons ─────────────────────────────────────────── */}
+      <div className="card" style={{marginBottom:12,textAlign:"center",padding:"20px 16px",borderColor:`${C.pin}44`}}>
+        <div style={{fontSize:11,color:C.mut,marginBottom:6,fontWeight:700,textTransform:"uppercase",letterSpacing:".1em"}}>Mon code parrain</div>
+        <div style={{fontSize:28,fontWeight:900,letterSpacing:5,color:C.vio,fontFamily:"monospace",marginBottom:14,padding:"10px 16px",background:C.sur,borderRadius:12,display:"inline-block"}}>{code}</div>
+        <div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
+          <button onClick={copyCode} style={{padding:"9px 18px",background:copied?`${C.grn}22`:C.sur,color:copied?C.grn:C.txt,border:`1.5px solid ${copied?C.grn:C.bor}`,fontSize:13,fontWeight:700,borderRadius:10,transition:"all .2s"}}>
+            {copied?"✅ Copié !":"📋 Copier"}
+          </button>
+          <button onClick={()=>setShowInvite(true)} style={{padding:"9px 18px",background:`linear-gradient(135deg,${C.vio},${C.pin})`,color:"#fff",fontSize:13,fontWeight:700,borderRadius:10}}>
+            🎁 Inviter un proche
+          </button>
+        </div>
+        {/* Simulation démo */}
+        <div style={{marginTop:12,paddingTop:12,borderTop:`1px dashed ${C.bor}`}}>
+          <div style={{fontSize:10,color:C.mut,marginBottom:5,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>🧪 Mode démo</div>
+          <button onClick={simulateReferral} disabled={showDemo&&demoStep===1} style={{padding:"7px 16px",background:`${C.vio}15`,color:C.vio,border:`1.5px dashed ${C.vio}`,fontSize:12,fontWeight:700,borderRadius:9,opacity:(showDemo&&demoStep===1)?0.5:1}}>
+            Simuler un filleul validé ({bonusNext>0?`+${bonusNext}j + `:""}🎰×1)
+          </button>
+        </div>
+      </div>
+
+      {/* ── Stats ──────────────────────────────────────────────────────── */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:12}}>
+        {[
+          {val:refCount,      label:"Invités",         color:C.mut},
+          {val:validatedCount,label:"Validés",         color:C.grn},
+          {val:`${daysEarned}j`,label:"Jours gagnés", color:C.blu},
+          {val:`${pendingSpins}🎰`,label:"Tours roue", color:pendingSpins>0?C.yel:C.mut,highlight:pendingSpins>0},
+        ].map((s,i)=>(
+          <div key={i} className="card" style={{textAlign:"center",padding:"12px 6px",borderColor:s.highlight?`${s.color}66`:""}}>
+            <div style={{fontSize:22,fontWeight:900,color:s.color}}>{s.val}</div>
+            <div style={{fontSize:9,color:C.mut,marginTop:2,fontWeight:700,textTransform:"uppercase",letterSpacing:".05em"}}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Progression filleul (si l'utilisateur a été parrainé) ──────── */}
+      {isFilleul && !unlocked && (
+        <div style={{marginBottom:12,borderRadius:14,border:`1.5px solid ${C.vio}33`,background:`${C.vio}06`,padding:"14px 16px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+            <span style={{fontSize:15}}>🎯</span>
+            <div style={{flex:1,fontSize:13,fontWeight:800,color:C.txt}}>Ta progression (en tant que filleul)</div>
+            <span style={{fontSize:12,fontWeight:700,color:C.vio}}>{score.toFixed(1)} / {REF_SCORE_TARGET} pts</span>
+          </div>
+          <div style={{position:"relative",height:8,borderRadius:99,background:C.sur,overflow:"hidden",marginBottom:8}}>
+            <div style={{position:"absolute",inset:0,right:`${100-scorePct}%`,background:`linear-gradient(90deg,${C.vio},${C.blu})`,borderRadius:99,transition:"right .5s cubic-bezier(.4,0,.2,1)"}}/>
+          </div>
+          <div style={{fontSize:11,color:C.mut}}>
+            Complète {REF_SCORE_TARGET} pts ({REF_STRONG_MIN} actions fortes) pour débloquer : <strong style={{color:C.grn}}>Premium – {FILLEUL_BONUS_DAYS}j</strong> pour toi + bonus pour ton parrain
+          </div>
+        </div>
+      )}
+      {isFilleul && unlocked && (
+        <div style={{marginBottom:12,borderRadius:14,border:`1.5px solid ${C.grn}66`,background:`${C.grn}08`,padding:"12px 16px",display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:22}}>🏅</span>
+          <div style={{fontSize:13,fontWeight:800,color:C.grn}}>Filleul validé — merci de faire partie de la famille Duvia ! 💜</div>
+        </div>
+      )}
+
+      {/* ── Tableau des récompenses ─────────────────────────────────────── */}
+      <div className="card" style={{marginBottom:12,padding:"18px 16px"}}>
+        <div style={{fontSize:12,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".1em",marginBottom:14}}>Vos récompenses parrain</div>
+
+        {/* Phase Trial / Earned */}
+        <div style={{fontSize:11,fontWeight:800,color:C.blu,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+          <span>🎁 Phase Premium sans abonnement</span>
+          <span style={{background:`${C.blu}18`,color:C.blu,borderRadius:8,padding:"1px 7px",fontSize:10}}>plafond {TRIAL_MAX_DAYS}j depuis J0</span>
+        </div>
+        <div style={{borderRadius:10,overflow:"hidden",border:`1px solid ${C.bor}`,marginBottom:14}}>
+          {[
+            {rang:"1er filleul validé", jours:`+${REF_TRIAL_PALIERS[1]}j`, upgrade:"→ Premium – x j 🎁", color:C.grn, highlight:true},
+            {rang:"2e filleul validé",  jours:`+${REF_TRIAL_PALIERS[2]}j`, upgrade:"",                   color:C.grn, highlight:false},
+            {rang:"3e filleul et +",    jours:"0j",                        upgrade:"Plafond 30j atteint", color:C.mut, highlight:false},
+          ].map((r,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",padding:"10px 12px",background:r.highlight?`${C.grn}08`:"transparent",borderBottom:i<2?`1px solid ${C.bor}`:"none"}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:12,color:r.highlight?C.grn:C.txt,fontWeight:r.highlight?800:600}}>{r.rang}</div>
+                {r.upgrade&&<div style={{fontSize:10,color:C.mut,marginTop:1}}>{r.upgrade}</div>}
+              </div>
+              <div style={{fontSize:13,fontWeight:900,color:r.color,marginRight:10,minWidth:28,textAlign:"right"}}>{r.jours}</div>
+              <div style={{fontSize:11,color:C.yel,fontWeight:700,minWidth:40,textAlign:"right"}}>🎰 ×{SPIN_PER_REF}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Phase Premium abonné */}
+        <div style={{fontSize:11,fontWeight:800,color:C.vio,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+          <span>⭐ Phase Premium abonné</span>
+          <span style={{background:`${C.vio}18`,color:C.vio,borderRadius:8,padding:"1px 7px",fontSize:10}}>reset mensuel</span>
+
+        </div>
+        <div style={{borderRadius:10,overflow:"hidden",border:`1px solid ${isPremium?C.vio+"44":C.bor}`,opacity:isPremium?1:0.55}}>
+          {[
+            {rang:`Filleuls 1 à ${PREM_MAX_PER_MONTH} / mois`, jours:`+${PREM_BONUS_PER_REF}j chacun`, note:`max ${PREM_MAX_PER_MONTH * PREM_BONUS_PER_REF}j/mois`, color:C.vio},
+            {rang:`Filleuls ${PREM_MAX_PER_MONTH+1}+ / mois`,  jours:"0j",                             note:"roue uniquement",                                   color:C.mut},
+          ].map((r,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",padding:"10px 12px",background:i===0?`${C.vio}06`:"transparent",borderBottom:i===0?`1px solid ${C.bor}`:"none"}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:12,color:r.color,fontWeight:i===0?800:600}}>{r.rang}</div>
+                <div style={{fontSize:10,color:C.mut,marginTop:1}}>{r.note}</div>
+              </div>
+              <div style={{fontSize:13,fontWeight:900,color:r.color,marginRight:10,minWidth:40,textAlign:"right"}}>{r.jours}</div>
+              <div style={{fontSize:11,color:C.yel,fontWeight:700,minWidth:40,textAlign:"right"}}>🎰 ×{SPIN_PER_REF}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{marginTop:10,fontSize:11,color:C.mut,lineHeight:1.5}}>
+          🎰 Tour de roue offert à chaque filleul validé quel que soit le statut. Pool <strong>Standard</strong> (Trial/Freemium) ou pool <strong>Abonnement ⭐</strong> (mois/an gratuit) pour les abonnés.
+        </div>
+      </div>
+
+      {/* ── Comment ça marche ───────────────────────────────────────────── */}
+      <div className="card" style={{marginBottom:12,padding:"16px 16px"}}>
+        <div style={{fontSize:12,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".1em",marginBottom:12}}>Comment ça marche ?</div>
+        {[
+          {icon:"🔗", title:"Partagez votre lien",    desc:"Envoyez votre code ou lien personnalisé par e-mail ou SMS — invitations illimitées."},
+          {icon:"✅", title:"Le filleul s'inscrit",   desc:`Il crée son compte via votre lien et démarre en Trial Premium (${TRIAL_BASE_DAYS}j).`},
+          {icon:"🎯", title:"Il valide ses actions",  desc:`Dès qu'il atteint ${REF_SCORE_TARGET} pts d'engagement, il passe en "Premium – ${FILLEUL_BONUS_DAYS}j restants" et vous recevez votre bonus.`},
+          {icon:"🔄", title:"Il peut aussi parrainer", desc:"Un filleul validé peut à son tour inviter des proches. Les mêmes règles s'appliquent."},
+        ].map((s,i,arr)=>(
+          <div key={i} style={{display:"flex",gap:12,alignItems:"flex-start",paddingBottom:i<arr.length-1?12:0,marginBottom:i<arr.length-1?12:0,borderBottom:i<arr.length-1?`1px solid ${C.bor}`:"none"}}>
+            <div style={{width:34,height:34,borderRadius:10,background:`${C.vio}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>{s.icon}</div>
+            <div>
+              <div style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:2}}>{s.title}</div>
+              <div style={{fontSize:12,color:C.mut,lineHeight:1.5}}>{s.desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Modale Inviter ──────────────────────────────────────────────── */}
+      {showInvite && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+          <div style={{background:C.card,borderRadius:"20px 20px 0 0",padding:"24px 20px 32px",width:"100%",maxWidth:480,boxShadow:"0 -8px 32px rgba(0,0,0,.18)"}}>
+            <div style={{width:40,height:4,background:C.bor,borderRadius:4,margin:"0 auto 20px"}}/>
+            <div style={{fontSize:17,fontWeight:900,marginBottom:4}}>🎁 Inviter un proche</div>
+            <div style={{fontSize:13,color:C.mut,marginBottom:16}}>Partagez le lien + votre code — votre proche démarre en Trial Premium</div>
+            <div style={{background:C.sur,borderRadius:12,padding:"12px 14px",marginBottom:14,border:`1.5px solid ${C.bor}`}}>
+              <div style={{fontSize:10,fontWeight:800,color:C.mut,textTransform:"uppercase",marginBottom:6}}>Lien d'invitation</div>
+              <div style={{fontSize:12,color:C.vio,fontFamily:"monospace",wordBreak:"break-all",fontWeight:700,marginBottom:8}}>{inviteLink}</div>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontSize:11,color:C.mut}}>Code :</span>
+                <span style={{fontSize:14,fontWeight:900,letterSpacing:3,color:C.vio,fontFamily:"monospace"}}>{code}</span>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+              {[
+                {icon:copiedLink?"✅":"📋", label:copiedLink?"Copié !":"Copier le lien", action:copyLink, active:copiedLink},
+                {icon:"✉️", label:"Par e-mail", action:shareViaEmail, active:false},
+                {icon:"💬", label:"Par SMS",    action:shareViaSMS,   active:false},
+              ].map((btn,i)=>(
+                <button key={i} onClick={btn.action} style={{padding:"12px 6px",background:btn.active?`${C.grn}15`:C.sur,color:btn.active?C.grn:C.txt,border:`1.5px solid ${btn.active?C.grn:C.bor}`,borderRadius:12,fontSize:12,fontWeight:700,display:"flex",flexDirection:"column",alignItems:"center",gap:4,cursor:"pointer"}}>
+                  <span style={{fontSize:22}}>{btn.icon}</span>
+                  {btn.label}
+                </button>
+              ))}
+            </div>
+            <button onClick={()=>setShowInvite(false)} style={{width:"100%",padding:12,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:12,fontSize:14,fontWeight:700,cursor:"pointer"}}>
+              Fermer
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modale démo ─────────────────────────────────────────────────── */}
+      {showDemo && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.card,borderRadius:18,padding:26,maxWidth:300,width:"100%",textAlign:"center",border:`1.5px solid ${C.bor}`}}>
+            {demoStep===1 ? (<>
+              <div style={{fontSize:36,marginBottom:10}}>📨</div>
+              <div style={{fontSize:15,fontWeight:800,marginBottom:6}}>Validation en cours…</div>
+              <div style={{fontSize:13,color:C.mut,marginBottom:14}}>Un filleul atteint le score requis</div>
+              <div style={{height:4,background:C.sur,borderRadius:4,overflow:"hidden"}}>
+                <div style={{height:"100%",width:"70%",background:`linear-gradient(90deg,${C.vio},${C.pin})`,borderRadius:4}}/>
+              </div>
+            </>) : (<>
+              <div style={{fontSize:36,marginBottom:10}}>🎉</div>
+              <div style={{fontSize:15,fontWeight:800,color:C.grn,marginBottom:6}}>Filleul validé !</div>
+              <div style={{fontSize:13,color:C.mut,marginBottom:6}}>
+                {bonusNext>0
+                  ? `+${bonusNext}j crédités sur votre compte`
+                  : "Plafond atteint — roue offerte quand même !"}
+              </div>
+              <div style={{fontSize:20,marginBottom:14}}>🎰 +{SPIN_PER_REF} tour de roue</div>
+              <button onClick={()=>{setShowDemo(false);setDemoStep(0);}} style={{padding:"10px 24px",background:`linear-gradient(90deg,${C.vio},${C.pin})`,color:"#fff",border:"none",borderRadius:10,fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                OK
+              </button>
+            </>)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ADMIN TAB ────────────────────────────────────────────────────────────────
+function AdminTab() {
+  const {C, sub, setSub, users, setUsers, setShowResetConfirm, simDate, setSimDate} = useApp();
+  const [grantTarget, setGrantTarget] = useState("");
+  // subscriberRows
+  const subscriberRows = (() => {
+    const all = (users||[]).filter(u => u.sub && u.sub.plan === "premium");
+    return all.map(u => {
+      const since = u.sub.premiumSince ? new Date(u.sub.premiumSince) : null;
+      const cycle = u.sub.cycle;
+      let expiry = null;
+      if(since){ expiry = new Date(since); cycle==="yearly" ? expiry.setFullYear(expiry.getFullYear()+1) : expiry.setMonth(expiry.getMonth()+1); }
+      const now = new Date();
+      const isActive = expiry ? expiry > now : true;
+      const daysLeft = expiry ? Math.ceil((expiry-now)/86400000) : null;
+      return {name:u.name, email:u.email, since, cycle, expiry, isActive, daysLeft};
+    });
+  })();
+
+  return (
+    <div>
+      {/* ── Simulateur de date ───────────────────────────────────────── */}
+      <div className="card" style={{marginBottom:14,borderColor:`${C.blu}44`,background:`${C.blu}06`}}>
+        <div style={{fontSize:11,fontWeight:800,color:C.blu,letterSpacing:".1em",textTransform:"uppercase",marginBottom:12}}>📅 Simuler une date</div>
+        <div style={{fontSize:12,color:C.mut,marginBottom:10}}>Simule une date future pour tester l'affichage des dépenses récurrentes.</div>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          <input type="date" value={simDate||""} onChange={e=>setSimDate(e.target.value||null)}
+            style={{flex:1,minWidth:140}} />
+          <button onClick={()=>setSimDate(null)}
+            style={{padding:"0 14px",height:44,background:`${C.red}18`,color:C.red,border:`1.5px solid ${C.red}44`,borderRadius:10,fontWeight:700,fontSize:12}}>
+            ✕ Réinitialiser
+          </button>
+        </div>
+        {simDate && (
+          <div style={{marginTop:8,fontSize:11,color:C.blu,fontWeight:700}}>
+            📅 Date simulée : {new Date(simDate).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+          </div>
+        )}
+      </div>
+
+      {/* ── Réinitialisation ─────────────────────────────────────────── */}
+      <div className="card" style={{marginBottom:14,borderColor:`${C.ora}44`,background:`${C.ora}06`}}>
+        <div style={{fontSize:11,fontWeight:800,color:C.ora,letterSpacing:".1em",textTransform:"uppercase",marginBottom:12}}>🔄 Réinitialisation</div>
+        <div style={{fontSize:13,color:C.mut,marginBottom:14,lineHeight:1.6}}>
+          Efface toutes les données locales : comptes, calendrier, dépenses, messages, configurations. L'application retourne à l'état initial.
+        </div>
+        <button onClick={()=>setShowResetConfirm(true)}
+          style={{width:"100%",height:44,background:C.ora,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+          🔄 Réinitialiser l'application
+        </button>
+      </div>
+
+      {/* ── Mode Admin — Gestion des plans ──────────────────────────── */}
+      <div className="card" style={{marginBottom:14,borderColor:"#FFD70044",background:"#FFD70008"}}>
+        <div style={{fontSize:11,fontWeight:800,color:"#cc9900",letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>👑 Mode Admin — Gestion des plans</div>
+        <div style={{fontSize:11,color:"#cc9900",opacity:.7,marginBottom:14}}>
+          Plan actuel : <strong>{subStatus(sub)}</strong>
+          {sub._admin && " · 👑 Admin"}
+        </div>
+
+        {/* ── Bêta ── */}
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:10,fontWeight:800,color:"#7c3aed",textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>🌟 Bêta</div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <button onClick={()=>setSub({...sub,plan:"trial_premium",accountCreatedAt:new Date().toISOString(),trialStart:new Date().toISOString(),premiumSince:null,trialExtension:0,pendingSpins:0})}
+              style={{padding:"8px 14px",background:"#7c3aed18",color:"#7c3aed",border:"1.5px solid #7c3aed",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              🌟 Bêta active (Trial offert)
+            </button>
+          </div>
+        </div>
+
+        {/* ── Trial Premium ── */}
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:10,fontWeight:800,color:"#f59e0b",textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>⏳ Trial Premium</div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <button onClick={()=>setSub({...sub,plan:"trial_premium",accountCreatedAt:new Date().toISOString(),trialStart:new Date().toISOString(),premiumSince:null,trialExtension:0,pendingSpins:0})}
+              style={{padding:"8px 14px",background:"#f59e0b18",color:"#f59e0b",border:"1.5px solid #f59e0b",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              ⏳ Trial J+0 (15j restants)
+            </button>
+            <button onClick={()=>setSub({...sub,plan:"trial_premium",accountCreatedAt:new Date(Date.now()-11*86400000).toISOString(),trialStart:new Date(Date.now()-11*86400000).toISOString(),premiumSince:null,trialExtension:0,pendingSpins:0})}
+              style={{padding:"8px 14px",background:"#ef444418",color:"#ef4444",border:"1.5px solid #ef4444",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              ⏰ Trial J-4 (fin imminente)
+            </button>
+            <button onClick={()=>setSub({...sub,plan:"earned_premium",accountCreatedAt:new Date(Date.now()-2*86400000).toISOString(),trialStart:new Date(Date.now()-2*86400000).toISOString(),premiumSince:null,trialExtension:5,validatedRefCount:1,pendingSpins:1})}
+              style={{padding:"8px 14px",background:"#10b98118",color:"#10b981",border:"1.5px solid #10b981",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              🎁 Earned Premium (parrainage)
+            </button>
+          </div>
+        </div>
+
+        {/* ── Premium abonné ── */}
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:10,fontWeight:800,color:"#8b5cf6",textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>⭐ Premium abonné</div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <button onClick={()=>setSub({...sub,plan:"premium",premiumSince:new Date().toISOString(),cycle:"monthly",_admin:false})}
+              style={{padding:"8px 14px",background:"#8b5cf618",color:"#8b5cf6",border:"1.5px solid #8b5cf6",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              ⭐ Premium Mensuel (actif)
+            </button>
+            <button onClick={()=>setSub({...sub,plan:"premium",premiumSince:new Date().toISOString(),cycle:"yearly",_admin:false})}
+              style={{padding:"8px 14px",background:"#8b5cf625",color:"#8b5cf6",border:"1.5px solid #8b5cf6",borderRadius:10,fontSize:12,fontWeight:800,cursor:"pointer"}}>
+              ⭐ Premium Annuel (actif)
+            </button>
+            <button onClick={()=>setSub({...sub,plan:"premium",premiumSince:new Date(Date.now()-32*86400000).toISOString(),cycle:"monthly",_admin:false})}
+              style={{padding:"8px 14px",background:"#ef444418",color:"#ef4444",border:"1.5px solid #ef4444",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              ❌ Premium Mensuel expiré
+            </button>
+            <button onClick={()=>setSub({...sub,plan:"premium",premiumSince:new Date(Date.now()-366*86400000).toISOString(),cycle:"yearly",_admin:false})}
+              style={{padding:"8px 14px",background:"#ef444412",color:"#ef4444",border:"1.5px dashed #ef4444",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              ❌ Premium Annuel expiré
+            </button>
+          </div>
+        </div>
+
+        {/* ── Freemium ── */}
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:10,fontWeight:800,color:"#6b7280",textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>🔓 Freemium</div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <button onClick={()=>setSub({plan:"freemium",accountCreatedAt:new Date(Date.now()-31*86400000).toISOString(),trialStart:new Date(Date.now()-31*86400000).toISOString(),premiumSince:null,cycle:"yearly",refCode:sub.refCode,refUsed:sub.refUsed,refCount:sub.refCount||0,validatedRefCount:sub.validatedRefCount||0,trialExtension:0,pendingSpins:0,monthlyRefMonth:null,monthlyRefCount:0})}
+              style={{padding:"8px 14px",background:"#6b728018",color:"#6b7280",border:"1.5px solid #6b7280",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              🔓 Freemium (trial expiré)
+            </button>
+          </div>
+        </div>
+
+        {/* ── Reset Admin ── */}
+        <div style={{borderTop:"1px solid #FFD70033",paddingTop:12,marginTop:4}}>
+          <button onClick={()=>setSub(makeAdminSub())}
+            style={{padding:"8px 18px",background:"#FFD70022",color:"#cc9900",border:"1.5px solid #FFD70088",borderRadius:10,fontSize:12,fontWeight:800,cursor:"pointer"}}>
+            👑 Restaurer mode Admin
+          </button>
+        </div>
+      </div>
+
+      {/* ── 🎁 Offrir Premium à un compte ─────────────────────────────── */}
+      <div className="card" style={{borderColor:`${C.vio}44`,background:`${C.vio}06`}}>
+        <div style={{fontSize:11,fontWeight:800,color:C.vio,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>🎁 Offrir Premium à un compte</div>
+        <div style={{fontSize:11,color:C.mut,marginBottom:10,lineHeight:1.5}}>
+          S'applique à la prochaine connexion de ce compte, sur cet appareil. (Le statut d'abonnement n'est pas encore synchronisé dans le nuage — voir la spec multi-familles.)
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          <select value={grantTarget} onChange={e=>setGrantTarget(e.target.value)}
+            style={{flex:1,minWidth:180,height:38,borderRadius:8,border:`1.5px solid ${C.bor}`,padding:"0 10px",fontSize:13,background:C.card,color:C.txt}}>
+            <option value="">— Choisir un compte —</option>
+            {(users||[]).filter(u=>u.role!=="admin").map(u=>(
+              <option key={u.id} value={u.id}>{u.name} ({u.email}){u.sub?.plan==="premium"?" ⭐ déjà Premium":""}</option>
+            ))}
+          </select>
+          <button disabled={!grantTarget} onClick={()=>{
+              setUsers(prev => prev.map(u => String(u.id)===String(grantTarget) ? {
+                ...u,
+                sub: { ...(u.sub||{}), plan:"premium", premiumSince:new Date().toISOString(), cycle:"yearly" },
+              } : u));
+              setGrantTarget("");
+            }}
+            style={{padding:"8px 16px",background:grantTarget?C.vio:C.bor,color:"#fff",border:"none",borderRadius:10,fontSize:12,fontWeight:800,cursor:grantTarget?"pointer":"not-allowed"}}>
+            🎁 Donner Premium (1 an)
+          </button>
+        </div>
+      </div>
+
+      {/* ── Abonnés Premium ──────────────────────────────────────────── */}
+      <div className="card" style={{borderColor:`${C.vio}44`,background:`${C.vio}06`}}>
+        <div style={{fontSize:11,fontWeight:800,color:C.vio,letterSpacing:".1em",textTransform:"uppercase",marginBottom:12}}>⭐ Abonnés Premium</div>
+        {subscriberRows.length === 0 ? (
+          <div style={{fontSize:13,color:C.mut,textAlign:"center",padding:"12px 0"}}>Aucun abonné Premium pour l'instant.</div>
+        ) : (
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead>
+                <tr style={{background:C.sur}}>
+                  {["Abonné","Souscrit le","Cycle","Échéance","Statut"].map(h=>(
+                    <th key={h} style={{padding:"7px 8px",textAlign:"left",fontWeight:800,color:C.mut,borderBottom:`1.5px solid ${C.bor}`,whiteSpace:"nowrap"}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {subscriberRows.map((r,i)=>(
+                  <tr key={i} style={{borderBottom:`1px solid ${C.bor}`,background:i%2===0?"transparent":C.sur}}>
+                    <td style={{padding:"8px",fontWeight:700,color:C.txt}}>
+                      <div>{r.name}</div>
+                      <div style={{fontSize:10,color:C.mut}}>{r.email}</div>
+                    </td>
+                    <td style={{padding:"8px",color:C.txt,whiteSpace:"nowrap"}}>{r.since?r.since.toLocaleDateString("fr-FR"):"—"}</td>
+                    <td style={{padding:"8px",whiteSpace:"nowrap"}}>
+                      <span style={{background:`${C.vio}18`,color:C.vio,padding:"2px 8px",borderRadius:6,fontWeight:700,fontSize:11}}>
+                        {r.cycle==="yearly"?"Annuel":"Mensuel"}
+                      </span>
+                    </td>
+                    <td style={{padding:"8px",color:C.txt,whiteSpace:"nowrap"}}>
+                      {r.expiry?r.expiry.toLocaleDateString("fr-FR"):"—"}
+                      {r.daysLeft!==null&&<div style={{fontSize:10,color:r.daysLeft<=7?C.red:r.daysLeft<=30?C.yel:C.mut}}>{r.daysLeft>0?`J-${r.daysLeft}`:"Expiré"}</div>}
+                    </td>
+                    <td style={{padding:"8px"}}>
+                      <span style={{background:r.isActive?`${C.grn}22`:`${C.red}22`,color:r.isActive?C.grn:C.red,padding:"2px 8px",borderRadius:6,fontWeight:800,fontSize:11,whiteSpace:"nowrap"}}>
+                        {r.isActive?"✅ Actif":"❌ Expiré"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+function PremiumTab() {
+  const {C,t,sub,setSub,st,days,perms,setMenuTab,setShowMenu,users,user,setConfirmDeleteAccount} = useApp();
+  const [confirm,setConfirm]=useState(false);
+  const isPremium=st==="premium"||sub._admin;
+
+  // ── Admin: build subscriber list from stored users ──────────────────────────
+  // Each user may have sub data stored under user.sub (set at login/subscribe)
+  // We also check DEMO_USERS as baseline; real subs come from localStorage users.
+  const subscriberRows = sub._admin ? (() => {
+    const all = (users||[]).filter(u => u.sub && u.sub.plan === "premium");
+    return all.map(u => {
+      const since = u.sub.premiumSince ? new Date(u.sub.premiumSince) : null;
+      const cycle = u.sub.cycle;
+      // Échéance = premiumSince + 1 mois ou + 1 an
+      let expiry = null;
+      if (since) {
+        expiry = new Date(since);
+        if (cycle === "yearly") expiry.setFullYear(expiry.getFullYear() + 1);
+        else expiry.setMonth(expiry.getMonth() + 1);
+      }
+      const now = new Date();
+      const isActive = expiry ? expiry > now : true;
+      const daysLeft = expiry ? Math.ceil((expiry - now) / 86400000) : null;
+      return { name: u.name, email: u.email, since, cycle, expiry, isActive, daysLeft };
+    });
+  })() : [];
+  // badge: "free" = gratuit · "trial" = Trial/Bêta · "premium" = Premium abonné uniquement
+  const items=[
+    // ── Famille & Compte ───────────────────────────────────────────────────────
+    {icon:"👥", label:"2 parents · 1 enfant (Trial : 2, Premium : illimité)", badge:"free"},
+    {icon:"👁️", label:"Observateurs (1 gratuit → illimité)",    badge:"trial"},
+    {icon:"📨", label:"Invitations SMS / WhatsApp / Email",      badge:"free"},
+    // ── Calendrier ─────────────────────────────────────────────────────────────
+    {icon:"📅", label:"Calendrier de garde",                     badge:"free"},
+    {icon:"🌍", label:"Jours fériés 15+ pays",                  badge:"free"},
+    {icon:"🌸", label:"Fête des mères / des pères",             badge:"trial"},
+    {icon:"🎂", label:"Anniversaires parents & enfants",         badge:"trial"},
+    {icon:"🗓️", label:"Dates personnalisées (2 en trial)",      badge:"trial"},
+    // ── Emploi du temps ────────────────────────────────────────────────────────
+    {icon:"🎒", label:"Emploi du temps des enfants",             badge:"trial"},
+    // ── Dépenses ───────────────────────────────────────────────────────────────
+    {icon:"💰", label:"Dépenses & remboursements",               badge:"free"},
+    {icon:"📊", label:"Balance & soldes visibles",               badge:"trial"},
+    {icon:"📄", label:"Export PDF calendrier annuel",           badge:"premium"},
+    {icon:"📄", label:"Export PDF des dépenses",                 badge:"premium"},
+    // ── Contacts ───────────────────────────────────────────────────────────────
+    {icon:"📞", label:"Répertoire contacts",                     badge:"trial"},
+    // ── Coffre-fort ────────────────────────────────────────────────────────────
+    {icon:"🔐", label:"Coffre-fort illimité — 1 Go",            badge:"premium"},
+    // ── Messagerie ─────────────────────────────────────────────────────────────
+    {icon:"💬", label:"Messagerie famille (18 ans+ pour enfants)",badge:"trial"},
+    // ── Jeu & Récompenses ──────────────────────────────────────────────────────
+    {icon:"🎡", label:"Roue Duvia — jeu & récompenses",         badge:"trial"},
+    // ── Parrainage ─────────────────────────────────────────────────────────────
+    {icon:"🎁", label:"Parrainage",                              badge:"free"},
+    // ── App ────────────────────────────────────────────────────────────────────
+    {icon:"🌐", label:"5 langues (FR · EN · DE · ES · PT)",     badge:"free"},
+    {icon:"🎨", label:"5 thèmes visuels",                        badge:"free"},
+    {icon:"📱", label:"Installable sur mobile (PWA)",            badge:"free"},
+  ];
+  return (
+    <div>
+      {/* ── Card bêta ──────────────────────────────────────────────────────────── */}
+      {isBeta() && !sub._admin && (
+        <div className="card" style={{marginBottom:14,borderColor:C.vio,background:`linear-gradient(135deg,${C.vio}12,${C.blu}08)`,textAlign:"center",padding:"20px 18px"}}>
+          <div style={{fontSize:36,marginBottom:8}}>🎉</div>
+          <div style={{fontSize:17,fontWeight:900,color:C.vio,marginBottom:6}}>
+            Bêta — Trial Premium gratuit 🎉
+          </div>
+          <div style={{fontSize:12,color:C.txt,lineHeight:1.7,marginBottom:10}}>
+            Duvia est en phase bêta non commerciale.<br/>
+            Toutes les fonctionnalités <strong>Trial Premium</strong> sont gratuites<br/>
+            jusqu'au <strong>30 septembre 2026</strong>.<br/>
+            <span style={{color:C.mut,fontSize:11}}>L'export PDF est réservé aux abonnés Premium.</span>
+          </div>
+          <div style={{
+            display:"inline-block",
+            background:C.vio,color:"#fff",
+            borderRadius:20,padding:"6px 18px",
+            fontSize:13,fontWeight:800,
+          }}>
+            ⏳ {BETA_DAYS_LEFT()} jours restants
+          </div>
+          <div style={{fontSize:11,color:C.mut,marginTop:12,lineHeight:1.5}}>
+            À partir d'octobre 2026, un abonnement sera proposé.<br/>
+            Vous serez prévenus avant la fin de la bêta.
+          </div>
+        </div>
+      )}
+
+      {/* Card statut — cachée pendant bêta si trial (la card bêta suffit) */}
+      {(!isBeta() || isPremium || sub._admin) && (
+        <div className="card" style={{marginBottom:14,borderColor:sub._admin?"#FFD700":isPremium?C.vio:st==="trial_premium"?C.yel:C.red,textAlign:"center",padding:"24px 18px"}}>
+          <div style={{fontSize:42,marginBottom:8}}>{sub._admin?"👑":isPremium?"⭐":st==="trial_premium"?"⏳":"🔓"}</div>
+          <div style={{fontSize:19,fontWeight:900,marginBottom:5,color:sub._admin?"#FFD700":isPremium?C.vio:st==="trial_premium"?C.yel:C.mut}}>
+            {sub._admin?"Admin ⚙️":isPremium?"Premium Actif ⭐":st==="earned_premium"?`Premium – ${days}j restant${days>1?"s":""}  🎁`:st==="trial_premium"?`Trial Premium — ${days} jour${days>1?"s":""} restant${days>1?"s":""}` :"Freemium"}
+          </div>
+          {isPremium&&sub.premiumSince&&<div style={{fontSize:12,color:C.mut}}>{t.premSince} {new Date(sub.premiumSince).toLocaleDateString()} · {sub.cycle==="monthly"?t.monthly:t.yearly}</div>}
+          {st==="trial_premium"&&<div style={{fontSize:12,color:C.mut,marginTop:4}}>Passez à Premium pour un accès illimité</div>}
+          {st==="freemium"&&<div style={{fontSize:12,color:C.mut,marginTop:4}}>Compte gratuit permanent — fonctions limitées</div>}
+        </div>
+      )}
+
+      {/* Pricing — verrouillé pendant la bêta */}
+      {!isPremium&&(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+          {[{cy:"monthly",pr:t.monthly,save:null},{cy:"yearly",pr:t.yearly,save:t.yearlyNote}].map(p=>(
+            <div key={p.cy} className="card" style={{borderColor:p.cy==="yearly"?C.vio:C.bor,textAlign:"center",padding:"16px 10px",position:"relative"}}>
+              {p.save&&<div style={{position:"absolute",top:-9,left:"50%",transform:"translateX(-50%)",background:C.grn,color:"#fff",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:8,whiteSpace:"nowrap"}}>2 mois offerts</div>}
+              <div style={{fontSize:22,fontWeight:900,color:C.vio,filter:isBeta()?"blur(6px)":"none",userSelect:isBeta()?"none":"auto"}}>{p.pr}</div>
+              <div style={{fontSize:11,color:C.mut,marginBottom:10,filter:isBeta()?"blur(4px)":"none",userSelect:isBeta()?"none":"auto"}}>{t.perFamily}</div>
+              {isBeta() ? (
+                <div style={{width:"100%",padding:"9px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:12,fontWeight:700,borderRadius:8,textAlign:"center"}}>
+                  🔒 Dispo après la bêta
+                </div>
+              ) : (
+                <button onClick={()=>setSub(s=>({...s,plan:"premium",premiumSince:new Date().toISOString(),cycle:p.cy,subscriberParentIdx:user?.parentIdx}))} style={{width:"100%",padding:"9px",background:p.cy==="yearly"?C.vio:C.sur,color:p.cy==="yearly"?"#fff":C.mut,border:`1.5px solid ${p.cy==="yearly"?C.vio:C.bor}`,fontSize:13}}>
+                  Choisir
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Parrainage shortcut */}
+      <div className="card" style={{marginBottom:14,borderColor:`${C.pin}33`,background:`${C.pin}06`,padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
+        <div style={{fontSize:28}}>🎁</div>
+        <div style={{flex:1,fontSize:14,fontWeight:800,color:C.pin}}>Parrainage</div>
+        <button onClick={()=>{setMenuTab("parrainage");}} style={{padding:"8px 14px",background:`linear-gradient(135deg,${C.vio},${C.pin})`,color:"#fff",fontSize:12,fontWeight:700,borderRadius:8,flexShrink:0}}>
+          Voir →
+        </button>
+      </div>
+      <div className="card" style={{marginBottom:14}}>
+        <div className="sec">Fonctionnalités incluses</div>
+        {/* Légende */}
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12,paddingBottom:10,borderBottom:`1px solid ${C.bor}`}}>
+          {[
+            {bg:`${C.grn}22`,color:C.grn,label:"🆓 Gratuit"},
+            {bg:`${C.vio}22`,color:C.vio,label:"⭐ Trial / Bêta"},
+            {bg:`${C.pin}22`,color:C.pin,label:"💎 Premium"},
+          ].map(b=>(
+            <span key={b.label} style={{fontSize:10,fontWeight:800,background:b.bg,color:b.color,padding:"2px 8px",borderRadius:6}}>{b.label}</span>
+          ))}
+        </div>
+        {items.map((f,i)=>(
+          <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<items.length-1?`1px solid ${C.bor}`:"none"}}>
+            <div style={{width:32,height:32,borderRadius:9,background:`${C.vio}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>{f.icon}</div>
+            <div style={{flex:1,fontSize:13,fontWeight:600,color:C.txt}}>{f.label}</div>
+            <span style={{fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:6,flexShrink:0,
+              background:f.badge==="free"?`${C.grn}22`:f.badge==="trial"?`${C.vio}22`:`${C.pin}22`,
+              color:f.badge==="free"?C.grn:f.badge==="trial"?C.vio:C.pin,
+            }}>
+              {f.badge==="free"?"🆓 Gratuit":f.badge==="trial"?"⭐ Trial / Bêta":"💎 Premium"}
+            </span>
+          </div>
+        ))}
+      </div>
+      {/* Cancel sub - premium only */}
+      {isPremium&&(
+        <div className="card" style={{borderColor:`${C.red}44`}}>
+          <div className="sec">{t.cancelSub}</div>
+          {!confirm?(
+            <button onClick={()=>setConfirm(true)} style={{padding:"9px 18px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,fontSize:13}}>{t.cancelSub}</button>
+          ):(
+            <div>
+              <div style={{fontSize:13,color:C.mut,marginBottom:10}}>{t.confirmCancel} ?</div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>{setSub(s=>({...s,plan:"freemium"}));setConfirm(false);}} style={{padding:"8px 16px",background:C.red,color:"#fff",fontSize:13}}>{t.confirmCancel}</button>
+                <button onClick={()=>setConfirm(false)} style={{padding:"8px 16px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13}}>{t.cancel}</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Supprimer le compte */}
+      {user?.role !== "admin" && (
+        <div className="card" style={{borderColor:`${C.red}22`}}>
+          <div className="sec" style={{color:C.red}}>{t.deleteAccount||"Supprimer mon compte"}</div>
+          <div style={{fontSize:12,color:C.mut,marginBottom:12,lineHeight:1.5}}>
+            {t.deleteAccountDesc||"Action définitive. Toutes vos données seront supprimées."}
+          </div>
+          <button
+            onClick={()=>setConfirmDeleteAccount(true)}
+            style={{padding:"9px 18px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,fontSize:13,borderRadius:10,cursor:"pointer",fontWeight:700}}>
+            🗑️ {t.deleteAccount||"Supprimer mon compte"}
+          </button>
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+// ─── HASH INTEGRITY ───────────────────────────────────────────────────────────
+function hashMsg(from,toArr,content,ts){
+  const s=[String(from),...[...toArr].map(String).sort(),content,ts].join('\x01');
+  let h=0x811c9dc5>>>0;
+  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}
+  return h.toString(16).toUpperCase().padStart(8,'0');
+}
+function verifyMsg(m){return hashMsg(m.from,m.to,m.content,m.ts)===m.hash;}
+
+// ─── PIÈCES JOINTES DANS LES MESSAGES ─────────────────────────────────────────
+// Le contenu d'un message reste une simple chaîne (pour rester compatible avec
+// le hash d'intégrité ci-dessus, qui hashe `content` tel quel) : pour une pièce
+// jointe, on préfixe le contenu par MSG_ATTACH_PREFIX + des métadonnées JSON
+// (url Supabase Storage, nom, type, taille), suivies d'un retour à la ligne
+// puis d'une légende optionnelle tapée par l'utilisateur.
+const MSG_ATTACH_PREFIX = "§DUVIA_ATTACH§";
+// Bucket privé (comme le Coffre-fort) : on stocke le CHEMIN de l'objet dans le
+// message, jamais une URL publique. Une URL signée temporaire est générée à
+// la demande au moment de l'affichage (voir useEffect dans MessagingTab).
+const CHAT_ATTACH_BUCKET = "chat-attachments";
+function parseMsgAttachment(content){
+  if (typeof content!=="string" || !content.startsWith(MSG_ATTACH_PREFIX)) return null;
+  const rest = content.slice(MSG_ATTACH_PREFIX.length);
+  const nl = rest.indexOf("\n");
+  const jsonPart = nl===-1 ? rest : rest.slice(0,nl);
+  const caption  = nl===-1 ? "" : rest.slice(nl+1);
+  try { const meta = JSON.parse(jsonPart); return { ...meta, caption }; } catch { return null; }
+}
+function formatFileSize(bytes){
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1024*1024) return `${(bytes/1024).toFixed(0)} Ko`;
+  return `${(bytes/(1024*1024)).toFixed(1)} Mo`;
+}
+
+// ─── MESSAGING TAB ────────────────────────────────────────────────────────────
+function MessagingTab(){
+  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,myUid,uidToLocal,localToUid,emailToUid,familySync}=useApp();
+  const [view,setView]=useState("list");
+  const [convId,setConvId]=useState(null);
+  const [draft,setDraft]=useState("");
+  const [picked,setPicked]=useState([]);
+  const [showProof,setShowProof]=useState(null);
+  const [shakeDraft,setShakeDraft]=useState(false);
+  // Épinglage de messages — par compte (localStorage)
+  const [pinnedMsgIds,setPinnedMsgIds]=useLocalStorage(`duvia_pinned_msgs_${user?.id||"x"}`,[]); 
+  function toggleMsgPin(id){setPinnedMsgIds(ids=>ids.includes(id)?ids.filter(x=>x!==id):[...ids,id]);}
+  const [pendingFile,setPendingFile]=useState(null); // {file,name,type,size,previewUrl}
+  const [uploadingFile,setUploadingFile]=useState(false);
+  const fileInputRef=useRef(null);
+  const endRef=useRef(null);
+
+  function _triggerShakeDraft(){ setShakeDraft(true); setTimeout(()=>setShakeDraft(false),600); }
+
+  // ── Pièce jointe (image / PDF) sélectionnée pour le prochain message ───────
+  function handleFilePick(e){
+    const f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if(!f) return;
+    const err = validateVaultFile(f); // mêmes formats/taille que le coffre-fort (PDF, JPG, PNG, WebP, GIF, HEIC)
+    if(err){ alert("⚠️ "+err); return; }
+    if(pendingFile?.previewUrl) URL.revokeObjectURL(pendingFile.previewUrl);
+    setPendingFile({
+      file: f,
+      name: sanitize(f.name).slice(0, LIMITS.DOC_NAME_MAX),
+      type: f.type,
+      size: f.size,
+      previewUrl: f.type.startsWith("image/") ? URL.createObjectURL(f) : null,
+    });
+  }
+  function clearPendingFile(){
+    if(pendingFile?.previewUrl) URL.revokeObjectURL(pendingFile.previewUrl);
+    setPendingFile(null);
+  }
+
+  const myId=String(user?.id||"");
+  // Nom depuis cfg.parents (source de vérité famille) — fallback user.name
+  const myName=cfg.parents[user?.parentIdx??-1]?.name||user?.name||"?";
+
+  // Helper: affiche un emoji ou une photo en rond
+  function renderAvatar(av, size) {
+    if (typeof av==="string"&&av.startsWith("http"))
+      return <img src={av} alt="" style={{width:size||"100%",height:size||"100%",borderRadius:"50%",objectFit:"cover",display:"block"}} />;
+    return <span>{av||"👤"}</span>;
+  }
+
+  // Participant map (tous les users locaux)
+  const pMap={};
+  (users||[]).forEach(u=>{
+    const cfgP = (cfg.parents||[]).find(p=>(p.email&&u.email&&p.email===u.email)||(p.name&&u.name&&p.name===u.name));
+    const col = cfgP?.color||C.vio;
+    const cfgAvatar = cfgP?.avatar
+      || (cfg.children||[]).find(c=>c.name===u.name)?.avatar;
+    pMap[String(u.id)]={name:u.name,role:u.role,color:col,
+      avatar:u.role==="admin"?"👑":u.role==="observer"?"👁️":cfgAvatar||(u.role==="child"?"🧒":"👤")};
+  });
+
+  // Contacts depuis cfg (source de vérité famille, cross-device)
+  // Si le membre a un compte local → on l'utilise ; sinon → objet synthétique
+  const _uByEmail=Object.fromEntries((users||[]).filter(u=>u.email).map(u=>[u.email,u]));
+  const _uByName =Object.fromEntries((users||[]).filter(u=>u.name ).map(u=>[u.name, u]));
+  const contacts=[
+    ...(cfg.parents||[])
+      .filter(p=>p.name && p.email && p.email!==user?.email)
+      .map(p=>{ const u=_uByEmail[p.email]; return u?{...u,name:p.name}:{id:`cfgp_${p.email}`,name:p.name,email:p.email,role:"parent"}; }),
+    ...(cfg.children||[])
+      .filter(c=>c.name && _uByName[c.name])  // enfants seulement si compte local existant
+      .map(c=>_uByName[c.name]),
+    ...(cfg.observers||[])
+      .filter(o=>o.status==="active"&&o.name)
+      .map(o=>{ const u=_uByEmail[o.email]; return u?{...u,name:o.name}:{id:`cfgo_${o.email||o.name}`,name:o.name,email:o.email,role:"observer"}; }),
+  ].filter(u=>String(u.id)!==myId&&!String(u.email||"").endsWith("@demo.fr"));
+
+  // Enrichir pMap avec les membres cfg pas encore dans users (cross-device)
+  contacts.forEach(u=>{
+    if(!pMap[String(u.id)]){
+      const cfgP2=(cfg.parents||[]).find(p=>(p.email&&u.email&&p.email===u.email)||(p.name&&u.name&&p.name===u.name));
+      const col=cfgP2?.color||C.vio;
+      const cfgAv = cfgP2?.avatar
+        || (cfg.observers||[]).find(o=>o.name===u.name)?.avatar;
+      pMap[String(u.id)]={name:u.name,role:u.role||"parent",color:col,
+        avatar:u.role==="observer"?(cfgAv||"👁️"):u.role==="child"?"🧒":(cfgAv||"👤")};
+    }
+    // Détecter si le destinataire a un compte Supabase (= peut recevoir un message)
+    u._registered = (uidToLocal&&Array.from(uidToLocal.values()).map(String).includes(String(u.id)))
+      || (u.email && emailToUid&&emailToUid.has(u.email));
+  });
+
+  // pMap par UID Supabase (les messages cloud utilisent des UIDs)
+  if(uidToLocal){
+    uidToLocal.forEach((localId, uid) => {
+      if(pMap[localId] && !pMap[uid]) pMap[uid] = pMap[localId];
+    });
+  }
+  // Mon propre UID
+  if(myUid && pMap[myId] && !pMap[myUid]) pMap[myUid] = pMap[myId];
+  // Membres connus via emailToUid+cfg (cross-device sans local_id)
+  if(emailToUid){
+    emailToUid.forEach((uid, email) => {
+      if(!pMap[uid]){
+        const cfgP=(cfg.parents||[]).find(p=>p.email===email);
+        const cfgO=(cfg.observers||[]).find(o=>o.email===email);
+        const member=cfgP||cfgO;
+        if(member){
+          const col=cfgP?.color||C.vio;
+          pMap[uid]={name:member.name,role:cfgP?"parent":"observer",color:col,
+            avatar:member.avatar||(cfgO?"👁️":"👤")};
+        }
+      }
+    });
+  }
+
+  function ck(ids){return[...new Set(ids)].map(String).sort().join('|');}
+
+  // Build conversations — filtre par UID Supabase (stable cross-device)
+  const allConvs={};
+  (msgs||[]).forEach(m=>{
+    const ids=[String(m.from),...(m.to||[]).map(String)];
+    if(!myUid || !ids.includes(String(myUid))) return;
+    const key=ck(ids);
+    if(!allConvs[key])allConvs[key]={key,ids,msgs:[]};
+    allConvs[key].msgs.push(m);
+  });
+  const convList=Object.values(allConvs).sort((a,b)=>{
+    const la=a.msgs.at(-1)?.ts||'',lb=b.msgs.at(-1)?.ts||'';
+    return lb.localeCompare(la);
+  });
+
+  const currentConv=convId?allConvs[convId]:null;
+  const currentMsgs=(currentConv?.msgs||[]).slice().sort((a,b)=>a.ts.localeCompare(b.ts));
+
+  // ── Pièces jointes : résolution d'URLs signées temporaires ──────────────────
+  // Le bucket "chat-attachments" est privé (comme le Coffre-fort) : on ne
+  // stocke jamais d'URL publique dans le message, seulement le chemin de
+  // l'objet. On génère ici des URLs signées (24h) pour les pièces jointes
+  // visibles dans la conversation ouverte, et on les régénère si elles ont
+  // expiré (ex: conversation rouverte plusieurs jours après).
+  const [attUrls,setAttUrls]=useState({}); // path -> {url, exp}
+  const attMsgIdsKey = currentMsgs.filter(m=>parseMsgAttachment(m.content)).map(m=>m.id).join(",");
+  useEffect(()=>{
+    const now = Date.now();
+    const paths = [...new Set(
+      currentMsgs.map(m=>parseMsgAttachment(m.content)?.path).filter(Boolean)
+    )].filter(p=>!attUrls[p] || attUrls[p].exp < now);
+    if(!paths.length) return;
+    const EXPIRES_IN = 60*60*24; // 24h
+    supabase.storage.from(CHAT_ATTACH_BUCKET).createSignedUrls(paths, EXPIRES_IN)
+      .then(({data})=>{
+        if(!data) return;
+        setAttUrls(prev=>{
+          const next={...prev};
+          data.forEach(d=>{ if(d?.signedUrl && d?.path) next[d.path]={ url:d.signedUrl, exp: Date.now()+EXPIRES_IN*1000-60000 }; });
+          return next;
+        });
+      }).catch(()=>{});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[attMsgIdsKey]);
+
+  // Mark read on open
+  useEffect(()=>{
+    if(!convId||!myUid)return;
+    msgs.forEach(m=>{
+      const ids=[String(m.from),...(m.to||[]).map(String)];
+      if(ck(ids)!==convId)return;
+      if((m.to||[]).map(String).includes(String(myUid))&&!(m.readBy||[]).map(String).includes(String(myUid)))
+        markCloudMessageRead(m.id, myUid);
+    });
+  },[convId,myUid,msgs]);
+
+  useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[currentMsgs.length,view]);
+
+  function _afterSend(toIds){
+    setDraft("");
+    addRefAction("SEND_MESSAGE");
+    if(view==="new"){
+      // Construire le key avec UIDs Supabase (pour matcher allConvs)
+      const toUids = toIds.map(id => {
+        if(localToUid && localToUid.has(id)) return localToUid.get(id);
+        if(id.startsWith&&(id.startsWith("cfgp_")||id.startsWith("cfgo_"))){
+          const email = id.replace(/^cfg[po]_/,"");
+          return emailToUid && emailToUid.get(email);
+        }
+        return id;
+      }).filter(Boolean);
+      setConvId(ck([String(myUid),...toUids]));
+      setView("chat");
+    }
+  }
+
+  async function sendMsg(toIds){
+    const content=draft.trim();
+    if((!content&&!pendingFile)||!toIds.length)return;
+    // ── Validations sécurité ────────────────────────────────────────
+    if(content.length > LIMITS.MSG_MAX){
+      alert((t.msgTooLong||"Message trop long (max {n} caractères).").replace("{n}",LIMITS.MSG_MAX));
+      return;
+    }
+    if(!checkMsgRateLimit()){
+      alert(t.msgRateLimit||"Trop de messages envoyés. Attends une minute avant de réessayer.");
+      return;
+    }
+    if(content&&!isCleanText(content)){
+      _triggerShakeDraft();
+      return;
+    }
+    const safeContent = content ? sanitize(content) : "";
+
+    if(pendingFile){
+      setUploadingFile(true);
+      try{
+        const ext = "." + (pendingFile.file.name.split(".").pop()||"bin").toLowerCase();
+        const path = `${familySync?.familyId||"shared"}/${Date.now()}_${Math.random().toString(36).slice(2,8)}${ext}`;
+        const { error: upErr } = await supabase.storage.from(CHAT_ATTACH_BUCKET)
+          .upload(path, pendingFile.file, { upsert:false, contentType: pendingFile.type||"application/octet-stream" });
+        if(upErr) throw upErr;
+        // Bucket privé : on ne génère PAS d'URL publique. Seul le chemin est
+        // stocké ; l'URL d'accès (signée, temporaire) sera demandée à
+        // l'affichage par les destinataires autorisés (membres de la famille).
+        const meta = { path, name: pendingFile.name, type: pendingFile.type, size: pendingFile.size };
+        const finalContent = MSG_ATTACH_PREFIX + JSON.stringify(meta) + "\n" + safeContent;
+        await sendCloudMessage(myName, toIds, finalContent);
+        clearPendingFile();
+        _afterSend(toIds);
+      }catch(e){
+        alert("⚠️ Erreur d'envoi du fichier : "+(e?.message||e));
+      }finally{
+        setUploadingFile(false);
+      }
+      return;
+    }
+
+    sendCloudMessage(myName, toIds, safeContent).then(()=>{
+      _afterSend(toIds);
+    }).catch(e=>alert("⚠️ Erreur d'envoi : "+(e?.message||e)));
+  }
+
+  function convName(ids){
+    return ids.filter(id=>id!==String(myUid)&&id!==myId).map(id=>{
+      if(pMap[id]?.name) return pMap[id].name;
+      // Fallback: chercher dans cfg par UID via emailToUid (reverse lookup)
+      if(emailToUid){
+        for(const [email, uid] of emailToUid){
+          if(uid===id){
+            const cfgP=(cfg.parents||[]).find(p=>p.email===email);
+            const cfgO=(cfg.observers||[]).find(o=>o.email===email);
+            if(cfgP||cfgO) return (cfgP||cfgO).name;
+          }
+        }
+      }
+      return "?";
+    }).join(", ");
+  }
+  function convColor(ids){const o=ids.find(id=>id!==String(myUid)&&id!==myId);return o?(pMap[o]?.color||C.vio):C.vio;}
+
+  // ── NEW CONVERSATION ──────────────────────────────────────────────────────
+  if(view==="new") return(
+    <div className="fi">
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+        <button onClick={()=>setView("list")} style={{padding:"6px 12px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:12,borderRadius:8}}>←</button>
+        <div style={{fontSize:15,fontWeight:900}}>{t.msgNewTitle||"✏️ Nouveau message"}</div>
+      </div>
+      <div className="card" style={{marginBottom:12}}>
+        <div style={{fontSize:11,color:C.mut,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",marginBottom:10}}>{t.msgRecipients||"Destinataires"}</div>
+        {contacts.length===0&&<div style={{color:C.mut,fontSize:13}}>{t.msgNoOtherUsers||"Aucun autre utilisateur enregistré."}</div>}
+        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+          {contacts.map(u=>{
+            const uid=String(u.id);const sel=picked.includes(uid);const col=pMap[uid]?.color||C.vio;
+            const reg=u._registered;
+            return(
+              <button key={uid}
+                onClick={()=>{ if(!reg) return; setPicked(p=>sel?p.filter(x=>x!==uid):[...p,uid]); }}
+                disabled={!reg}
+                title={reg?"":(t.msgNotRegistered||"Pas encore inscrit — invitation à renvoyer")}
+                style={{
+                  padding:"8px 14px",
+                  background:!reg?`${C.mut}11`:(sel?`${col}22`:C.sur),
+                  border:`2px solid ${!reg?C.bor:(sel?col:C.bor)}`,
+                  borderRadius:20,display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:700,
+                  color:!reg?C.mut:(sel?col:C.mut),
+                  opacity:!reg?0.5:1,
+                  transition:"all .15s",cursor:!reg?"not-allowed":"pointer"
+              }}>
+                {renderAvatar(pMap[uid]?.avatar, 22)}
+                <span>{u.name}</span>
+                {!reg&&<span style={{fontSize:10,fontWeight:600}}>· {t.msgNotRegisteredShort||"pas inscrit"}</span>}
+                {sel&&<span style={{fontSize:10}}>✓</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      {picked.length>0&&(
+        <>
+          {pendingFile && (
+            <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",marginBottom:8,background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:14}}>
+              {pendingFile.previewUrl
+                ? <img src={pendingFile.previewUrl} alt="" style={{width:42,height:42,borderRadius:8,objectFit:"cover",flexShrink:0}} />
+                : <div style={{width:42,height:42,borderRadius:8,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>📄</div>}
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:800,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pendingFile.name}</div>
+                <div style={{fontSize:10,color:C.mut}}>{formatFileSize(pendingFile.size)}</div>
+              </div>
+              <button onClick={clearPendingFile} disabled={uploadingFile} style={{width:26,height:26,borderRadius:"50%",border:"none",background:`${C.red}18`,color:C.red,fontSize:13,fontWeight:900,flexShrink:0,cursor:"pointer"}}>✕</button>
+            </div>
+          )}
+          <div style={{display:"flex",gap:8,padding:"10px 12px",background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:22,alignItems:"center"}}>
+            <input type="file" ref={fileInputRef} onChange={handleFilePick} accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif" style={{display:"none"}} />
+            <button onClick={()=>fileInputRef.current?.click()} disabled={uploadingFile} title={t.msgAttach||"Joindre un fichier"} style={{
+              width:32,height:32,borderRadius:"50%",border:`1.5px solid ${C.bor}`,background:"transparent",color:C.mut,
+              fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer"
+            }}>📎</button>
+            <input value={draft} onChange={e=>setDraft(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),sendMsg(picked))}
+              placeholder={pendingFile?(t.msgCaptionPlaceholder||"Légende (optionnel)…"):(t.msgFirstPlaceholder||"Premier message…")} autoFocus
+              className={shakeDraft?"duvia-shake":""}
+              style={{flex:1,background:"transparent",border:"none",outline:"none",fontSize:14,color:C.txt}} />
+            <button onClick={()=>sendMsg(picked)} disabled={(!draft.trim()&&!pendingFile)||uploadingFile} style={{
+              width:36,height:36,borderRadius:"50%",border:"none",cursor:(draft.trim()||pendingFile)&&!uploadingFile?"pointer":"default",
+              background:(draft.trim()||pendingFile)?`linear-gradient(135deg,${C.vio},${C.pin})`:`${C.vio}44`,
+              color:"#fff",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0
+            }}>{uploadingFile?"…":"→"}</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  // ── CHAT VIEW ─────────────────────────────────────────────────────────────
+  if(view==="chat"&&currentConv){
+    const isGroup=currentConv.ids.length>2;
+    const otherIds=currentConv.ids.filter(id=>id!==String(myUid));
+    return(
+      <div className="fi" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 190px)"}}>
+        {/* Header */}
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexShrink:0}}>
+          <button onClick={()=>setView("list")} style={{padding:"6px 12px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:12,borderRadius:8}}>←</button>
+          <div style={{position:"relative",flexShrink:0}}>
+            <div style={{width:38,height:38,borderRadius:isGroup?11:"50%",background:isGroup?`linear-gradient(135deg,${C.vio},${C.pin})`:`linear-gradient(135deg,${convColor(currentConv.ids)},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,border:isGroup?`2px solid ${C.vio}44`:"none",overflow:"hidden"}}>
+              {isGroup?"👥":renderAvatar(pMap[otherIds[0]]?.avatar)}
+            </div>
+            {isGroup&&(
+              <div style={{position:"absolute",bottom:-4,right:-4,background:C.vio,color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:8,fontWeight:900,border:`2px solid ${C.card}`}}>
+                {currentConv.ids.length}
+              </div>
+            )}
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:1}}>
+              {isGroup&&<span style={{fontSize:9,fontWeight:800,color:C.vio,background:`${C.vio}18`,border:`1px solid ${C.vio}33`,borderRadius:5,padding:"1px 5px",flexShrink:0}}>{t.msgGroupBadge||"GROUPE"}</span>}
+              <div style={{fontSize:14,fontWeight:900,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{convName(currentConv.ids)}</div>
+            </div>
+            {isGroup
+              ? <div style={{fontSize:10,color:C.mut,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  👤 {currentConv.ids.map(id=>id===myId?(t.msgMe||"Moi"):pMap[id]?.name||"?").join(" · ")}
+                </div>
+              : <div style={{fontSize:10,color:C.grn,fontWeight:700}}>{t.msgSecure||"🔒 Messagerie sécurisée"}</div>
+            }
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div style={{flex:1,overflowY:"auto",paddingBottom:8}}>
+          {currentMsgs.length===0&&(
+            <div style={{textAlign:"center",padding:40,color:C.mut,fontSize:13}}>{t.msgStartConv||"Démarrez la conversation"}</div>
+          )}
+          {/* ── Messages épinglés ── */}
+          {(()=>{
+            const pinned=currentMsgs.filter(m=>pinnedMsgIds.includes(m.id));
+            if(!pinned.length) return null;
+            return(
+              <div style={{background:`${C.vio}0a`,border:`1px solid ${C.vio}33`,borderRadius:10,padding:"8px 10px",marginBottom:10}}>
+                <div style={{fontSize:10,fontWeight:800,color:C.vio,marginBottom:6}}>📌 MESSAGES ÉPINGLÉS ({pinned.length})</div>
+                {pinned.map(m=>(
+                  <div key={m.id} style={{fontSize:12,color:C.txt,padding:"4px 0",borderBottom:`1px solid ${C.bor}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{parseMsgAttachment(m.content)?`📄 ${parseMsgAttachment(m.content)?.name||"Fichier"}`:m.content}</span>
+                    <button onClick={()=>toggleMsgPin(m.id)} style={{background:"transparent",border:"none",color:C.mut,fontSize:11,cursor:"pointer",flexShrink:0}}>✕</button>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+          {currentMsgs.map((m,idx)=>{
+            const isMe=String(m.from)===String(myUid);
+            const verified=verifyMsg(m);
+            const att=parseMsgAttachment(m.content);
+            const attIsImg=att&&(att.type||"").startsWith("image/");
+            const prev=currentMsgs[idx-1];
+            const showDate=!prev||new Date(m.ts).toDateString()!==new Date(prev.ts).toDateString();
+            const readOk=(m.readBy||[]).some(id=>String(id)!==String(myUid));
+            const hhmm=new Date(m.ts).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+            const col=pMap[String(m.from)]?.color||C.vio;
+            const isPinned=pinnedMsgIds.includes(m.id);
+            return(
+              <div key={m.id}>
+                {showDate&&<div style={{textAlign:"center",fontSize:11,color:C.mut,margin:"12px 0 8px",fontWeight:600}}>{new Date(m.ts).toLocaleDateString()}</div>}
+                {/* Ligne principale : avatar + colonne bulle */}
+                <div style={{display:"flex",flexDirection:isMe?"row-reverse":"row",alignItems:"flex-start",gap:8,marginBottom:4,paddingLeft:isMe?48:0,paddingRight:isMe?0:48}}>
+                  {/* Avatar — aligné en haut avec la bulle */}
+                  {!isMe?(
+                    <div style={{width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${col},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0,overflow:"hidden",marginTop:2}}>
+                      {renderAvatar(pMap[String(m.from)]?.avatar)}
+                    </div>
+                  ):(
+                    <div style={{width:32,flexShrink:0}}/>
+                  )}
+                  {/* Bulle + épingle côte à côte */}
+                  <div style={{maxWidth:"78%",display:"flex",flexDirection:isMe?"row-reverse":"row",alignItems:"flex-end",gap:4}}>
+                  <div style={{display:"flex",flexDirection:"column",alignItems:isMe?"flex-end":"flex-start",minWidth:0,flex:1}}>
+                    {!isMe&&isGroup&&<div style={{fontSize:10,color:col,marginBottom:3,fontWeight:700,paddingLeft:2}}>{m.fromName}</div>}
+                    {/* Bulle */}
+                    <div onClick={()=>setShowProof(showProof===m.id?null:m.id)} style={{
+                      padding:att&&attIsImg?6:"10px 13px",
+                      background:isMe?`linear-gradient(135deg,${col},${col}cc)`:C.sur,
+                      color:isMe?"#fff":C.txt,
+                      borderRadius:isMe?"18px 4px 18px 18px":"4px 18px 18px 18px",
+                      fontSize:14,lineHeight:1.45,cursor:"pointer",
+                      border:isMe?"none":`1px solid ${C.bor}`,
+                      boxShadow:"0 1px 4px rgba(0,0,0,.08)",wordBreak:"break-word",
+                      position:"relative"
+                    }}>
+                      {/* Heure inline (float right) — messages texte uniquement */}
+                      {!att&&<span style={{float:"right",marginLeft:10,marginTop:4,lineHeight:1,fontSize:10,opacity:.72,color:isMe?"rgba(255,255,255,.82)":C.mut,display:"inline-flex",alignItems:"center",gap:3}}>
+                        {hhmm}{isMe&&<span style={{fontWeight:800,fontSize:10,color:readOk?"rgba(255,255,255,.92)":"rgba(255,255,255,.4)"}}>{readOk?"✓✓":"✓"}</span>}
+                      </span>}
+                      {!att ? (typeof m.content==="string"&&m.content.startsWith("§DUVIA_ATTACH§") ? <span style={{opacity:.6,fontSize:12}}>📄 Fichier (non disponible)</span> : m.content) : (
+                        <>
+                          {attIsImg ? (
+                            attUrls[att.path]?.url ? (
+                              <a href={attUrls[att.path].url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{display:"block"}}>
+                                <img src={attUrls[att.path].url} alt={att.name||""} style={{maxWidth:"100%",maxHeight:220,borderRadius:12,display:"block"}} />
+                              </a>
+                            ) : (
+                              <div style={{width:160,height:120,borderRadius:12,background:isMe?"rgba(255,255,255,.15)":C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:isMe?"#fff":C.mut,opacity:.8}}>
+                                {t.msgLoadingFile||"Chargement…"}
+                              </div>
+                            )
+                          ) : (
+                            attUrls[att.path]?.url ? (
+                              <a href={attUrls[att.path].url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 4px",color:"inherit",textDecoration:"none"}}>
+                                <span style={{fontSize:22,flexShrink:0}}>📄</span>
+                                <span style={{minWidth:0}}>
+                                  <div style={{fontSize:13,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{att.name||"Fichier"}</div>
+                                  {att.size?<div style={{fontSize:10,opacity:.75}}>{formatFileSize(att.size)}</div>:null}
+                                </span>
+                              </a>
+                            ) : (
+                              <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 4px",opacity:.8}}>
+                                <span style={{fontSize:22,flexShrink:0}}>📄</span>
+                                <span style={{minWidth:0}}>
+                                  <div style={{fontSize:13,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{att.name||"Fichier"}</div>
+                                  <div style={{fontSize:10}}>{t.msgLoadingFile||"Chargement…"}</div>
+                                </span>
+                              </div>
+                            )
+                          )}
+                          {att.caption && <div style={{marginTop:attIsImg?6:2,padding:attIsImg?"0 4px":0}}>{att.caption}</div>}
+                        </>
+                      )}
+                      {/* Heure pour pièces jointes (en bas) */}
+                      {att&&<div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",gap:3,marginTop:attIsImg?4:5,marginBottom:-2}}>
+                        <span style={{fontSize:10,opacity:.72,color:isMe?"rgba(255,255,255,.82)":C.mut}}>{hhmm}</span>
+                        {isMe&&<span style={{color:readOk?"rgba(255,255,255,.92)":"rgba(255,255,255,.4)",fontWeight:800,fontSize:10}}>{readOk?"✓✓":"✓"}</span>}
+                      </div>}
+                    </div>
+
+                    {/* Proof hash — compact, discret */}
+                    {showProof===m.id&&(
+                      <div style={{marginTop:4,padding:"6px 10px",background:verified?`${C.grn}12`:`${C.red}12`,borderRadius:10,border:`1px solid ${verified?C.grn+"40":C.red+"40"}`,fontSize:10,maxWidth:"100%"}}>
+                        <span style={{fontWeight:700,color:verified?C.grn:C.red}}>
+                          {verified?"🔒 Intégrité vérifiée":"⚠️ Message modifié !"}
+                        </span>
+                        <span style={{color:C.mut,fontFamily:"monospace",marginLeft:6,letterSpacing:.5}}>#{(m.hash||"").slice(0,8)}</span>
+                      </div>
+                    )}
+                  </div>{/* fin colonne bulle */}
+                  {/* Bouton épingle — à côté de la bulle */}
+                  <button onClick={()=>toggleMsgPin(m.id)} style={{background:"transparent",border:"none",fontSize:13,cursor:"pointer",opacity:isPinned?1:0.35,padding:"2px 4px",lineHeight:1,transition:"opacity .15s",flexShrink:0,alignSelf:"flex-end",marginBottom:4}} title={isPinned?"Désépingler":"Épingler"}>📌</button>
+                  </div>{/* fin row bulle+épingle */}
+                </div>
+              </div>
+            );
+          })}
+          <div ref={endRef}/>
+        </div>
+
+        {/* Aperçu pièce jointe en attente d'envoi */}
+        {pendingFile && (
+          <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",marginBottom:8,background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:14,flexShrink:0}}>
+            {pendingFile.previewUrl
+              ? <img src={pendingFile.previewUrl} alt="" style={{width:42,height:42,borderRadius:8,objectFit:"cover",flexShrink:0}} />
+              : <div style={{width:42,height:42,borderRadius:8,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>📄</div>}
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:12,fontWeight:800,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pendingFile.name}</div>
+              <div style={{fontSize:10,color:C.mut}}>{formatFileSize(pendingFile.size)}</div>
+            </div>
+            <button onClick={clearPendingFile} disabled={uploadingFile} style={{width:26,height:26,borderRadius:"50%",border:"none",background:`${C.red}18`,color:C.red,fontSize:13,fontWeight:900,flexShrink:0,cursor:"pointer"}}>✕</button>
+          </div>
+        )}
+        {/* Input */}
+        <div style={{display:"flex",gap:8,paddingTop:10,borderTop:`1px solid ${C.bor}`,flexShrink:0,alignItems:"center"}}>
+          <input type="file" ref={fileInputRef} onChange={handleFilePick} accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif" style={{display:"none"}} />
+          <button onClick={()=>fileInputRef.current?.click()} disabled={uploadingFile} title={t.msgAttach||"Joindre un fichier"} style={{
+            width:38,height:38,borderRadius:"50%",border:`1.5px solid ${C.bor}`,background:C.sur,color:C.mut,
+            fontSize:17,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer"
+          }}>📎</button>
+          <input value={draft} onChange={e=>setDraft(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),sendMsg(otherIds))}
+            placeholder={pendingFile?(t.msgCaptionPlaceholder||"Légende (optionnel)…"):(t.msgPlaceholder||"Message…")}
+            className={shakeDraft?"duvia-shake":""}
+            style={{flex:1,padding:"10px 14px",background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:22,fontSize:14,color:C.txt,outline:"none"}} />
+          <button onClick={()=>sendMsg(otherIds)} disabled={(!draft.trim()&&!pendingFile)||uploadingFile} style={{
+            width:42,height:42,borderRadius:"50%",border:"none",flexShrink:0,
+            background:(draft.trim()||pendingFile)?`linear-gradient(135deg,${C.vio},${C.pin})`:`${C.vio}44`,
+            color:"#fff",fontSize:20,display:"flex",alignItems:"center",justifyContent:"center",
+            cursor:(draft.trim()||pendingFile)&&!uploadingFile?"pointer":"default"
+          }}>{uploadingFile?"…":"→"}</button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── LIST VIEW ─────────────────────────────────────────────────────────────
+  return(
+    <div className="fi">
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+        <div>
+          <div style={{fontSize:16,fontWeight:900}}>💬 {t.tabMsg||"Messages"}</div>
+          <div style={{fontSize:11,color:C.mut}}>{t.msgListSubtitle||"Sécurisés · Infalsifiables · Tap pour vérifier"}</div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          <button onClick={()=>{setPicked([]);setDraft("");setView("new");}} style={{
+            padding:"8px 16px",background:`linear-gradient(135deg,${C.vio},${C.pin})`,
+            color:"#fff",fontSize:13,fontWeight:800,borderRadius:20
+          }}>{t.msgNewBtn||"✏️ Nouveau"}</button>
+          <InfoBubble C={C} tipKey={`duvia_msgtip_${user?.id||"x"}`} title={t.tabMsg||"Messages"}>
+            {t.msgTipBody||"Échangez des messages directement avec l'autre parent et les observateurs. Chaque message est horodaté et son intégrité peut être vérifiée à tout moment en appuyant dessus. Les conversations restent privées et sécurisées au sein de votre famille Duvia."}
+          </InfoBubble>
+        </div>
+      </div>
+
+      {contacts.length===0&&(
+        <div className="card" style={{textAlign:"center",padding:32,color:C.mut}}>
+          <div style={{fontSize:36,marginBottom:10}}>👥</div>
+          <div style={{fontSize:14,fontWeight:700,marginBottom:6}}>{t.msgEmptyContactsTitle||"Aucun contact disponible"}</div>
+          <div style={{fontSize:12}}>{t.msgEmptyContactsDesc||"Invitez l'autre parent à créer un compte Duvia pour pouvoir échanger."}</div>
+        </div>
+      )}
+
+      {contacts.length>0&&convList.length===0&&(
+        <div className="card" style={{textAlign:"center",padding:36,color:C.mut}}>
+          <div style={{fontSize:40,marginBottom:12}}>💬</div>
+          <div style={{fontSize:14,fontWeight:700,marginBottom:6}}>{t.msgEmptyConvTitle||"Aucune conversation"}</div>
+          <div style={{fontSize:12}}>{t.msgEmptyConvDesc||"Appuyez sur « Nouveau » pour démarrer un échange sécurisé."}</div>
+        </div>
+      )}
+
+      {convList.map(conv=>{
+        const last=conv.msgs.at(-1);
+        const _myUidStr=String(myUid||"");
+        const unread=conv.msgs.filter(m=>(m.to||[]).map(String).includes(_myUidStr)&&!(m.readBy||[]).map(String).includes(_myUidStr)).length;
+        const col=convColor(conv.ids);
+        // Groupe = 3+ participants au total (2 personnes = toujours une conv 1-à-1)
+        const isGroup=conv.ids.length>2;
+        const otherIds=conv.ids.filter(id=>id!==_myUidStr);
+        const memberCount=conv.ids.length; // total including me
+        return(
+          <div key={conv.key} onClick={()=>{setConvId(conv.key);setView("chat");}} className="card" style={{
+            marginBottom:10,cursor:"pointer",
+            borderColor:unread>0?col:isGroup?C.vio+"55":C.bor,
+            background:unread>0?`${col}08`:isGroup?`${C.vio}05`:C.card,transition:"all .15s"
+          }}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              {/* Avatar */}
+              <div style={{position:"relative",flexShrink:0}}>
+                <div style={{width:46,height:46,borderRadius:isGroup?14:"50%",background:isGroup?`linear-gradient(135deg,${C.vio},${C.pin})`:`linear-gradient(135deg,${col},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,border:isGroup?`2px solid ${C.vio}44`:"none",overflow:"hidden"}}>
+                  {isGroup?"👥":renderAvatar(pMap[otherIds[0]]?.avatar)}
+                </div>
+                {/* Group member count badge */}
+                {isGroup&&(
+                  <div style={{position:"absolute",bottom:-4,right:-4,background:C.vio,color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:900,border:`2px solid ${C.card}`,lineHeight:1.4}}>
+                    {memberCount}
+                  </div>
+                )}
+                {unread>0&&<span style={{position:"absolute",top:-2,right:isGroup?8:-2,background:C.red,color:"#fff",borderRadius:"50%",width:18,height:18,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800}}>{unread}</span>}
+              </div>
+
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:isGroup?2:3}}>
+                  <div style={{display:"flex",alignItems:"center",gap:5,minWidth:0}}>
+                    {isGroup&&<span style={{fontSize:9,fontWeight:800,color:C.vio,background:`${C.vio}18`,border:`1px solid ${C.vio}33`,borderRadius:5,padding:"1px 5px",flexShrink:0}}>{t.msgGroupBadge||"GROUPE"}</span>}
+                    <div style={{fontSize:14,fontWeight:unread>0?900:700,color:unread>0?col:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{convName(conv.ids)}</div>
+                  </div>
+                  <div style={{fontSize:10,color:C.mut,flexShrink:0,marginLeft:8}}>
+                    {last&&new Date(last.ts).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}
+                  </div>
+                </div>
+                {/* Group members list */}
+                {isGroup&&(
+                  <div style={{fontSize:10,color:C.mut,marginBottom:3,display:"flex",alignItems:"center",gap:4}}>
+                    <span style={{fontSize:11}}>👤</span>
+                    <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                      {conv.ids.map(id=>(myUid&&id===String(myUid))||id===myId?(t.msgMe||"Moi"):pMap[id]?.name||"?").join(" · ")}
+                    </span>
+                  </div>
+                )}
+                <div style={{fontSize:12,color:C.mut,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  {last&&(
+                    isGroup
+                      ? <><span style={{color:String(last.from)===myId?C.vio:C.grn,fontWeight:700}}>{String(last.from)===myId?(t.msgYou||"Vous"):pMap[String(last.from)]?.name||"?"} : </span>{last.content}</>
+                      : <>{String(last.from)===myId&&<span style={{color:C.vio}}>{t.msgYou||"Vous"} : </span>}{last.content}</>
+                  ) || "—"}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Security info */}
+      <div style={{marginTop:16,padding:"12px 14px",background:`${C.grn}08`,borderRadius:12,border:`1px solid ${C.grn}22`,display:"flex",gap:10,alignItems:"flex-start"}}>
+        <span style={{fontSize:18,flexShrink:0}}>🔒</span>
+        <div style={{fontSize:11,color:C.mut,lineHeight:1.5}}>
+          {t.msgIntegrityFooter||"Chaque message est signé par un hash cryptographique unique (FNV-1a). Appuyez sur n'importe quel message pour vérifier son intégrité."}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── SCHEDULE TAB ─────────────────────────────────────────────────────────────
+const SUBJECT_COLORS = {
+  "Mathématiques":"#4a9eff","Mathematics":"#4a9eff","Mathematik":"#4a9eff","Matemáticas":"#4a9eff","Matemática":"#4a9eff",
+  "Français":"#ff6bb5","French":"#ff6bb5","Deutsch":"#ff6bb5","Lengua":"#ff6bb5","Português":"#ff6bb5",
+  "Histoire-Géo":"#f5c842","History":"#f5c842","Geschichte":"#f5c842","Historia":"#f5c842","História":"#f5c842",
+  "Sciences":"#3ecf8e","Science":"#3ecf8e","Naturwissenschaften":"#3ecf8e","Ciencias":"#3ecf8e","Ciências":"#3ecf8e",
+  "Anglais":"#7c6fcd","English":"#7c6fcd","Englisch":"#7c6fcd","Inglés":"#7c6fcd","Inglês":"#7c6fcd",
+  "EPS":"#ff9f43","PE":"#ff9f43","Sport":"#ff9f43","Ed. Física":"#ff9f43",
+  "Arts plastiques":"#ff5e57","Art":"#ff5e57","Kunst":"#ff5e57","Arte":"#ff5e57","Artes":"#ff5e57",
+  "Musique":"#3ecf8e","Music":"#3ecf8e","Musik":"#3ecf8e","Música":"#3ecf8e",
+  "Physique-Chimie":"#4a9eff","Physics":"#4a9eff","Physik":"#4a9eff","Física":"#4a9eff",
+  "SVT":"#3ecf8e","Biology":"#3ecf8e","Biologie":"#3ecf8e","Biología":"#3ecf8e","Biologia":"#3ecf8e",
+};
+function subjColor(subj) { return SUBJECT_COLORS[subj]||"#7c6fcd"; }
+
+function ScheduleTab({prem: premProp, childReadOnly}) {
+  const {C,t,cfg,setCfg,prem: ctxPrem,onUpgrade,user,setMenuTab,setConfigStep} = useApp();
+  const prem = premProp !== undefined ? premProp : ctxPrem;
+  const children = cfg.parents ? cfg.children : [];
+  // childReadOnly: find the child's own index by name matching user.name
+  const ownChildIdx = childReadOnly
+    ? Math.max(0, (cfg.children||[]).findIndex(ch => ch.name && user?.name && ch.name.toLowerCase()===user.name.toLowerCase()))
+    : 0;
+  const [childIdx,setChildIdx] = useState(ownChildIdx);
+  const [dayIdx,setDayIdx] = useState(0);
+  const [showForm,setShowForm] = useState(false);
+  const [editId,setEditId] = useState(null);
+  const [form,setForm] = useState({subject:"",room:"",building:"",from:"08:00",to:"09:00"});
+  const [err,setErr] = useState("");
+
+  const dayNames = t.dayNames ? t.dayNames.slice(0,7) : ["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
+  const dayShort = t.dayShort ? t.dayShort.slice(0,7) : ["L","M","M","J","V","S","D"];
+  const subjects = t.scheduleSubjects || ["Mathématiques","Français","Histoire-Géo","Sciences","Anglais","EPS","Arts plastiques","Musique","Technologie","Autre"];
+  const child = cfg.children[childIdx];
+  const scheduleKey = `schedule_child${child?.id||0}_day${dayIdx}`;
+  const slots = (cfg.schedules||{})[scheduleKey]||[];
+
+  function saveSlot() {
+    const currentSlots = (cfg.schedules||{})[scheduleKey]||[];
+    if(!prem && !editId && currentSlots.length>=1){onUpgrade();return;}
+    if(!form.subject){setErr(t.scheduleErrSubject||"Matière requise");return;}
+    if(!form.from||!form.to){setErr(t.scheduleErrTime||"Horaires requis");return;}
+    const newSlot = {id:editId||Date.now(),...form};
+    const all = cfg.schedules||{};
+    const existing = all[scheduleKey]||[];
+    let updated;
+    if(editId) updated = existing.map(s=>s.id===editId?newSlot:s);
+    else updated = [...existing,newSlot];
+    updated = updated.sort((a,b)=>a.from.localeCompare(b.from));
+    setCfg(c=>({...c,schedules:{...all,[scheduleKey]:updated}}));
+    setShowForm(false);setEditId(null);setForm({subject:"",room:"",building:"",from:"08:00",to:"09:00"});setErr("");
+  }
+  function deleteSlot(id) {
+    const all = cfg.schedules||{};
+    const updated = (all[scheduleKey]||[]).filter(s=>s.id!==id);
+    setCfg(c=>({...c,schedules:{...all,[scheduleKey]:updated}}));
+  }
+  function startEdit(slot) {
+    setForm({subject:slot.subject,teacher:slot.teacher||'',room:slot.room,building:slot.building,from:slot.from,to:slot.to});
+    setEditId(slot.id);setShowForm(true);
+  }
+  function cancelForm() {
+    setShowForm(false);setEditId(null);setForm({subject:"",room:"",building:"",from:"08:00",to:"09:00"});setErr("");
+  }
+
+  if(!cfg.children||cfg.children.length===0||!cfg.children[0]?.name) {
+    return (
+      <div>
+        {/* Header */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+          <div>
+            <div style={{fontSize:16,fontWeight:900}}>🎒 {t.scheduleTitle||"Emploi du temps"}</div>
+            <div style={{fontSize:11,color:C.mut}}>{t.scheduleWeeklySubtitle||"Planning hebdomadaire par enfant"}</div>
+          </div>
+          <InfoBubble C={C} tipKey={`duvia_scheduletip_${user?.id||"x"}`} title={t.scheduleTitle||"Emploi du temps"}>
+            {t.scheduleTipBody||"Renseignez ici l'emploi du temps de chaque enfant : matières, salles, horaires. Il sera visible par tous les membres de la famille, sauf les observateurs."}
+          </InfoBubble>
+        </div>
+        <div className="card" style={{textAlign:"center",padding:32,color:C.mut}}>
+          <div style={{fontSize:32,marginBottom:10}}>🎒</div>
+          <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>{t.scheduleNoChildren||"Configurez d'abord les enfants dans Configuration."}</div>
+          <button onClick={()=>{setMenuTab("config");setConfigStep(0);}} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"8px 16px",background:`${C.vio}18`,border:`1.5px solid ${C.vio}`,color:C.vio,fontWeight:800,fontSize:13,borderRadius:20,cursor:"pointer"}}>
+            ⚙️ {t.tabConfig||"Configuration"} › {t.stepId||"Identifiants"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fi">
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+        <div>
+          <div style={{fontSize:16,fontWeight:900}}>🎒 {t.scheduleTitle||"Emploi du temps"}</div>
+          <div style={{fontSize:11,color:C.mut}}>{t.scheduleWeeklySubtitle||"Planning hebdomadaire par enfant"}</div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          <InfoBubble C={C} tipKey={`duvia_scheduletip_${user?.id||"x"}`} title={t.scheduleTitle||"Emploi du temps"}>
+            {t.scheduleTipBody||"Renseignez ici l'emploi du temps de chaque enfant : matières, salles, horaires. Il sera visible par tous les membres de la famille, sauf les observateurs."}
+          </InfoBubble>
+        </div>
+      </div>
+
+      {/* Child selector */}
+      {cfg.children.length > 1 && (
+        <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+          {cfg.children.filter(c=>c.name).map((ch,i)=>(
+            <button key={ch.id} onClick={()=>{if(childReadOnly&&i!==ownChildIdx)return;setChildIdx(i);setShowForm(false);}}
+              style={{padding:"3px 10px",background:childIdx===i?C.vio:C.sur,color:childIdx===i?"#fff":childReadOnly&&i!==ownChildIdx?C.mut+"88":C.mut,border:`1.5px solid ${childIdx===i?C.vio:C.bor}`,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:5,opacity:childReadOnly&&i!==ownChildIdx?0.5:1}}>
+              <span style={{fontSize:16,flexShrink:0}}>{ch.avatar||"🧒"}</span>{ch.name}
+              {childReadOnly&&i!==ownChildIdx&&<span style={{fontSize:10}}>🔒</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {cfg.children.filter(c=>c.name).length>0 && (
+        <div style={{marginBottom:8,fontSize:12,color:C.txt,display:"flex",alignItems:"center",gap:5}}>
+          <span style={{fontSize:15}}>{cfg.children[childIdx]?.avatar||"🧒"}</span>
+          <span style={{fontWeight:800,color:C.vio}}>{cfg.children[childIdx]?.name}</span>
+        </div>
+      )}
+
+      {/* Day selector */}
+      <div style={{display:"flex",gap:6,marginBottom:16}}>
+        {dayNames.map((d,i)=>{
+          const k=`schedule_child${cfg.children[childIdx]?.id||0}_day${i}`;
+          const count=(cfg.schedules||{})[k]?.length||0;
+          return (
+            <button key={i} onClick={()=>{setDayIdx(i);setShowForm(false);}} style={{flex:1,padding:"8px 4px",background:dayIdx===i?C.vio:C.sur,color:dayIdx===i?"#fff":C.mut,border:`1.5px solid ${dayIdx===i?C.vio:C.bor}`,borderRadius:10,fontSize:10,fontWeight:800,display:"flex",flexDirection:"column",alignItems:"center",gap:2,position:"relative"}}>
+              <span style={{fontSize:13}}>{dayShort[i]}</span>
+              <span style={{fontSize:8}}>{d.slice(0,3)}</span>
+              {count>0&&<span style={{position:"absolute",top:-4,right:-4,background:dayIdx===i?C.grn:C.vio,borderRadius:"50%",width:14,height:14,fontSize:8,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800}}>{count}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Freemium banner — 1 cours/jour max */}
+      {!prem && !childReadOnly && (
+        <div onClick={onUpgrade} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",marginBottom:14,background:`${C.vio}10`,border:`1.5px dashed ${C.vio}55`,borderRadius:14,cursor:"pointer"}}>
+          <span style={{fontSize:20,flexShrink:0}}>🔒</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:12,fontWeight:800,color:C.vio}}>Cours illimités — Premium</div>
+            <div style={{fontSize:11,color:C.mut,marginTop:1}}>En gratuit : 1 cours par jour. Passez en Premium pour en ajouter autant que vous voulez.</div>
+          </div>
+          <div style={{flexShrink:0,padding:"5px 10px",background:`${C.vio}22`,color:C.vio,borderRadius:8,fontSize:11,fontWeight:800}}>⭐ Premium</div>
+        </div>
+      )}
+
+      {/* Day view */}
+      <div style={{marginBottom:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div style={{fontSize:13,fontWeight:800,color:C.txt}}>{dayNames[dayIdx]}</div>
+          {!showForm && (!childReadOnly || childIdx===ownChildIdx) && (
+            <button onClick={()=>{
+              const currentSlots = (cfg.schedules||{})[scheduleKey]||[];
+              if(!prem && currentSlots.length>=1){return;}
+              setShowForm(true);setEditId(null);setForm({subject:"",room:"",building:"",from:"08:00",to:"09:00"});
+            }} disabled={!prem && slots.length>=1}
+              style={{padding:"7px 14px",background:(!prem&&slots.length>=1)?C.sur:`linear-gradient(135deg,${C.vio},${C.blu})`,color:(!prem&&slots.length>=1)?C.mut:"#fff",fontSize:12,fontWeight:800,opacity:(!prem&&slots.length>=1)?0.6:1,cursor:(!prem&&slots.length>=1)?"not-allowed":"pointer"}}>
+              {(!prem&&slots.length>=1) ? "🔒 + Ajouter" : (t.scheduleAddSlot||"+ Ajouter")}
+            </button>
+          )}
+        </div>
+
+        {/* Timeline */}
+        {slots.length===0 && !showForm && (
+          <div style={{textAlign:"center",padding:"28px 0",color:C.mut,fontSize:13}}>
+            <div style={{fontSize:28,marginBottom:8}}>📭</div>
+            {t.scheduleNoSlots||"Aucun cours ce jour-là."}
+          </div>
+        )}
+
+        {slots.map((slot,si)=>{
+          const color=subjColor(slot.subject);
+          return (
+            <div key={slot.id} style={{display:"flex",gap:12,marginBottom:10,alignItems:"stretch"}}>
+              {/* Time column */}
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",minWidth:46}}>
+                <div style={{fontSize:11,fontWeight:800,color:C.mut}}>{slot.from}</div>
+                <div style={{flex:1,width:2,background:`${color}55`,margin:"3px 0"}}></div>
+                <div style={{fontSize:11,fontWeight:800,color:C.mut}}>{slot.to}</div>
+              </div>
+              {/* Card */}
+              <div style={{flex:1,background:C.card,border:`1.5px solid ${C.bor}`,borderLeft:`4px solid ${color}`,borderRadius:"0 12px 12px 0",padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                <div style={{flex:1}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                    <span style={{background:`${color}22`,color:color,borderRadius:6,padding:"2px 8px",fontSize:12,fontWeight:800}}>{slot.subject}</span>
+                  </div>
+                  {slot.teacher&&<div style={{fontSize:11,color:C.mut,marginBottom:2}}>👤 <span style={{color:C.txt,fontWeight:600}}>{slot.teacher}</span></div>}
+                  <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                    {slot.room && (
+                      <div style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:C.mut}}>
+                        <span>🚪</span>
+                        <span style={{fontWeight:700,color:C.txt}}>{slot.room}</span>
+                      </div>
+                    )}
+                    {slot.building && (
+                      <div style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:C.mut}}>
+                        <span>🏫</span>
+                        <span style={{fontWeight:700,color:C.txt}}>{slot.building}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:6,flexShrink:0}}>
+                  {(!childReadOnly || childIdx===ownChildIdx) && (
+                    <>
+                      <button onClick={()=>startEdit(slot)} style={{padding:"5px 9px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:11}}>{t.scheduleEdit||"✎"}</button>
+                      <button onClick={()=>deleteSlot(slot.id)} style={{padding:"5px 9px",background:`${C.red}18`,color:C.red,border:`1.5px solid ${C.red}44`,fontSize:11}}>✕</button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Add/Edit form */}
+      {showForm && (
+        <div className="card fi" style={{borderColor:C.vio,marginBottom:14}}>
+          <div style={{fontSize:12,fontWeight:800,color:C.vio,marginBottom:14,letterSpacing:".06em",textTransform:"uppercase"}}>{editId?(t.scheduleEditTitle||"Modifier"):(t.scheduleAddTitle||"Nouveau cours")}</div>
+          {err&&<div style={{background:`${C.red}22`,borderRadius:8,padding:"7px 12px",marginBottom:10,fontSize:12,color:C.red}}>{err}</div>}
+
+          {/* Subject */}
+          <div className="field">
+            <label className="lbl">{t.scheduleSubject||"Matière"}</label>
+            <input value={form.subject} onChange={e=>setForm(f=>({...f,subject:e.target.value}))} placeholder={t.schedulePlaceholderSubject||"ex: Mathématiques, EPS…"} />
+          </div>
+
+          {/* Teacher */}
+          <div className="field">
+            <label className="lbl">👤 {t.scheduleTeacher||"Professeur"}</label>
+            <input value={form.teacher||""} onChange={e=>setForm(f=>({...f,teacher:e.target.value}))} placeholder={t.schedulePlaceholderTeacher||"ex: M. Dupont"} />
+          </div>
+
+          {/* Times */}
+          <div className="row" style={{marginBottom:14}}>
+            <div style={{flex:1}}>
+              <label className="lbl">{t.scheduleFrom||"De"}</label>
+              <input type="time" value={form.from} onChange={e=>setForm(f=>({...f,from:e.target.value}))} />
+            </div>
+            <div style={{flex:1}}>
+              <label className="lbl">{t.scheduleTo||"À"}</label>
+              <input type="time" value={form.to} onChange={e=>setForm(f=>({...f,to:e.target.value}))} />
+            </div>
+          </div>
+
+          {/* Room + Building */}
+          <div className="row" style={{marginBottom:16}}>
+            <div style={{flex:1}}>
+              <label className="lbl">🚪 {t.scheduleRoom||"Salle"}</label>
+              <input value={form.room} onChange={e=>setForm(f=>({...f,room:e.target.value}))} placeholder={t.schedulePlaceholderRoom||"ex: 204"} />
+            </div>
+            <div style={{flex:1}}>
+              <label className="lbl">🏫 {t.scheduleBuilding||"Bâtiment"}</label>
+              <input value={form.building} onChange={e=>setForm(f=>({...f,building:e.target.value}))} placeholder={t.schedulePlaceholderBuilding||"ex: Bât. A"} />
+            </div>
+          </div>
+
+          {/* Preview chip */}
+          {form.subject && (
+            <div style={{marginBottom:14,display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:C.sur,borderRadius:10,flexWrap:"wrap"}}>
+              <span style={{background:`${subjColor(form.subject)}22`,color:subjColor(form.subject),borderRadius:6,padding:"2px 8px",fontSize:12,fontWeight:800}}>{form.subject}</span>
+              {form.from&&form.to&&<span style={{fontSize:11,color:C.mut}}>{form.from}–{form.to}</span>}
+              {form.teacher&&<span style={{fontSize:11,color:C.mut}}>👤 {form.teacher}</span>}
+              {form.room&&<span style={{fontSize:11,color:C.mut}}>🚪 {form.room}</span>}
+              {form.building&&<span style={{fontSize:11,color:C.mut}}>🏫 {form.building}</span>}
+            </div>
+          )}
+
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={saveSlot} style={{flex:1,padding:"10px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:14,fontWeight:800}}>
+              {t.scheduleSave||"Enregistrer"}
+            </button>
+            <button onClick={cancelForm} style={{padding:"10px 16px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13}}>
+              {t.scheduleCancel||"Annuler"}
+            </button>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+// ─── CONTACTS TAB ─────────────────────────────────────────────────────────────
+const CAT_ICONS = {
+  parents:"👨‍👩‍👧",observers:"👁️",school:"🏫",health:"🏥",other:"📋"
+};
+const CAT_COLORS_MAP = {
+  parents:"blu",observers:"ora",school:"grn",health:"red",other:"mut"
+};
+
+// ─── EMERGENCY NUMBERS BY COUNTRY ─────────────────────────────────────────────
+const EMERGENCY_NUMBERS = {
+  FR:[
+    {name:"🚨 Secours — Numéro Européen", phone:"112"},
+    {name:"🚒 Pompiers",                   phone:"18"},
+    {name:"🚑 SAMU",                       phone:"15"},
+    {name:"👮 Police / Gendarmerie",        phone:"17"},
+    {name:"🧏 Urgences sourds/muets (SMS)", phone:"114"},
+  ],
+  BE:[
+    {name:"🚨 Secours — Numéro Européen",  phone:"112"},
+    {name:"🚒 Pompiers",                   phone:"100"},
+    {name:"👮 Police",                     phone:"101"},
+  ],
+  CH:[
+    {name:"🚨 Secours — Numéro Européen",  phone:"112"},
+    {name:"🚒 Pompiers",                   phone:"118"},
+    {name:"🚑 Ambulance",                  phone:"144"},
+    {name:"👮 Police",                     phone:"117"},
+  ],
+  LU:[
+    {name:"🚨 Secours — Numéro Européen",  phone:"112"},
+    {name:"🚒 Pompiers / Ambulance",       phone:"112"},
+    {name:"👮 Police",                     phone:"113"},
+  ],
+  DE:[
+    {name:"🚨 Notruf — Europaweite Nummer",phone:"112"},
+    {name:"👮 Polizei",                    phone:"110"},
+  ],
+  AT:[
+    {name:"🚨 Notruf — Europaweite Nummer",phone:"112"},
+    {name:"🚒 Feuerwehr",                  phone:"122"},
+    {name:"🚑 Rettung",                    phone:"144"},
+    {name:"👮 Polizei",                    phone:"133"},
+  ],
+  NL:[
+    {name:"🚨 Noodhulp — Europees nummer", phone:"112"},
+  ],
+  ES:[
+    {name:"🚨 Emergencias — Número Europeo",phone:"112"},
+    {name:"👮 Policía Nacional",            phone:"091"},
+    {name:"🚒 Bomberos",                   phone:"080"},
+    {name:"🚑 Emergencias médicas",        phone:"061"},
+  ],
+  PT:[
+    {name:"🚨 Emergência — Número Europeu", phone:"112"},
+  ],
+  IT:[
+    {name:"🚨 Emergenze — Numero Europeo",  phone:"112"},
+    {name:"🚒 Vigili del fuoco",            phone:"115"},
+    {name:"🚑 Ambulanza",                  phone:"118"},
+    {name:"👮 Carabinieri",                phone:"112"},
+    {name:"👮 Polizia",                    phone:"113"},
+  ],
+  GB:[
+    {name:"🚨 Emergency",                  phone:"999"},
+    {name:"🚨 Emergency (mobile/EU)",      phone:"112"},
+    {name:"📞 Non-emergency police",       phone:"101"},
+    {name:"🏥 NHS non-emergency",          phone:"111"},
+  ],
+  PL:[
+    {name:"🚨 Ratownictwo — Numer Europejski",phone:"112"},
+    {name:"🚒 Straż pożarna",              phone:"998"},
+    {name:"🚑 Pogotowie",                  phone:"999"},
+    {name:"👮 Policja",                    phone:"997"},
+  ],
+  CZ:[
+    {name:"🚨 Záchranná — Evropské číslo", phone:"112"},
+    {name:"🚒 Hasiči",                     phone:"150"},
+    {name:"🚑 Záchranná",                  phone:"155"},
+    {name:"👮 Policie",                    phone:"158"},
+  ],
+  SK:[
+    {name:"🚨 Záchranná — Európske číslo", phone:"112"},
+    {name:"🚑 Záchranná",                  phone:"155"},
+    {name:"👮 Polícia",                    phone:"158"},
+  ],
+  HR:[
+    {name:"🚨 Hitne službe — Europski broj",phone:"112"},
+    {name:"🚒 Vatrogasci",                 phone:"193"},
+    {name:"🚑 Hitna pomoć",                phone:"194"},
+    {name:"👮 Policija",                   phone:"192"},
+  ],
+  CA:[
+    {name:"🚨 Emergency",                  phone:"911"},
+  ],
+};
+
+function ContactsTab({readOnly,addOnly,prem: premProp}) {
+  const {C,t,cfg,setCfg,prem: ctxPrem,onUpgrade,setActivity,user,addRefAction} = useApp();
+  const prem = premProp !== undefined ? premProp : ctxPrem;
+  // addOnly: child can add contacts but not edit/delete
+  const canAdd = !readOnly;
+  const canDelete = !readOnly && !addOnly;
+  const canEdit = !readOnly && !addOnly;
+  const [showForm,setShowForm] = useState(false);
+  const [editId,setEditId] = useState(null);
+  const [form,setForm] = useState({name:"",phone:"",note:"",cat:"other"});
+  const [err,setErr] = useState("");
+  const [filter,setFilter] = useState("all");
+  const [confirmDel,setConfirmDel] = useState(null); // contact object to confirm delete
+
+  // Build auto-contacts from parents & observers in cfg
+  const autoContacts = [];
+  (cfg.parents||[]).filter(p=>p.name).forEach(p=>{
+    autoContacts.push({id:`auto_parent_${p.id}`,name:p.name,phone:p.phone||"",note:t.roleParent||"Parent",cat:"parents",auto:true,color:p.color,avatar:p.avatar});
+  });
+  // Children with phone
+  (cfg.children||[]).filter(ch=>ch.name).forEach(ch=>{
+    if(ch.phone) autoContacts.push({id:`auto_child_${ch.id}`,name:ch.name,phone:ch.phone,note:t.contactsChild||"Enfant",cat:"other",auto:true,avatar:ch.avatar});
+  });
+  (cfg.observers||[]).forEach((o,i)=>{
+    autoContacts.push({id:`auto_obs_${i}`,name:o.name||o.email,phone:o.phone||"",note:o.relation||t.roleObs||"Observateur",cat:"observers",auto:true});
+  });
+
+  // Emergency numbers from country config
+  const country = cfg.country || "FR";
+  const emergencyNums = (EMERGENCY_NUMBERS[country] || []).map((e,i)=>({
+    id:`auto_emergency_${i}`,name:e.name,phone:e.phone,note:"",cat:"emergency",auto:true,emergency:true
+  }));
+
+  const customContacts = cfg.contacts || [];
+
+  // Default contacts seeded on first render if none exist
+  const allContacts = [...emergencyNums, ...autoContacts, ...customContacts];
+
+  const CATS = [
+    {key:"all",label:t.contactsCatAll||"🔍 Tous"},
+    {key:"emergency",label:t.contactsCatEmergency||"🆘 Urgences"},
+    {key:"parents",label:t.contactsCatParents||"👨‍👩‍👧 Parents"},
+    {key:"observers",label:t.contactsCatObservers||"👁️ Observateurs"},
+    {key:"school",label:t.contactsCatSchool||"🏫 École"},
+    {key:"health",label:t.contactsCatHealth||"🏥 Santé"},
+    {key:"other",label:t.contactsCatOther||"📋 Autres"},
+  ];
+
+  const filtered = filter==="all" ? allContacts : allContacts.filter(c=>c.cat===filter);
+
+  // Group by cat for display
+  const groups = {};
+  filtered.forEach(c=>{
+    if(!groups[c.cat]) groups[c.cat]=[];
+    groups[c.cat].push(c);
+  });
+
+  function catColor(cat) {
+    const map = {emergency:C.red,parents:C.blu,observers:C.ora,school:C.grn,health:C.red,other:C.mut};
+    return map[cat]||C.mut;
+  }
+  function catLabel(cat) {
+    const map = {emergency:t.contactsCatEmergency||"🆘 Urgences",parents:t.contactsCatParents,observers:t.contactsCatObservers,school:t.contactsCatSchool,health:t.contactsCatHealth,other:t.contactsCatOther};
+    return (map[cat]||cat).replace(/^[^\w🆘]+/,"");
+  }
+
+  function saveContact() {
+    if(!prem){onUpgrade();return;}
+    if(!form.name.trim()){setErr(t.contactsName||"Nom requis");return;}
+    const entry = {id:editId||Date.now(), name:form.name.trim(), phone:form.phone.trim(), note:form.note.trim(), cat:form.cat};
+    const existing = cfg.contacts||[];
+    const updated = editId ? existing.map(c=>c.id===editId?entry:c) : [...existing,entry];
+    setCfg(c=>({...c,contacts:updated}));
+    if(!editId){ setActivity(a=>({...a,contacts:{ts:new Date().toISOString(),by:String(user?.id||"")}})); addRefAction("ADD_CONTACT"); }
+    cancelForm();
+  }
+  function deleteContact(id) {
+    setCfg(c=>({...c,contacts:(c.contacts||[]).filter(x=>x.id!==id)}));
+    setConfirmDel(null);
+  }
+  function startEdit(contact) {
+    setForm({name:contact.name,phone:contact.phone||"",note:contact.note||"",cat:contact.cat});
+    setEditId(contact.id);setShowForm(true);
+  }
+  function cancelForm() {
+    setShowForm(false);setEditId(null);setForm({name:"",phone:"",note:"",cat:"other"});setErr("");
+  }
+
+  const catOrder = ["emergency","parents","observers","school","health","other"];
+  const sortedGroups = catOrder.filter(k=>groups[k]);
+
+  return (
+    <div className="fi">
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+        <div>
+          <div style={{fontSize:16,fontWeight:900}}>📞 {t.contactsTitle||"Répertoire"}</div>
+          <div style={{fontSize:11,color:C.mut}}>{t.contactsSubtitle||"Numéros utiles partagés avec toute la famille"}</div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          <InfoBubble C={C} tipKey={`duvia_contactstip_${user?.id||"x"}`} title={t.contactsTitle||"Répertoire"}>
+            {t.contactsTipBody||"Retrouvez ici les numéros utiles de la famille. Ce répertoire est visible par tous les membres de la famille."}
+          </InfoBubble>
+        </div>
+      </div>
+
+      {/* Category filter */}
+      <div style={{display:"flex",gap:5,marginBottom:14,overflowX:"auto",paddingBottom:4}}>
+        {CATS.map(cat=>(
+          <button key={cat.key} onClick={()=>setFilter(cat.key)} style={{whiteSpace:"nowrap",padding:"5px 11px",background:filter===cat.key?C.vio:C.sur,color:filter===cat.key?"#fff":C.mut,border:`1.5px solid ${filter===cat.key?C.vio:C.bor}`,borderRadius:20,fontSize:11,fontWeight:700,flexShrink:0}}>
+            {cat.key==="all"?cat.label:cat.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Add button (not for readOnly) */}
+      {canAdd && !showForm && (
+        <button onClick={()=>{if(!prem){onUpgrade();return;}setShowForm(true);setEditId(null);setForm({name:"",phone:"",note:"",cat:"other"});}} style={{width:"100%",padding:"11px",background:prem?`linear-gradient(135deg,${C.grn},${C.blu})`:`${C.ora}22`,color:prem?"#fff":C.ora,border:prem?"none":`1.5px solid ${C.ora}`,fontSize:13,fontWeight:800,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+          <span style={{fontSize:16}}>{prem?"":"🔒"}</span> {prem?((t.contactsAdd||"Ajouter un contact").replace(/^\+\s*/,"")):`${t.lockSection} — ${t.upgradeCTA}`}
+        </button>
+      )}
+
+      {/* Add/Edit form */}
+      {showForm && canAdd && prem && (
+        <div className="card fi" style={{borderColor:C.grn,marginBottom:16}}>
+          <div style={{fontSize:12,fontWeight:800,color:C.grn,marginBottom:14,letterSpacing:".06em",textTransform:"uppercase"}}>
+            {editId?(t.contactsEditTitle||"Modifier"):(t.contactsAddTitle||"Nouveau contact")}
+          </div>
+          {err&&<div style={{background:`${C.red}22`,borderRadius:8,padding:"7px 12px",marginBottom:10,fontSize:12,color:C.red}}>{err}</div>}
+
+          {/* Category */}
+          <div className="field">
+            <label className="lbl">{t.contactsCatLabel||"Catégorie"}</label>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {CATS.filter(c=>c.key!=="all" && c.key!=="emergency").map(cat=>(
+                <button key={cat.key} onClick={()=>setForm(f=>({...f,cat:cat.key}))} style={{padding:"5px 11px",background:form.cat===cat.key?catColor(cat.key):C.sur,color:form.cat===cat.key?"#fff":C.mut,border:`1.5px solid ${form.cat===cat.key?catColor(cat.key):C.bor}`,borderRadius:20,fontSize:11,fontWeight:700}}>
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Name */}
+          <div className="field">
+            <label className="lbl">{t.contactsName||"Nom / Rôle"}</label>
+            <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder={t.contactsPlaceholderName||"ex: Dr. Martin, École Jean Moulin…"} />
+          </div>
+
+          {/* Phone */}
+          <div className="field">
+            <label className="lbl">📞 {t.contactsPhone||"Téléphone"}</label>
+            <input type="tel" value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} />
+          </div>
+
+          {/* Note */}
+          <div className="field">
+            <label className="lbl">💬 {t.contactsNote||"Note (optionnel)"}</label>
+            <input value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))} placeholder={t.contactsPlaceholderNote||"ex: Urgences, cabinet 3ème étage…"} />
+          </div>
+
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={saveContact} style={{flex:1,padding:"10px",background:`linear-gradient(135deg,${C.grn},${C.blu})`,color:"#fff",fontSize:14,fontWeight:800}}>
+              {t.contactsSave||"Enregistrer"}
+            </button>
+            <button onClick={cancelForm} style={{padding:"10px 16px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13}}>
+              {t.contactsCancel||"Annuler"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {allContacts.length===0 && (
+        <div style={{textAlign:"center",padding:"32px 0",color:C.mut}}>
+          <div style={{fontSize:32,marginBottom:8}}>📭</div>
+          <div style={{fontSize:13}}>{t.contactsEmpty||"Aucun contact enregistré."}</div>
+        </div>
+      )}
+
+      {/* Contact groups */}
+      {sortedGroups.map(cat=>(
+        <div key={cat} style={{marginBottom:18}}>
+          {/* Category header */}
+          <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:10}}>
+            <div style={{width:4,height:18,borderRadius:2,background:catColor(cat)}}></div>
+            <span style={{fontSize:11,fontWeight:800,color:catColor(cat),letterSpacing:".08em",textTransform:"uppercase"}}>{catLabel(cat)}</span>
+            <span style={{fontSize:10,color:C.mut}}>· {groups[cat].length}</span>
+          </div>
+
+          {groups[cat].map(contact=>{
+            const color = contact.emergency ? C.red : (contact.color||catColor(contact.cat));
+            return (
+              <div key={contact.id} style={{display:"flex",alignItems:"center",gap:12,background:contact.emergency?`${C.red}0d`:C.card,border:`1.5px solid ${contact.emergency?C.red:C.bor}`,borderLeft:`4px solid ${color}`,borderRadius:"0 12px 12px 0",padding:"12px 14px",marginBottom:8}}>
+                {/* Avatar */}
+                <div style={{width:38,height:38,borderRadius:12,background:`${color}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0,border:`2px solid ${color}44`,overflow:"hidden"}}>
+                  {contact.avatar
+                    ? (typeof contact.avatar==="string" && contact.avatar.startsWith("http")
+                        ? <img src={contact.avatar} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} />
+                        : contact.avatar)
+                    : (contact.emergency?"🆘":contact.cat==="parents"?"👤":contact.cat==="observers"?"👁️":contact.cat==="school"?"🏫":contact.cat==="health"?"🏥":"📋")}
+                </div>
+                {/* Info */}
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:800,color:contact.emergency?C.red:C.txt,marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{contact.name}</div>
+                  {contact.phone ? (
+                    <a href={`tel:${contact.phone.replace(/\s/g,"")}`} style={{fontSize:contact.emergency?16:12,color:contact.emergency?C.red:C.blu,fontWeight:contact.emergency?900:700,textDecoration:"none",display:"flex",alignItems:"center",gap:4}}>
+                      📞 {contact.phone}
+                    </a>
+                  ) : (
+                    !contact.auto && <div style={{fontSize:11,color:C.mut}}>{t.contactsNoPhone||"— pas de numéro —"}</div>
+                  )}
+                  {contact.note && <div style={{fontSize:11,color:C.mut,marginTop:2}}>{contact.note}</div>}
+                </div>
+                {/* Actions */}
+                <div style={{display:"flex",gap:5,flexShrink:0}}>
+                  {contact.phone && (
+                    <a href={`tel:${contact.phone.replace(/\s/g,"")}`} style={{display:"flex",alignItems:"center",justifyContent:"center",width:contact.emergency?38:32,height:contact.emergency?38:32,borderRadius:10,background:contact.emergency?C.red:`${C.grn}22`,border:contact.emergency?"none":`1.5px solid ${C.grn}44`,textDecoration:"none",fontSize:14}}>
+                      {contact.emergency?<span style={{color:"#fff",fontWeight:900,fontSize:18}}>📞</span>:"📞"}
+                    </a>
+                  )}
+                  {canEdit && !contact.auto && prem && (
+                    <>
+                      <button onClick={()=>startEdit(contact)} style={{width:32,height:32,padding:0,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:10,fontSize:13}}>✎</button>
+                      <button onClick={()=>setConfirmDel(contact)} style={{width:32,height:32,padding:0,background:`${C.red}18`,color:C.red,border:`1.5px solid ${C.red}44`,borderRadius:10,fontSize:13}}>✕</button>
+                    </>
+                  )}
+                  {canAdd && !canEdit && !contact.auto && prem && (
+                    <div style={{fontSize:9,color:C.mut,padding:"3px 6px",background:C.sur,borderRadius:6,border:`1px solid ${C.bor}`}}>{t.contactsReadOnly||"Lecture"}</div>
+                  )}
+                  {canAdd && !readOnly && contact.auto && !contact.emergency && (
+                    <div style={{fontSize:9,color:C.mut,padding:"3px 6px",background:C.sur,borderRadius:6,border:`1px solid ${C.bor}`}}>{t.contactsAuto||"Auto"}</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+
+      {/* Confirmation suppression */}
+      {confirmDel && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.card,borderRadius:16,padding:24,maxWidth:320,width:"100%",textAlign:"center",border:`1.5px solid ${C.bor}`,boxShadow:"0 12px 40px rgba(0,0,0,.3)"}}>
+            <div style={{fontSize:36,marginBottom:10}}>🗑️</div>
+            <div style={{fontSize:15,fontWeight:800,marginBottom:6}}>{t.vaultConfirmDel||"Supprimer ce contact ?"}</div>
+            <div style={{fontSize:13,color:C.mut,marginBottom:4}}><strong style={{color:C.txt}}>{confirmDel.name}</strong></div>
+            {confirmDel.phone && (
+              <div style={{fontSize:12,color:C.mut,marginBottom:16}}>📞 {confirmDel.phone}</div>
+            )}
+            <div style={{display:"flex",gap:10,marginTop:18}}>
+              <button onClick={()=>setConfirmDel(null)} style={{flex:1,padding:"10px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontWeight:700,borderRadius:10,fontSize:13}}>
+                {t.vaultCancel||"Annuler"}
+              </button>
+              <button onClick={()=>deleteContact(confirmDel.id)} style={{flex:1,padding:"10px",background:C.red,color:"#fff",fontWeight:800,borderRadius:10,fontSize:13,border:"none"}}>
+                🗑 {t.vaultDelete||"Supprimer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+// ─── SPIN WHEEL ───────────────────────────────────────────────────────────────
+// Règles du tableau des lots (version 2.0)
+// ┌─────────────────────────────────────┬────────────┬──────────┬──────────────┐
+// │ LOT                                 │ Souscript. │ Autres   │ Achat        │
+// ├─────────────────────────────────────┼────────────┼──────────┼──────────────┤
+// │ Perdu                               │ 48,9 %     │ 50,0 %   │ —            │
+// │ 1 an offert                         │  0,1 %     │  0,0 %   │ —            │
+// │ 1 mois offert                       │  1,0 %     │  0,0 %   │ —            │
+// │ Thème Été 26 (21/06–23/07)          │ 20,0 %     │ 20,0 %   │ 0,49 €       │
+// │ Thème Jeu vidéo (permanent)         │ 10,0 %     │ 10,0 %   │ 0,29 €       │
+// │ Thème Licorne  (permanent)          │ 10,0 %     │ 10,0 %   │ 0,29 €       │
+// │ Thème Tennis France 26 (24/05–04/06)│  5,0 %     │  5,0 %   │ 0,99 €       │
+// │ Thème Coupe du Monde 26 (06/06–26/07│  5,0 %     │  5,0 %   │ 0,99 €       │
+// └─────────────────────────────────────┴────────────┴──────────┴──────────────┘
+// Fréquence : 7 jours (parents) · 2 jours (enfants/observateurs)
+// Permission : OUI pour tous les rôles
+// Si achat : devient permanent pour tous les thèmes
+
+const WHEEL_PRIZES = [
+  { id:"year",    label:"1 AN OFFERT",          labelKey:"wheelSegYear",    emoji:"🏆", color:"#FFD700", type:"payment",
+    price:null,   validStart:null, validEnd:null },
+  { id:"month",   label:"1 MOIS OFFERT",         labelKey:"wheelSegMonth",   emoji:"🎁", color:"#ff6bb5", type:"payment",
+    price:null,   validStart:null, validEnd:null },
+  { id:"theme",   label:"THÈME ÉTÉ 🌴",          labelKey:"wheelSegTheme",   emoji:"🌴", color:"#3ecf8e", type:"reward",
+    price:0.49,   validStart:SUMMER_START, validEnd:SUMMER_END },
+  { id:"video",   label:"THÈME JEU VIDÉO 🎮",    labelKey:"wheelSegVideo",   emoji:"🎮", color:"#7c6fcd", type:"reward",
+    price:0.29,   validStart:null, validEnd:null },
+  { id:"licorne", label:"THÈME LICORNE 🦄",       labelKey:"wheelSegLicorne", emoji:"🦄", color:"#ec4899", type:"reward",
+    price:0.29,   validStart:null, validEnd:null },
+  { id:"rg",      label:"THÈME TENNIS 🎾",        labelKey:"wheelSegRG",      emoji:"🎾", color:"#c2745a", type:"reward",
+    price:0.99,   validStart:RG_START, validEnd:RG_END },
+  { id:"wc",      label:"THÈME COUPE DU MONDE ⚽", labelKey:"wheelSegWC",     emoji:"⚽", color:"#2563eb", type:"reward",
+    price:0.99,   validStart:WC_START, validEnd:WC_END },
+  { id:"nothing", label:"PERDU",                  labelKey:"wheelSegNothing", emoji:"😅", color:"#9ca3af", type:"none",
+    price:null,   validStart:null, validEnd:null },
+];
+
+// Helper: is a seasonal prize currently active on the wheel?
+function isPrizeActive(p) {
+  if(!p.validStart) return true; // permanent
+  const n = new Date();
+  return n >= p.validStart && n <= p.validEnd;
+}
+
+// ─── PROBABILITÉS PAR RÔLE ───────────────────────────────────────────────────
+// "Souscripteur" = parent avec parentIdx === 0 (celui qui a souscrit l'abonnement)
+// "Autres" = autre parent, enfant, observateur
+const PROBS_SUBSCRIBER = { year:0.001, month:0.010, theme:0.200, video:0.100, licorne:0.100, rg:0.050, wc:0.050, nothing:0.489 };
+const PROBS_OTHERS     = { year:0.000, month:0.000, theme:0.200, video:0.100, licorne:0.100, rg:0.050, wc:0.050, nothing:0.500 };
+
+// 20 segments visuels : nothing×10, theme×4, video×2, licorne×2, rg×1, wc×1
+// year et month sont "virtuels" (pas de segment propre) → atterrissent sur rien/mois visuellement
+const P_NOTHING  = WHEEL_PRIZES[7]; // 😅
+const P_THEME    = WHEEL_PRIZES[2]; // 🌴
+const P_VIDEO    = WHEEL_PRIZES[3]; // 🎮
+const P_LICORNE  = WHEEL_PRIZES[4]; // 🦄
+const P_RG       = WHEEL_PRIZES[5]; // 🎾
+const P_WC       = WHEEL_PRIZES[6]; // ⚽
+const P_MONTH    = WHEEL_PRIZES[1]; // 🎁
+
+const WHEEL_SEGS = [
+  P_NOTHING,  // 0
+  P_THEME,    // 1
+  P_NOTHING,  // 2
+  P_VIDEO,    // 3
+  P_NOTHING,  // 4
+  P_THEME,    // 5
+  P_NOTHING,  // 6
+  P_LICORNE,  // 7
+  P_NOTHING,  // 8
+  P_THEME,    // 9
+  P_NOTHING,  // 10
+  P_RG,       // 11
+  P_NOTHING,  // 12
+  P_THEME,    // 13
+  P_NOTHING,  // 14
+  P_VIDEO,    // 15
+  P_WC,       // 16
+  P_LICORNE,  // 17
+  P_NOTHING,  // 18
+  P_NOTHING,  // 19
+];
+
+// Couleurs visuelles des segments (correspondant à WHEEL_SEGS)
+const WHEEL_SEG_COLORS = [
+  "#9ca3af","#3ecf8e","#9ca3af","#7c6fcd","#9ca3af","#3ecf8e",
+  "#9ca3af","#ec4899","#9ca3af","#3ecf8e","#9ca3af","#c2745a",
+  "#9ca3af","#3ecf8e","#9ca3af","#7c6fcd","#2563eb","#ec4899",
+  "#9ca3af","#9ca3af",
+];
+
+// Tirage pondéré avec prise en compte du rôle et des dates de validité
+function pickSegment(isSubscriber = true) {
+  const probs = isSubscriber ? PROBS_SUBSCRIBER : PROBS_OTHERS;
+
+  // Redistribue les probabilités des lots hors-période vers "nothing"
+  const active = { ...probs };
+  ["theme","rg","wc"].forEach(id=>{
+    const p = WHEEL_PRIZES.find(x=>x.id===id);
+    if(p && !isPrizeActive(p)) { active.nothing += active[id]; active[id] = 0; }
+  });
+
+  // Tirage
+  const r = Math.random(); let cum = 0;
+  let prize = WHEEL_PRIZES[7]; // défaut: perdu
+  for(const p of WHEEL_PRIZES) {
+    const prob = active[p.id] || 0;
+    cum += prob;
+    if(r < cum) { prize = p; break; }
+  }
+
+  // Trouver le segment visuel correspondant
+  const matchIdxs = WHEEL_SEGS.reduce((a,s,i)=>{ if(s.id===prize.id) a.push(i); return a; },[]);
+  let segIdx;
+  if(matchIdxs.length > 0) {
+    segIdx = matchIdxs[Math.floor(Math.random()*matchIdxs.length)];
+  } else {
+    // year → atterrit visuellement sur un segment "nothing" aléatoire
+    // month → atterrit visuellement sur un segment "nothing" aléatoire
+    const nothingIdxs = WHEEL_SEGS.reduce((a,s,i)=>{ if(s.id==="nothing") a.push(i); return a; },[]);
+    segIdx = nothingIdxs[Math.floor(Math.random()*nothingIdxs.length)];
+  }
+  return { segIdx, prize };
+}
+
+function WheelGame({ isPremium, isAdmin=false, restrictedRole=false, userId="", isSubscriber=true, isParent=true }) {
+  const {C,t,lang,sub,setSub} = useApp();
+  const [spinning, setSpinning] = useState(false);
+  const [deg, setDeg] = useState(0);
+  const [result, setResult] = useState(null);
+  const [showResult, setShowResult] = useState(false);
+  const [particles, setParticles] = useState([]);
+
+  const now = Date.now();
+  // Cooldown : 7 jours pour les parents, 2 jours pour enfants/observateurs
+  const cooldownMs = isParent ? 7*24*60*60*1000 : 2*24*60*60*1000;
+  const isAdminSub = isAdmin || sub._admin || false;
+  // ── lastSpin : clé dédiée résistante aux rechargements du sub ────────────
+  // duvia_spin_ts est une clé séparée, jamais écrasée par setSub()
+  const [spinTimestamps, setSpinTimestamps] = useLocalStorage("duvia_spin_ts", {});
+  const lastSpinByUser = useMemo(() => {
+    const fromSub = sub.lastSpinByUser || {};
+    // Fusionner sub (legacy) + spinTimestamps (nouvelle clé) → prend le plus récent
+    const merged = {...fromSub};
+    Object.entries(spinTimestamps).forEach(([uid, ts]) => {
+      if (!merged[uid] || ts > merged[uid]) merged[uid] = ts;
+    });
+    return merged;
+  }, [sub.lastSpinByUser, spinTimestamps]);
+  const lastSpin = lastSpinByUser[userId] || null;
+  const hasBonusSpin = (sub.pendingSpins||0) > 0;
+  const canSpin = isAdminSub || hasBonusSpin || !lastSpin || (now - new Date(lastSpin).getTime()) >= cooldownMs;
+  const nextSpinDate = lastSpin ? new Date(new Date(lastSpin).getTime()+cooldownMs) : null;
+  const hoursLeft = nextSpinDate ? Math.ceil((nextSpinDate.getTime()-now)/3600000) : 0;
+  const daysLeft  = nextSpinDate ? Math.ceil((nextSpinDate.getTime()-now)/86400000) : 0;
+  const showHours = hoursLeft <= 24;
+
+  const SEGS = WHEEL_SEGS;
+  const N = SEGS.length; // 20 segments
+  const segDeg = 360/N;
+
+  function spin() {
+    if(spinning || (!canSpin && !isAdminSub) || !isPremium) return;
+    const usingBonus = !isAdminSub && hasBonusSpin && lastSpin && (now - new Date(lastSpin).getTime()) < cooldownMs;
+    setShowResult(false); setResult(null); setParticles([]);
+
+    const { segIdx, prize } = pickSegment(isSubscriber);
+
+    const segCenter = segIdx * segDeg + segDeg / 2;
+    const targetMod = ((-segCenter) % 360 + 360) % 360;
+    const currentMod = ((deg % 360) + 360) % 360;
+    const delta = (targetMod - currentMod + 360) % 360;
+    const target = deg + 360 * 7 + (delta === 0 ? 360 : delta);
+
+    setSpinning(true);
+    const start = deg;
+    const dur = 4200;
+    const t0 = performance.now();
+    function frame(t) {
+      const p = Math.min((t-t0)/dur, 1);
+      const e = 1 - Math.pow(1-p, 4);
+      setDeg(start + (target-start)*e);
+      if(p < 1) { requestAnimationFrame(frame); }
+      else {
+        setDeg(start + (target-start));
+        setSpinning(false);
+        setResult(prize);
+        setShowResult(true);
+        if(!restrictedRole) {
+          const now_ts = new Date().toISOString();
+          setSpinTimestamps(h=>({...h,[userId]:now_ts}));
+          setSub(s=>({...s,
+            lastSpinByUser: { ...(s.lastSpinByUser||{}), [userId]: now_ts },
+            pendingSpins: usingBonus ? Math.max(0,(s.pendingSpins||0)-1) : (s.pendingSpins||0),
+            earnedTheme:   prize.id==="theme"   || s.earnedTheme,
+            earnedVideo:   prize.id==="video"   || s.earnedVideo,
+            earnedLicorne: prize.id==="licorne" || s.earnedLicorne,
+            earnedRG:      prize.id==="rg"      || s.earnedRG,
+            earnedWC:      prize.id==="wc"      || s.earnedWC,
+          }));
+        } else {
+          // Rôles restreints → on enregistre quand même le cooldown
+          const now_ts = new Date().toISOString();
+          setSpinTimestamps(h=>({...h,[userId]:now_ts}));
+          setSub(s=>({...s, lastSpinByUser: { ...(s.lastSpinByUser||{}), [userId]: now_ts }}));
+        }
+        if(prize.id!=="nothing") {
+          setParticles(Array.from({length:40},(_,i)=>({
+            id:i, x:50, y:50,
+            vx:(Math.random()-0.5)*120, vy:(Math.random()-0.8)*120,
+            color:[prize.color,"#FFD700","#ff6bb5","#4a9eff"][i%4],
+            size:Math.random()*6+3,
+          })));
+          setTimeout(()=>setParticles([]),2000);
+        }
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // SVG wheel
+  function segPath(i) {
+    const r = 110, cx=120, cy=120;
+    const a1 = (i*segDeg-90) * Math.PI/180;
+    const a2 = ((i+1)*segDeg-90) * Math.PI/180;
+    const x1=cx+r*Math.cos(a1), y1=cy+r*Math.sin(a1);
+    const x2=cx+r*Math.cos(a2), y2=cy+r*Math.sin(a2);
+    return `M${cx},${cy} L${x1},${y1} A${r},${r} 0 0,1 ${x2},${y2} Z`;
+  }
+  function emojiPos(i) {
+    const r=75, cx=120, cy=120;
+    const a = ((i+0.5)*segDeg-90)*Math.PI/180;
+    return { x:cx+r*Math.cos(a), y:cy+r*Math.sin(a) };
+  }
+
+  const segColors = WHEEL_SEG_COLORS;
+  const LOCALE = {fr:"fr-FR",en:"en-GB",de:"de-DE",es:"es-ES",pt:"pt-PT"}[lang] || "fr-FR";
+
+  return (
+    <div style={{textAlign:"center"}}>
+      {/* Title */}
+      <div style={{marginBottom:16}}>
+        <div style={{fontSize:22,fontWeight:900,background:"linear-gradient(135deg,#FFD700,#ff6bb5,#7c6fcd)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
+          {t.wheelTitle}
+        </div>
+        <div style={{fontSize:11,color:C.mut,marginTop:3}}>
+          {isAdmin
+            ? t.wheelAdminMode
+            : restrictedRole
+              ? `${t.wheelFunPrefix} ${isParent?t.unitDayAbbrevParent:t.unitDayAbbrevChild}`
+              : `${t.wheelNormalPrefix} ${isParent?t.cooldown7days:t.cooldown2days} ${t.wheelPremiumSuffix}`}
+        </div>
+      </div>
+
+      {/* Wheel */}
+      <div style={{position:"relative",display:"inline-block",marginBottom:16}}>
+        {/* Particles */}
+        {particles.map(p=>(
+          <div key={p.id} style={{
+            position:"absolute",
+            left:`calc(${p.x}% + ${p.vx*(1)}px)`,
+            top:`calc(${p.y}% + ${p.vy*(1)}px)`,
+            width:p.size,height:p.size,
+            background:p.color,
+            borderRadius:"50%",
+            pointerEvents:"none",
+            zIndex:20,
+            animation:"confettiFall 1.5s ease-out forwards",
+          }}/>
+        ))}
+        <style>{`
+          @keyframes confettiFall { from{opacity:1;transform:scale(1)} to{opacity:0;transform:scale(0.3) translateY(40px)} }
+          @keyframes popIn { from{transform:scale(0.4);opacity:0} to{transform:scale(1);opacity:1} }
+          @keyframes shimmer { 0%,100%{opacity:0.5} 50%{opacity:1} }
+        `}</style>
+
+        {/* Pointer */}
+        <div style={{position:"absolute",top:-18,left:"50%",transform:"translateX(-50%)",fontSize:26,zIndex:10,filter:"drop-shadow(0 2px 4px rgba(0,0,0,.4))"}}>▼</div>
+
+        {/* SVG Wheel */}
+        <svg width="240" height="240" viewBox="0 0 240 240"
+          style={{display:"block",transform:`rotate(${deg}deg)`,transition:spinning?"none":"none",
+            filter:"drop-shadow(0 8px 24px rgba(124,111,205,.4))",borderRadius:"50%"}}>
+          {/* Segments */}
+          {SEGS.map((seg,i)=>(
+            <g key={i}>
+              <path d={segPath(i)} fill={segColors[i]} stroke="white" strokeWidth="2"/>
+              <path d={segPath(i)} fill="rgba(255,255,255,0.1)" stroke="none"/>
+            </g>
+          ))}
+          {/* Emojis */}
+          {SEGS.map((seg,i)=>{
+            const pos=emojiPos(i);
+            return <text key={i} x={pos.x} y={pos.y} textAnchor="middle" dominantBaseline="middle"
+              fontSize="18" style={{userSelect:"none"}}>{seg.emoji}</text>;
+          })}
+          {/* Center */}
+          <circle cx="120" cy="120" r="24" fill="white" stroke="#7c6fcd" strokeWidth="3"/>
+          <text x="120" y="120" textAnchor="middle" dominantBaseline="middle" fontSize="16">✦</text>
+        </svg>
+      </div>
+
+      {/* Button */}
+      <div style={{marginBottom:14}}>
+        {!isPremium ? (
+          <div style={{padding:"11px 28px",background:`${C.vio}15`,border:`2px dashed ${C.vio}`,borderRadius:50,fontSize:13,fontWeight:800,color:C.vio,display:"inline-block"}}>
+            {t.wheelLockedPremium}
+          </div>
+        ) : canSpin ? (
+          <button onClick={spin} disabled={spinning} style={{
+            padding:"13px 36px",
+            background:spinning?"linear-gradient(135deg,#9b8ee0,#7ab5ff)":"linear-gradient(135deg,#FFD700,#ff9f43)",
+            color:"#fff",fontSize:16,fontWeight:900,borderRadius:50,
+            boxShadow:spinning?"none":"0 6px 20px rgba(255,215,0,.45)",
+            transform:spinning?"scale(0.97)":"scale(1)",transition:"all .2s",
+          }}>
+            {spinning ? t.wheelSpinning : t.wheelLaunch}
+          </button>
+        ) : (
+          <div style={{padding:"12px 20px",background:C.sur,borderRadius:14,border:`1.5px solid ${C.bor}`,display:"inline-block"}}>
+            <div style={{fontSize:12,color:C.mut,fontWeight:700}}>{t.wheelNextSpinIn}</div>
+            <div style={{fontSize:20,fontWeight:900,color:C.vio}}>
+              {showHours ? `${hoursLeft}${t.wheelHourSuffix}` : `${daysLeft} ${daysLeft>1?t.wheelDayPlural:t.wheelDaySingular}`}
+            </div>
+            <div style={{fontSize:10,color:C.mut}}>{t.wheelOnDatePrefix} {nextSpinDate?.toLocaleDateString(LOCALE,{weekday:"long",day:"numeric",month:"long"})}</div>
+          </div>
+        )}
+      </div>
+
+      {/* Result */}
+      {showResult && result && (
+        <div style={{background:result.id==="nothing"?C.sur:`${result.color}18`,border:`2.5px solid ${result.color}`,borderRadius:18,padding:"18px 16px",marginBottom:14,animation:"popIn .4s cubic-bezier(.34,1.56,.64,1)"}}>
+          <div style={{fontSize:44,marginBottom:6}}>{result.emoji}</div>
+          <div style={{fontSize:20,fontWeight:900,color:result.color,marginBottom:6}}>{t[result.labelKey]||result.label}</div>
+          <div style={{fontSize:12,color:C.mut,marginBottom:12,lineHeight:1.5}}>
+            {result.type==="payment" && t.wheelResultPayment}
+            {result.id==="theme" && (isSummerPeriod()?t.wheelResultThemeUnlocked:t.wheelResultThemeEarned)}
+            {result.id==="video" && t.wheelResultVideoUnlocked}
+            {result.id==="licorne" && t.wheelResultLicorneUnlocked}
+            {result.id==="rg" && (isRGPeriod()?t.wheelResultRGUnlocked:t.wheelResultRGEarned)}
+            {result.id==="wc" && (isWCPeriod()?t.wheelResultWCUnlocked:t.wheelResultWCEarned)}
+            {result.id==="nothing" && `${t.wheelResultNothingPrefix} ${isParent?t.cooldown7days:t.cooldown2days} ${t.wheelResultNothingSuffix}`}
+          </div>
+          <button onClick={()=>setShowResult(false)} style={{padding:"8px 22px",background:result.color,color:"#fff",fontSize:13,fontWeight:800,borderRadius:20}}>
+            {result.id==="nothing"?t.wheelOk:t.wheelGreat}
+          </button>
+        </div>
+      )}
+
+      {/* Prize table */}
+      <div style={{textAlign:"left",marginTop:8}}>
+        <div style={{fontSize:10,fontWeight:800,color:C.mut,letterSpacing:".08em",textTransform:"uppercase",marginBottom:8}}>{t.wheelPrizeTableTitle}</div>
+        {WHEEL_PRIZES.map(p=>{
+          const active = isPrizeActive(p);
+          return (
+            <div key={p.id} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"9px 10px",marginBottom:4,
+              background:p.type==="payment"?`${p.color}08`:C.sur,borderRadius:10,
+              border:`1.5px solid ${p.type==="payment"?p.color+"44":active?C.bor:C.bor+"44"}`,
+              opacity:active?1:0.5}}>
+              <div style={{width:30,height:30,borderRadius:8,background:`${p.color}22`,border:`2px solid ${p.color}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0,marginTop:1}}>{p.emoji}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:12,fontWeight:800,color:p.color}}>{t[p.labelKey]||p.label}</div>
+                {p.type==="payment" ? (
+                  <div style={{fontSize:9,color:C.mut,marginTop:2}}>{t.wheelPrizePaymentInfo}</div>
+                ) : p.type==="reward" ? (
+                  <div style={{fontSize:9,color:C.mut,marginTop:2}}>
+                    {p.price&&<span style={{background:`${p.color}15`,color:p.color,borderRadius:5,padding:"1px 5px",fontWeight:700,marginRight:5}}>{t.wheelBuyPrefix} {p.price}{t.wheelBuyPermanentSuffix}</span>}
+                    {p.validStart
+                      ? <span>{p.validStart.toLocaleDateString(LOCALE,{day:"2-digit",month:"2-digit"})} → {p.validEnd.toLocaleDateString(LOCALE,{day:"2-digit",month:"2-digit"})}{!active?t.wheelAvailableByPurchase:""}</span>
+                      : <span>{t.wheelPermanent}</span>}
+                  </div>
+                ) : (
+                  <div style={{fontSize:9,color:C.mut,marginTop:2}}>{t.wheelTryAgainSoon}</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Composant réutilisable : ligne de lot gagné ──────────────────────────────
+function EarnedPrizeRow({ emoji, label, color, info, status, gift=false }) {
+  const {C,t} = useApp();
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px",background:C.sur,borderRadius:10,
+      border:`1.5px solid ${gift?color+"55":C.bor}`}}>
+      <div style={{width:36,height:36,borderRadius:10,background:`${color}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0,position:"relative"}}>
+        {emoji}
+        {gift && <span style={{position:"absolute",top:-4,right:-4,fontSize:11}}>🎁</span>}
+      </div>
+      <div style={{flex:1}}>
+        <div style={{fontSize:13,fontWeight:800,color}}>{label}</div>
+        <div style={{fontSize:11,color:C.mut}}>{gift?t.wheelGiftFromAdult:""}{info}</div>
+      </div>
+      <span style={{marginLeft:"auto",background:`${color}22`,color,borderRadius:8,padding:"2px 8px",fontSize:10,fontWeight:800,flexShrink:0}}>{status}</span>
+    </div>
+  );
+}
+
+// ─── CADEAU : achat de lots pour les enfants ──────────────────────────────────
+// Lots achetables (hors prizes d'abonnement réservés au souscripteur)
+const PURCHASABLE_PRIZES = [
+  { id:"theme",   label:"Thème Été 26",             labelKey:"shopTheme",   emoji:"🌴", color:"#3ecf8e", price:0.49, validStart:SUMMER_START, validEnd:SUMMER_END  },
+  { id:"video",   label:"Thème Jeu Vidéo",           labelKey:"shopVideo",   emoji:"🎮", color:"#7c6fcd", price:0.29, validStart:null, validEnd:null               },
+  { id:"licorne", label:"Thème Licorne",             labelKey:"shopLicorne", emoji:"🦄", color:"#ec4899", price:0.29, validStart:null, validEnd:null               },
+  { id:"rg",      label:"Thème Tennis France 26",    labelKey:"shopRG",      emoji:"🎾", color:"#c2745a", price:0.99, validStart:RG_START,    validEnd:RG_END       },
+  { id:"wc",      label:"Thème Coupe du Monde 26",   labelKey:"shopWC",      emoji:"⚽", color:"#2563eb", price:0.99, validStart:WC_START,    validEnd:WC_END       },
+];
+
+function GiftShopSection() {
+  const {C, t, lang, sub, setSub, users, user} = useApp();
+  const LOCALE = {fr:"fr-FR",en:"en-GB",de:"de-DE",es:"es-ES",pt:"pt-PT"}[lang] || "fr-FR";
+  const [step, setStep]     = useState("idle"); // idle | selectTarget | selectChild | confirm | success
+  const [selPrize, setSelPrize] = useState(null);
+  const [selChild, setSelChild] = useState(null);
+  const [forSelf, setForSelf]   = useState(false);
+  const [paying, setPaying]     = useState(false);
+
+  const childUsers   = (users||[]).filter(u => u.role === "child");
+  const giftedPrizes = sub.giftedPrizes || {};
+
+  function prizeAlreadyGifted(prizeId, childId) {
+    return !!(giftedPrizes[String(childId)]?.[prizeId]);
+  }
+  function prizeOwnedBySelf(prizeId) {
+    return !!(sub[`earned_${prizeId}`] || sub[`earnedSelf_${prizeId}`]);
+  }
+
+  function startBuy(prize) {
+    setSelPrize(prize);
+    setSelChild(null);
+    setForSelf(false);
+    setStep("selectTarget");
+  }
+
+  function confirmPurchase() {
+    if(!selPrize) return;
+    setPaying(true);
+    setTimeout(() => {
+      if(forSelf) {
+        setSub(s => ({ ...s, [`earnedSelf_${selPrize.id}`]: true }));
+      } else {
+        if(!selChild) return;
+        const cid = String(selChild.id);
+        setSub(s => ({
+          ...s,
+          giftedPrizes: {
+            ...(s.giftedPrizes||{}),
+            [cid]: { ...(s.giftedPrizes?.[cid]||{}), [selPrize.id]: true },
+          }
+        }));
+      }
+      setPaying(false);
+      setStep("success");
+    }, 1400);
+  }
+
+  function reset() { setStep("idle"); setSelPrize(null); setSelChild(null); setForSelf(false); }
+
+  return (
+    <div className="card" style={{marginBottom:14,border:`1.5px solid ${C.vio}33`}}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+        <div style={{width:32,height:32,borderRadius:10,background:"linear-gradient(135deg,#FFD700,#ff9f43)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:17}}>🎨</div>
+        <div>
+          <div style={{fontSize:14,fontWeight:900,color:C.txt}}>{t.giftShopTitle}</div>
+          <div style={{fontSize:10,color:C.mut}}>{t.giftShopSubtitle}</div>
+        </div>
+      </div>
+
+      {/* STEP: idle — grille des lots */}
+      {step === "idle" && (
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {PURCHASABLE_PRIZES.map(p => {
+            const ownedSelf   = prizeOwnedBySelf(p.id);
+            const allGifted   = childUsers.length > 0 && childUsers.every(ch => prizeAlreadyGifted(p.id, ch.id));
+            const fullyOwned  = ownedSelf && (childUsers.length === 0 || allGifted);
+            return (
+              <button key={p.id} onClick={()=>!fullyOwned&&startBuy(p)}
+                style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",
+                  background:fullyOwned?C.sur:`${p.color}10`,borderRadius:12,
+                  border:`1.5px solid ${fullyOwned?C.bor:p.color+"44"}`,
+                  cursor:fullyOwned?"default":"pointer",textAlign:"left"}}>
+                <div style={{width:36,height:36,borderRadius:10,background:`${p.color}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{p.emoji}</div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,fontWeight:800,color:fullyOwned?C.mut:p.color}}>{t[p.labelKey]||p.label}</div>
+                  <div style={{fontSize:10,color:C.mut,marginTop:1}}>
+                    {p.validStart
+                      ? `${p.validStart.toLocaleDateString(LOCALE,{day:"2-digit",month:"2-digit"})} → ${p.validEnd.toLocaleDateString(LOCALE,{day:"2-digit",month:"2-digit"})}${t.giftShopPermanentAfterPurchase}`
+                      : t.wheelPermanent}
+                  </div>
+                </div>
+                {fullyOwned
+                  ? <span style={{background:C.sur,color:C.mut,borderRadius:8,padding:"3px 9px",fontSize:11,fontWeight:700,flexShrink:0}}>{t.giftShopObtained}</span>
+                  : <span style={{background:`${p.color}22`,color:p.color,borderRadius:8,padding:"3px 9px",fontSize:12,fontWeight:900,flexShrink:0}}>{p.price.toFixed(2)} €</span>
+                }
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* STEP: selectTarget — pour moi ou pour un enfant */}
+      {step === "selectTarget" && selPrize && (
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,padding:"10px 12px",background:`${selPrize.color}10`,borderRadius:12,border:`1.5px solid ${selPrize.color}44`}}>
+            <span style={{fontSize:24}}>{selPrize.emoji}</span>
+            <div>
+              <div style={{fontSize:13,fontWeight:800,color:selPrize.color}}>{t[selPrize.labelKey]||selPrize.label}</div>
+              <div style={{fontSize:11,color:C.mut}}>{selPrize.price.toFixed(2)} € · {t.wheelPermanent}</div>
+            </div>
+          </div>
+          <div style={{fontSize:12,fontWeight:700,color:C.mut,marginBottom:10}}>{t.giftShopThemeFor}</div>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+            {/* Pour moi */}
+            <button onClick={()=>{setForSelf(true);setSelChild(null);setStep("confirm");}}
+              disabled={prizeOwnedBySelf(selPrize.id)}
+              style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",
+                background:prizeOwnedBySelf(selPrize.id)?C.sur:`${selPrize.color}12`,
+                borderRadius:12,border:`1.5px solid ${prizeOwnedBySelf(selPrize.id)?C.bor:selPrize.color+"55"}`,
+                opacity:prizeOwnedBySelf(selPrize.id)?0.5:1,
+                cursor:prizeOwnedBySelf(selPrize.id)?"default":"pointer",textAlign:"left"}}>
+              <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${C.vio},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>🙋</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:800,color:prizeOwnedBySelf(selPrize.id)?C.mut:C.txt}}>{t.giftShopForMe}</div>
+                <div style={{fontSize:10,color:C.mut}}>{t.giftShopActivateOnMyAccount}</div>
+              </div>
+              {prizeOwnedBySelf(selPrize.id)
+                ? <span style={{fontSize:10,color:C.mut,fontWeight:700}}>{t.giftShopAlreadyOwned}</span>
+                : <span style={{fontSize:16,color:selPrize.color}}>→</span>}
+            </button>
+            {/* Pour un enfant */}
+            {childUsers.length > 0 && (
+              <button onClick={()=>{setForSelf(false);setSelChild(childUsers.length===1?childUsers[0]:null);setStep("selectChild");}}
+                style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",
+                  background:`${selPrize.color}12`,borderRadius:12,
+                  border:`1.5px solid ${selPrize.color}55`,
+                  cursor:"pointer",textAlign:"left"}}>
+                <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,#FFD700,#ff9f43)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>🎁</div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,fontWeight:800,color:C.txt}}>{t.giftShopGiftToChild}</div>
+                  <div style={{fontSize:10,color:C.mut}}>{t.giftShopChildUnlocks}</div>
+                </div>
+                <span style={{fontSize:16,color:selPrize.color}}>→</span>
+              </button>
+            )}
+          </div>
+          <button onClick={reset} style={{width:"100%",padding:"9px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:10,fontSize:13,fontWeight:700}}>{t.cancel||"Annuler"}</button>
+        </div>
+      )}
+
+      {/* STEP: selectChild */}
+      {step === "selectChild" && selPrize && (
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,padding:"10px 12px",background:`${selPrize.color}10`,borderRadius:12,border:`1.5px solid ${selPrize.color}44`}}>
+            <span style={{fontSize:24}}>{selPrize.emoji}</span>
+            <div>
+              <div style={{fontSize:13,fontWeight:800,color:selPrize.color}}>{t[selPrize.labelKey]||selPrize.label}</div>
+              <div style={{fontSize:11,color:C.mut}}>{selPrize.price.toFixed(2)} € · {t.giftShopForChildLabel}</div>
+            </div>
+          </div>
+          <div style={{fontSize:12,fontWeight:700,color:C.mut,marginBottom:8}}>{t.giftShopWhichChild}</div>
+          <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:14}}>
+            {childUsers.map(ch => {
+              const alreadyGifted = prizeAlreadyGifted(selPrize.id, ch.id);
+              return (
+                <button key={ch.id} onClick={()=>!alreadyGifted&&setSelChild(ch)}
+                  style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",
+                    background:selChild?.id===ch.id?`${selPrize.color}18`:C.sur,
+                    borderRadius:10,border:`1.5px solid ${selChild?.id===ch.id?selPrize.color:alreadyGifted?C.bor+"88":C.bor}`,
+                    opacity:alreadyGifted?0.45:1,cursor:alreadyGifted?"default":"pointer",textAlign:"left"}}>
+                  <div style={{width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${C.grn},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>🧒</div>
+                  <div style={{flex:1,fontSize:13,fontWeight:700,color:alreadyGifted?C.mut:C.txt}}>{ch.name}</div>
+                  {alreadyGifted
+                    ? <span style={{fontSize:10,color:C.mut,fontWeight:700}}>{t.giftShopAlreadyGifted}</span>
+                    : selChild?.id===ch.id&&<span style={{fontSize:16}}>✓</span>}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>setStep("selectTarget")} style={{flex:1,padding:"10px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:10,fontSize:13,fontWeight:700}}>{t.giftShopBack}</button>
+            <button onClick={()=>selChild&&setStep("confirm")} disabled={!selChild}
+              style={{flex:2,padding:"10px",background:selChild?`linear-gradient(135deg,${selPrize.color},${selPrize.color}cc)`:"#ccc",
+                color:"#fff",border:"none",borderRadius:10,fontSize:13,fontWeight:800,
+                opacity:selChild?1:0.5,cursor:selChild?"pointer":"default"}}>
+              {t.giftShopContinue}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* STEP: confirm */}
+      {step === "confirm" && selPrize && (
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:36,marginBottom:8}}>{selPrize.emoji}</div>
+          <div style={{fontSize:15,fontWeight:900,color:selPrize.color,marginBottom:4}}>{t[selPrize.labelKey]||selPrize.label}</div>
+          <div style={{fontSize:13,color:C.mut,marginBottom:2}}>
+            {forSelf ? t.giftShopForYourAccount : <>{t.giftShopForPrefix} <strong style={{color:C.txt}}>{selChild?.name}</strong></>}
+          </div>
+          <div style={{fontSize:12,color:C.mut,marginBottom:16}}>{t.giftShopUnlockedPermanently}</div>
+          <div style={{background:C.sur,borderRadius:12,padding:"12px 14px",marginBottom:16,border:`1.5px solid ${C.bor}`,textAlign:"left"}}>
+            <div style={{fontSize:10,fontWeight:800,color:C.mut,letterSpacing:".08em",textTransform:"uppercase",marginBottom:8}}>{t.giftShopSimulatedPayment}</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:13,color:C.txt}}>{t[selPrize.labelKey]||selPrize.label}</span>
+              <span style={{fontSize:14,fontWeight:900,color:selPrize.color}}>{selPrize.price.toFixed(2)} €</span>
+            </div>
+            <div style={{marginTop:8,padding:"6px 10px",background:`${selPrize.color}12`,borderRadius:8,fontSize:10,color:C.mut}}>
+              {t.giftShopProdNote}
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>setStep(forSelf?"selectTarget":"selectChild")} style={{flex:1,padding:"10px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:10,fontSize:13,fontWeight:700}}>{t.giftShopBack}</button>
+            <button onClick={confirmPurchase} disabled={paying}
+              style={{flex:2,padding:"10px",background:paying?"#ccc":`linear-gradient(135deg,${selPrize.color},${selPrize.color}bb)`,
+                color:"#fff",border:"none",borderRadius:10,fontSize:13,fontWeight:900,cursor:paying?"default":"pointer"}}>
+              {paying ? t.giftShopProcessing : `${t.giftShopPayPrefix} ${selPrize.price.toFixed(2)} €`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* STEP: success */}
+      {step === "success" && selPrize && (
+        <div style={{textAlign:"center",padding:"8px 0"}}>
+          <div style={{fontSize:48,marginBottom:8}}>🎉</div>
+          <div style={{fontSize:16,fontWeight:900,color:selPrize.color,marginBottom:4}}>
+            {(t[selPrize.labelKey]||selPrize.label)}{forSelf ? t.giftShopActivatedSuffix : t.giftShopGiftedSuffix}
+          </div>
+          <div style={{fontSize:13,color:C.mut,marginBottom:16}}>
+            {forSelf
+              ? t.giftShopActiveOnAccount
+              : <><strong style={{color:C.txt}}>{selChild?.name}</strong>{t.giftShopChildHasAccess}</>
+            }
+          </div>
+          <button onClick={reset} style={{padding:"10px 28px",background:`linear-gradient(135deg,${selPrize.color},${selPrize.color}bb)`,color:"#fff",borderRadius:50,fontSize:13,fontWeight:800,border:"none"}}>
+            {t.giftShopBuyAnother}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── GAME TAB ────────────────────────────────────────────────────────────────
+function GameTab() {
+  const {C,t,sub,setSub,prem,onUpgrade,st,isChild,isObs,isAdm,user,videoActive} = useApp();
+  const isPremium = prem; // trial_premium + premium peuvent jouer (freemium : non)
+  // Rôle du joueur
+  const isParent  = user?.role === "parent";
+  const isSubscriber = isParent && (user?.parentIdx === 0); // Parent souscripteur (parentIdx 0)
+  const isAdult   = (isParent || isObs) && !isAdm; // adulte non-admin
+  const restrictedRole = (isChild || isObs) && !isAdm; // roue sans gains d'abonnement
+  const cooldownLabel = (isChild||isObs) ? t.cooldown2days : t.cooldown7days;
+  const userId = String(user?.id || "");
+
+  // Lots cadeaux reçus par cet enfant (si le joueur est un enfant)
+  const myGifted = isChild ? (sub.giftedPrizes?.[userId] || {}) : {};
+
+  return (
+    <div className="fi">
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+        <div>
+          <div style={{fontSize:16,fontWeight:900,background:"linear-gradient(135deg,#FFD700,#ff6bb5,#7c6fcd)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{t.wheelTitle}</div>
+          <div style={{fontSize:11,color:C.mut}}>{restrictedRole ? `${t.wheelTabSubFunPrefix} ${cooldownLabel}` : `${t.wheelTabSubPremiumPrefix} ${cooldownLabel} ${t.wheelTabSubPremiumSuffix}`}</div>
+        </div>
+      </div>
+
+      {/* Lock banner for freemium (not shown for restricted roles or trial users) */}
+      {!prem && !restrictedRole && (
+        <div onClick={onUpgrade} style={{cursor:"pointer",background:`linear-gradient(135deg,${C.vio}22,${C.blu}22)`,border:`2px dashed ${C.vio}`,borderRadius:14,padding:"20px",textAlign:"center",marginBottom:16}}>
+          <div style={{fontSize:36,marginBottom:8}}>🔒</div>
+          <div style={{fontWeight:900,fontSize:15,color:C.vio,marginBottom:6}}>{t.wheelPremiumFeature}</div>
+          <div style={{fontSize:12,color:C.mut,marginBottom:14,lineHeight:1.6}}>
+            {t.wheelPremiumDescLine1}<br/>{t.wheelPremiumDescLine2}
+          </div>
+          <button style={{padding:"11px 28px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:14,fontWeight:800,borderRadius:50}}>
+            {t.wheelGoPremium}
+          </button>
+        </div>
+      )}
+
+      {/* Wheel game */}
+      <div className="card" style={{marginBottom:14,borderColor:`${C.vio}44`,padding:"20px 14px"}}>
+        <WheelGame
+          isPremium={prem || restrictedRole}
+          isAdmin={sub._admin||false}
+          restrictedRole={restrictedRole}
+          userId={userId}
+          isSubscriber={isSubscriber}
+          isParent={isParent || isAdm}
+        />
+      </div>
+
+      {/* 🎁 Boutique cadeaux — visible pour les adultes Premium (parents + observateurs) */}
+      {(prem || isAdm) && (isParent || isObs || isAdm) && !isChild && (
+        <GiftShopSection />
+      )}
+
+      {/* Earned rewards showcase — lots gagnés à la roue + cadeaux reçus */}
+      {(sub.earnedTheme||sub.earnedVideo||sub.earnedLicorne||sub.earnedRG||sub.earnedWC||sub.earnedBadge
+        ||myGifted.theme||myGifted.video||myGifted.licorne||myGifted.rg||myGifted.wc) && (
+        <div className="card" style={{marginBottom:14}}>
+          <div className="sec">{isChild ? t.wheelMyPrizesChild : t.wheelMyPrizesAdult}</div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {/* Legacy badge */}
+            {sub.earnedBadge && !isChild && (
+              <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px",background:C.sur,borderRadius:10,border:`1.5px solid ${C.bor}`}}>
+                <div style={{width:36,height:36,borderRadius:10,background:"#7c6fcd22",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>🏅</div>
+                <div><div style={{fontSize:13,fontWeight:800,color:"#7c6fcd"}}>{t.wheelExclusiveBadge}</div>
+                <div style={{fontSize:11,color:C.mut}}>{t.wheelComingSoonProfile}</div></div>
+                <span style={{marginLeft:"auto",background:"#7c6fcd22",color:"#7c6fcd",borderRadius:8,padding:"2px 8px",fontSize:10,fontWeight:800}}>{t.wheelWon}</span>
+              </div>
+            )}
+            {(sub.earnedTheme||myGifted.theme) && (() => {
+              const g = !!myGifted.theme;
+              return <EarnedPrizeRow emoji="🌴" label={t.shopTheme} color="#3ecf8e"
+                info={g||isSummerPeriod()?t.wheelActivateViaMenu:t.wheelActivatableSummer}
+                status={g||isSummerPeriod()?t.wheelActive:t.wheelPendingStatus} gift={g} />;
+            })()}
+            {(sub.earnedVideo||myGifted.video) && (() => {
+              const g = !!myGifted.video;
+              return <EarnedPrizeRow emoji="🎮" label={t.shopVideo} color="#8b5cf6"
+                info={videoActive?t.wheelVideoActiveInfo:t.wheelActivateViaButton} status={videoActive?t.wheelActiveCheck:t.wheelApply} gift={g} />;
+            })()}
+            {(sub.earnedLicorne||myGifted.licorne) && (() => {
+              const g = !!myGifted.licorne;
+              return <EarnedPrizeRow emoji="🦄" label={t.shopLicorne} color="#ec4899"
+                info={t.wheelActivateViaMenu} status={t.wheelActive} gift={g} />;
+            })()}
+            {(sub.earnedRG||myGifted.rg) && (() => {
+              const g = !!myGifted.rg;
+              return <EarnedPrizeRow emoji="🎾" label={t.shopRG} color="#c2745a"
+                info={g||isRGPeriod()?t.wheelActivateViaMenu:t.wheelActivatableRG}
+                status={g||isRGPeriod()?t.wheelActive:t.wheelPendingStatus} gift={g} />;
+            })()}
+            {(sub.earnedWC||myGifted.wc) && (() => {
+              const g = !!myGifted.wc;
+              return <EarnedPrizeRow emoji="⚽" label={t.shopWC} color="#2563eb"
+                info={g||isWCPeriod()?t.wheelActivateViaMenu:t.wheelActivatableWC}
+                status={g||isWCPeriod()?t.wheelActive:t.wheelPendingStatus} gift={g} />;
+            })()}
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+// ─── GAME TAB END ─────────────────────────────────────────────────────────────
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VAULT TAB — Coffre-fort de documents
+// ═══════════════════════════════════════════════════════════════════════════════
+function VaultTab() {
+  const { C, t, cfg, setCfg, user, users, prem, perms, onUpgrade, isObs, setActivity, addRefAction, sub, familySync, pushNotif, addHist, myUid, unreadVaultDocIds, setUnreadVaultDocIds } = useApp();
+  const premFull = isPremFull(sub);
+
+  // Identité cloud de la personne connectée (nécessaire pour savoir qui a uploadé quoi)
+  const [uid, setUid] = useState(null);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUid(data?.user?.id || null));
+  }, []);
+
+  const { docs: rawDocs, loading: vaultLoading, error: vaultError, addDoc, updateDoc, togglePin: toggleVaultPin, removeDoc, openDoc } =
+    useVault(familySync.familyId, uid);
+
+  // Épinglage par compte (localStorage) — chaque parent gère ses épingles
+  const [pinnedDocIds, setPinnedDocIds] = useLocalStorage(`duvia_pinned_${user?.id||"x"}`, []);
+  // unreadVaultDocIds vient du contexte principal (réactif dans toute l'app)
+  const unreadDocIds = unreadVaultDocIds;
+  const setUnreadDocIds = setUnreadVaultDocIds;
+  const docs = (rawDocs||[]).map(d=>({...d, pinned: pinnedDocIds.includes(d.id), unread: unreadDocIds.includes(d.id)}));
+
+  // Ouvrir un doc : le marque comme lu
+  function openVaultDoc(doc) {
+    setUnreadDocIds(ids => ids.filter(id => id !== doc.id));
+    setPreviewDoc(doc);
+  }
+
+  // Taille totale utilisée (en octets)
+  const totalSizeBytes = useMemo(() =>
+    docs.reduce((sum, d) => sum + (d.file_size || 0), 0),
+  [docs]);
+  const VAULT_MAX_MB    = getPerms(sub).maxStorageMB || 50;
+  const VAULT_MAX_BYTES = VAULT_MAX_MB * 1024 * 1024;
+  const VAULT_MAX_LABEL = `${VAULT_MAX_MB} Mo`;
+  const totalSizeMB = (totalSizeBytes / (1024 * 1024)).toFixed(1);
+  const totalSizeGB = (totalSizeBytes / (1024 * 1024 * 1024)).toFixed(2); // gardé pour compat
+
+  // Helper : si le doc a été ajouté par un parent supprimé
+  function resolveAddedBy(name) {
+    const deleted = (cfg.deletedParents||[]).find(d => d.name === name);
+    if (deleted) return { label:`${t.vaultDeletedParent||"Parent supprimé —"} ${name}`, deleted:true };
+    // `name` est parfois le nom de COMPTE (identifiant de connexion, ex. "Sissi1")
+    // plutôt que le nom AFFICHÉ configuré pour la famille (ex. "Sissi", visible
+    // partout ailleurs dans l'app). On essaie de retrouver ce nom affiché via
+    // l'email du compte correspondant, sinon on garde le nom tel quel.
+    const accountUser = (users||[]).find(u => u.name === name);
+    const displayName = accountUser?.email
+      ? (cfg.parents||[]).find(p => p.email && p.email === accountUser.email)?.name
+      : null;
+    return { label: displayName || name, deleted:false };
+  }
+  // Nom à enregistrer comme "ajouté par" pour CE compte : on privilégie le nom
+  // affiché de la famille (cfg.parents, configuré au moment de la création du
+  // foyer) plutôt que le nom de compte/connexion, qui peut différer.
+  const myDisplayName = (cfg.parents||[]).find(p => p.email && p.email === user?.email)?.name || user?.name || "?";
+  const [showForm, setShowForm] = useState(false);
+  const [editDoc, setEditDoc] = useState(null);
+  const [savingDoc, setSavingDoc] = useState(false);
+  const [vaultSubmittedPopup, setVaultSubmittedPopup] = useState(false);
+  const [filterCat, setFilterCat] = useState("all");
+  const [search, setSearch] = useState("");
+  const [confirmDel, setConfirmDel] = useState(null);
+  const [previewDoc, setPreviewDoc] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewUrlLoading, setPreviewUrlLoading] = useState(false);
+
+  // Le fichier n'est plus en base64 dans le doc : on demande une URL
+  // temporaire à Supabase Storage chaque fois qu'on ouvre l'aperçu.
+  useEffect(() => {
+    if (!previewDoc?.storage_path) { setPreviewUrl(null); return; }
+    let cancelled = false;
+    setPreviewUrlLoading(true);
+    openDoc(previewDoc.storage_path)
+      .then((url) => { if (!cancelled) setPreviewUrl(url); })
+      .catch(() => { if (!cancelled) setPreviewUrl(null); })
+      .finally(() => { if (!cancelled) setPreviewUrlLoading(false); });
+    return () => { cancelled = true; };
+  }, [previewDoc, openDoc]);
+
+  const [showCatMenu, setShowCatMenu] = useState(false);
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+
+  useEffect(() => {
+    if (!showCatMenu && !showFilterMenu) return;
+    const close = () => { setShowCatMenu(false); setShowFilterMenu(false); };
+    const t2 = setTimeout(() => document.addEventListener("click", close), 0);
+    return () => { clearTimeout(t2); document.removeEventListener("click", close); };
+  }, [showCatMenu, showFilterMenu]);
+
+  // Form state
+  const [formName, setFormName] = useState("");
+  const [shakeDocName, setShakeDocName] = useState(false);
+  function _triggerShakeDocName(){ setShakeDocName(true); setTimeout(()=>setShakeDocName(false),600); }
+  const [formCat, setFormCat] = useState(0);
+  const [formDate, setFormDate] = useState(toStr(new Date()));
+  const [formNotes, setFormNotes] = useState("");
+  const [formFile, setFormFile] = useState(null); // { name, size, type, dataUrl }
+  const [formShared, setFormShared] = useState(true);
+  const fileRef = useRef();
+
+  const vaultCats = t.vaultCats || [];
+
+  function openAdd() {
+    if (!prem) { onUpgrade(); return; } // Coffre-fort : Premium (y compris Bêta/trial)
+    if (totalSizeBytes >= VAULT_MAX_BYTES) {
+      alert(`⚠️ Limite de ${VAULT_MAX_LABEL} atteinte (${totalSizeMB} Mo utilisés). Supprimez des fichiers pour en ajouter.`);
+      return;
+    }
+    setEditDoc(null);
+    setFormName(""); setFormCat(0);
+    setFormDate(toStr(new Date()));
+    setFormNotes(""); setFormFile(null); setFormShared(true);
+    setShowForm(true);
+  }
+
+  function openEdit(doc) {
+    setEditDoc(doc);
+    setFormName(doc.name); setFormCat(doc.category_idx||0);
+    setFormDate(doc.doc_date||""); setFormNotes(doc.notes||"");
+    setFormFile(doc.file_name ? { name: doc.file_name, size: doc.file_size, type: doc.mime_type, existing: true } : null);
+    setFormShared(doc.shared!==false);
+    setShowForm(true);
+  }
+
+  async function handleFile(e) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const fileErr = validateVaultFile(f);
+    if (fileErr) { alert(fileErr); e.target.value = ""; return; }
+    // Vérification quota stockage total (vault + dépenses)
+    const { data: usedBytes } = await supabase.rpc("get_family_storage_bytes", { fid: familySync?.familyId }).catch(()=>({data:null}));
+    const effectiveUsed = usedBytes ?? totalSizeBytes;
+    if (effectiveUsed + f.size > VAULT_MAX_BYTES) {
+      alert(`⚠️ Limite de stockage atteinte (${VAULT_MAX_LABEL} max).\nUtilisé : ${(effectiveUsed/1024/1024).toFixed(1)} Mo · Fichier : ${(f.size/1024/1024).toFixed(1)} Mo`);
+      e.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      // dataUrl = aperçu instantané dans le formulaire uniquement ; rawFile = ce
+      // qui sera réellement envoyé à Supabase Storage à l'enregistrement.
+      setFormFile({ name: sanitize(f.name).slice(0, LIMITS.DOC_NAME_MAX), size: f.size, type: f.type, dataUrl: ev.target.result, rawFile: f, existing: false });
+    };
+    reader.readAsDataURL(f);
+  }
+
+  async function saveDoc() {
+    const cleanDocName = sanitize(formName).slice(0, LIMITS.DOC_NAME_MAX);
+    if (!cleanDocName.trim()) return;
+    if(!isCleanText(cleanDocName)){ _triggerShakeDocName(); return; }
+    const cleanNotes = sanitize(formNotes).slice(0, LIMITS.NOTES_MAX);
+    const maxDocs = perms?.maxVaultDocs ?? 5;
+    if (!editDoc && docs.length >= maxDocs && maxDocs !== Infinity) { onUpgrade(); return; }
+    setSavingDoc(true);
+    try {
+      if (editDoc) {
+        const newFile = (formFile && !formFile.existing) ? formFile.rawFile : null;
+        const removeFile = !formFile && !!editDoc.file_name;
+        await updateDoc(editDoc.id, {
+          name: cleanDocName, category_idx: formCat, doc_date: formDate, notes: cleanNotes, shared: formShared,
+        }, newFile, removeFile);
+        pushNotif(`✏️ Document modifié : "${cleanDocName}"`, "vault");
+        addHist("Document modifié", `${myDisplayName} — "${cleanDocName}"`, "vault");
+        setActivity(a=>({...a,vault:{ts:new Date().toISOString(),by:String(user?.id||"")}})); setCfg(c=>({...c,vaultActivity:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
+        // Email notification
+        try { supabase.functions.invoke("notify-vault", { body: { action:"update", docName:cleanDocName, byName:myDisplayName, familyId:familySync?.familyId } }).catch(()=>{}); } catch(e){}
+      } else {
+        await addDoc({
+          name: cleanDocName, categoryIdx: formCat, docDate: formDate, notes: cleanNotes, shared: formShared,
+          file: formFile ? formFile.rawFile : null,
+        }, myDisplayName);
+        pushNotif(`🗄️ Document ajouté : "${cleanDocName}"`, "vault");
+        addHist("Nouveau document", `${myDisplayName} — "${cleanDocName}"`, "vault");
+        setActivity(a=>({...a,vault:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
+        setCfg(c=>({...c,vaultActivity:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
+        // Email géré par le webhook Supabase (INSERT → notify-vault)
+        setVaultSubmittedPopup(true);
+        setTimeout(()=>setVaultSubmittedPopup(false), 2500);
+      }
+      setShowForm(false);
+      setEditDoc(null);
+    } catch (e) {
+      alert("⚠️ Erreur lors de l'enregistrement du document : " + (e?.message || e));
+    } finally {
+      setSavingDoc(false);
+    }
+  }
+
+  async function deleteDoc(id) {
+    const docToDelete = docs.find(d => d.id === id);
+    const docName = docToDelete?.name || "Document";
+    try {
+      await removeDoc(id);
+      pushNotif(`🗑️ Document supprimé : "${docName}"`, "vault");
+      addHist("Document supprimé", `${myDisplayName} — "${docName}"`, "vault");
+      setActivity(a=>({...a,vault:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
+      setCfg(c=>({...c,vaultActivity:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
+      try { supabase.functions.invoke("notify-vault", { body: { action:"delete", docName, byName:myDisplayName, familyId:familySync?.familyId } }).catch(()=>{}); } catch(e){}
+    } catch (e) {
+      alert("⚠️ Erreur lors de la suppression : " + (e?.message || e));
+    }
+    setConfirmDel(null);
+    if (previewDoc?.id === id) setPreviewDoc(null);
+  }
+
+  function togglePin(id) {
+    setPinnedDocIds(ids =>
+      ids.includes(id) ? ids.filter(x=>x!==id) : [...ids, id]
+    );
+  }
+
+  function formatSize(bytes) {
+    if (!bytes) return "";
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1048576) return (bytes/1024).toFixed(1) + " KB";
+    return (bytes/1048576).toFixed(1) + " MB";
+  }
+
+  const catIcon = (idx) => (vaultCats[idx] || "📝 Autre").split(" ")[0];
+  const catLabel = (idx) => (vaultCats[idx] || "Autre").replace(/^[^\s]+ /, "");
+
+  const filtered = docs.filter(d => {
+    const matchCat = filterCat === "all" || d.category_idx === parseInt(filterCat);
+    const matchSearch = !search || d.name.toLowerCase().includes(search.toLowerCase()) ||
+      (d.notes||"").toLowerCase().includes(search.toLowerCase()) ||
+      (d.added_by_name||"").toLowerCase().includes(search.toLowerCase());
+    return matchCat && matchSearch;
+  });
+
+  const pinned = filtered.filter(d => d.pinned)
+    .sort((a,b) => new Date(b.created_at||0) - new Date(a.created_at||0));
+  const others = filtered.filter(d => !d.pinned)
+    .sort((a,b) => new Date(b.created_at||0) - new Date(a.created_at||0));
+
+  // ── Enregistrer l'heure de départ du coffre (pour la prochaine visite) ────
+  const lastVisitKey = `duvia_vault_last_visit_${user?.id||"x"}`;
+  useEffect(() => {
+    return () => { localStorage.setItem(lastVisitKey, new Date().toISOString()); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Détection nouveaux docs (autre parent) → point rouge + popup OS ────────
+  const seenVaultIdsRef = useRef(null);
+  useEffect(() => {
+    if (!docs || docs.length === 0) return;
+    if (seenVaultIdsRef.current === null) {
+      // Premier chargement : initialiser et détecter les docs manqués depuis la dernière visite
+      seenVaultIdsRef.current = new Set(docs.map(d => d.id));
+      const prevVisit = localStorage.getItem(lastVisitKey) || "";
+      if (prevVisit) {
+        const toAdd = docs
+          .filter(d => d.added_by_name !== myDisplayName && (d.created_at||"") > prevVisit)
+          .map(d => d.id);
+        if (toAdd.length > 0)
+          setUnreadDocIds(ids => [...ids, ...toAdd.filter(id => !ids.includes(id))]);
+      }
+      return;
+    }
+    // Temps réel : nouveaux docs arrivés pendant la session
+    const newDocs = docs.filter(d => !seenVaultIdsRef.current.has(d.id));
+    docs.forEach(d => seenVaultIdsRef.current.add(d.id));
+    const fromOthers = newDocs.filter(d => d.added_by_name !== myDisplayName);
+    if (fromOthers.length === 0) return;
+    setUnreadDocIds(ids => {
+      const toAdd = fromOthers.map(d => d.id).filter(id => !ids.includes(id));
+      return toAdd.length ? [...ids, ...toAdd] : ids;
+    });
+    // Popup OS
+    fromOthers.forEach(d => {
+      const who = resolveAddedBy(d.added_by_name||"").label;
+      const body = `🗄️ ${who} a ajouté "${d.name}"`;
+      if(window.Notification && Notification.permission === "granted"){
+        if(navigator.serviceWorker?.controller){
+          navigator.serviceWorker.ready.then(reg=>reg.showNotification(t.appName,{body})).catch(()=>{});
+        } else { try{ new Notification(t.appName,{body}); }catch(e){} }
+      }
+    });
+  }, [docs, myDisplayName]);
+
+  // Premium gate
+  if (!prem) {
+    return (
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:18,padding:"40px 20px",textAlign:"center"}}>
+        <div style={{fontSize:56}}>🗄️</div>
+        <div style={{fontSize:18,fontWeight:900,color:C.txt}}>{t.vaultPremLock||"🔒 Coffre-fort — Premium"}</div>
+        <div style={{fontSize:13,color:C.mut,maxWidth:280,lineHeight:1.6}}>{t.vaultPremDesc||"Stockez tous vos documents légaux en sécurité."}</div>
+        <button onClick={onUpgrade} style={{height:48,padding:"0 28px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:15,fontWeight:800,borderRadius:12}}>
+          {t.upgradeCTA||"⭐ Passer Premium"}
+        </button>
+      </div>
+    );
+  }
+
+  // Premier chargement (les données viennent du nuage maintenant, plus de localStorage instantané)
+  if (vaultLoading && docs.length === 0) {
+    return (
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,padding:"60px 20px",textAlign:"center"}}>
+        <div style={{fontSize:32}}>🗄️</div>
+        <div style={{fontSize:13,color:C.mut}}>Chargement du coffre-fort…</div>
+      </div>
+    );
+  }
+  if (vaultError) {
+    return (
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,padding:"60px 20px",textAlign:"center"}}>
+        <div style={{fontSize:32}}>⚠️</div>
+        <div style={{fontSize:13,color:C.red}}>{vaultError}</div>
+      </div>
+    );
+  }
+
+  // Preview modal
+  if (previewDoc) {
+    const f = previewDoc.file_name ? { name: previewDoc.file_name, size: previewDoc.file_size, type: previewDoc.mime_type } : null;
+    return (
+      <div className="fi">
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+          <button onClick={()=>setPreviewDoc(null)} style={{height:36,padding:"0 14px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:12,borderRadius:8}}>← Retour</button>
+          <div style={{flex:1,fontWeight:800,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{previewDoc.name}</div>
+        </div>
+        <div className="card" style={{marginBottom:12}}>
+          <div style={{display:"flex",gap:12,alignItems:"flex-start",flexWrap:"wrap"}}>
+            <div style={{width:42,height:42,borderRadius:10,background:`${C.vio}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>
+              {catIcon(previewDoc.category_idx)}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:15,fontWeight:800,marginBottom:4}}>{previewDoc.name}</div>
+              <div style={{fontSize:12,color:C.mut,marginBottom:2}}>{catLabel(previewDoc.category_idx)} · {previewDoc.doc_date}</div>
+              {previewDoc.notes && <div style={{fontSize:12,color:C.txt,marginTop:6,lineHeight:1.5,whiteSpace:"pre-wrap"}}>{previewDoc.notes}</div>}
+              <div style={{fontSize:11,color:C.mut,marginTop:8}}>
+                {t.vaultAddedBy||"Ajouté par"}: {(() => { const r=resolveAddedBy(previewDoc.added_by_name); return <b style={{color:r.deleted?C.red:undefined}}>{r.label}</b>; })()}
+              </div>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8,marginTop:14,flexWrap:"wrap"}}>
+            {!isObs && (
+              <button onClick={()=>{ setPreviewDoc(null); openEdit(previewDoc); }} style={{padding:"7px 14px",background:`${C.vio}22`,color:C.vio,border:`1.5px solid ${C.vio}`,fontSize:12,fontWeight:700,borderRadius:8}}>
+                ✎ {t.vaultEdit||"Modifier"}
+              </button>
+            )}
+            {!isObs && (
+              <button onClick={()=>setConfirmDel(previewDoc.id)} style={{padding:"7px 14px",background:`${C.red}15`,color:C.red,border:`1.5px solid ${C.red}44`,fontSize:12,fontWeight:700,borderRadius:8}}>
+                🗑 {t.vaultDelete||"Supprimer"}
+              </button>
+            )}
+          </div>
+        </div>
+        {f && (
+          <div className="card">
+            <div style={{fontSize:11,fontWeight:800,color:C.mut,marginBottom:12,letterSpacing:".08em",textTransform:"uppercase"}}>{t.vaultFileInfo||"Infos fichier"}</div>
+            <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:12}}>
+              <div style={{fontSize:32}}>{f.type?.includes("pdf") ? "📄" : f.type?.includes("image") ? "🖼️" : "📎"}</div>
+              <div>
+                <div style={{fontSize:13,fontWeight:700}}>{f.name}</div>
+                <div style={{fontSize:11,color:C.mut}}>{f.type} · {formatSize(f.size)}</div>
+              </div>
+            </div>
+            {previewUrlLoading && (
+              <div style={{textAlign:"center",padding:16,fontSize:12,color:C.mut}}>Chargement du fichier…</div>
+            )}
+            {previewUrl && f.type?.startsWith("image") && (
+              <img src={previewUrl} alt={f.name} style={{width:"100%",maxHeight:280,objectFit:"contain",borderRadius:10,border:`1.5px solid ${C.bor}`,marginBottom:10}} />
+            )}
+            {previewUrl && f.type?.includes("pdf") && (
+              <div style={{background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:10,padding:12,marginBottom:10,fontSize:12,color:C.mut,textAlign:"center"}}>
+                📄 Aperçu PDF non disponible dans l'app
+              </div>
+            )}
+            {previewUrl && (
+              <a href={previewUrl} download={f.name} target="_blank" rel="noreferrer" style={{display:"block",padding:"9px 0",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:13,fontWeight:700,borderRadius:10,textAlign:"center",textDecoration:"none"}}>
+                ⬇️ {t.vaultDownload||"Télécharger"}
+              </a>
+            )}
+          </div>
+        )}
+        {confirmDel && (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+            <div style={{background:C.card,borderRadius:16,padding:24,maxWidth:320,width:"100%",textAlign:"center",border:`1.5px solid ${C.bor}`}}>
+              <div style={{fontSize:32,marginBottom:10}}>🗑️</div>
+              <div style={{fontSize:15,fontWeight:800,marginBottom:8}}>{t.vaultConfirmDel||"Supprimer ce document ?"}</div>
+              <div style={{display:"flex",gap:10,marginTop:18}}>
+                <button onClick={()=>setConfirmDel(null)} style={{flex:1,padding:"10px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontWeight:700}}>{t.vaultCancel||"Annuler"}</button>
+                <button onClick={()=>deleteDoc(confirmDel)} style={{flex:1,padding:"10px",background:C.red,color:"#fff",fontWeight:800}}>🗑 {t.vaultDelete||"Supprimer"}</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Add/edit form
+  if (showForm) {
+    return (
+      <div className="fi">
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+          <button onClick={()=>{setShowForm(false);setEditDoc(null);}} style={{height:36,padding:"0 14px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:12,borderRadius:8}}>← {t.vaultCancel||"Annuler"}</button>
+          <div style={{fontWeight:800,fontSize:14}}>{editDoc ? "✎ "+t.vaultEdit : "➕ "+t.vaultAdd}</div>
+        </div>
+        <div className="card" style={{display:"flex",flexDirection:"column",gap:14}}>
+          <div className="field">
+            <label className="lbl">{t.vaultName||"Nom du document"} *</label>
+            <input value={formName} onChange={e=>setFormName(e.target.value)} placeholder="ex : Jugement du 12/03/2023" className={shakeDocName?"duvia-shake":""} />
+          </div>
+          <div className="row" style={{alignItems:"stretch"}}>
+            <div className="field" style={{flex:2,position:"relative",marginBottom:0}}>
+              <label className="lbl">{t.vaultCat||"Catégorie"}</label>
+              <button onClick={()=>setShowCatMenu(v=>!v)} style={{width:"100%",height:44,padding:"0 12px",background:C.inp,border:`1.5px solid ${showCatMenu?C.vio:C.bor}`,color:C.txt,borderRadius:10,fontSize:13,textAlign:"left",display:"flex",alignItems:"center",gap:8,fontWeight:600,justifyContent:"space-between",boxSizing:"border-box"}}>
+                <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{vaultCats[formCat]||"—"}</span>
+                <span style={{fontSize:10,color:C.mut,flexShrink:0}}>{showCatMenu?"▲":"▼"}</span>
+              </button>
+              {showCatMenu && (
+                <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:C.card,border:`1.5px solid ${C.vio}`,borderRadius:14,zIndex:50,overflow:"hidden",boxShadow:"0 8px 24px rgba(0,0,0,.18)"}}>
+                  {vaultCats.map((c,i)=>(
+                    <button key={i} onClick={()=>{setFormCat(i);setShowCatMenu(false);}}
+                      style={{width:"100%",height:44,padding:"0 14px",background:i===formCat?`${C.vio}18`:"transparent",color:i===formCat?C.vio:C.txt,textAlign:"left",fontSize:13,fontWeight:i===formCat?800:600,display:"flex",alignItems:"center",gap:8,borderBottom:i<vaultCats.length-1?`1px solid ${C.bor}`:"none",borderRadius:0,transition:"background .1s"}}>
+                      <span style={{fontSize:17,width:24,textAlign:"center"}}>{c.split(" ")[0]}</span>
+                      <span>{c.replace(/^[^\s]+ /,"")}</span>
+                      {i===formCat && <span style={{marginLeft:"auto",fontSize:12}}>✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="field" style={{flex:1,marginBottom:0}}>
+              <label className="lbl">{t.vaultDate||"Date"}</label>
+              <input type="date" value={formDate} onChange={e=>setFormDate(e.target.value)} />
+            </div>
+          </div>
+          <div className="field">
+            <label className="lbl">{t.vaultNotes||"Notes"}</label>
+            <textarea value={formNotes} onChange={e=>setFormNotes(e.target.value)}
+              placeholder="ex : Version signée par les deux parties..."
+              style={{background:C.inp,border:`1.5px solid ${C.bor}`,color:C.txt,borderRadius:10,padding:"11px 13px",fontFamily:"inherit",fontSize:14,width:"100%",outline:"none",resize:"vertical",minHeight:72}} />
+          </div>
+          <div className="field">
+            <label className="lbl">{t.vaultUploadLabel||"Fichier (PDF, image)"}</label>
+            <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+              <button onClick={()=>fileRef.current?.click()} style={{height:44,padding:"0 14px",background:`${C.vio}18`,color:C.vio,border:`1.5px solid ${C.vio}66`,fontSize:12,fontWeight:700,borderRadius:10,flexShrink:0}}>
+                📎 {t.vaultUploadBtn||"Choisir un fichier"}
+              </button>
+              <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp" style={{display:"none"}} onChange={handleFile} />
+              {formFile ? (
+                <div style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:0}}>
+                  <span style={{fontSize:16}}>{formFile.type?.includes("pdf") ? "📄" : "🖼️"}</span>
+                  <span style={{fontSize:12,color:C.txt,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{formFile.name}</span>
+                  <span style={{fontSize:10,color:C.mut,flexShrink:0}}>({formatSize(formFile.size)})</span>
+                  <button onClick={()=>setFormFile(null)} style={{width:24,height:24,background:`${C.red}18`,color:C.red,border:"none",fontSize:12,borderRadius:6,flexShrink:0,padding:0}}>×</button>
+                </div>
+              ) : (
+                <span style={{fontSize:12,color:C.mut}}>{t.vaultNoFile||"Aucun fichier"}</span>
+              )}
+            </div>
+          </div>
+          <button onClick={saveDoc} disabled={!formName.trim() || savingDoc} style={{height:50,background:(formName.trim()&&!savingDoc)?`linear-gradient(135deg,${C.vio},${C.blu})`:`${C.bor}`,color:(formName.trim()&&!savingDoc)?"#fff":C.mut,fontSize:15,fontWeight:800,borderRadius:12,cursor:(formName.trim()&&!savingDoc)?"pointer":"not-allowed",transition:"all .2s"}}>
+            {savingDoc ? "⏳ Envoi…" : <>✓ {t.vaultSave||"Enregistrer"}</>}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Main list
+  const DocCard = ({doc}) => {
+    const uploadedAt = doc.created_at ? new Date(doc.created_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) : null;
+    return (
+    <div style={{background:C.card,border:`1.5px solid ${doc.pinned?C.vio:C.bor}`,borderRadius:14,padding:"12px 14px",marginBottom:10,cursor:"pointer",transition:"all .15s",borderLeft:doc.pinned?`4px solid ${C.vio}`:undefined}}
+      onClick={()=>openVaultDoc(doc)}>
+      <div style={{display:"flex",gap:12,alignItems:"center"}}>
+        <div style={{width:40,height:40,borderRadius:10,background:`${C.vio}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0,position:"relative"}}>
+          {catIcon(doc.category_idx)}
+          {doc.unread && <span style={{position:"absolute",top:-3,right:-3,width:9,height:9,borderRadius:"50%",background:"#e53e3e",border:`2px solid ${C.card}`}}/>}
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:14,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{doc.name}</div>
+          <div style={{fontSize:11,color:C.mut,marginTop:2}}>
+            {catLabel(doc.category_idx)}{doc.doc_date ? " · " + doc.doc_date : ""}
+            {uploadedAt ? <span style={{marginLeft:6,opacity:.7}}>· {uploadedAt}</span> : null}
+          </div>
+          {doc.notes && <div style={{fontSize:11,color:C.mut,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{doc.notes}</div>}
+        </div>
+      </div>
+    </div>
+  );
+  };
+
+  return (
+    <div className="fi">
+      {/* Toast "Document ajouté" */}
+      {vaultSubmittedPopup && (
+        <div style={{position:"fixed",top:14,left:"50%",transform:"translateX(-50%)",zIndex:9999,background:"var(--card, #fff)",border:"1.5px solid #7c3aed",borderRadius:14,padding:"12px 18px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 8px 30px rgba(0,0,0,.22)",maxWidth:"90vw",animation:"fadeInDown .25s ease",pointerEvents:"none"}}>
+          <span style={{fontSize:20}}>✅</span>
+          <div>
+            <div style={{fontSize:13,fontWeight:800}}>Document ajouté</div>
+            <div style={{fontSize:11,opacity:.7}}>Visible par l'autre parent dans le coffre-fort.</div>
+          </div>
+        </div>
+      )}
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <div>
+          <div style={{fontSize:16,fontWeight:900}}>🗄️ {t.vaultTitle||"Coffre-fort"}</div>
+          <div style={{fontSize:11,color:C.mut}}>{t.vaultSub||"Documents importants de la famille"}</div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          <InfoBubble C={C} tipKey={`duvia_vaulttip_${user?.id||"x"}`} title={t.vaultTitle||"Coffre-fort"}>
+            {t.vaultTipBody||"Conservez ici les documents importants de la famille (jugements, médical, scolaire…). Réservé aux abonnés Premium. Limite : 1 Go de stockage total."}
+          </InfoBubble>
+        </div>
+      </div>
+
+      {/* Jauge de stockage — uniquement si full Premium */}
+      {prem && (
+        <div style={{marginBottom:14}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.mut,fontWeight:700,marginBottom:4}}>
+            <span>Stockage utilisé</span>
+            <span>{totalSizeBytes < 1024*1024 ? `${(totalSizeBytes/1024).toFixed(0)} Ko` : totalSizeMB + " Mo"} / {VAULT_MAX_LABEL}</span>
+          </div>
+          <div style={{height:6,background:C.bor,borderRadius:4,overflow:"hidden"}}>
+            <div style={{
+              height:"100%",
+              width:`${Math.min(100,(totalSizeBytes/VAULT_MAX_BYTES)*100)}%`,
+              background:totalSizeBytes/VAULT_MAX_BYTES>0.9?C.red:totalSizeBytes/VAULT_MAX_BYTES>0.7?C.ora:C.vio,
+              borderRadius:4,transition:"width .4s ease"
+            }}/>
+          </div>
+          {totalSizeBytes/VAULT_MAX_BYTES>0.9&&(
+            <div style={{fontSize:10,color:C.red,fontWeight:700,marginTop:4}}>⚠️ Stockage presque plein</div>
+          )}
+        </div>
+      )}
+
+      {/* Search + filter */}
+      <div style={{display:"flex",gap:8,marginBottom:14}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={t.vaultSearch||"Rechercher…"}
+          style={{flex:1,minWidth:0}} />
+        <div style={{position:"relative",flexShrink:0}}>
+          <button onClick={()=>setShowFilterMenu(v=>!v)}
+            style={{height:44,padding:"0 14px",background:filterCat!=="all"?`${C.vio}18`:C.inp,border:`1.5px solid ${filterCat!=="all"?C.vio:C.bor}`,color:filterCat!=="all"?C.vio:C.txt,borderRadius:10,fontSize:13,display:"flex",alignItems:"center",gap:6,fontWeight:600,whiteSpace:"nowrap"}}>
+            <span>{filterCat==="all" ? (t.vaultAll||"Tous") : vaultCats[parseInt(filterCat)]?.split(" ")[0]||"🗂️"}</span>
+            <span style={{fontSize:10,color:C.mut}}>{showFilterMenu?"▲":"▼"}</span>
+          </button>
+          {showFilterMenu && (
+            <div style={{position:"absolute",top:"calc(100% + 4px)",right:0,minWidth:220,background:C.card,border:`1.5px solid ${C.vio}`,borderRadius:14,zIndex:50,overflow:"hidden",boxShadow:"0 8px 24px rgba(0,0,0,.22)"}}>
+              <button onClick={()=>{setFilterCat("all");setShowFilterMenu(false);}}
+                style={{width:"100%",height:44,padding:"0 14px",background:filterCat==="all"?`${C.vio}18`:"transparent",color:filterCat==="all"?C.vio:C.txt,textAlign:"left",fontSize:13,fontWeight:filterCat==="all"?800:600,display:"flex",alignItems:"center",gap:8,borderBottom:`1px solid ${C.bor}`,borderRadius:0}}>
+                <span style={{fontSize:17,width:24,textAlign:"center"}}>🗂️</span>
+                <span>{t.vaultAll||"Tous"}</span>
+                {filterCat==="all" && <span style={{marginLeft:"auto",fontSize:12}}>✓</span>}
+              </button>
+              {vaultCats.map((c,i)=>(
+                <button key={i} onClick={()=>{setFilterCat(String(i));setShowFilterMenu(false);}}
+                  style={{width:"100%",height:44,padding:"0 14px",background:filterCat===String(i)?`${C.vio}18`:"transparent",color:filterCat===String(i)?C.vio:C.txt,textAlign:"left",fontSize:13,fontWeight:filterCat===String(i)?800:600,display:"flex",alignItems:"center",gap:8,borderBottom:i<vaultCats.length-1?`1px solid ${C.bor}`:"none",borderRadius:0,transition:"background .1s"}}>
+                  <span style={{fontSize:17,width:24,textAlign:"center"}}>{c.split(" ")[0]}</span>
+                  <span>{c.replace(/^[^\s]+ /,"")}</span>
+                  {filterCat===String(i) && <span style={{marginLeft:"auto",fontSize:12}}>✓</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Add button */}
+      {!isObs && (
+        <button onClick={openAdd} style={{width:"100%",marginBottom:14,height:44,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:13,fontWeight:800,borderRadius:10}}>
+          + {t.vaultAdd?.replace("+ ","")||"Ajouter un document"}
+        </button>
+      )}
+
+      {/* Stats bar */}
+      {docs.length > 0 && (
+        <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+          {vaultCats.map((c,i)=>{
+            const count = docs.filter(d=>d.category_idx===i).length;
+            if (!count) return null;
+            return (
+              <button key={i} onClick={()=>setFilterCat(filterCat===String(i)?"all":String(i))}
+                style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",background:filterCat===String(i)?`${C.vio}22`:C.sur,border:`1.5px solid ${filterCat===String(i)?C.vio:C.bor}`,borderRadius:20,fontSize:11,color:filterCat===String(i)?C.vio:C.mut,fontWeight:700,cursor:"pointer"}}>
+                <span>{c.split(" ")[0]}</span>
+                <span style={{background:filterCat===String(i)?C.vio:C.bor,color:filterCat===String(i)?"#fff":C.txt,borderRadius:"50%",width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800}}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {filtered.length === 0 && (
+        <div style={{textAlign:"center",padding:"48px 20px",color:C.mut}}>
+          <div style={{fontSize:44,marginBottom:12}}>🗄️</div>
+          <div style={{fontSize:14,fontWeight:700}}>{t.vaultEmpty||"Aucun document enregistré."}</div>
+          {!isObs && <div style={{fontSize:12,marginTop:8,opacity:.7}}>Appuyez sur + pour ajouter un premier document</div>}
+        </div>
+      )}
+
+      {/* Pinned section */}
+      {pinned.length > 0 && (
+        <div style={{marginBottom:4}}>
+          <div style={{fontSize:10,fontWeight:800,color:C.vio,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+            <span>📌</span> {t.vaultPinned||"Épinglés"}
+          </div>
+          {pinned.map(doc=>(
+            <div key={doc.id} style={{position:"relative"}}>
+              <DocCard doc={doc} />
+              {!isObs && (
+                <button onClick={e=>{e.stopPropagation();togglePin(doc.id);}}
+                  style={{position:"absolute",top:10,right:10,background:"transparent",border:"none",fontSize:16,cursor:"pointer",opacity:1,padding:"2px 4px",lineHeight:1}} title="Désépingler">
+                  📌
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Other docs */}
+      {others.length > 0 && (
+        <div>
+          {pinned.length > 0 && (
+            <div style={{fontSize:10,fontWeight:800,color:C.mut,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8,marginTop:4}}>
+              {t.vaultOther||"Autres documents"}
+            </div>
+          )}
+          {others.map(doc=>(
+            <div key={doc.id} style={{position:"relative"}}>
+              <DocCard doc={doc} />
+              {!isObs && (
+                <button onClick={e=>{e.stopPropagation();togglePin(doc.id);}}
+                  style={{position:"absolute",top:10,right:10,background:"transparent",border:"none",fontSize:16,cursor:"pointer",opacity:0.3,padding:"2px 4px",lineHeight:1,transition:"opacity .15s"}} title="Épingler"
+                  onMouseEnter={e=>e.currentTarget.style.opacity="1"} onMouseLeave={e=>e.currentTarget.style.opacity="0.3"}>
+                  📌
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Confirm delete modal (main list) */}
+      {confirmDel && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.card,borderRadius:16,padding:24,maxWidth:320,width:"100%",textAlign:"center",border:`1.5px solid ${C.bor}`}}>
+            <div style={{fontSize:32,marginBottom:10}}>🗑️</div>
+            <div style={{fontSize:15,fontWeight:800,marginBottom:8}}>{t.vaultConfirmDel||"Supprimer ce document ?"}</div>
+            <div style={{display:"flex",gap:10,marginTop:18}}>
+              <button onClick={()=>setConfirmDel(null)} style={{flex:1,padding:"10px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontWeight:700}}>{t.vaultCancel||"Annuler"}</button>
+              <button onClick={()=>deleteDoc(confirmDel)} style={{flex:1,padding:"10px",background:C.red,color:"#fff",fontWeight:800}}>🗑 {t.vaultDelete||"Supprimer"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+// ─── VAULT TAB END ────────────────────────────────────────────────────────────
