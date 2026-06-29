@@ -2776,7 +2776,31 @@ export default function App() {
     })();
   }, [familySync.familyId, user?.id]);
 
-  // ── Diagnostic : capture d'erreurs globales + réessai d'un rapport en attente ─
+  // ── Vérification plan d'abonnement depuis Supabase ───────────────────────
+  // Écrase le plan localStorage avec la valeur serveur — résiste à la falsification
+  useEffect(() => {
+    if (!myUid || user?.role === "admin") return;
+    (async () => {
+      try {
+        const { data: subRow } = await supabase
+          .from("subscriptions")
+          .select("plan, premium_since, cycle, trial_start, trial_extension_days")
+          .eq("user_id", myUid)
+          .maybeSingle();
+        if (!subRow) return;
+        setSub(s => ({
+          ...s,
+          plan:          subRow.plan            || s.plan,
+          premiumSince:  subRow.premium_since   || s.premiumSince,
+          cycle:         subRow.cycle           || s.cycle,
+          trialStart:    subRow.trial_start     || s.trialStart,
+          trialExtension:subRow.trial_extension_days ?? s.trialExtension,
+        }));
+      } catch (e) {
+        console.error("[Duvia] Erreur vérification plan:", e);
+      }
+    })();
+  }, [myUid]);
   useEffect(() => {
     initDiagnostics();
     retryPendingReport();
