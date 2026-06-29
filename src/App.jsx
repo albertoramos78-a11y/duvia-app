@@ -3480,7 +3480,7 @@ export default function App() {
     setDeleteAccountError("");
 
     // ── 1. Suppression réelle en base via Edge Function Supabase ──────────────
-    if(_supaReady){
+    if(myUid){
       try {
         // Nettoyage table subscriptions avant suppression du compte
         if(myUid) await supabase.from("subscriptions").delete().eq("user_id", myUid);
