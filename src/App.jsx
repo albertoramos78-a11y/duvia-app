@@ -6386,10 +6386,6 @@ function FamilySyncCard() {
             <span style={{fontSize:11,color:C.mut,fontWeight:700}}>{t.familyCode} :</span>
             <span style={{fontFamily:"JetBrains Mono",fontSize:15,fontWeight:800,letterSpacing:2,color:C.vio}}>{cfg.shareCode}</span>
           </div>
-
-          {/* Bloc « Rejoindre une famille existante » masqué : l'ajout d'un 2e
-              parent se fait via le lien d'invitation (carte Invité). On garde
-              uniquement l'affichage du code famille à partager ci-dessus. */}
         </>
       )}
     </div>
