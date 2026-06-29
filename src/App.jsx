@@ -14434,19 +14434,35 @@ function VaultTab() {
     .sort((a,b) => new Date(b.created_at||0) - new Date(a.created_at||0));
 
   // ── Détection nouveaux docs (autre parent) → popup OS + point rouge ────────
+  const lastVisitKey = `duvia_vault_last_visit_${user?.id||"x"}`;
   const seenVaultIdsRef = useRef(null);
+  // Au premier montage : détecter les docs ajoutés pendant l'absence
   useEffect(() => {
     if (!docs || docs.length === 0) return;
-    const _myUidStr = myUid ? String(myUid) : null;
+    const prevVisit = localStorage.getItem(lastVisitKey) || "";
+    localStorage.setItem(lastVisitKey, new Date().toISOString());
+    if (!prevVisit) return;
+    const toAdd = docs.filter(d =>
+      d.added_by_name !== myDisplayName &&
+      (d.created_at || "") > prevVisit
+    ).map(d => d.id);
+    if (toAdd.length > 0)
+      setUnreadDocIds(ids => [...ids, ...toAdd.filter(id => !ids.includes(id))]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // mount uniquement
+
+  // En temps réel : nouveaux docs pendant la session
+  useEffect(() => {
+    if (!docs || docs.length === 0) return;
     if (seenVaultIdsRef.current === null) {
       seenVaultIdsRef.current = new Set(docs.map(d => d.id));
       return;
     }
     const newDocs = docs.filter(d => !seenVaultIdsRef.current.has(d.id));
     docs.forEach(d => seenVaultIdsRef.current.add(d.id));
-    const fromOthers = newDocs.filter(d => !_myUidStr || String(d.uploaded_by||d.user_id) !== _myUidStr);
+    // Filtrer : uniquement les docs ajoutés par l'AUTRE parent
+    const fromOthers = newDocs.filter(d => d.added_by_name !== myDisplayName);
     if (fromOthers.length === 0) return;
-    // Ajouter aux non-lus
     setUnreadDocIds(ids => {
       const toAdd = fromOthers.map(d => d.id).filter(id => !ids.includes(id));
       return toAdd.length ? [...ids, ...toAdd] : ids;
@@ -14461,7 +14477,7 @@ function VaultTab() {
         } else { try{ new Notification(t.appName,{body}); }catch(e){} }
       }
     });
-  }, [docs, myUid]);
+  }, [docs, myDisplayName]);
 
   // Premium gate
   if (!prem) {
