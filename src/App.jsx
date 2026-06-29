@@ -2711,14 +2711,7 @@ export default function App() {
   const brandActive = themeMode==="palette";
 
   // ── Session (email stored, user object restored from users list) ──────────
-  // sessionEmail en mémoire — pas de persistance sauf si "Rester connecté" coché
-  const [sessionEmail, setSessionEmail] = useState(() => {
-    try {
-      const remember = window.localStorage.getItem("duvia_remember") === "1";
-      if (!remember) return null; // pas de persistence → reconnexion requise
-      return JSON.parse(window.localStorage.getItem("duvia_session") || "null");
-    } catch { return null; }
-  });
+  const [sessionEmail, setSessionEmail] = useLocalStorage("duvia_session", null);
   const [user, setUser] = useState(() => {
     if (!sessionEmail) return null;
     // 🔒 Sécurité appareil partagé : on ne restaure la session de l'app QUE si
@@ -2861,12 +2854,11 @@ export default function App() {
   // revenant. Les rechargements INTERNES de l'app (éjection, quitter, nouvelle
   // version…) posent un drapeau via duviaReload() et sont donc épargnés.
   useEffect(() => {
-    // Consomme un éventuel drapeau laissé par le rechargement précédent.
     try { window.sessionStorage.removeItem("duvia_internal_reload"); } catch {}
     const onLeave = () => {
       try {
-        if (window.localStorage.getItem("duvia_remember") === "1") return; // rester connecté
-        if (window.sessionStorage.getItem("duvia_internal_reload") === "1") { // reload interne
+        if (window.localStorage.getItem("duvia_remember") === "1") return; // rester connecté → rien effacer
+        if (window.sessionStorage.getItem("duvia_internal_reload") === "1") {
           window.sessionStorage.removeItem("duvia_internal_reload"); return;
         }
         // Efface les jetons d'auth (les deux stockages) + la session locale.
@@ -2874,6 +2866,7 @@ export default function App() {
           Object.keys(store).filter(k => k.startsWith("sb-")).forEach(k => store.removeItem(k));
         });
         window.localStorage.removeItem("duvia_session");
+
       } catch {}
     };
     window.addEventListener("pagehide", onLeave);
