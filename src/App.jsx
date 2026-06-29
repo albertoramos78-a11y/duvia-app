@@ -3266,7 +3266,7 @@ export default function App() {
     try{ const raw=window.localStorage.getItem("duvia_activity"); if(raw)return JSON.parse(raw); }catch{}
     return activity;
   }, [activity, activityTick]); // ✅ recalculé uniquement si activity ou tick change
-  const vaultDot   = liveActivity.vault?.by   && liveActivity.vault.by!==_myId   && liveActivity.vault.ts   >(_seen.vault  ||"");
+  const vaultDot   = cfg.vaultActivity?.by && cfg.vaultActivity.by!==_myId && cfg.vaultActivity.ts>(_seen.vault||"");
   const contactsDot= liveActivity.contacts?.by && liveActivity.contacts.by!==_myId && liveActivity.contacts.ts>(_seen.contacts||"");
   // Vibration dépenses = dépenses EN ATTENTE créées par l'autre parent (source DB)
   const expPendingDot = (allExpenses||[]).some(e =>
@@ -14348,7 +14348,7 @@ function VaultTab() {
         }, newFile, removeFile);
         pushNotif(`✏️ Document modifié : "${cleanDocName}"`, "vault");
         addHist("Document modifié", `${myDisplayName} — "${cleanDocName}"`, "vault");
-        setActivity(a=>({...a,vault:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
+        setActivity(a=>({...a,vault:{ts:new Date().toISOString(),by:String(user?.id||"")}})); setCfg(c=>({...c,vaultActivity:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
         // Email notification
         try { supabase.functions.invoke("notify-vault", { body: { action:"update", docName:cleanDocName, byName:myDisplayName, familyId:familySync?.familyId } }).catch(()=>{}); } catch(e){}
       } else {
@@ -14359,7 +14359,7 @@ function VaultTab() {
         pushNotif(`🗄️ Document ajouté : "${cleanDocName}"`, "vault");
         addHist("Nouveau document", `${myDisplayName} — "${cleanDocName}"`, "vault");
         setActivity(a=>({...a,vault:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
-        addRefAction("UPLOAD_DOC");
+        setActivity(a=>({...a,vault:{ts:new Date().toISOString(),by:String(user?.id||"")}})); setCfg(c=>({...c,vaultActivity:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
         // Email géré par le webhook Supabase (INSERT → notify-vault)
       }
       setShowForm(false);
@@ -14379,7 +14379,7 @@ function VaultTab() {
       pushNotif(`🗑️ Document supprimé : "${docName}"`, "vault");
       addHist("Document supprimé", `${myDisplayName} — "${docName}"`, "vault");
       setActivity(a=>({...a,vault:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
-      try { supabase.functions.invoke("notify-vault", { body: { action:"delete", docName, byName:myDisplayName, familyId:familySync?.familyId } }).catch(()=>{}); } catch(e){}
+      setActivity(a=>({...a,vault:{ts:new Date().toISOString(),by:String(user?.id||"")}})); setCfg(c=>({...c,vaultActivity:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
     } catch (e) {
       alert("⚠️ Erreur lors de la suppression : " + (e?.message || e));
     }
@@ -14634,7 +14634,9 @@ function VaultTab() {
   }
 
   // Main list
-  const DocCard = ({doc}) => (
+  const DocCard = ({doc}) => {
+    const uploadedAt = doc.created_at ? new Date(doc.created_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) : null;
+    return (
     <div style={{background:C.card,border:`1.5px solid ${doc.pinned?C.vio:C.bor}`,borderRadius:14,padding:"12px 14px",marginBottom:10,cursor:"pointer",transition:"all .15s",borderLeft:doc.pinned?`4px solid ${C.vio}`:undefined}}
       onClick={()=>setPreviewDoc(doc)}>
       <div style={{display:"flex",gap:12,alignItems:"center"}}>
@@ -14643,18 +14645,16 @@ function VaultTab() {
         </div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:14,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{doc.name}</div>
-          <div style={{fontSize:11,color:C.mut,marginTop:2}}>{catLabel(doc.category_idx)}{doc.doc_date ? " · " + doc.doc_date : ""}</div>
+          <div style={{fontSize:11,color:C.mut,marginTop:2}}>
+            {catLabel(doc.category_idx)}{doc.doc_date ? " · " + doc.doc_date : ""}
+            {uploadedAt ? <span style={{marginLeft:6,opacity:.7}}>· {uploadedAt}</span> : null}
+          </div>
           {doc.notes && <div style={{fontSize:11,color:C.mut,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{doc.notes}</div>}
         </div>
-        {!doc.pinned && (
-          <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"center",flexShrink:0}}>
-            {doc.file_name && <span style={{fontSize:14}}>{doc.mime_type?.includes("pdf")?"📄":"🖼️"}</span>}
-            {doc.shared && <span style={{fontSize:11,color:C.mut}}>👥</span>}
-          </div>
-        )}
       </div>
     </div>
   );
+  };
 
   return (
     <div className="fi">
