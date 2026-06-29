@@ -3603,7 +3603,7 @@ export default function App() {
         {icon:"📞",label:t.tabContacts||"Contacts"},
         {icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},
       ]
-    : [{icon:"📅",label:t.tabCal},{icon:"🎒",label:t.tabSchedule||"EDT"},{icon:"💰",label:t.tabExp,badge:expPendingDot?1:0,wobbleOnly:true},{icon:"📞",label:t.tabContacts||"Contacts",badge:contactsDot?1:0},{icon:"🗄️",label:t.tabVault||"Coffre",badge:vaultDot?1:0},{icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},{icon:"🎡",label:t.tabGame||"Jeu"}];
+    : [{icon:"📅",label:t.tabCal},{icon:"🎒",label:t.tabSchedule||"EDT"},{icon:"💰",label:t.tabExp,badge:expPendingDot?1:0},{icon:"📞",label:t.tabContacts||"Contacts",badge:contactsDot?1:0},{icon:"🗄️",label:t.tabVault||"Coffre",badge:vaultDot?1:0},{icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},{icon:"🎡",label:t.tabGame||"Jeu"}];
 
   // ── Context value ─────────────────────────────────────────────────────────
   const onUpgrade = () => { setMenuTab("premium"); setShowMenu(false); };
@@ -14197,7 +14197,7 @@ function GameTab() {
 // VAULT TAB — Coffre-fort de documents
 // ═══════════════════════════════════════════════════════════════════════════════
 function VaultTab() {
-  const { C, t, cfg, setCfg, user, users, prem, perms, onUpgrade, isObs, setActivity, addRefAction, sub, familySync } = useApp();
+  const { C, t, cfg, setCfg, user, users, prem, perms, onUpgrade, isObs, setActivity, addRefAction, sub, familySync, pushNotif, addHist, myUid } = useApp();
   const premFull = isPremFull(sub);
 
   // Identité cloud de la personne connectée (nécessaire pour savoir qui a uploadé quoi)
@@ -14346,13 +14346,21 @@ function VaultTab() {
         await updateDoc(editDoc.id, {
           name: cleanDocName, category_idx: formCat, doc_date: formDate, notes: cleanNotes, shared: formShared,
         }, newFile, removeFile);
+        pushNotif(`✏️ Document modifié : "${cleanDocName}"`, "vault");
+        addHist("Document modifié", `${myDisplayName} — "${cleanDocName}"`, "vault");
+        setActivity(a=>({...a,vault:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
+        // Email notification
+        try { supabase.functions.invoke("notify-vault", { body: { action:"update", docName:cleanDocName, byName:myDisplayName, familyId:familySync?.familyId } }).catch(()=>{}); } catch(e){}
       } else {
         await addDoc({
           name: cleanDocName, categoryIdx: formCat, docDate: formDate, notes: cleanNotes, shared: formShared,
           file: formFile ? formFile.rawFile : null,
         }, myDisplayName);
+        pushNotif(`🗄️ Document ajouté : "${cleanDocName}"`, "vault");
+        addHist("Nouveau document", `${myDisplayName} — "${cleanDocName}"`, "vault");
         setActivity(a=>({...a,vault:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
         addRefAction("UPLOAD_DOC");
+        // Email géré par le webhook Supabase (INSERT → notify-vault)
       }
       setShowForm(false);
       setEditDoc(null);
@@ -14364,8 +14372,14 @@ function VaultTab() {
   }
 
   async function deleteDoc(id) {
+    const docToDelete = docs.find(d => d.id === id);
+    const docName = docToDelete?.name || "Document";
     try {
       await removeDoc(id);
+      pushNotif(`🗑️ Document supprimé : "${docName}"`, "vault");
+      addHist("Document supprimé", `${myDisplayName} — "${docName}"`, "vault");
+      setActivity(a=>({...a,vault:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
+      try { supabase.functions.invoke("notify-vault", { body: { action:"delete", docName, byName:myDisplayName, familyId:familySync?.familyId } }).catch(()=>{}); } catch(e){}
     } catch (e) {
       alert("⚠️ Erreur lors de la suppression : " + (e?.message || e));
     }
@@ -14397,8 +14411,33 @@ function VaultTab() {
     return matchCat && matchSearch;
   });
 
-  const pinned = filtered.filter(d => d.pinned);
-  const others = filtered.filter(d => !d.pinned);
+  const pinned = filtered.filter(d => d.pinned)
+    .sort((a,b) => new Date(b.created_at||0) - new Date(a.created_at||0));
+  const others = filtered.filter(d => !d.pinned)
+    .sort((a,b) => new Date(b.created_at||0) - new Date(a.created_at||0));
+
+  // ── Popup OS quand l'autre parent ajoute un doc ──────────────────────────
+  const seenVaultIdsRef = useRef(null);
+  useEffect(() => {
+    if (!docs || docs.length === 0) return;
+    const _myUidStr = myUid ? String(myUid) : null;
+    if (seenVaultIdsRef.current === null) {
+      seenVaultIdsRef.current = new Set(docs.map(d => d.id));
+      return;
+    }
+    const newDocs = docs.filter(d => !seenVaultIdsRef.current.has(d.id));
+    docs.forEach(d => seenVaultIdsRef.current.add(d.id));
+    const toNotify = newDocs.filter(d => !_myUidStr || String(d.uploaded_by||d.user_id) !== _myUidStr);
+    toNotify.forEach(d => {
+      const who = resolveAddedBy(d.added_by_name||"").label;
+      const body = `🗄️ ${who} a ajouté "${d.name}"`;
+      if(window.Notification && Notification.permission === "granted"){
+        if(navigator.serviceWorker?.controller){
+          navigator.serviceWorker.ready.then(reg=>reg.showNotification(t.appName,{body})).catch(()=>{});
+        } else { try{ new Notification(t.appName,{body}); }catch(e){} }
+      }
+    });
+  }, [docs, myUid]);
 
   // Premium gate
   if (!prem) {
@@ -14727,8 +14766,8 @@ function VaultTab() {
               <DocCard doc={doc} />
               {!isObs && (
                 <button onClick={e=>{e.stopPropagation();togglePin(doc.id);}}
-                  style={{position:"absolute",top:10,right:10,padding:"3px 8px",background:`${C.vio}22`,color:C.vio,border:"none",borderRadius:6,fontSize:10,fontWeight:700,zIndex:1}}>
-                  {t.vaultUnpin||"Désépingler"}
+                  style={{position:"absolute",top:10,right:10,background:"transparent",border:"none",fontSize:16,cursor:"pointer",opacity:1,padding:"2px 4px",lineHeight:1}} title="Désépingler">
+                  📌
                 </button>
               )}
             </div>
@@ -14749,8 +14788,9 @@ function VaultTab() {
               <DocCard doc={doc} />
               {!isObs && (
                 <button onClick={e=>{e.stopPropagation();togglePin(doc.id);}}
-                  style={{position:"absolute",top:10,right:10,padding:"3px 8px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:6,fontSize:10,fontWeight:700,zIndex:1}}>
-                  {t.vaultPin||"Épingler"}
+                  style={{position:"absolute",top:10,right:10,background:"transparent",border:"none",fontSize:16,cursor:"pointer",opacity:0.3,padding:"2px 4px",lineHeight:1,transition:"opacity .15s"}} title="Épingler"
+                  onMouseEnter={e=>e.currentTarget.style.opacity="1"} onMouseLeave={e=>e.currentTarget.style.opacity="0.3"}>
+                  📌
                 </button>
               )}
             </div>
