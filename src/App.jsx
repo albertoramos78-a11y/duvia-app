@@ -12577,8 +12577,9 @@ function MessagingTab(){
                   ):(
                     <div style={{width:32,flexShrink:0}}/>
                   )}
-                  {/* Colonne bulle + métadonnées */}
-                  <div style={{maxWidth:"78%",display:"flex",flexDirection:"column",alignItems:isMe?"flex-end":"flex-start"}}>
+                  {/* Bulle + épingle côte à côte */}
+                  <div style={{maxWidth:"78%",display:"flex",flexDirection:isMe?"row-reverse":"row",alignItems:"flex-end",gap:4}}>
+                  <div style={{display:"flex",flexDirection:"column",alignItems:isMe?"flex-end":"flex-start",minWidth:0,flex:1}}>
                     {!isMe&&isGroup&&<div style={{fontSize:10,color:col,marginBottom:3,fontWeight:700,paddingLeft:2}}>{m.fromName}</div>}
                     {/* Bulle */}
                     <div onClick={()=>setShowProof(showProof===m.id?null:m.id)} style={{
@@ -12625,19 +12626,13 @@ function MessagingTab(){
                           {att.caption && <div style={{marginTop:attIsImg?6:2,padding:attIsImg?"0 4px":0}}>{att.caption}</div>}
                         </>
                       )}
+                      {/* Heure + lu — intégrée dans la bulle */}
+                      <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",gap:3,marginTop:att&&attIsImg?4:5,marginBottom:-2}}>
+                        <span style={{fontSize:10,opacity:.72,color:isMe?"rgba(255,255,255,.82)":C.mut}}>{hhmm}</span>
+                        {isMe&&<span style={{color:readOk?"rgba(255,255,255,.92)":"rgba(255,255,255,.4)",fontWeight:800,fontSize:10}}>{readOk?"✓✓":"✓"}</span>}
+                      </div>
                     </div>
-                    {/* Métadonnées sous la bulle : heure + épingle */}
-                    <div style={{display:"flex",flexDirection:isMe?"row-reverse":"row",alignItems:"center",gap:6,marginTop:4,paddingLeft:isMe?0:2,paddingRight:isMe?2:0}}>
-                      {/* Heure + lu */}
-                      <span style={{fontSize:10,color:C.mut,display:"flex",alignItems:"center",gap:3}}>
-                        {hhmm}{isMe&&<span style={{color:readOk?C.vio:C.bor,fontWeight:800,fontSize:11}}>{readOk?"✓✓":"✓"}</span>}
-                      </span>
-                      {/* Bouton épingle */}
-                      <button onClick={()=>toggleMsgPin(m.id)} style={{background:"transparent",border:"none",fontSize:12,cursor:"pointer",opacity:isPinned?1:0.25,padding:0,lineHeight:1,transition:"opacity .15s"}} title={isPinned?"Désépingler":"Épingler"}>
-                        📌
-                      </button>
-                      {isPinned&&<span style={{fontSize:9,color:C.vio,fontWeight:700}}>épinglé</span>}
-                    </div>
+
                     {/* Proof hash — compact, discret */}
                     {showProof===m.id&&(
                       <div style={{marginTop:4,padding:"6px 10px",background:verified?`${C.grn}12`:`${C.red}12`,borderRadius:10,border:`1px solid ${verified?C.grn+"40":C.red+"40"}`,fontSize:10,maxWidth:"100%"}}>
@@ -12647,7 +12642,10 @@ function MessagingTab(){
                         <span style={{color:C.mut,fontFamily:"monospace",marginLeft:6,letterSpacing:.5}}>#{(m.hash||"").slice(0,8)}</span>
                       </div>
                     )}
-                  </div>
+                  </div>{/* fin colonne bulle */}
+                  {/* Bouton épingle — à côté de la bulle */}
+                  <button onClick={()=>toggleMsgPin(m.id)} style={{background:"transparent",border:"none",fontSize:13,cursor:"pointer",opacity:isPinned?1:0.35,padding:"2px 4px",lineHeight:1,transition:"opacity .15s",flexShrink:0,alignSelf:"flex-end",marginBottom:4}} title={isPinned?"Désépingler":"Épingler"}>📌</button>
+                  </div>{/* fin row bulle+épingle */}
                 </div>
               </div>
             );
