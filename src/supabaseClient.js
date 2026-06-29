@@ -1,16 +1,19 @@
 import { createClient } from "@supabase/supabase-js";
 
-// Ces deux valeurs sont publiques par conception (clé "anon").
-// La vraie sécurité est gérée par les règles RLS dans Supabase.
-const SUPABASE_URL = "https://ifhriyvvqkwqgzmrjjxp.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmaHJpeXZ2cWt3cWd6bXJqanhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0NDg0NjEsImV4cCI6MjA5NzAyNDQ2MX0.7OoRpsQccKcM6OdNU6gD-sQEqZpV8HnXSDIA5HJSZ4Q";
+// Les clés sont lues depuis les variables d'environnement Vercel (VITE_*)
+// Jamais hardcodées dans le code source.
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error("⚠️ Variables VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY manquantes.");
+}
 
 // Stockage de session « intelligent » :
 // - « Rester connecté » coché (duvia_remember=1) → token en localStorage
 //   (persiste après fermeture de l'onglet).
 // - sinon → sessionStorage (effacé à la fermeture de l'onglet) — sûr sur un
 //   appareil partagé entre co-parents.
-// Survit toujours aux rechargements internes (flux d'éjection).
 const REMEMBER_KEY = "duvia_remember";
 const smartStorage = (typeof window === "undefined") ? undefined : {
   getItem(k) {
