@@ -3353,68 +3353,48 @@ export default function App() {
     }
   }, [setCfg, t]); // ✅ référence stable
 
-  // ── Notifications OS pour l'autre parent (reçues via Realtime Supabase) ──
-  // cfg.notifs est partagé entre les deux parents via la DB.
-  // Quand Parent B reçoit une mise à jour Realtime, on détecte les nouvelles
-  // notifs (id > dernière connue) et on déclenche la notification OS locale.
+  // ── Notifications OS pour l'autre parent (dépenses/actions via cfg.notifs) ──
   const lastNotifIdRef = useRef(null);
   useEffect(() => {
     const notifs = cfg.notifs || [];
     if (notifs.length === 0) return;
     const latestId = notifs[0]?.id;
-    if (lastNotifIdRef.current === null) {
-      lastNotifIdRef.current = latestId;
-      return;
-    }
+    if (lastNotifIdRef.current === null) { lastNotifIdRef.current = latestId; return; }
     if (latestId === lastNotifIdRef.current) return;
     const newOnes = notifs.filter(n => n.id > lastNotifIdRef.current);
     lastNotifIdRef.current = latestId;
-    if (newOnes.length === 0) return;
-    if (!window.Notification || Notification.permission !== "granted") return;
+    if (newOnes.length === 0 || !window.Notification || Notification.permission !== "granted") return;
     newOnes.forEach(n => {
       if(navigator.serviceWorker?.controller){
         navigator.serviceWorker.ready.then(reg=>reg.showNotification(t.appName,{body:n.msg})).catch(()=>{});
-      } else {
-        try{ new Notification(t.appName,{body:n.msg}); }catch(e){}
-      }
+      } else { try{ new Notification(t.appName,{body:n.msg}); }catch(e){} }
     });
   }, [cfg.notifs, t]);
 
-  // ── Notifications OS pour les messages reçus (via Realtime useMessages) ──
-  // Les messages ne passent PAS par cfg.notifs — ils ont leur propre canal
-  // Realtime (table messages). On surveille le tableau msgs et on notifie
-  // uniquement les messages dont on est destinataire et qu'on n'a pas envoyés.
-  const lastMsgIdRef = useRef(null);
+  // ── Notifications OS pour les messages reçus (Realtime useMessages) ──
+  const seenMsgIdsRef = useRef(null);
   useEffect(() => {
     if (!msgs || msgs.length === 0) return;
-    const _myUidStr = String(myUid || _myId || "");
-    if (!_myUidStr) return;
-    // Trier par ts pour avoir le plus récent en premier
-    const sorted = [...msgs].sort((a,b) => b.ts > a.ts ? 1 : -1);
-    const latestId = sorted[0]?.id;
-    if (lastMsgIdRef.current === null) {
-      lastMsgIdRef.current = latestId;
-      return; // premier chargement — mémoriser sans notifier
+    const _myUidStr = myUid ? String(myUid) : null;
+    if (seenMsgIdsRef.current === null) {
+      seenMsgIdsRef.current = new Set(msgs.map(m => m.id));
+      return;
     }
-    if (latestId === lastMsgIdRef.current) return;
-    // Nouveaux messages : envoyés après le dernier connu, dont je suis destinataire, pas expéditeur
-    const newOnes = msgs.filter(m =>
-      m.id > lastMsgIdRef.current &&
+    const unseen = msgs.filter(m => !seenMsgIdsRef.current.has(m.id));
+    msgs.forEach(m => seenMsgIdsRef.current.add(m.id));
+    if (!_myUidStr || !window.Notification || Notification.permission !== "granted") return;
+    const toNotify = unseen.filter(m =>
       String(m.from) !== _myUidStr &&
-      (m.to||[]).map(String).includes(_myUidStr)
+      (m.to || []).map(String).includes(_myUidStr)
     );
-    lastMsgIdRef.current = latestId;
-    if (newOnes.length === 0 || !window.Notification || Notification.permission !== "granted") return;
-    newOnes.forEach(m => {
+    toNotify.forEach(m => {
       const senderName = m.fromName || t.appName;
-      const preview = (m.content||"").startsWith("__ATTACH__")
+      const preview = (m.content || "").startsWith("__ATTACH__")
         ? `📎 ${senderName} a partagé un fichier`
-        : `💬 ${senderName} : ${(m.content||"").slice(0,80)}`;
+        : `💬 ${senderName} : ${(m.content || "").slice(0, 80)}`;
       if(navigator.serviceWorker?.controller){
-        navigator.serviceWorker.ready.then(reg=>reg.showNotification(t.appName,{body:preview})).catch(()=>{});
-      } else {
-        try{ new Notification(t.appName,{body:preview}); }catch(e){}
-      }
+        navigator.serviceWorker.ready.then(reg => reg.showNotification(t.appName, {body: preview})).catch(()=>{});
+      } else { try{ new Notification(t.appName, {body: preview}); }catch(e){} }
     });
   }, [msgs, myUid, _myId, t]);
 
@@ -10116,22 +10096,15 @@ function ExpTab() {
     try {
       if(editId){
         if(editScope==="series"){
-          // Modifier toute la série : recalculer les occurrences et remplacer
           const existing=(ctxExpenses||[]).find(x=>x.id===editId);
           const rid=existing?.recurringId;
           if(rid && form.recurring && form.recurringEnd){
             const occurrences=getOccurrences(form.date,form.recurringEnd,form.recurringFreq);
-            const newExpenses=occurrences.map((d)=>({
-              ...payload,date:d,
-              recurringId:rid,recurringFreq:form.recurringFreq,
-              recurringStart:form.date,recurringEnd:form.recurringEnd,
-              status:"pending", createdBy: user?.parentIdx??0,
-            }));
+            const newExpenses=occurrences.map((d)=>({...payload,date:d,recurringId:rid,recurringFreq:form.recurringFreq,recurringStart:form.date,recurringEnd:form.recurringEnd,status:"pending",createdBy:user?.parentIdx??0}));
             await expMethods.updateExpensesBySeries(rid,newExpenses);
             { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`🔄 ${cleanLabel} · série (${occurrences.length} occ.) — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
             pushNotif(`✏️ ${form.label} — série modifiée, revalidation requise`,"exp");
           } else {
-            // Fallback: single
             await expMethods.updateExpense(editId,{...payload,status:"pending",createdBy:user?.parentIdx??0});
             { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
             pushNotif(`✏️ ${form.label} (${amt.toFixed(2)} ${currency}) modifiée — revalidation requise`,"exp");
@@ -10144,12 +10117,7 @@ function ExpTab() {
       } else if(form.recurring) {
         const occurrences = getOccurrences(form.date, form.recurringEnd, form.recurringFreq);
         const recurringId = String(Date.now());
-        const newExpenses = occurrences.map((d) => ({
-          ...payload, date: d,
-          recurringId, recurringFreq: form.recurringFreq,
-          recurringStart: form.date, recurringEnd: form.recurringEnd,
-          status:"pending", createdBy: user?.parentIdx??0,
-        }));
+        const newExpenses = occurrences.map((d) => ({...payload,date:d,recurringId,recurringFreq:form.recurringFreq,recurringStart:form.date,recurringEnd:form.recurringEnd,status:"pending",createdBy:user?.parentIdx??0}));
         await expMethods.addExpenses(newExpenses);
         { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.newExpense||"Nouvelle dépense",`🔄 ${cleanLabel} · ${occurrences.length} occ. — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
         pushNotif(`🔄 ${form.label} — ${occurrences.length} occurrence${occurrences.length>1?"s":""}` ,"exp");
@@ -12595,25 +12563,33 @@ function MessagingTab(){
             const readOk=(m.readBy||[]).some(id=>String(id)!==String(myUid));
             const hhmm=new Date(m.ts).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
             const col=pMap[String(m.from)]?.color||C.vio;
+            const isPinned=pinnedMsgIds.includes(m.id);
             return(
               <div key={m.id}>
                 {showDate&&<div style={{textAlign:"center",fontSize:11,color:C.mut,margin:"12px 0 8px",fontWeight:600}}>{new Date(m.ts).toLocaleDateString()}</div>}
-                <div style={{display:"flex",flexDirection:isMe?"row-reverse":"row",alignItems:"flex-end",gap:6,marginBottom:6,paddingLeft:isMe?44:0,paddingRight:isMe?0:44}}>
-                  {!isMe&&(
-                    <div style={{width:30,height:30,borderRadius:"50%",background:`linear-gradient(135deg,${col},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0,overflow:"hidden"}}>
+                {/* Ligne principale : avatar + colonne bulle */}
+                <div style={{display:"flex",flexDirection:isMe?"row-reverse":"row",alignItems:"flex-start",gap:8,marginBottom:4,paddingLeft:isMe?48:0,paddingRight:isMe?0:48}}>
+                  {/* Avatar — aligné en haut avec la bulle */}
+                  {!isMe?(
+                    <div style={{width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${col},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0,overflow:"hidden",marginTop:2}}>
                       {renderAvatar(pMap[String(m.from)]?.avatar)}
                     </div>
+                  ):(
+                    <div style={{width:32,flexShrink:0}}/>
                   )}
-                  <div style={{maxWidth:"78%"}}>
-                    {!isMe&&isGroup&&<div style={{fontSize:10,color:C.mut,marginBottom:2,fontWeight:700}}>{m.fromName}</div>}
+                  {/* Colonne bulle + métadonnées */}
+                  <div style={{maxWidth:"78%",display:"flex",flexDirection:"column",alignItems:isMe?"flex-end":"flex-start"}}>
+                    {!isMe&&isGroup&&<div style={{fontSize:10,color:col,marginBottom:3,fontWeight:700,paddingLeft:2}}>{m.fromName}</div>}
+                    {/* Bulle */}
                     <div onClick={()=>setShowProof(showProof===m.id?null:m.id)} style={{
                       padding:att&&attIsImg?6:"10px 13px",
                       background:isMe?`linear-gradient(135deg,${col},${col}cc)`:C.sur,
                       color:isMe?"#fff":C.txt,
-                      borderRadius:isMe?"18px 18px 4px 18px":"18px 18px 18px 4px",
+                      borderRadius:isMe?"18px 4px 18px 18px":"4px 18px 18px 18px",
                       fontSize:14,lineHeight:1.45,cursor:"pointer",
                       border:isMe?"none":`1px solid ${C.bor}`,
-                      boxShadow:"0 1px 4px rgba(0,0,0,.08)",wordBreak:"break-word"
+                      boxShadow:"0 1px 4px rgba(0,0,0,.08)",wordBreak:"break-word",
+                      position:"relative"
                     }}>
                       {!att ? (typeof m.content==="string"&&m.content.startsWith("§DUVIA_ATTACH§") ? <span style={{opacity:.6,fontSize:12}}>📄 Fichier (non disponible)</span> : m.content) : (
                         <>
@@ -12650,23 +12626,27 @@ function MessagingTab(){
                         </>
                       )}
                     </div>
-                    <div style={{display:"flex",justifyContent:isMe?"flex-end":"flex-start",alignItems:"center",gap:4,marginTop:2}}>
-                      <button onClick={()=>toggleMsgPin(m.id)} style={{background:"transparent",border:"none",fontSize:11,cursor:"pointer",opacity:pinnedMsgIds.includes(m.id)?1:0.3,padding:"0 2px"}} title={pinnedMsgIds.includes(m.id)?"Désépingler":"Épingler"}>
+                    {/* Métadonnées sous la bulle : heure + épingle */}
+                    <div style={{display:"flex",flexDirection:isMe?"row-reverse":"row",alignItems:"center",gap:6,marginTop:4,paddingLeft:isMe?0:2,paddingRight:isMe?2:0}}>
+                      {/* Heure + lu */}
+                      <span style={{fontSize:10,color:C.mut,display:"flex",alignItems:"center",gap:3}}>
+                        {hhmm}{isMe&&<span style={{color:readOk?C.vio:C.bor,fontWeight:800,fontSize:11}}>{readOk?"✓✓":"✓"}</span>}
+                      </span>
+                      {/* Bouton épingle */}
+                      <button onClick={()=>toggleMsgPin(m.id)} style={{background:"transparent",border:"none",fontSize:12,cursor:"pointer",opacity:isPinned?1:0.25,padding:0,lineHeight:1,transition:"opacity .15s"}} title={isPinned?"Désépingler":"Épingler"}>
                         📌
                       </button>
-                      {pinnedMsgIds.includes(m.id)&&<span style={{fontSize:9,color:C.mut}}>Épinglé</span>}
+                      {isPinned&&<span style={{fontSize:9,color:C.vio,fontWeight:700}}>épinglé</span>}
                     </div>
+                    {/* Proof hash — compact, discret */}
                     {showProof===m.id&&(
-                      <div style={{marginTop:4,padding:"7px 10px",background:verified?`${C.grn}15`:`${C.red}15`,borderRadius:8,border:`1px solid ${verified?C.grn:C.red}`,fontSize:10}}>
-                        <div style={{fontWeight:800,color:verified?C.grn:C.red,marginBottom:2}}>
-                          {verified?(t.msgVerified||"🔒 Message authentifié — Intégrité vérifiée"):(t.msgTampered||"⚠️ ALERTE — Message potentiellement modifié !")}
-                        </div>
-                        <div style={{color:C.mut,fontFamily:"monospace",letterSpacing:1,wordBreak:"break-all"}}>Hash: #{m.hash}</div>
+                      <div style={{marginTop:4,padding:"6px 10px",background:verified?`${C.grn}12`:`${C.red}12`,borderRadius:10,border:`1px solid ${verified?C.grn+"40":C.red+"40"}`,fontSize:10,maxWidth:"100%"}}>
+                        <span style={{fontWeight:700,color:verified?C.grn:C.red}}>
+                          {verified?"🔒 Intégrité vérifiée":"⚠️ Message modifié !"}
+                        </span>
+                        <span style={{color:C.mut,fontFamily:"monospace",marginLeft:6,letterSpacing:.5}}>#{(m.hash||"").slice(0,8)}</span>
                       </div>
                     )}
-                    <div style={{fontSize:10,color:C.mut,marginTop:3,display:"flex",gap:4,justifyContent:isMe?"flex-end":"flex-start",alignItems:"center"}}>
-                      {hhmm}{isMe&&<span style={{color:readOk?C.vio:C.bor,fontWeight:800}}>{readOk?"✓✓":"✓"}</span>}
-                    </div>
                   </div>
                 </div>
               </div>
