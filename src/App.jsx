@@ -3250,31 +3250,25 @@ export default function App() {
   const _seen = allSeen[_myId] || {vault:"",contacts:"",expenses:""};
   function _setSeen(updater){
     setAllSeen(prev=>{
+
       const cur=prev[_myId]||{vault:"",contacts:"",expenses:""};
       return {...prev,[_myId]:typeof updater==="function"?updater(cur):updater};
     });
   }
   // Sync activity depuis localStorage quand un autre user écrit (cross-session)
   const [activityTick,setActivityTick] = useState(0);
-  const [vaultUnreadTick,setVaultUnreadTick] = useState(0);
+  // Docs coffre non-lus — dans le contexte principal pour que vaultDot soit réactif
+  const [unreadVaultDocIds, setUnreadVaultDocIds] = useLocalStorage(`duvia_vault_unread_${_myId}`, []);
+  const vaultUnreadCount = unreadVaultDocIds.length;
   useEffect(()=>{
-    function onStorage(e){
-      if(e.key==="duvia_activity") setActivityTick(t=>t+1);
-      if(e.key?.includes("vault_unread")) setVaultUnreadTick(t=>t+1);
-    }
+    function onStorage(e){ if(e.key==="duvia_activity") setActivityTick(t=>t+1); }
     window.addEventListener("storage",onStorage);
     return()=>window.removeEventListener("storage",onStorage);
   },[]);
-  // Relire activity depuis localStorage si tick change — memoïsé
   const liveActivity = useMemo(() => {
     try{ const raw=window.localStorage.getItem("duvia_activity"); if(raw)return JSON.parse(raw); }catch{}
     return activity;
-  }, [activity, activityTick]); // ✅ recalculé uniquement si activity ou tick change
-  // Unread vault docs (localStorage, par user)
-  const vaultUnreadCount = useMemo(() => {
-    void vaultUnreadTick;
-    try{ const ids=JSON.parse(localStorage.getItem(`duvia_vault_unread_${_myId}`)||"[]"); return ids.length; }catch{ return 0; }
-  }, [vaultUnreadTick, _myId]);
+  }, [activity, activityTick]);
   const vaultDot   = (cfg.vaultActivity?.by && cfg.vaultActivity.by!==_myId && cfg.vaultActivity.ts>(_seen.vault||"")) || vaultUnreadCount>0;
   const contactsDot= liveActivity.contacts?.by && liveActivity.contacts.by!==_myId && liveActivity.contacts.ts>(_seen.contacts||"");
   // Vibration dépenses = dépenses EN ATTENTE créées par l'autre parent (source DB)
@@ -3626,6 +3620,7 @@ export default function App() {
     setMenuTab, setShowMenu,
     msgs, sendCloudMessage, markCloudMessageRead, myUid,
     activity, setActivity, allSeen, setAllSeen, _setSeen,
+    unreadVaultDocIds, setUnreadVaultDocIds,
     summerActive, setSummerActive, rgActive, setRgActive, wcActive, setWcActive, videoActive, setVideoActive,
     brandActive,
     handleSetUser,
@@ -14206,7 +14201,7 @@ function GameTab() {
 // VAULT TAB — Coffre-fort de documents
 // ═══════════════════════════════════════════════════════════════════════════════
 function VaultTab() {
-  const { C, t, cfg, setCfg, user, users, prem, perms, onUpgrade, isObs, setActivity, addRefAction, sub, familySync, pushNotif, addHist, myUid } = useApp();
+  const { C, t, cfg, setCfg, user, users, prem, perms, onUpgrade, isObs, setActivity, addRefAction, sub, familySync, pushNotif, addHist, myUid, unreadVaultDocIds, setUnreadVaultDocIds } = useApp();
   const premFull = isPremFull(sub);
 
   // Identité cloud de la personne connectée (nécessaire pour savoir qui a uploadé quoi)
@@ -14220,8 +14215,9 @@ function VaultTab() {
 
   // Épinglage par compte (localStorage) — chaque parent gère ses épingles
   const [pinnedDocIds, setPinnedDocIds] = useLocalStorage(`duvia_pinned_${user?.id||"x"}`, []);
-  // Docs non lus — point rouge jusqu'à ouverture
-  const [unreadDocIds, setUnreadDocIds] = useLocalStorage(`duvia_vault_unread_${user?.id||"x"}`, []);
+  // unreadVaultDocIds vient du contexte principal (réactif dans toute l'app)
+  const unreadDocIds = unreadVaultDocIds;
+  const setUnreadDocIds = setUnreadVaultDocIds;
   const docs = (rawDocs||[]).map(d=>({...d, pinned: pinnedDocIds.includes(d.id), unread: unreadDocIds.includes(d.id)}));
 
   // Ouvrir un doc : le marque comme lu
