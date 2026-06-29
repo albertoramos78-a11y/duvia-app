@@ -12246,13 +12246,13 @@ function MessagingTab(){
   const contacts=[
     ...(cfg.parents||[])
       .filter(p=>p.name && p.email && p.email!==user?.email)
-      .map(p=>_uByEmail[p.email]||{id:`cfgp_${p.email}`,name:p.name,email:p.email,role:"parent"}),
+      .map(p=>{ const u=_uByEmail[p.email]; return u?{...u,name:p.name}:{id:`cfgp_${p.email}`,name:p.name,email:p.email,role:"parent"}; }),
     ...(cfg.children||[])
       .filter(c=>c.name && _uByName[c.name])  // enfants seulement si compte local existant
       .map(c=>_uByName[c.name]),
     ...(cfg.observers||[])
       .filter(o=>o.status==="active"&&o.name)
-      .map(o=>_uByEmail[o.email]||{id:`cfgo_${o.email||o.name}`,name:o.name,email:o.email,role:"observer"}),
+      .map(o=>{ const u=_uByEmail[o.email]; return u?{...u,name:o.name}:{id:`cfgo_${o.email||o.name}`,name:o.name,email:o.email,role:"observer"}; }),
   ].filter(u=>String(u.id)!==myId&&!String(u.email||"").endsWith("@demo.fr"));
 
   // Enrichir pMap avec les membres cfg pas encore dans users (cross-device)
@@ -14433,34 +14433,33 @@ function VaultTab() {
   const others = filtered.filter(d => !d.pinned)
     .sort((a,b) => new Date(b.created_at||0) - new Date(a.created_at||0));
 
-  // ── Détection nouveaux docs (autre parent) → popup OS + point rouge ────────
+  // ── Enregistrer l'heure de départ du coffre (pour la prochaine visite) ────
   const lastVisitKey = `duvia_vault_last_visit_${user?.id||"x"}`;
-  const seenVaultIdsRef = useRef(null);
-  // Au premier montage : détecter les docs ajoutés pendant l'absence
   useEffect(() => {
-    if (!docs || docs.length === 0) return;
-    const prevVisit = localStorage.getItem(lastVisitKey) || "";
-    localStorage.setItem(lastVisitKey, new Date().toISOString());
-    if (!prevVisit) return;
-    const toAdd = docs.filter(d =>
-      d.added_by_name !== myDisplayName &&
-      (d.created_at || "") > prevVisit
-    ).map(d => d.id);
-    if (toAdd.length > 0)
-      setUnreadDocIds(ids => [...ids, ...toAdd.filter(id => !ids.includes(id))]);
+    return () => { localStorage.setItem(lastVisitKey, new Date().toISOString()); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // mount uniquement
+  }, []);
 
-  // En temps réel : nouveaux docs pendant la session
+  // ── Détection nouveaux docs (autre parent) → point rouge + popup OS ────────
+  const seenVaultIdsRef = useRef(null);
   useEffect(() => {
     if (!docs || docs.length === 0) return;
     if (seenVaultIdsRef.current === null) {
+      // Premier chargement : initialiser et détecter les docs manqués depuis la dernière visite
       seenVaultIdsRef.current = new Set(docs.map(d => d.id));
+      const prevVisit = localStorage.getItem(lastVisitKey) || "";
+      if (prevVisit) {
+        const toAdd = docs
+          .filter(d => d.added_by_name !== myDisplayName && (d.created_at||"") > prevVisit)
+          .map(d => d.id);
+        if (toAdd.length > 0)
+          setUnreadDocIds(ids => [...ids, ...toAdd.filter(id => !ids.includes(id))]);
+      }
       return;
     }
+    // Temps réel : nouveaux docs arrivés pendant la session
     const newDocs = docs.filter(d => !seenVaultIdsRef.current.has(d.id));
     docs.forEach(d => seenVaultIdsRef.current.add(d.id));
-    // Filtrer : uniquement les docs ajoutés par l'AUTRE parent
     const fromOthers = newDocs.filter(d => d.added_by_name !== myDisplayName);
     if (fromOthers.length === 0) return;
     setUnreadDocIds(ids => {
