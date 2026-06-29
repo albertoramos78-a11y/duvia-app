@@ -33,46 +33,7 @@ if (PH_KEY) {
 //     URL  → https://xxx.supabase.co
 //     KEY  → eyJhbGci... (clé anon publique)
 // ═══════════════════════════════════════════════════════════════════════════════
-const _SUPA_URL = "https://ifhriyvvqkwqgzmrjjxp.supabase.co";
-const _SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmaHJpeXZ2cWt3cWd6bXJqanhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0NDg0NjEsImV4cCI6MjA5NzAyNDQ2MX0.7OoRpsQccKcM6OdNU6gD-sQEqZpV8HnXSDIA5HJSZ4Q";
-const _supaReady = Boolean(_SUPA_URL && _SUPA_KEY);
-
-async function _supaFetch(path, options = {}) {
-  if (!_supaReady) throw new Error("Supabase non configuré (variables VITE_ manquantes).");
-  const res = await fetch(`${_SUPA_URL}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      "apikey": _SUPA_KEY,
-      "Authorization": `Bearer ${_SUPA_KEY}`,
-      ...(options.headers || {}),
-    },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || err.error || `Erreur HTTP ${res.status}`);
-  }
-  return res.status === 204 ? null : res.json().catch(() => null);
-}
-
-async function _supaFunction(name, body = {}) {
-  if (!_supaReady) throw new Error("Supabase non configuré.");
-  const res = await fetch(`${_SUPA_URL}/functions/v1/${name}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${_SUPA_KEY}`,
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || err.error || `Erreur Edge Function ${res.status}`);
-  }
-  return res.json().catch(() => null);
-}
-
-// Edge Function → voir fichier séparé : supabase/functions/delete-account/index.ts
+// ─── Edge Function → voir fichier séparé : supabase/functions/delete-account/index.ts
 
 
 // Preserve scroll position when expanding accordions
@@ -3479,7 +3440,7 @@ export default function App() {
       try {
         // Nettoyage table subscriptions avant suppression du compte
         if(myUid) await supabase.from("subscriptions").delete().eq("user_id", myUid);
-        await _supaFunction("delete-account", {
+        await supabase.functions.invoke("delete-account", {
           userId:   myUid || String(myId),
           email:    myEmail,
           familyId: familyId,
@@ -5780,14 +5741,7 @@ function PrefsTab() {
     if(error){ setPwErr("Erreur : "+error.message); return; }
     // Email de confirmation
     try{
-      const {data:{session}} = await supabase.auth.getSession();
-      if(session?.access_token){
-        await fetch(`${_SUPA_URL}/functions/v1/notify-password-change`,{
-          method:"POST",
-          headers:{"Content-Type":"application/json","Authorization":`Bearer ${session.access_token}`},
-          body:JSON.stringify({}),
-        }).catch(()=>{});
-      }
+      await supabase.functions.invoke("notify-password-change", {body:{}}).catch(()=>{});
     }catch{}
     setPwOld(""); setPwOk("✅ Mot de passe mis à jour !"); setPwMode(false); setPw(""); setPw2("");
     setShowPwOld(false); setShowPw(false); setShowPw2(false);
@@ -13602,8 +13556,18 @@ function WheelGame({ isPremium, isAdmin=false, restrictedRole=false, userId="", 
   // Cooldown : 7 jours pour les parents, 2 jours pour enfants/observateurs
   const cooldownMs = isParent ? 7*24*60*60*1000 : 2*24*60*60*1000;
   const isAdminSub = isAdmin || sub._admin || false;
-  // lastSpin per user (stocké dans sub.lastSpinByUser[userId])
-  const lastSpinByUser = sub.lastSpinByUser || {};
+  // ── lastSpin : clé dédiée résistante aux rechargements du sub ────────────
+  // duvia_spin_ts est une clé séparée, jamais écrasée par setSub()
+  const [spinTimestamps, setSpinTimestamps] = useLocalStorage("duvia_spin_ts", {});
+  const lastSpinByUser = useMemo(() => {
+    const fromSub = sub.lastSpinByUser || {};
+    // Fusionner sub (legacy) + spinTimestamps (nouvelle clé) → prend le plus récent
+    const merged = {...fromSub};
+    Object.entries(spinTimestamps).forEach(([uid, ts]) => {
+      if (!merged[uid] || ts > merged[uid]) merged[uid] = ts;
+    });
+    return merged;
+  }, [sub.lastSpinByUser, spinTimestamps]);
   const lastSpin = lastSpinByUser[userId] || null;
   const hasBonusSpin = (sub.pendingSpins||0) > 0;
   const canSpin = isAdminSub || hasBonusSpin || !lastSpin || (now - new Date(lastSpin).getTime()) >= cooldownMs;
@@ -13644,8 +13608,10 @@ function WheelGame({ isPremium, isAdmin=false, restrictedRole=false, userId="", 
         setResult(prize);
         setShowResult(true);
         if(!restrictedRole) {
+          const now_ts = new Date().toISOString();
+          setSpinTimestamps(h=>({...h,[userId]:now_ts}));
           setSub(s=>({...s,
-            lastSpinByUser: { ...(s.lastSpinByUser||{}), [userId]: new Date().toISOString() },
+            lastSpinByUser: { ...(s.lastSpinByUser||{}), [userId]: now_ts },
             pendingSpins: usingBonus ? Math.max(0,(s.pendingSpins||0)-1) : (s.pendingSpins||0),
             earnedTheme:   prize.id==="theme"   || s.earnedTheme,
             earnedVideo:   prize.id==="video"   || s.earnedVideo,
@@ -13655,7 +13621,9 @@ function WheelGame({ isPremium, isAdmin=false, restrictedRole=false, userId="", 
           }));
         } else {
           // Rôles restreints → on enregistre quand même le cooldown
-          setSub(s=>({...s, lastSpinByUser: { ...(s.lastSpinByUser||{}), [userId]: new Date().toISOString() }}));
+          const now_ts = new Date().toISOString();
+          setSpinTimestamps(h=>({...h,[userId]:now_ts}));
+          setSub(s=>({...s, lastSpinByUser: { ...(s.lastSpinByUser||{}), [userId]: now_ts }}));
         }
         if(prize.id!=="nothing") {
           setParticles(Array.from({length:40},(_,i)=>({
