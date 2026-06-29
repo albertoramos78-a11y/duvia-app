@@ -1034,11 +1034,21 @@ function generateICS(cfg) {
 }
 function downloadICS(cfg) {
   const content = generateICS(cfg);
-  const blob = new Blob([content],{type:"text/calendar;charset=utf-8"});
+  const blob = new Blob([content], {type:"text/calendar;charset=utf-8"});
+  // Web Share API — ouvre le sélecteur natif sur Android/iOS (agenda, etc.)
+  if (navigator.share && navigator.canShare) {
+    const file = new File([blob], "duvia-garde.ics", {type:"text/calendar"});
+    if (navigator.canShare({files:[file]})) {
+      navigator.share({files:[file], title:"Duvia – Planning de garde"}).catch(()=>{});
+      return;
+    }
+  }
+  // Fallback desktop : téléchargement classique
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href=url; a.download="duvia-garde.ics"; a.click();
-  URL.revokeObjectURL(url);
+  a.href=url; a.download="duvia-garde.ics";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 500);
 }
 
 // ─── Helper : affiche le vrai prénom de l'observateur (jamais l'email brut) ──
@@ -14257,6 +14267,7 @@ function VaultTab() {
   const [showForm, setShowForm] = useState(false);
   const [editDoc, setEditDoc] = useState(null);
   const [savingDoc, setSavingDoc] = useState(false);
+  const [vaultSubmittedPopup, setVaultSubmittedPopup] = useState(false);
   const [filterCat, setFilterCat] = useState("all");
   const [search, setSearch] = useState("");
   const [confirmDel, setConfirmDel] = useState(null);
@@ -14372,8 +14383,10 @@ function VaultTab() {
         pushNotif(`🗄️ Document ajouté : "${cleanDocName}"`, "vault");
         addHist("Nouveau document", `${myDisplayName} — "${cleanDocName}"`, "vault");
         setActivity(a=>({...a,vault:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
-        setActivity(a=>({...a,vault:{ts:new Date().toISOString(),by:String(user?.id||"")}})); setCfg(c=>({...c,vaultActivity:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
+        setCfg(c=>({...c,vaultActivity:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
         // Email géré par le webhook Supabase (INSERT → notify-vault)
+        setVaultSubmittedPopup(true);
+        setTimeout(()=>setVaultSubmittedPopup(false), 2500);
       }
       setShowForm(false);
       setEditDoc(null);
@@ -14649,17 +14662,6 @@ function VaultTab() {
               )}
             </div>
           </div>
-          <label style={{display:"flex",alignItems:"center",gap:10,padding:"12px",background:C.sur,borderRadius:10,border:`1.5px solid ${C.bor}`,cursor:"pointer"}}>
-            <input type="checkbox" checked={formShared} onChange={e=>setFormShared(e.target.checked)} />
-            <div>
-              <div style={{fontSize:12,fontWeight:700,color:C.txt}}>👥 {t.vaultShared||"Visible QUE par les parents"}</div>
-              {cfg.parents?.length > 0 && (
-                <div style={{fontSize:11,color:C.mut,marginTop:2}}>
-                  {cfg.parents.map(p=>p.name||"Parent").join(", ")}
-                </div>
-              )}
-            </div>
-          </label>
           <button onClick={saveDoc} disabled={!formName.trim() || savingDoc} style={{height:50,background:(formName.trim()&&!savingDoc)?`linear-gradient(135deg,${C.vio},${C.blu})`:`${C.bor}`,color:(formName.trim()&&!savingDoc)?"#fff":C.mut,fontSize:15,fontWeight:800,borderRadius:12,cursor:(formName.trim()&&!savingDoc)?"pointer":"not-allowed",transition:"all .2s"}}>
             {savingDoc ? "⏳ Envoi…" : <>✓ {t.vaultSave||"Enregistrer"}</>}
           </button>
@@ -14694,6 +14696,16 @@ function VaultTab() {
 
   return (
     <div className="fi">
+      {/* Toast "Document ajouté" */}
+      {vaultSubmittedPopup && (
+        <div style={{position:"fixed",top:14,left:"50%",transform:"translateX(-50%)",zIndex:9999,background:"var(--card, #fff)",border:"1.5px solid #7c3aed",borderRadius:14,padding:"12px 18px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 8px 30px rgba(0,0,0,.22)",maxWidth:"90vw",animation:"fadeInDown .25s ease",pointerEvents:"none"}}>
+          <span style={{fontSize:20}}>✅</span>
+          <div>
+            <div style={{fontSize:13,fontWeight:800}}>Document ajouté</div>
+            <div style={{fontSize:11,opacity:.7}}>Visible par l'autre parent dans le coffre-fort.</div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
         <div>
