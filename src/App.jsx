@@ -165,7 +165,8 @@ function identifierToAuthEmail(v) {
   const raw = (v || "").trim();
   if (!raw) return "";
   if (raw.includes("@")) return raw.toLowerCase();
-  return `tel${normalizePhoneDigits(raw)}@phone.duvia.app`;
+  // Sel statique : rend le format non-devinable sans accès au code source
+  return `tel${normalizePhoneDigits(raw)}.dv26@phone.duvia.app`;
 }
 
 // Valide le mot de passe : longueur + au moins une majuscule + un caractère spécial.
