@@ -12592,6 +12592,10 @@ function MessagingTab(){
                       boxShadow:"0 1px 4px rgba(0,0,0,.08)",wordBreak:"break-word",
                       position:"relative"
                     }}>
+                      {/* Heure inline (float right) — messages texte uniquement */}
+                      {!att&&<span style={{float:"right",marginLeft:10,marginTop:4,lineHeight:1,fontSize:10,opacity:.72,color:isMe?"rgba(255,255,255,.82)":C.mut,display:"inline-flex",alignItems:"center",gap:3}}>
+                        {hhmm}{isMe&&<span style={{fontWeight:800,fontSize:10,color:readOk?"rgba(255,255,255,.92)":"rgba(255,255,255,.4)"}}>{readOk?"✓✓":"✓"}</span>}
+                      </span>}
                       {!att ? (typeof m.content==="string"&&m.content.startsWith("§DUVIA_ATTACH§") ? <span style={{opacity:.6,fontSize:12}}>📄 Fichier (non disponible)</span> : m.content) : (
                         <>
                           {attIsImg ? (
@@ -12626,11 +12630,11 @@ function MessagingTab(){
                           {att.caption && <div style={{marginTop:attIsImg?6:2,padding:attIsImg?"0 4px":0}}>{att.caption}</div>}
                         </>
                       )}
-                      {/* Heure + lu — intégrée dans la bulle */}
-                      <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",gap:3,marginTop:att&&attIsImg?4:5,marginBottom:-2}}>
+                      {/* Heure pour pièces jointes (en bas) */}
+                      {att&&<div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",gap:3,marginTop:attIsImg?4:5,marginBottom:-2}}>
                         <span style={{fontSize:10,opacity:.72,color:isMe?"rgba(255,255,255,.82)":C.mut}}>{hhmm}</span>
                         {isMe&&<span style={{color:readOk?"rgba(255,255,255,.92)":"rgba(255,255,255,.4)",fontWeight:800,fontSize:10}}>{readOk?"✓✓":"✓"}</span>}
-                      </div>
+                      </div>}
                     </div>
 
                     {/* Proof hash — compact, discret */}
