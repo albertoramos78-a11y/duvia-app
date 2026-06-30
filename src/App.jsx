@@ -4582,11 +4582,12 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
   const [showInstallModal,setShowInstallModal]=useState(false);
   const [err,setErr]=useState(""); const [ok,setOk]=useState("");
   const [showPw,setShowPw]=useState(false);
-  // « Rester connecté » — opt-in PROPRE à chaque affichage de l'écran de
-  // connexion : on remet le drapeau à zéro au montage (évite qu'une valeur
-  // « 1 » d'une session précédente garde l'utilisateur connecté par erreur).
+  // « Rester connecté » — préférence persistante de l'utilisateur, on ne
+  // la réinitialise plus au montage (ça effaçait le choix légitime de
+  // l'utilisateur à chaque chargement de l'app, avant même la vérification
+  // de session, empêchant « rester connecté » de fonctionner après une
+  // vraie fermeture d'onglet).
   const [remember,setRemember]=useState(false);
-  useEffect(()=>{ try{ window.localStorage.removeItem("duvia_remember"); window.localStorage.removeItem("duvia_remember_until"); }catch{} },[]);
 
 
   const [shakeName,setShakeName]=useState(false);
