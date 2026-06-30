@@ -2805,6 +2805,17 @@ export default function App() {
   useEffect(() => {
     initDiagnostics();
     retryPendingReport();
+    // Auto-expiration du snapshot famille (sécurité de secours après éjection) — 30 jours
+    try {
+      const raw = window.localStorage.getItem("duvia_family_snapshot");
+      if (raw) {
+        const snap = JSON.parse(raw);
+        const ageMs = Date.now() - new Date(snap.at || 0).getTime();
+        if (ageMs > 30 * 24 * 60 * 60 * 1000) {
+          window.localStorage.removeItem("duvia_family_snapshot");
+        }
+      }
+    } catch {}
   }, []);
 
   // ── Vérification Supabase Auth au démarrage ───────────────────────────────
@@ -5726,6 +5737,7 @@ function PrefsTab() {
   const [showPw2,setShowPw2]     = useState(false);
   const [pwErr,setPwErr] = useState(""); const [pwOk,setPwOk] = useState("");
   const [saving,setSaving] = useState(false);
+  const [localDataCleared, setLocalDataCleared] = useState(false);
   const [emailMode,setEmailMode]   = useState(false);
   const [newEmail,setNewEmail]     = useState("");
   const [emailErr,setEmailErr]     = useState("");
@@ -5953,6 +5965,20 @@ function PrefsTab() {
           <span style={{fontSize:13,fontWeight:700,color:C.txt}}>📤 Télécharger mes données</span>
         </button>
         <div style={{fontSize:11,color:C.mut,marginTop:6,paddingLeft:4}}>Format JSON · Vos données personnelles uniquement</div>
+        <button onClick={()=>{
+            try {
+              window.localStorage.removeItem("duvia_family_snapshot");
+              window.localStorage.removeItem("duvia_ejected");
+            } catch {}
+            setLocalDataCleared(true);
+            setTimeout(()=>setLocalDataCleared(false), 2500);
+          }} style={{...row, marginTop:8}}>
+          <span style={{fontSize:13,fontWeight:700,color:C.txt}}>🧹 Supprimer mes données locales</span>
+        </button>
+        <div style={{fontSize:11,color:C.mut,marginTop:6,paddingLeft:4}}>Efface la sauvegarde de secours stockée sur cet appareil</div>
+        {localDataCleared && (
+          <div style={{fontSize:12,color:C.grn,fontWeight:700,marginTop:6,paddingLeft:4}}>✅ Données locales supprimées</div>
+        )}
       </div>
 
       {/* ── Zone de danger ── */}
