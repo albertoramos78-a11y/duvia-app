@@ -2873,12 +2873,15 @@ export default function App() {
         if (window.sessionStorage.getItem("duvia_internal_reload") === "1") {
           window.sessionStorage.removeItem("duvia_internal_reload"); return;
         }
-        // Efface les jetons d'auth (les deux stockages) + la session locale.
-        [window.sessionStorage, window.localStorage].forEach(store => {
-          Object.keys(store).filter(k => k.startsWith("sb-")).forEach(k => store.removeItem(k));
-        });
-        window.localStorage.removeItem("duvia_session");
-
+        // ✅ FIX refresh : on ne supprime plus rien ici.
+        // pagehide se déclenche AUSSI sur un simple refresh (F5 / pull-to-refresh),
+        // pas seulement à la fermeture de l'onglet. Effacer les jetons ici cassait
+        // donc la session à chaque refresh.
+        // La vraie frontière de sécurité reste sessionStorage : le navigateur
+        // l'efface tout seul à la fermeture réelle de l'onglet/fenêtre (comportement
+        // natif), donc rien à faire manuellement ici. Si la session Supabase a
+        // réellement disparu, le useEffect "Vérification Supabase Auth au démarrage"
+        // s'en aperçoit et nettoie sessionEmail/duvia_session automatiquement.
       } catch {}
     };
     window.addEventListener("pagehide", onLeave);
