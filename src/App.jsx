@@ -8160,7 +8160,7 @@ function StepGarde() {
                     <div style={{fontSize:9,color:d.we?C.yel:C.mut,marginBottom:3,fontFamily:"JetBrains Mono",fontWeight:700,lineHeight:1.2}}>{d.label}<br/><span style={{fontSize:8}}>{d.num}</span></div>
                     {parents.map((p,pi)=>(
                       <button key={pi} onClick={()=>setDay(i,pi)} style={{width:"100%",padding:"4px 1px",marginBottom:2,background:pat[i]?.parentIdx===pi?p.color:C.sur,color:pat[i]?.parentIdx===pi?"#fff":C.mut,border:`1.5px solid ${pat[i]?.parentIdx===pi?p.color:C.bor}`,borderRadius:6,fontSize:8,fontWeight:800}}>
-                        {p.name?p.name.split(" ")[0].slice(0,4):`P${pi+1}`}
+                        {(p.name?.trim().split(" ")[0]?.slice(0,4)) || `P${pi+1}`}
                       </button>
                     ))}
                     {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=>(
@@ -8220,7 +8220,7 @@ function WeekRow({wk, wkPiCounts, dominantPi, wkColor, wkLabel, hol, det, chGetH
             <button key={pi}
               onClick={()=>{const base=chGetHolDetails();const nd={...base,[hol.n]:{...(base[hol.n]||{})}};wk.forEach(({ds})=>{nd[hol.n][ds]=pi;});chSetHolDetails(nd);setOpen(false);}}
               style={{padding:"3px 9px",background:wkPiCounts[pi]===wk.length?p.color:`${p.color}22`,color:wkPiCounts[pi]===wk.length?"#fff":p.color,border:`1.5px solid ${p.color}`,borderRadius:20,fontSize:11,fontWeight:800}}>
-              {p.name?p.name.split(" ")[0].slice(0,6):`P${pi+1}`}
+              {(p.name?.trim().split(" ")[0]?.slice(0,6)) || `P${pi+1}`}
             </button>
           ))}
           {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=>(
@@ -8798,7 +8798,7 @@ function getSpecialEvents(date, cfg) {
 // CALENDAR TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
-  const {C,t,cfg,updateCal: ctxUpdateCal,apiData,setMenuTab,setConfigStep,prem,perms,onUpgrade,isObs,isChild,user,sub} = useApp();
+  const {C,t,cfg,setCfg,updateCal: ctxUpdateCal,apiData,setMenuTab,setConfigStep,prem,perms,onUpgrade,isObs,isChild,user,sub,addHist,pushNotif,custodyShadow,familySync} = useApp();
   const premFull = isPremFull(sub); // PDF calendrier réservé full premium uniquement
   const editBlocked = !canEdit;
   const updateCal = updateCalProp !== undefined ? updateCalProp : ctxUpdateCal;
@@ -8813,6 +8813,17 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
   const calViewDir=useRef("right"); // "right" = list→grid, "left" = grid→list
   function switchCalView(v){ calViewDir.current=v==="grid"?"right":"left"; setCalView(v); }
   const editRef=useRef(null);
+
+  // ── Réinitialiser les échanges manuels (overrides) ──────────────────────
+  const [confirmResetOverrides, setConfirmResetOverrides] = useState(false);
+  const overridesCount = Object.keys(cfg.overrides || {}).length;
+  function resetManualOverrides() {
+    setCfg(c => ({...c, overrides: {}}));
+    custodyShadow?.shadowClearAllOverrides?.();
+    addHist?.(t.tabCal || "Calendrier", "Réinitialisation des échanges manuels", "cal");
+    pushNotif?.("📅 Tous les échanges manuels ont été réinitialisés");
+    setConfirmResetOverrides(false);
+  }
   const y=cur.getFullYear(),m=cur.getMonth();
   const dc=dInMonth(y,m);
   const multiChild = !cfg.sameGuardAll && cfg.children?.length > 1;
@@ -9077,6 +9088,12 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
                 <span style={{fontSize:10}}>{premFull?"📄":"🔒"}</span>
                 <span style={{fontSize:9,color:premFull?C.vio:C.mut,fontWeight:800}}>PDF</span>
               </button>
+              <button onClick={()=>setConfirmResetOverrides(true)} disabled={overridesCount===0}
+                title="Réinitialiser tous les échanges manuels du calendrier"
+                style={{display:"flex",alignItems:"center",gap:3,padding:"3px 7px",background:overridesCount?`${C.red}15`:`${C.mut}10`,border:`1px solid ${overridesCount?C.red:C.mut}33`,borderRadius:6,cursor:overridesCount?"pointer":"not-allowed",transition:"all .15s",opacity:overridesCount?1:.5}}>
+                <span style={{fontSize:10}}>🔄</span>
+                <span style={{fontSize:9,color:overridesCount?C.red:C.mut,fontWeight:800}}>Réinit.</span>
+              </button>
             </>
           )}
           <InfoBubble C={C} tipKey={`duvia_caltip_${user?.id||"x"}`} title={t.tabCal||"Calendrier"} autoOpen={false}>
@@ -9084,9 +9101,36 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
             <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid rgba(255,255,255,.25)"}}>
               {t.calTipGuardians||"🏠 Gardiens : un proche invité avec l'option « Peut être gardien » (Configuration → Accès) apparaît ici en orange. Vous pouvez alors lui attribuer une journée de garde — par exemple quand les grands-parents gardent les enfants à la place d'un parent."}
             </div>
+            <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid rgba(255,255,255,.25)"}}>
+              {t.calTipReset||"🔄 Le bouton « Réinit. » efface tous les échanges manuels que vous avez faits sur le calendrier (clics sur un jour précis pour changer la garde). Le planning revient à la règle de base (semaine A/B, garde exclusive, etc.). Cette action est irréversible."}
+            </div>
           </InfoBubble>
         </div>
       </div>
+
+      {/* Modale de confirmation : réinitialiser les échanges manuels */}
+      {confirmResetOverrides && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:20}}
+          onClick={()=>setConfirmResetOverrides(false)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:16,padding:22,maxWidth:380,width:"100%",border:`1.5px solid ${C.red}44`}}>
+            <div style={{fontSize:16,fontWeight:900,color:C.txt,marginBottom:8}}>🔄 Réinitialiser les échanges manuels ?</div>
+            <div style={{fontSize:13,color:C.mut,lineHeight:1.5,marginBottom:16}}>
+              {overridesCount} échange{overridesCount>1?"s":""} manuel{overridesCount>1?"s":""} sur le calendrier {overridesCount>1?"seront supprimés":"sera supprimé"}. Le planning reviendra à la règle de base (semaine A/B, garde exclusive...). Cette action est <b>irréversible</b>.
+            </div>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setConfirmResetOverrides(false)}
+                style={{flex:1,padding:"10px",background:C.sur,color:C.txt,border:`1.5px solid ${C.bor}`,borderRadius:10,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                Annuler
+              </button>
+              <button onClick={resetManualOverrides}
+                style={{flex:1,padding:"10px",background:C.red,color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                Réinitialiser
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sélecteur d'enfant */}
       {multiChild && (
         <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
