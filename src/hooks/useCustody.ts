@@ -4,6 +4,7 @@ import {
   replaceCustodyPatternDays,
   upsertCustodyOverride,
   deleteCustodyOverride,
+  clearAllManualOverrides,
   upsertSpecialDates,
   replaceCustomDates,
   type CustodyRuleInput,
@@ -72,5 +73,10 @@ export function useCustody(familyId: string | null) {
     [familyId, safe]
   );
 
-  return { shadowRule, shadowOverride, shadowDeleteOverride, shadowSpecialDates, shadowCustomDates };
+  const shadowClearAllOverrides = useCallback(
+    () => safe("clearAllManualOverrides", () => clearAllManualOverrides(familyId!)),
+    [familyId, safe]
+  );
+
+  return { shadowRule, shadowOverride, shadowDeleteOverride, shadowSpecialDates, shadowCustomDates, shadowClearAllOverrides };
 }
