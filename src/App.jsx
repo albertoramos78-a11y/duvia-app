@@ -4,6 +4,7 @@ import { supabase } from "./supabaseClient";
 import { initDiagnostics, retryPendingReport, submitBugReport } from "./services/diagnostics";
 import { useVault } from "./hooks/useVault";
 import { useMessages } from "./hooks/useMessages";
+import { useCustody } from "./hooks/useCustody";
 import { useIdLinks } from "./hooks/useIdLinks";
 import { useExpenses } from "./hooks/useExpenses";
 import { useHistory } from "./hooks/useHistory";
@@ -2625,6 +2626,45 @@ export default function App() {
 
   const [sub,setSub]     = useLocalStorage("duvia_sub", makeSub);
   const { msgs: cloudMsgs, send: _sendCloudMsg, markRead: markCloudMessageRead } = useMessages(familySync.familyId);
+  // Phase 3 migration custody : écriture en parallèle, ne lit/affiche rien — voir hooks/useCustody.ts
+  const custodyShadow = useCustody(familySync.familyId);
+
+  // Phase 3 — shadow write specialDates (fête mères/pères, anniversaires, dates perso)
+  // Un seul effet debounced couvre TOUS les toggles dispersés dans l'UI, plutôt que
+  // de patcher chaque setCfg individuellement (plus sûr, garantit l'exhaustivité).
+  const specialDatesShadowTimer = useRef(null);
+  useEffect(() => {
+    if (!familySync.familyId || !cfg.specialDates) return;
+    if (specialDatesShadowTimer.current) clearTimeout(specialDatesShadowTimer.current);
+    specialDatesShadowTimer.current = setTimeout(() => {
+      const sd = cfg.specialDates || {};
+      custodyShadow?.shadowSpecialDates?.({
+        childId: null,
+        motherDayEnabled: !!sd.motherDay?.enabled,
+        fatherDayEnabled: !!sd.fatherDay?.enabled,
+        parentBirths: sd.parentBirths || [],
+        childBirths: sd.childBirths || [],
+        evenParentIdx: sd.evenParentIdx ?? null,
+        oddParentIdx: sd.oddParentIdx ?? null,
+      });
+      // Préférences par enfant (sd.perChild)
+      Object.entries(sd.perChild || {}).forEach(([childId, prefs]) => {
+        custodyShadow?.shadowSpecialDates?.({
+          childId: Number(childId),
+          evenParentIdx: prefs?.evenParentIdx ?? null,
+          oddParentIdx: prefs?.oddParentIdx ?? null,
+        });
+      });
+      // Dates personnalisées récurrentes (liste complète remplacée d'un coup)
+      const customList = (sd.custom || []).filter(cd => cd.label && cd.day && cd.month).map(cd => ({
+        label: cd.label, day: +cd.day, month: +cd.month,
+        year: cd.yearly ? null : (cd.year ? +cd.year : null),
+        yearly: !!cd.yearly, parentId: cd.parentId ? +cd.parentId : null,
+      }));
+      custodyShadow?.shadowCustomDates?.(customList);
+    }, 2000);
+    return () => { if (specialDatesShadowTimer.current) clearTimeout(specialDatesShadowTimer.current); };
+  }, [cfg.specialDates, familySync.familyId, custodyShadow]);
   const { localToUid, uidToLocal } = useIdLinks(familySync.familyId);
   const {
     expenses: allExpenses,
@@ -3489,6 +3529,18 @@ export default function App() {
   }
   function updateCal(ds,data) {
     setCfg(c=>({...c,overrides:{...c.overrides,[ds]:{...(c.overrides[ds]||{}),...data}}}));
+    // Phase 3 — écriture en parallèle (silencieuse)
+    const merged = {...(cfg.overrides?.[ds]||{}), ...data};
+    if (merged.parentIdx===undefined && !merged.obsId) {
+      custodyShadow?.shadowDeleteOverride?.(null, ds);
+    } else {
+      custodyShadow?.shadowOverride?.({
+        childId: null, date: ds, parentIdx: merged.parentIdx ?? null,
+        obsId: merged.obsId ?? null, obsName: merged.obsName ?? null,
+        timeType: merged.timeType||"full", startTime: merged.startTime||null,
+        endTime: merged.endTime||null, location: merged.location||null, note: merged.note||null,
+      });
+    }
     addHist(t.tabCal,ds,"cal");
     pushNotif(`📅 ${ds}`,"cal");
   }
@@ -3662,7 +3714,7 @@ export default function App() {
     setMenuTab, setShowMenu,
     msgs, sendCloudMessage, markCloudMessageRead, myUid,
     activity, setActivity, allSeen, setAllSeen, _setSeen,
-    unreadVaultDocIds, setUnreadVaultDocIds,
+    unreadVaultDocIds, setUnreadVaultDocIds, custodyShadow,
     summerActive, setSummerActive, rgActive, setRgActive, wcActive, setWcActive, videoActive, setVideoActive,
     brandActive,
     handleSetUser,
@@ -7881,7 +7933,7 @@ function StepDates() {
 
 // ─── STEP 3: CUSTODY ─────────────────────────────────────────────────────────
 function StepGarde() {
-  const {C,t,cfg,setCfg,addHist,pushNotif} = useApp();
+  const {C,t,cfg,setCfg,addHist,pushNotif,custodyShadow} = useApp();
   const {parents} = cfg;
   const children = cfg.children || [];
 
@@ -7972,14 +8024,30 @@ function StepGarde() {
       ...(multiChild ? (cfg.custodyPerChild?.[selChildId]||cfg.custody) : cfg.custody),
       type, weekAlt:wA, exclusive:ex, pattern:pat, confirmed:true
     };
+    // Phase 3 — écriture en parallèle dans les nouvelles tables (silencieuse,
+    // sans impact si ça échoue ; l'affichage reste basé sur cfg.custody)
+    const shadowPatternDays = type==="custom" ? pat.map(d=>({
+      parentIdx: d.parentIdx ?? null, timeType: d.timeType||"full",
+      startTime: d.startTime||null, endTime: d.endTime||null, location: d.location||null,
+    })) : undefined;
     if(multiChild && selChildId) {
       setCfg(c=>({...c, custodyPerChild:{...c.custodyPerChild,[selChildId]:newCustody}}));
       const childName = children.find(ch=>ch.id===selChildId)?.name||"Enfant";
       addHist(t.stepGarde, childName, "cal");
       pushNotif(`📆 Planning de ${childName} confirmé`);
+      custodyShadow?.shadowRule?.({
+        childId: selChildId, type, startMonth: cfg.custody.startMonth, startYear: cfg.custody.startYear,
+        weekAltEvenIdx: wA?.evenIdx, exclusiveMainIdx: ex?.mainIdx, exclusiveWeIdx: ex?.weIdx,
+        exclusiveParity: ex?.parity, confirmed: true,
+      }, shadowPatternDays);
     } else {
       setCfg(c=>({...c, custody:newCustody}));
       addHist(t.stepGarde,"","cal"); pushNotif("📆 "+t.confirmed);
+      custodyShadow?.shadowRule?.({
+        childId: null, type, startMonth: cfg.custody.startMonth, startYear: cfg.custody.startYear,
+        weekAltEvenIdx: wA?.evenIdx, exclusiveMainIdx: ex?.mainIdx, exclusiveWeIdx: ex?.weIdx,
+        exclusiveParity: ex?.parity, confirmed: true,
+      }, shadowPatternDays);
     }
     setConfirmed(true);
   }
