@@ -3,10 +3,6 @@ const fr = {
     appName:"Duvia",appSub:"Two homes. One family.",
     login:"Connexion",register:"Créer un compte",logout:"Déconnexion",
     email:"Email",password:"Mot de passe",fullName:"Prénom Nom",
-    emailOrPhone:"Email ou téléphone",
-    emailOrPhonePlaceholder:"email@exemple.fr ou 06 12 34 56 78",
-    emailOrPhoneHint:"💡 Pas d'email ? Utilisez un numéro de téléphone.",
-    continueWithGoogle:"Continuer avec Google",
     roleParent:"Parent",roleObs:"Observateur (famille…)",roleChild:"Enfant",roleLabel:"Rôle",
     connect:"Se connecter",createAcc:"Créer mon compte",sendLink:"Envoyer le lien",
     forgotPw:"Mot de passe oublié ?",backLogin:"← Retour",backToSite:"← Retour au site Duvia",
@@ -585,87 +581,5 @@ const fr = {
     obsCanGuardDesc:"Apparaît dans le calendrier comme option de garde",
     obsNoFamily:"Vous n'êtes pas affecté à une famille.",
     obsNoFamilyDesc:"Seule une famille peut vous inviter à rejoindre Duvia. Contactez le parent qui souhaitait vous donner accès pour qu'il génère un nouveau lien d'invitation.",
-    // ── Slide 3 : popups confirm() jusque-là hardcodées en français ──
-    confirmLeaveFamilyFull:"Quitter la famille ? Vous n'aurez plus accès au calendrier ni à la messagerie.",
-    confirmLeaveFamilySimple:"Quitter la famille ?",
-    confirmDeleteNotif:"Supprimer cette notification ?",
-    confirmDeleteAllNotifs:"Supprimer toutes les notifications ({n}) ?",
-    confirmLeaveFamilyDetailed:"Quitter cette famille ?\n\nVous repartirez sur une famille personnelle vierge. Une synthèse de vos données est conservée pour export.",
-    confirmRemoveGuest:"Retirer {name} de la famille ?\n\nIl repartira sur une famille personnelle vierge. Vous conservez la famille et son code.",
-    confirmCreateNewFamily:"Créer une nouvelle famille distincte ? Tu pourras basculer entre tes familles depuis le menu en haut de l'app.",
-    confirmRejectRequest:"Refuser cette demande ?",
-    confirmRemoveChild:"Retirer {name} de la famille ?",
-    confirmRemoveObserver:"Retirer {name} de la famille ?",
-
-    // ── Slide 4 : 14 clés trouvées par audit complet (utilisées dans App.jsx mais jamais définies) ──
-    deleteAccount:"Supprimer mon compte",
-    deleteAccountDesc:"Action définitive. Toutes vos données seront supprimées.",
-    expPaidBy:"Payé par",
-    histSub:"Journal des modifications",
-    msgAttach:"Joindre un fichier",
-    msgCaptionPlaceholder:"Légende (optionnel)…",
-    msgLoadingFile:"Chargement…",
-    msgNotRegistered:"Pas encore inscrit — invitation à renvoyer",
-    msgNotRegisteredShort:"pas inscrit",
-    multiFamilyInfo:"Vous appartenez à plusieurs familles. Utilisez ce menu pour basculer de l'une à l'autre.",
-    multiFamilyTitle:"Plusieurs familles",
-    obsInviteContactHint:"Renseignez au moins un moyen de contact (email ou téléphone).",
-    obsInvitePhone:"Téléphone",
-    optional:"optionnel",
-
-    // ── Slide 5 : Special date — boutons/labels hardcodés ──
-    assignAllTo:"Tout → {name}",
-    clearAll:"Effacer",
-    customDateLabel:"Date {n}",
-    eventName:"Nom de l'événement",
-    eventNamePlaceholder:"Ex: Vacances ski, Mariage...",
-    dayLabel:"Jour",
-    monthLabel:"Mois",
-    yearLabel:"Année",
-    concernsLabel:"Concerne",
-    childFallback:"Enfant {id}",
-    custodyAtLabel:"Garde chez",
-    parentFallback:"Parent {id}",
-    yearlyRecurrence:"Reconduire tous les ans",
-
-    // ── Slide 7 : texte info dépenses ──
-    expPendingInfo:"Toute dépense ajoutée est ⏳ en attente jusqu'à validation par l'autre parent. Une fois ✅ acceptée, elle est comptabilisée. Si ❌ refusée, elle reste visible mais exclue des totaux. Chaque action est enregistrée dans l'historique.",
-
-    // ── Slide 9 : placeholders coffre-fort ──
-    vaultNamePlaceholder:"ex : Jugement du 12/03/2023",
-    vaultNotesPlaceholder:"ex : Version signée par les deux parties...",
-
-    // ── Slide 11 : achat bloqué en BETA ──
-    betaLocked:"Bêta",
-
-    // ── Slides 12-13 : notifications/historique générées (audit complet) ──
-    years:"ans",
-    joinedFamilyMsg:"a rejoint la famille — messagerie activée",
-    removedFromFamilyMsg:"a été supprimé de la famille.",
-    overridesResetDetail:"Réinitialisation des échanges manuels",
-    overridesResetMsg:"Tous les échanges manuels ont été réinitialisés",
-    scheduleConfirmedFor:"Planning de {name} confirmé",
-    expSeriesModified:"série modifiée, revalidation requise",
-    expModifiedRevalidate:"modifiée — revalidation requise",
-    occurrenceSingular:"occurrence",
-    occurrencesPlural:"occurrences",
-    expSeriesLabel:"Série",
-    expSeriesDeleted:"Série supprimée",
-    reimConfirmedMsg:"Remboursement de {name} ({amount}) confirmé",
-    reimConfirmedTitle:"Remboursement confirmé",
-    reimRejectedMsg:"Remboursement de {name} ({amount}) refusé",
-    reimRejectedTitle:"Remboursement refusé",
-    modifiedLabel:"Modifié",
-    reimModifiedMsg:"Remboursement de {name} modifié ({amount}) — revalidation requise",
-    vaultDocModifiedMsg:"Document modifié : \"{name}\"",
-    vaultDocModifiedTitle:"Document modifié",
-    vaultDocAddedMsg:"Document ajouté : \"{name}\"",
-    vaultDocAddedTitle:"Nouveau document",
-    vaultDocDeletedMsg:"Document supprimé : \"{name}\"",
-    vaultDocDeletedTitle:"Document supprimé",
-
-    // ── CGV ──
-    viewCGV:"Voir les CGV",
-
   };
 export default fr;
