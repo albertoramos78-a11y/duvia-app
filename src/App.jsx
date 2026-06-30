@@ -3005,6 +3005,16 @@ export default function App() {
       try {
         window.localStorage.removeItem("duvia_family_id");
         window.localStorage.removeItem("duvia_cfg");
+        // 🔒 Sécurité : à la déconnexion explicite, on retire le profil complet
+        // (téléphone, code parrainage, plan) de la liste locale des comptes —
+        // il ne doit pas traîner indéfiniment sur un appareil partagé.
+        if (sessionEmail) {
+          const raw = window.localStorage.getItem("duvia_users");
+          const list = raw ? JSON.parse(raw) : [];
+          window.localStorage.setItem("duvia_users", JSON.stringify(
+            list.filter(u2 => u2.email !== sessionEmail)
+          ));
+        }
       } catch {}
       setUser(null);
       // 🔒 Indispensable : sans ça, la session Supabase du compte précédent
