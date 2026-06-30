@@ -63,6 +63,21 @@ function sanitize(str) {
     .trim();
 }
 
+// ── Échappement HTML — pour injecter du texte utilisateur dans un template
+// HTML (export PDF via iframe srcDoc). Contrairement à sanitize() qui
+// SUPPRIME les balises (bon pour le stockage), escapeHtml() les neutralise
+// en entités HTML — c'est la bonne défense au point d'injection lui-même,
+// en complément de sanitize() à la saisie.
+function escapeHtml(str) {
+  if (typeof str !== "string") return "";
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // ── Filtre insultes ───────────────────────────────────────────────────────────
 // Deux listes séparées pour éviter les faux positifs :
 // - LONG_BAD : sous-chaîne (mots longs, sans risque de collision)
@@ -970,11 +985,14 @@ function generateICS(cfg) {
     const p = parents[pIdx]; if(!p) return;
     const name = p.name || `Parent ${pIdx+1}`;
     const title = childNames ? `${childNames} chez ${name}` : `Garde chez ${name}`;
+    // Échappement ICS (RFC 5545) : \, ; , et retours à la ligne doivent être échappés
+    // dans un champ texte, sinon ils peuvent casser la structure du fichier .ics
+    const icsTitle = title.replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\n/g,"\\n");
     const endPlus = new Date(end); endPlus.setDate(endPlus.getDate()+1);
     lines.push("BEGIN:VEVENT",
       `DTSTART;VALUE=DATE:${toICS(start)}`,
       `DTEND;VALUE=DATE:${toICS(endPlus)}`,
-      `SUMMARY:${title}`,
+      `SUMMARY:${icsTitle}`,
       `UID:duvia-${toICS(start)}-p${pIdx}@duvia.fr`,
       "END:VEVENT");
   }
@@ -2957,6 +2975,7 @@ export default function App() {
   const [showBugModal,setShowBugModal] = useState(false);
   const [showInstallModal,setShowInstallModal] = useState(false);
   const [showLicenseModal,setShowLicenseModal] = useState(false);
+  const [showCGVModal,setShowCGVModal] = useState(false);
   const [showPrizesMenu,setShowPrizesMenu] = useState(false);
   const [menuHighlight,setMenuHighlight] = useState(true);
   const [showOnboardingTip,setShowOnboardingTip] = useState(false);
@@ -3083,7 +3102,7 @@ export default function App() {
           const googleUser = {
             id: u.id,
             email: u.email,
-            name: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split("@")[0] || "Utilisateur",
+            name: sanitize(u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split("@")[0] || "Utilisateur").slice(0, LIMITS.NAME_MAX) || "Utilisateur",
             role: "parent",
             parentIdx: 0,
             sub: u.user_metadata?.sub || undefined,
@@ -3491,7 +3510,7 @@ export default function App() {
           inv.code===obsData.inviteCode ? {...inv, used:true} : inv
         ),
       }));
-      pushNotif(`🧒 ${obsData.name} (${obsData.childAge} ans) a rejoint la famille — messagerie activée`, "info");
+      pushNotif(`🧒 ${obsData.name} (${obsData.childAge} ${t.years||"ans"}) ${t.joinedFamilyMsg||"a rejoint la famille — messagerie activée"}`, "info");
       return;
     }
     // Observateur standard
@@ -4036,7 +4055,7 @@ export default function App() {
               {/* ── Lots gagnés déplacés dans le bouton 🏆 de la barre ───── */}
               {isObs && !isAdm && (
                 <button onClick={async()=>{
-                  if(!window.confirm("Quitter la famille ? Vous n'aurez plus accès au calendrier ni à la messagerie.")) return;
+                  if(!window.confirm(t.confirmLeaveFamilyFull||"Quitter la famille ? Vous n'aurez plus accès au calendrier ni à la messagerie.")) return;
                   await familySync?.leaveFamily?.();
                   setShowMenu(false);
                   handleSetUser(null); setTab(0);
@@ -4065,6 +4084,8 @@ export default function App() {
                 DUVIA — Licence Propriétaire<br/>
                 © 2026 Alberto Ramos — Tous droits réservés<br/>
                 <button onClick={()=>setShowLicenseModal(true)} style={{background:"none",border:"none",color:C.vio,textDecoration:"underline",fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit"}}>{t.viewLicense}</button>
+                {" · "}
+                <button onClick={()=>setShowCGVModal(true)} style={{background:"none",border:"none",color:C.vio,textDecoration:"underline",fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit"}}>{t.viewCGV||"Voir les CGV"}</button>
               </div>
             </div>
             </>
@@ -4155,6 +4176,102 @@ Date d'entrée en vigueur : 14 juin 2026
           </div>
         </div>
       )}
+      {/* Modale CGV — Conditions Générales de Vente */}
+      {showCGVModal && (
+        <div onClick={()=>setShowCGVModal(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:16,padding:20,maxWidth:480,width:"100%",maxHeight:"80vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexShrink:0}}>
+              <div style={{fontSize:16,fontWeight:900,color:C.txt}}>📜 CGV</div>
+              <button onClick={()=>setShowCGVModal(false)} style={{width:30,height:30,background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,color:C.mut,fontSize:14,cursor:"pointer"}}>✕</button>
+            </div>
+            <div style={{fontSize:11,color:C.yel,background:`${C.yel}18`,border:`1px solid ${C.yel}55`,borderRadius:8,padding:"8px 10px",marginBottom:10,flexShrink:0,lineHeight:1.5}}>
+              ⚠️ Document provisoire en attente d'immatriculation (SIRET) et de relecture juridique. Ne constitue pas encore des CGV opposables.
+            </div>
+            <div style={{fontSize:12,color:C.mut,lineHeight:1.6,whiteSpace:"pre-wrap",overflowY:"auto",flex:1,paddingRight:4}}>
+{`CONDITIONS GÉNÉRALES DE VENTE — DUVIA
+
+En vigueur au : [date à compléter après immatriculation]
+Version provisoire — bêta non commerciale
+
+ARTICLE 1 — OBJET
+
+Les présentes Conditions Générales de Vente (CGV) régissent les ventes d'abonnements et de produits numériques additionnels (ci-après « Produits ») proposés sur l'application Duvia, éditée par :
+
+Alberto Ramos
+[Forme juridique et SIRET à compléter]
+[Adresse à compléter]
+Email : DUVIA.services@gmx.com
+
+Toute commande passée sur Duvia implique l'acceptation pleine et entière des présentes CGV.
+
+ARTICLE 2 — PRODUITS ET SERVICES
+
+Duvia propose :
+- Un accès Freemium gratuit avec fonctionnalités limitées ;
+- Un abonnement Premium (mensuel ou annuel) donnant accès à l'ensemble des fonctionnalités ;
+- Des thèmes visuels additionnels à l'unité, à usage permanent une fois acquis.
+
+ARTICLE 3 — PÉRIODE BÊTA GRATUITE
+
+Duvia est actuellement en phase bêta non commerciale. Pendant cette période :
+- L'accès Trial Premium est offert gratuitement à tous les utilisateurs jusqu'à la date communiquée dans l'application ;
+- Aucun paiement réel n'est traité ;
+- L'achat de thèmes additionnels est désactivé.
+Les présentes CGV entreront pleinement en vigueur à l'ouverture commerciale de Duvia, qui sera annoncée dans l'application avec un préavis raisonnable.
+
+ARTICLE 4 — PRIX
+
+Les prix sont indiqués en euros, toutes taxes comprises (TTC). À titre indicatif, à l'ouverture commerciale :
+- Abonnement Premium mensuel : 4,99 € / mois ;
+- Abonnement Premium annuel : 49,99 € / an ;
+- Thèmes additionnels : de 0,29 € à 0,99 € à l'unité.
+Duvia se réserve le droit de modifier ses prix à tout moment ; les utilisateurs déjà abonnés en seront informés avant toute application d'un nouveau tarif à leur renouvellement.
+
+ARTICLE 5 — MODALITÉS DE PAIEMENT
+
+Le paiement s'effectue en ligne par carte bancaire via un prestataire de paiement sécurisé tiers (Stripe). Duvia ne stocke aucune donnée bancaire.
+
+ARTICLE 6 — DURÉE ET RECONDUCTION
+
+L'abonnement Premium est souscrit pour une durée d'un mois ou d'un an selon la formule choisie, avec reconduction tacite à chaque échéance, sauf résiliation par l'utilisateur avant la date de renouvellement.
+
+ARTICLE 7 — DROIT DE RÉTRACTATION
+
+Conformément à l'article L221-18 du Code de la consommation, le consommateur dispose d'un délai de 14 jours pour exercer son droit de rétractation sans avoir à justifier de motif.
+
+Toutefois, conformément à l'article L221-28 13° du Code de la consommation, ce droit ne s'applique pas au contenu numérique fourni sur un support immatériel dont l'exécution a commencé après accord préalable exprès du consommateur et renoncement exprès à son droit de rétractation. En souscrivant à Duvia, l'utilisateur reconnaît demander un accès immédiat au service et renoncer expressément à son droit de rétractation pour la période déjà consommée.
+
+ARTICLE 8 — RÉSILIATION
+
+L'utilisateur peut résilier son abonnement à tout moment depuis les réglages de l'application. La résiliation prend effet à la fin de la période en cours déjà payée ; aucun remboursement au prorata n'est effectué sauf disposition légale contraire.
+
+ARTICLE 9 — REMBOURSEMENT
+
+Les thèmes additionnels, une fois acquis et débloqués, ne sont pas remboursables sauf défaut technique avéré empêchant leur utilisation, sur demande motivée adressée à DUVIA.services@gmx.com dans un délai de 14 jours.
+
+ARTICLE 10 — DONNÉES PERSONNELLES
+
+Le traitement des données personnelles liées à la facturation est décrit dans la Politique de confidentialité de Duvia, accessible depuis l'application.
+
+ARTICLE 11 — RESPONSABILITÉ
+
+Duvia met en œuvre les moyens raisonnables pour assurer la disponibilité et la sécurité du service, sans garantie de disponibilité ininterrompue. La responsabilité de Duvia ne saurait être engagée en cas de force majeure ou de fait imputable à un tiers (opérateur, hébergeur, prestataire de paiement).
+
+ARTICLE 12 — DROIT APPLICABLE ET LITIGES
+
+Les présentes CGV sont soumises au droit français. En cas de litige, et après tentative de résolution amiable, les tribunaux français seront seuls compétents, sous réserve des dispositions impératives applicables aux consommateurs.
+
+ARTICLE 13 — CONTACT
+
+Pour toute question relative aux présentes CGV :
+Email : DUVIA.services@gmx.com
+
+[Document provisoire — à finaliser avec un conseil juridique avant ouverture commerciale]`}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Trial / Premium / Earned bubble — second row */}
       {!isObs && !isChild && st==="trial_premium" && (
         <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>
@@ -4304,7 +4421,7 @@ Date d'entrée en vigueur : 14 juin 2026
                 <div style={{fontSize:44,marginBottom:12}}>🏚️</div>
                 <div style={{fontWeight:900,fontSize:17,color:C.txt,marginBottom:8}}>{t.familyDisbanded||"Cette famille n'a plus de parent actif."}</div>
                 <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:20}}>{t.familyDisbandedObs||"Votre accès est maintenu mais aucun parent ne gère plus cette famille. Vous pouvez quitter."}</div>
-                <button onClick={async()=>{if(!window.confirm("Quitter la famille ?")) return; await familySync?.leaveFamily?.(); handleSetUser(null); setTab(0);}}
+                <button onClick={async()=>{if(!window.confirm(t.confirmLeaveFamilySimple||"Quitter la famille ?")) return; await familySync?.leaveFamily?.(); handleSetUser(null); setTab(0);}}
                   style={{height:44,padding:"0 24px",background:C.red,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:14,cursor:"pointer"}}>
                   🚪 {t.obsLeaveFamily||"Quitter la famille"}
                 </button>
@@ -4616,6 +4733,64 @@ function PasswordResetScreen({ onDone }) {
           {loading ? "Mise à jour…" : "Confirmer le nouveau mot de passe"}
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── Traduction automatique des avis (API gratuite MyMemory, sans clé) ──────
+// Cache en localStorage pour éviter de re-traduire le même texte à chaque
+// chargement (la quota gratuite de MyMemory est limitée).
+const _reviewTranslationCache = (() => {
+  try { return JSON.parse(localStorage.getItem("duvia_review_tr") || "{}"); } catch { return {}; }
+})();
+function _saveReviewTranslationCache() {
+  try { localStorage.setItem("duvia_review_tr", JSON.stringify(_reviewTranslationCache)); } catch {}
+}
+async function translateReviewText(text, targetLang) {
+  if (!text || targetLang === "fr") return text; // avis déjà en français (langue source supposée)
+  const cacheKey = `${targetLang}:${text}`;
+  if (_reviewTranslationCache[cacheKey]) return _reviewTranslationCache[cacheKey];
+  try {
+    const res = await fetch(
+      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=fr|${targetLang}`
+    );
+    const data = await res.json();
+    const translated = data?.responseData?.translatedText;
+    if (translated && data.responseStatus === 200) {
+      _reviewTranslationCache[cacheKey] = translated;
+      _saveReviewTranslationCache();
+      return translated;
+    }
+  } catch (e) { /* échec réseau → on garde le texte original, jamais bloquant */ }
+  return text;
+}
+
+// Hook : traduit un avis selon la langue UI courante, avec fallback immédiat sur l'original
+function useTranslatedReview(text, lang) {
+  const [translated, setTranslated] = useState(text);
+  useEffect(() => {
+    let cancelled = false;
+    setTranslated(text); // affiche l'original tout de suite, remplace si traduction dispo
+    if (lang !== "fr" && text) {
+      translateReviewText(text, lang).then(t => { if (!cancelled) setTranslated(t); });
+    }
+    return () => { cancelled = true; };
+  }, [text, lang]);
+  return translated;
+}
+
+// Petit composant dédié — un Hook ne peut pas s'appeler directement dans un .map()
+function ReviewItem({r, lang, compact, C}) {
+  const translatedComment = useTranslatedReview(r.comment, lang);
+  return (
+    <div style={compact
+      ? {background:"rgba(255,255,255,0.65)",borderRadius:12,padding:"10px 14px",marginBottom:8,backdropFilter:"blur(4px)",animation:"loginReviewFade .2s ease both"}
+      : {background:C?.sur,borderRadius:10,padding:"10px 12px",marginBottom:8}}>
+      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+        <span style={{color:"#FFB800",fontSize:compact?12:14}}>{"★".repeat(r.stars)}{"☆".repeat(5-r.stars)}</span>
+        <span style={{fontSize:11,fontWeight:700,color:compact?"#555":C?.txt}}>{r.display_name}</span>
+      </div>
+      <div style={{fontSize:12,color:compact?"#666":C?.mut,fontStyle:"italic",lineHeight:1.4}}>"{translatedComment}"</div>
     </div>
   );
 }
@@ -5379,7 +5554,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
                 });
               }} style={{width:"100%",height:44,background:"#fff",border:"1.5px solid #dadce0",borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",gap:10,fontSize:14,fontWeight:700,color:"#3c4043",cursor:"pointer",marginBottom:4,boxShadow:"0 1px 4px rgba(0,0,0,.08)"}}>
                 <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.8 2.5 30.2 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.9 6.1C12.4 13 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.5-4.1 7-10.2 7-17.1z"/><path fill="#FBBC05" d="M10.5 28.6A14.8 14.8 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6l-7.9-6.1A23.8 23.8 0 0 0 0 24c0 3.9.9 7.5 2.6 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.6-5.9c-2 1.4-4.7 2.2-7.6 2.2-6.3 0-11.6-3.5-13.5-9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>
-                Continuer avec Google
+                {t.continueWithGoogle||"Continuer avec Google"}
               </button>
             </>
           )}
@@ -5414,13 +5589,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
               <span style={{fontSize:10,color:"#999",marginLeft:2,display:"inline-block",transition:"transform .2s",transform:reviewsOpen?"rotate(180deg)":"rotate(0deg)"}}>▾</span>
             </div>
             {reviewsOpen && publicReviews.map((r,i)=>(
-              <div key={i} style={{background:"rgba(255,255,255,0.65)",borderRadius:12,padding:"10px 14px",marginBottom:8,backdropFilter:"blur(4px)",animation:"loginReviewFade .2s ease both"}}>
-                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
-                  <span style={{color:"#FFB800",fontSize:12}}>{"★".repeat(r.stars)}{"☆".repeat(5-r.stars)}</span>
-                  <span style={{fontSize:11,fontWeight:700,color:"#555"}}>{r.display_name}</span>
-                </div>
-                <div style={{fontSize:12,color:"#666",fontStyle:"italic",lineHeight:1.4}}>"{r.comment}"</div>
-              </div>
+              <ReviewItem key={i} r={r} lang={lang} compact={true} />
             ))}
           </div>
         )}
@@ -5478,8 +5647,8 @@ function NotifTab({prem: premProp}) {
   const storageKey = `duvia_deleted_notifs_${user?.id||"guest"}`;
   const [deletedIds,setDeletedIds] = useLocalStorage(storageKey,[]);
   const notifs = allNotifs.filter(n=>!deletedIds.includes(n.id));
-  function deleteNotif(id){ if(window.confirm("Supprimer cette notification ?")) setDeletedIds(ids=>[...ids,id]); }
-  function deleteAll(){ if(window.confirm(`Supprimer toutes les notifications (${notifs.length}) ?`)) setDeletedIds(ids=>[...ids,...allNotifs.map(n=>n.id)]); }
+  function deleteNotif(id){ if(window.confirm(t.confirmDeleteNotif||"Supprimer cette notification ?")) setDeletedIds(ids=>[...ids,id]); }
+  function deleteAll(){ if(window.confirm((t.confirmDeleteAllNotifs||"Supprimer toutes les notifications ({n}) ?").replace("{n}",notifs.length))) setDeletedIds(ids=>[...ids,...allNotifs.map(n=>n.id)]); }
   function markAll(){setCfg(c=>({...c,notifs:c.notifs.map(n=>({...n,read:true}))}));}
 
   // Map notif type → tab index (parent layout: 0=Cal, 1=Schedule, 2=Exp, 3=Contacts, 4=Vault, 5=Msg)
@@ -6180,7 +6349,7 @@ function ConfigTab() {
 
   // « Quitter la famille » — pour le parent connecté (créateur OU invité).
   async function quitterFamille(){
-    if(!window.confirm("Quitter cette famille ?\n\nVous repartirez sur une famille personnelle vierge. Une synthèse de vos données est conservée pour export.")) return;
+    if(!window.confirm(t.confirmLeaveFamilyDetailed||"Quitter cette famille ?\n\nVous repartirez sur une famille personnelle vierge. Une synthèse de vos données est conservée pour export.")) return;
     const res = await familySync?.leaveFamily?.();
     if(res?.ok){ duviaReload(); }
     else { alert("⚠️ Impossible de quitter la famille.\n\nDétail : "+(res?.error||"inconnu")+"\n\n(Si l'erreur mentionne « leave_family », la migration SQL 0018 n'est pas encore exécutée sur Supabase.)"); }
@@ -6190,7 +6359,7 @@ function ConfigTab() {
   async function retirerInvite(i){
     const p = cfg.parents[i];
     if(!p?.userId){ alert("Cet invité n'a pas encore rejoint — utilisez « Retirer » sur l'invitation."); return; }
-    if(!window.confirm(`Retirer ${p.name||"l'invité"} de la famille ?\n\nIl repartira sur une famille personnelle vierge. Vous conservez la famille et son code.`)) return;
+    if(!window.confirm((t.confirmRemoveGuest||"Retirer {name} de la famille ?\n\nIl repartira sur une famille personnelle vierge. Vous conservez la famille et son code.").replace("{name}",p.name||"l'invité"))) return;
     const res = await familySync?.removeFamilyMember?.(p.userId);
     if(res?.ok){
       setCfg(c=>({...c, parents:c.parents.filter((_,j)=>j!==i)}));
@@ -6264,7 +6433,7 @@ function ConfigTab() {
     });
 
     setEmailSimIdx(null);
-    pushNotif(`🗑️ ${parentName} a été supprimé de la famille.`);
+    pushNotif(`🗑️ ${parentName} ${t.removedFromFamilyMsg||"a été supprimé de la famille."}`);
   }
   function addChild(){if(cfg.children.length>=(perms?.maxChildren??1))return onUpgrade();setCfg(c=>({...c,children:[...c.children,{id:Date.now(),name:"",email:"",birthDay:"",birthMonth:"",birthYear:"",allergy:"",bloodType:"",home:{school:"",doctor:"",notes:"",emergencyContacts:""}}]}));}
   function removeChild(i){setCfg(c=>{const children=c.children.filter((_,j)=>j!==i);return{...c,children,sameGuardAll:children.length<=1?true:c.sameGuardAll};});}
@@ -6384,7 +6553,7 @@ function ConfigTab() {
                 <ParentInviteShareBtns C={C} parent={{inviteUrl:inviteResult.url, inviteEmail:inviteResult.email, invitePhone:inviteResult.phone}} familyName={cfg.parents[0]?.name || "Votre famille"} />
                 <button onClick={()=>{
                   navigator.clipboard.writeText(inviteResult.url);
-                  pushNotif("Lien copié !","info");
+                  pushNotif(`🔗 ${t.copied||"Copié !"}`,"info");
                 }} style={{width:"100%",height:40,background:C.sur,color:C.txt,border:`1.5px solid ${C.bor}`,borderRadius:10,fontWeight:700,fontSize:13,marginBottom:10}}>
                   {t.copyInviteLink}
                 </button>
@@ -6539,7 +6708,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
         <button
           disabled={creatingFamily}
           onClick={async ()=>{
-            if(!window.confirm("Créer une nouvelle famille distincte ? Tu pourras basculer entre tes familles depuis le menu en haut de l'app.")) return;
+            if(!window.confirm(t.confirmCreateNewFamily||"Créer une nouvelle famille distincte ? Tu pourras basculer entre tes familles depuis le menu en haut de l'app.")) return;
             setCreatingFamily(true);
             const myProfile = (typeof user?.parentIdx === "number" ? cfg.parents[user.parentIdx] : null) || {};
             const prefillParent = {
@@ -6637,7 +6806,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
                       {pidActing===m.userId?"⏳…":"✅ Valider"}
                     </button>
                     <button disabled={pidActing===m.userId} onClick={async()=>{
-                      if(!window.confirm("Refuser cette demande ?")) return;
+                      if(!window.confirm(t.confirmRejectRequest||"Refuser cette demande ?")) return;
                       setPidActing(m.userId);
                       const res=await familySync.rejectMember(m.userId);
                       setPidActing(null);
@@ -6681,7 +6850,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           {/* Row 1 : Avatar | Nom | Genre | Couleur */}
           <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:12}}>
             {/* Avatar */}
-            <div style={{...fieldBox,flexShrink:0}}>
+            <div style={{...fieldBox,flexShrink:0,...lockStyle}}>
               <span style={lbl}>Avatar</span>
               <div style={{height:IH,display:"flex",alignItems:"center"}}>
                 <AvatarPicker current={p.avatar} color={p.color} pool={PARENT_AVATARS} onSelect={em=>setParent(i,"avatar",em)} />
@@ -6781,7 +6950,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
               <span style={{fontSize:16,color:C.mut,transition:"transform .2s",display:"inline-block",transform:expandedChildren.has(i)?"rotate(180deg)":"rotate(0deg)"}}>⌄</span>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              {!isChild && <button onClick={e=>{e.stopPropagation();if(!window.confirm(`Retirer ${ch.name.trim()||`l'enfant ${i+1}`} de la famille ?`)) return;removeChild(i);}} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12}}>{t.remove}</button>}
+              {!isChild && <button onClick={e=>{e.stopPropagation();const childLabel=ch.name.trim()||`l'enfant ${i+1}`;if(!window.confirm((t.confirmRemoveChild||"Retirer {name} de la famille ?").replace("{name}",childLabel))) return;removeChild(i);}} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12}}>{t.remove}</button>}
             </div>
           </div>
 
@@ -7109,7 +7278,7 @@ function ChildInviteBtn({ childIdx, childName, childPhone, childEmail, childBirt
             <button onClick={handleWhatsApp} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:"#25D36618",color:"#25D366",border:"1.5px solid #25D36644"}}><span style={{fontSize:14}}>📱</span> WhatsApp</button>
             <button onClick={handleEmail} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:`${C.vio}18`,color:C.vio,border:`1.5px solid ${C.vio}44`}}>✉️ Email</button>
             <button onClick={handleCopy} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:copied?`${C.grn}18`:C.sur,color:copied?C.grn:C.mut,border:`1.5px solid ${C.bor}`}}>
-              {copied ? "✅ Copié !" : "📋 Copier"}
+              {copied ? `✅ ${t.copied||"Copié !"}` : `📋 ${t.copyLink||"Copier"}`}
             </button>
           </div>
           <button onClick={()=>setInviteUrl("")} style={{fontSize:11,color:C.mut,background:"none",border:"none",cursor:"pointer",textDecoration:"underline",padding:0}}>↩️ Regénérer un lien</button>
@@ -7507,9 +7676,12 @@ function StepDates() {
                               {/* Boutons tout assigner */}
                               <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
                                 {cfg.parents.map((p,pi)=>(
-                                  <button key={pi} onClick={()=>{const base=chGetHolDetails();const newDet={...base,[hol.n]:{...(base[hol.n]||{})}};days.forEach(d2=>{newDet[hol.n][d2]=pi;});chSetHolDetails(newDet);}} style={{padding:"4px 10px",background:`${p.color}22`,color:p.color,border:`1.5px solid ${p.color}`,borderRadius:20,fontSize:11,fontWeight:700}}>Tout → {p.name||`P${pi+1}`}</button>
+                                  <button key={pi} onClick={()=>{const base=chGetHolDetails();const newDet={...base,[hol.n]:{...(base[hol.n]||{})}};days.forEach(d2=>{newDet[hol.n][d2]=pi;});chSetHolDetails(newDet);}} style={{padding:"4px 10px",background:`${p.color}22`,color:p.color,border:`1.5px solid ${p.color}`,borderRadius:20,fontSize:11,fontWeight:700}}>{(t.assignAllTo||"Tout → {name}").replace("{name}",p.name||`P${pi+1}`)}</button>
                                 ))}
-                                <button onClick={()=>{const base=chGetHolDetails();chSetHolDetails({...base,[hol.n]:{}});}} style={{padding:"4px 8px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,borderRadius:20,fontSize:11}}>Effacer</button>
+                                {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=>(
+                                  <button key={o.id} onClick={()=>{const base=chGetHolDetails();const newDet={...base,[hol.n]:{...(base[hol.n]||{})}};days.forEach(d2=>{newDet[hol.n][d2]=`obs:${o.id}`;});chSetHolDetails(newDet);}} style={{padding:"4px 10px",background:"#f59e0b22",color:"#f59e0b",border:"1.5px solid #f59e0b",borderRadius:20,fontSize:11,fontWeight:700}}>{(t.assignAllTo||"Tout → {name}").replace("{name}","🏠 "+obsLabel(o))}</button>
+                                ))}
+                                <button onClick={()=>{const base=chGetHolDetails();chSetHolDetails({...base,[hol.n]:{}});}} style={{padding:"4px 8px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,borderRadius:20,fontSize:11}}>{t.clearAll||"Effacer"}</button>
                               </div>
                               {/* Vue par semaines */}
                               {(()=>{
@@ -7730,9 +7902,12 @@ function StepDates() {
                           <div style={{padding:"10px 11px"}}>
                             <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
                               {cfg.parents.map((p,pi)=>(
-                                <button key={pi} onClick={()=>{const base=chGetHolDetails();const newDet={...base,[hol.n]:{...(base[hol.n]||{})}};days.forEach(d2=>{newDet[hol.n][d2]=pi;});chSetHolDetails(newDet);}} style={{padding:"4px 10px",background:`${p.color}22`,color:p.color,border:`1.5px solid ${p.color}`,borderRadius:20,fontSize:11,fontWeight:700}}>Tout → {p.name||`P${pi+1}`}</button>
+                                <button key={pi} onClick={()=>{const base=chGetHolDetails();const newDet={...base,[hol.n]:{...(base[hol.n]||{})}};days.forEach(d2=>{newDet[hol.n][d2]=pi;});chSetHolDetails(newDet);}} style={{padding:"4px 10px",background:`${p.color}22`,color:p.color,border:`1.5px solid ${p.color}`,borderRadius:20,fontSize:11,fontWeight:700}}>{(t.assignAllTo||"Tout → {name}").replace("{name}",p.name||`P${pi+1}`)}</button>
                               ))}
-                              <button onClick={()=>{const base=chGetHolDetails();chSetHolDetails({...base,[hol.n]:{}});}} style={{padding:"4px 8px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,borderRadius:20,fontSize:11}}>Effacer</button>
+                              {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=>(
+                                <button key={o.id} onClick={()=>{const base=chGetHolDetails();const newDet={...base,[hol.n]:{...(base[hol.n]||{})}};days.forEach(d2=>{newDet[hol.n][d2]=`obs:${o.id}`;});chSetHolDetails(newDet);}} style={{padding:"4px 10px",background:"#f59e0b22",color:"#f59e0b",border:"1.5px solid #f59e0b",borderRadius:20,fontSize:11,fontWeight:700}}>{(t.assignAllTo||"Tout → {name}").replace("{name}","🏠 "+obsLabel(o))}</button>
+                              ))}
+                              <button onClick={()=>{const base=chGetHolDetails();chSetHolDetails({...base,[hol.n]:{}});}} style={{padding:"4px 8px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,borderRadius:20,fontSize:11}}>{t.clearAll||"Effacer"}</button>
                             </div>
                             {(()=>{
                               const weeks=[];let week=[];
@@ -7862,55 +8037,55 @@ function StepDates() {
             <div key={i} style={{marginBottom:12,padding:"12px",background:C.sur,borderRadius:10,border:`1.5px solid ${C.bor}`}}>
               {/* Header */}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                <div style={{fontSize:12,fontWeight:800,color:C.vio}}>📌 Date {i+1}</div>
+                <div style={{fontSize:12,fontWeight:800,color:C.vio}}>📌 {(t.customDateLabel||"Date {n}").replace("{n}",i+1)}</div>
                 <button onClick={()=>{if(!prem)return;setCfg(prev=>{const arr=[...(prev.specialDates?.custom||[])];arr.splice(i,1);return {...prev,specialDates:{...prev.specialDates,custom:arr}};});}} style={{padding:"3px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:11}}>✕</button>
               </div>
               {/* Label */}
               <div style={{...fld,marginBottom:10}}>
-                <span style={lbl}>Nom de l'événement</span>
-                <input value={cd.label||""} onChange={e=>updCd("label",e.target.value)} placeholder="Ex: Vacances ski, Mariage..." disabled={!prem} style={inp} />
+                <span style={lbl}>{t.eventName||"Nom de l'événement"}</span>
+                <input value={cd.label||""} onChange={e=>updCd("label",e.target.value)} placeholder={t.eventNamePlaceholder||"Ex: Vacances ski, Mariage..."} disabled={!prem} style={inp} />
               </div>
               {/* Date row */}
               <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:10}}>
                 <div style={{...fld,flex:1}}>
-                  <span style={lbl}>Jour</span>
+                  <span style={lbl}>{t.dayLabel||"Jour"}</span>
                   <input type="number" min="1" max="31" value={cd.day||""} onChange={e=>updCd("day",e.target.value)} placeholder={t.dayPlaceholder||"JJ"} disabled={!prem} style={inp} />
                 </div>
                 <div style={{...fld,flex:2}}>
-                  <span style={lbl}>Mois</span>
+                  <span style={lbl}>{t.monthLabel||"Mois"}</span>
                   <select value={cd.month||""} onChange={e=>updCd("month",e.target.value)} disabled={!prem} style={inp}>
                     <option value="">--</option>
                     {t.months.map((m,j)=><option key={j} value={pad(j+1)}>{m}</option>)}
                   </select>
                 </div>
                 <div style={{...fld,flex:1}}>
-                  <span style={lbl}>Année</span>
+                  <span style={lbl}>{t.yearLabel||"Année"}</span>
                   <input type="number" min="2020" max="2099" value={cd.year||""} onChange={e=>updCd("year",e.target.value)} placeholder={cd.yearly?"—":new Date().getFullYear()} disabled={!prem||cd.yearly} style={{...inp,opacity:cd.yearly?0.4:1}} />
                 </div>
               </div>
               {/* Who has custody */}
               <div className="field">
-                <label className="lbl">🧒 Concerne</label>
+                <label className="lbl">🧒 {t.concernsLabel||"Concerne"}</label>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                   <button onClick={()=>updCd("childId","all")} style={{padding:"6px 14px",background:(!cd.childId||cd.childId==="all")?C.vio:C.sur,color:(!cd.childId||cd.childId==="all")?"#fff":C.mut,border:`1.5px solid ${(!cd.childId||cd.childId==="all")?C.vio:C.bor}`,borderRadius:20,fontSize:12,fontWeight:700}}>
-                    Tous
+                    {t.all||"Tous"}
                   </button>
                   {children.map(ch=>(
                     <button key={ch.id} onClick={()=>updCd("childId",String(ch.id))} style={{padding:"6px 14px",background:cd.childId===String(ch.id)?C.vio:C.sur,color:cd.childId===String(ch.id)?"#fff":C.mut,border:`1.5px solid ${cd.childId===String(ch.id)?C.vio:C.bor}`,borderRadius:20,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
-                      {ch.avatar&&<span>{ch.avatar}</span>}{ch.name||`Enfant ${ch.id}`}
+                      {ch.avatar&&<span>{ch.avatar}</span>}{ch.name||(t.childFallback||"Enfant {id}").replace("{id}",ch.id)}
                     </button>
                   ))}
                 </div>
               </div>
               {/* Which parent */}
               <div className="field">
-                <label className="lbl">👤 Garde chez</label>
+                <label className="lbl">👤 {t.custodyAtLabel||"Garde chez"}</label>
                 <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                   {parents.map(p=>(
                     <button key={p.id} onClick={()=>updCd("parentId",String(p.id))} style={{flex:1,minWidth:80,padding:"9px",background:cd.parentId===String(p.id)?p.color:C.sur,color:cd.parentId===String(p.id)?"#fff":C.mut,border:`2px solid ${cd.parentId===String(p.id)?p.color:C.bor}`,borderRadius:10,fontSize:13,fontWeight:800,display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>
                       {p.avatar&&(typeof p.avatar==="string"&&p.avatar.startsWith("http")
                         ? <img src={p.avatar} alt="" style={{width:22,height:22,borderRadius:"50%",objectFit:"cover",verticalAlign:"middle"}} />
-                        : <span style={{fontSize:18}}>{p.avatar}</span>)}{p.name||`Parent ${p.id}`}
+                        : <span style={{fontSize:18}}>{p.avatar}</span>)}{p.name||(t.parentFallback||"Parent {id}").replace("{id}",p.id)}
                     </button>
                   ))}
                 </div>
@@ -7918,7 +8093,7 @@ function StepDates() {
               {/* Yearly recurrence */}
               <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13}}>
                 <input type="checkbox" checked={!!cd.yearly} onChange={e=>updCd("yearly",e.target.checked)} />
-                <span>🔁 Reconduire tous les ans</span>
+                <span>🔁 {t.yearlyRecurrence||"Reconduire tous les ans"}</span>
               </label>
             </div>
           );
@@ -8032,9 +8207,9 @@ function StepGarde() {
     })) : undefined;
     if(multiChild && selChildId) {
       setCfg(c=>({...c, custodyPerChild:{...c.custodyPerChild,[selChildId]:newCustody}}));
-      const childName = children.find(ch=>ch.id===selChildId)?.name||"Enfant";
+      const childName = children.find(ch=>ch.id===selChildId)?.name||t.childFallback?.replace("{id}","")||"Enfant";
       addHist(t.stepGarde, childName, "cal");
-      pushNotif(`📆 Planning de ${childName} confirmé`);
+      pushNotif(`📆 ${(t.scheduleConfirmedFor||"Planning de {name} confirmé").replace("{name}",childName)}`);
       custodyShadow?.shadowRule?.({
         childId: selChildId, type, startMonth: cfg.custody.startMonth, startYear: cfg.custody.startYear,
         weekAltEvenIdx: wA?.evenIdx, exclusiveMainIdx: ex?.mainIdx, exclusiveWeIdx: ex?.weIdx,
@@ -8149,6 +8324,29 @@ function StepGarde() {
 
         {type==="custom"&&(
           <div className="fi">
+            {/* Légende parents + observateurs gardiens (avatar, nom, couleur) */}
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
+              {parents.map((p,pi)=>(
+                <div key={pi} style={{display:"flex",alignItems:"center",gap:5,padding:"3px 9px 3px 3px",background:`${p.color}15`,border:`1.5px solid ${p.color}`,borderRadius:20}}>
+                  <span style={{width:18,height:18,borderRadius:"50%",background:p.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,flexShrink:0,overflow:"hidden"}}>
+                    {p.avatar&&typeof p.avatar==="string"&&p.avatar.startsWith("http")
+                      ? <img src={p.avatar} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} />
+                      : <span style={{color:"#fff"}}>{p.avatar||(p.name?.trim()[0]?.toUpperCase())||"P"}</span>}
+                  </span>
+                  <span style={{fontSize:11,fontWeight:700,color:p.color}}>{p.name||`P${pi+1}`}</span>
+                </div>
+              ))}
+              {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=>(
+                <div key={o.id} style={{display:"flex",alignItems:"center",gap:5,padding:"3px 9px 3px 3px",background:"#f59e0b15",border:"1.5px solid #f59e0b",borderRadius:20}}>
+                  <span style={{width:18,height:18,borderRadius:"50%",background:"#f59e0b",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,flexShrink:0,overflow:"hidden"}}>
+                    {o.avatar&&typeof o.avatar==="string"&&o.avatar.startsWith("http")
+                      ? <img src={o.avatar} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} />
+                      : <span style={{color:"#fff"}}>{o.avatar||"🏠"}</span>}
+                  </span>
+                  <span style={{fontSize:11,fontWeight:700,color:"#f59e0b"}}>{obsLabel(o)}</span>
+                </div>
+              ))}
+            </div>
             <div style={{overflowX:"auto"}}>
               <div style={{display:"grid",gridTemplateColumns:"repeat(14,1fr)",gap:3,minWidth:520,marginBottom:4}}>
                 <div style={{gridColumn:"1 / span 7",textAlign:"center",fontSize:9,fontWeight:800,color:C.vio,background:`${C.vio}12`,borderRadius:6,padding:"3px 0",textTransform:"uppercase",letterSpacing:".05em"}}>{t.evenWeek}</div>
@@ -8158,15 +8356,25 @@ function StepGarde() {
                 {D14.map((d,i)=>(
                   <div key={i} style={{textAlign:"center"}}>
                     <div style={{fontSize:9,color:d.we?C.yel:C.mut,marginBottom:3,fontFamily:"JetBrains Mono",fontWeight:700,lineHeight:1.2}}>{d.label}<br/><span style={{fontSize:8}}>{d.num}</span></div>
-                    {parents.map((p,pi)=>(
-                      <button key={pi} onClick={()=>setDay(i,pi)} style={{width:"100%",padding:"4px 1px",marginBottom:2,background:pat[i]?.parentIdx===pi?p.color:C.sur,color:pat[i]?.parentIdx===pi?"#fff":C.mut,border:`1.5px solid ${pat[i]?.parentIdx===pi?p.color:C.bor}`,borderRadius:6,fontSize:8,fontWeight:800}}>
-                        {(p.name?.trim().split(" ")[0]?.slice(0,4)) || `P${pi+1}`}
+                    {parents.map((p,pi)=>{
+                      const initials=(p.name?.trim().split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase())||`P${pi+1}`;
+                      const active=pat[i]?.parentIdx===pi;
+                      return (
+                      <button key={pi} onClick={()=>setDay(i,pi)} title={p.name||`P${pi+1}`} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:2,padding:"3px 1px",marginBottom:2,background:active?p.color:C.sur,color:active?"#fff":C.mut,border:`1.5px solid ${active?p.color:C.bor}`,borderRadius:6,fontSize:8,fontWeight:800}}>
+                        {p.avatar&&(typeof p.avatar==="string"&&p.avatar.startsWith("http")
+                          ? <img src={p.avatar} alt="" style={{width:11,height:11,borderRadius:"50%",objectFit:"cover",flexShrink:0}} />
+                          : <span style={{fontSize:10,lineHeight:1}}>{p.avatar}</span>)}
+                        <span>{initials}</span>
                       </button>
-                    ))}
+                      );
+                    })}
                     {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=>(
-                      <button key={o.id} onClick={()=>setDayObs(i,o.id,obsLabel(o))}
-                        style={{width:"100%",padding:"4px 1px",marginBottom:2,background:pat[i]?.obsId===o.id?"#f59e0b":C.sur,color:pat[i]?.obsId===o.id?"#fff":"#f59e0b",border:"1.5px solid #f59e0b",borderRadius:6,fontSize:8,fontWeight:800}}>
-                        🏠{obsLabel(o).slice(0,3)}
+                      <button key={o.id} onClick={()=>setDayObs(i,o.id,obsLabel(o))} title={obsLabel(o)}
+                        style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:2,padding:"3px 1px",marginBottom:2,background:pat[i]?.obsId===o.id?"#f59e0b":C.sur,color:pat[i]?.obsId===o.id?"#fff":"#f59e0b",border:"1.5px solid #f59e0b",borderRadius:6,fontSize:8,fontWeight:800}}>
+                        {o.avatar&&typeof o.avatar==="string"&&o.avatar.startsWith("http")
+                          ? <img src={o.avatar} alt="" style={{width:11,height:11,borderRadius:"50%",objectFit:"cover",flexShrink:0}} />
+                          : <span style={{fontSize:10,lineHeight:1}}>{o.avatar||"🏠"}</span>}
+                        <span>{obsLabel(o).slice(0,3)}</span>
                       </button>
                     ))}
                   </div>
@@ -8219,15 +8427,21 @@ function WeekRow({wk, wkPiCounts, dominantPi, wkColor, wkLabel, hol, det, chGetH
           {cfg.parents.map((p,pi)=>(
             <button key={pi}
               onClick={()=>{const base=chGetHolDetails();const nd={...base,[hol.n]:{...(base[hol.n]||{})}};wk.forEach(({ds})=>{nd[hol.n][ds]=pi;});chSetHolDetails(nd);setOpen(false);}}
-              style={{padding:"3px 9px",background:wkPiCounts[pi]===wk.length?p.color:`${p.color}22`,color:wkPiCounts[pi]===wk.length?"#fff":p.color,border:`1.5px solid ${p.color}`,borderRadius:20,fontSize:11,fontWeight:800}}>
-              {(p.name?.trim().split(" ")[0]?.slice(0,6)) || `P${pi+1}`}
+              title={p.name||`P${pi+1}`}
+              style={{width:26,height:26,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,background:wkPiCounts[pi]===wk.length?p.color:`${p.color}22`,color:"#fff",border:`1.5px solid ${p.color}`,flexShrink:0,padding:0}}>
+              {p.avatar&&typeof p.avatar==="string"&&p.avatar.startsWith("http")
+                ? <img src={p.avatar} alt="" style={{width:"100%",height:"100%",borderRadius:"50%",objectFit:"cover"}} />
+                : (p.avatar || (p.name?.trim()[0]?.toUpperCase()) || "P")}
             </button>
           ))}
           {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=>(
             <button key={o.id}
               onClick={()=>{const base=chGetHolDetails();const nd={...base,[hol.n]:{...(base[hol.n]||{})}};wk.forEach(({ds})=>{nd[hol.n][ds]=`obs:${o.id}`;});chSetHolDetails(nd);setOpen(false);}}
-              style={{padding:"3px 9px",background:"#f59e0b22",color:"#f59e0b",border:"1.5px solid #f59e0b",borderRadius:20,fontSize:11,fontWeight:800}}>
-              🏠 {obsLabel(o)}
+              title={obsLabel(o)}
+              style={{width:26,height:26,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,background:"#f59e0b22",border:"1.5px solid #f59e0b",flexShrink:0,padding:0}}>
+              {o.avatar&&typeof o.avatar==="string"&&o.avatar.startsWith("http")
+                ? <img src={o.avatar} alt="" style={{width:"100%",height:"100%",borderRadius:"50%",objectFit:"cover"}} />
+                : (o.avatar || "🏠")}
             </button>
           ))}
           <button onClick={()=>setOpen(o=>!o)}
@@ -8412,7 +8626,7 @@ function StepAccess() {
               if(!res.ok) alert("⚠️ Erreur lors de la validation.");
             }} style={{padding:"7px 12px",background:C.grn,color:"#fff",borderRadius:8,fontSize:12,fontWeight:800,opacity:pendingActionId===m.userId?0.6:1}}>Valider</button>
             <button disabled={pendingActionId===m.userId} onClick={async ()=>{
-              if(!window.confirm("Refuser cette demande ?")) return;
+              if(!window.confirm(t.confirmRejectRequest||"Refuser cette demande ?")) return;
               setPendingActionId(m.userId);
               const res = await familySync.rejectMember(m.userId);
               setPendingActionId(null);
@@ -8456,8 +8670,8 @@ function StepAccess() {
                 {canGuard&&<span style={{color:"#fff",fontSize:13,fontWeight:900}}>✓</span>}
               </div>
               <div>
-                <div style={{fontSize:13,fontWeight:700,color:canGuard?"#f59e0b":C.txt}}>🏠 Peut être gardien</div>
-                <div style={{fontSize:11,color:C.mut}}>Apparaît dans le calendrier comme option de garde</div>
+                <div style={{fontSize:13,fontWeight:700,color:canGuard?"#f59e0b":C.txt}}>🏠 {t.obsCanGuard||"Peut être gardien"}</div>
+                <div style={{fontSize:11,color:C.mut}}>{t.obsCanGuardDesc||"Apparaît dans le calendrier comme option de garde"}</div>
               </div>
             </div>
             <button onClick={sendInvite} disabled={(!email&&!phone)||genLoading}
@@ -8508,7 +8722,7 @@ function StepAccess() {
               }
             </div>
             <button onClick={async()=>{
-              if(!window.confirm(`Retirer ${o.name||o.email||"cet observateur"} de la famille ?`)) return;
+              if(!window.confirm((t.confirmRemoveObserver||"Retirer {name} de la famille ?").replace("{name}",o.name||o.email||"cet observateur"))) return;
               // Supprimer de Supabase si l'observateur a un compte (userId)
               if(o.userId){ await familySync.removeFamilyMember(o.userId); }
               // Supprimer de cfg local
@@ -8560,7 +8774,7 @@ function StepAccess() {
                 <button onClick={handleSendWhatsApp} disabled={!o.phone} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:o.phone?"pointer":"not-allowed",opacity:o.phone?1:.4,background:"#25D36618",color:"#25D366",border:"1.5px solid #25D36644"}}><span style={{fontSize:14}}>📱</span> WhatsApp</button>
                 <button onClick={handleSendEmail} disabled={!o.email} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:o.email?"pointer":"not-allowed",opacity:o.email?1:.4,background:`${C.vio}18`,color:C.vio,border:`1.5px solid ${C.vio}44`}}>✉️ Email</button>
                 <button onClick={copyInvite} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:copied?`${C.grn}18`:C.sur,color:copied?C.grn:C.mut,border:`1.5px solid ${C.bor}`}}>
-                  {copied ? "✅ Copié !" : "📋 Copier"}
+                  {copied ? `✅ ${t.copied||"Copié !"}` : `📋 ${t.copyLink||"Copier"}`}
                 </button>
               </div>
             </div>
@@ -8575,7 +8789,7 @@ function StepAccess() {
                 if(!res.ok) alert("⚠️ Erreur lors de la validation.");
               }} style={{flex:1,height:42,background:C.grn,color:"#fff",fontSize:13,fontWeight:800,borderRadius:10,opacity:pendingActionId===matchingPending.userId?0.6:1}}>{t.obsApprove||"Accepter"}</button>
               <button disabled={pendingActionId===matchingPending.userId} onClick={async()=>{
-                if(!window.confirm("Refuser cette demande ?")) return;
+                if(!window.confirm(t.confirmRejectRequest||"Refuser cette demande ?")) return;
                 setPendingActionId(matchingPending.userId);
                 const res = await familySync.rejectMember(matchingPending.userId);
                 setPendingActionId(null);
@@ -8820,8 +9034,8 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
   function resetManualOverrides() {
     setCfg(c => ({...c, overrides: {}}));
     custodyShadow?.shadowClearAllOverrides?.();
-    addHist?.(t.tabCal || "Calendrier", "Réinitialisation des échanges manuels", "cal");
-    pushNotif?.("📅 Tous les échanges manuels ont été réinitialisés");
+    addHist?.(t.tabCal || "Calendrier", t.overridesResetDetail||"Réinitialisation des échanges manuels", "cal");
+    pushNotif?.(`📅 ${t.overridesResetMsg||"Tous les échanges manuels ont été réinitialisés"}`);
     setConfirmResetOverrides(false);
   }
   const y=cur.getFullYear(),m=cur.getMonth();
@@ -8837,6 +9051,9 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
   function generateCalendarPDF() {
     if(!premFull){ onUpgrade(); return; }
     const p0 = cfg.parents[0]||{}, p1 = cfg.parents[1]||{};
+    // Versions échappées pour injection sûre dans le HTML du PDF (defense en profondeur)
+    const p0NameSafe = escapeHtml(p0.name||"Parent 1");
+    const p1NameSafe = escapeHtml(p1.name||"Parent 2");
     const col0 = p0.color||"#f97316", col1 = p1.color||"#06b6d4";
     const cols = [col0, col1];
     const DAY_LTR = ["D","L","M","M","J","V","S"];
@@ -8942,8 +9159,8 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
     const periodLabel = (a,b) => `${MONTHS[a.getMonth()]} ${a.getFullYear()} – ${MONTHS[b.getMonth()]} ${b.getFullYear()}`;
 
     const legendHTML = `<div class="leg">
-      <span><i class="lc" style="background:${col0}aa"></i>${p0.name||"Parent 1"}</span>
-      <span><i class="lc" style="background:${col1}aa"></i>${p1.name||"Parent 2"}</span>
+      <span><i class="lc" style="background:${col0}aa"></i>${p0NameSafe}</span>
+      <span><i class="lc" style="background:${col1}aa"></i>${p1NameSafe}</span>
       <span><i class="lc fer-lc"></i>Jour férié</span>
       <span><i class="lc" style="background:#22c55ecc"></i>Vacances scolaires</span>
     </div>`;
@@ -9003,14 +9220,14 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
 </style></head><body>
 
 <div class="page">
-  <h1>&#128197; Planning de garde &mdash; ${p0.name||"Parent 1"} &amp; ${p1.name||"Parent 2"}</h1>
+  <h1>&#128197; Planning de garde &mdash; ${p0NameSafe} &amp; ${p1NameSafe}</h1>
   <div class="sub">Page 1/2 &middot; ${periodLabel(m1Start,m1End)} &middot; Généré par Duvia le ${todayLabel}</div>
   ${legendHTML}
   <div class="cal">${page1Months}</div>
 </div>
 
 <div class="page">
-  <h1>&#128197; Planning de garde &mdash; ${p0.name||"Parent 1"} &amp; ${p1.name||"Parent 2"}</h1>
+  <h1>&#128197; Planning de garde &mdash; ${p0NameSafe} &amp; ${p1NameSafe}</h1>
   <div class="sub">Page 2/2 &middot; ${periodLabel(m2Start,m2End)} &middot; Généré par Duvia le ${todayLabel}</div>
   ${legendHTML}
   <div class="cal">${page2Months}</div>
@@ -9023,16 +9240,16 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
     <div class="cert-body">
       <p>Le présent document atteste du planning de garde alternée établi entre :</p>
       <div class="cert-parents">
-        <div><span class="dot" style="background:${col0}"></span>${p0.name||"Parent 1"}</div>
-        <div><span class="dot" style="background:${col1}"></span>${p1.name||"Parent 2"}</div>
+        <div><span class="dot" style="background:${col0}"></span>${p0NameSafe}</div>
+        <div><span class="dot" style="background:${col1}"></span>${p1NameSafe}</div>
       </div>
       <p>Pour l'enfant / les enfants : <strong>${childrenNames}</strong></p>
       <p>Période couverte par ce document : <strong>${periodLabel(m1Start,m2End)}</strong></p>
       <p class="cert-note">Ce planning reflète l'organisation de la garde convenue entre les parents au moment de son édition. Toute modification ultérieure doit faire l'objet d'un accord mutuel entre les deux parents.</p>
     </div>
     <div class="cert-sign">
-      <div class="cert-sign-block"><div class="cert-sign-line"></div><div>${p0.name||"Parent 1"}<br/>Date et signature</div></div>
-      <div class="cert-sign-block"><div class="cert-sign-line"></div><div>${p1.name||"Parent 2"}<br/>Date et signature</div></div>
+      <div class="cert-sign-block"><div class="cert-sign-line"></div><div>${p0NameSafe}<br/>Date et signature</div></div>
+      <div class="cert-sign-block"><div class="cert-sign-line"></div><div>${p1NameSafe}<br/>Date et signature</div></div>
     </div>
     <div class="cert-footer">Document généré le ${todayLabel} via Duvia</div>
   </div>
@@ -9715,7 +9932,7 @@ function formatPublicReviewName(fullName) {
 }
 
 function RatingTab() {
-  const {C,t,cfg,user,sub,familySync,myUid} = useApp();
+  const {C,t,cfg,user,sub,familySync,myUid,lang} = useApp();
   const [hovered, setHovered] = useState(0);
   const [selected, setSelected] = useState(0);
   const [comment, setComment] = useState("");
@@ -9797,13 +10014,7 @@ function RatingTab() {
         <div style={{marginTop:20,width:"100%",textAlign:"left"}}>
           <div style={{fontSize:11,fontWeight:800,color:C.mut,marginBottom:10,textTransform:"uppercase",letterSpacing:".5px"}}>Ce que disent les utilisateurs</div>
           {publicReviews.map((r,i)=>(
-            <div key={i} style={{background:C.sur,borderRadius:10,padding:"10px 12px",marginBottom:8}}>
-              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
-                <span style={{color:"#FFB800",fontSize:12}}>{"★".repeat(r.stars)}{"☆".repeat(5-r.stars)}</span>
-                <span style={{fontSize:11,fontWeight:700,color:C.txt}}>{r.display_name}</span>
-              </div>
-              <div style={{fontSize:12,color:C.mut,fontStyle:"italic",lineHeight:1.4}}>"{r.comment}"</div>
-            </div>
+            <ReviewItem key={i} r={r} lang={lang} compact={false} C={C} />
           ))}
         </div>
       )}
@@ -10265,31 +10476,31 @@ function ExpTab() {
             const occurrences=getOccurrences(form.date,form.recurringEnd,form.recurringFreq);
             const newExpenses=occurrences.map((d)=>({...payload,date:d,recurringId:rid,recurringFreq:form.recurringFreq,recurringStart:form.date,recurringEnd:form.recurringEnd,status:"pending",createdBy:user?.parentIdx??0}));
             await expMethods.updateExpensesBySeries(rid,newExpenses);
-            { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`🔄 ${cleanLabel} · série (${occurrences.length} occ.) — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
-            pushNotif(`✏️ ${form.label} — série modifiée, revalidation requise`,"exp");
+            { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`🔄 ${cleanLabel} · série (${occurrences.length} occ.) — ${amt.toFixed(2)} ${currency}\n${t.expPaidBy||"Payé par"} ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
+            pushNotif(`✏️ ${form.label} — ${t.expSeriesModified||"série modifiée, revalidation requise"}`,"exp");
           } else {
             await expMethods.updateExpense(editId,{...payload,status:"pending",createdBy:user?.parentIdx??0});
-            { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
-            pushNotif(`✏️ ${form.label} (${amt.toFixed(2)} ${currency}) modifiée — revalidation requise`,"exp");
+            { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\n${t.expPaidBy||"Payé par"} ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
+            pushNotif(`✏️ ${form.label} (${amt.toFixed(2)} ${currency}) ${t.expModifiedRevalidate||"modifiée — revalidation requise"}`,"exp");
           }
         } else {
           await expMethods.updateExpense(editId,{...payload,status:"pending",createdBy:user?.parentIdx??0});
-          { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
-          pushNotif(`✏️ ${form.label} (${amt.toFixed(2)} ${currency}) modifiée — revalidation requise`,"exp");
+          { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\n${t.expPaidBy||"Payé par"} ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
+          pushNotif(`✏️ ${form.label} (${amt.toFixed(2)} ${currency}) ${t.expModifiedRevalidate||"modifiée — revalidation requise"}`,"exp");
         }
       } else if(form.recurring) {
         const occurrences = getOccurrences(form.date, form.recurringEnd, form.recurringFreq);
         const recurringId = String(Date.now());
         const newExpenses = occurrences.map((d) => ({...payload,date:d,recurringId,recurringFreq:form.recurringFreq,recurringStart:form.date,recurringEnd:form.recurringEnd,status:"pending",createdBy:user?.parentIdx??0}));
         await expMethods.addExpenses(newExpenses);
-        { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.newExpense||"Nouvelle dépense",`🔄 ${cleanLabel} · ${occurrences.length} occ. — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
-        pushNotif(`🔄 ${form.label} — ${occurrences.length} occurrence${occurrences.length>1?"s":""}` ,"exp");
+        { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.newExpense||"Nouvelle dépense",`🔄 ${cleanLabel} · ${occurrences.length} occ. — ${amt.toFixed(2)} ${currency}\n${t.expPaidBy||"Payé par"} ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
+        pushNotif(`🔄 ${form.label} — ${occurrences.length} ${occurrences.length>1?(t.occurrencesPlural||"occurrences"):(t.occurrenceSingular||"occurrence")}` ,"exp");
         setActivity(a=>({...a,expenses:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
         setExpSubmittedPopup(true);
       } else {
         const e={...payload,status:"pending",createdBy:user?.parentIdx??0};
         await expMethods.addExpense(e);
-        { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.newExpense||"Nouvelle dépense",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
+        { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.newExpense||"Nouvelle dépense",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\n${t.expPaidBy||"Payé par"} ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
         pushNotif(`💰 ${form.label} (${form.amount}${currency})`,"exp");
         setActivity(a=>({...a,expenses:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
         addRefAction("ADD_EXPENSE");
@@ -10347,12 +10558,12 @@ function ExpTab() {
       const seriesItems=(ctxExpenses||[]).filter(x=>x.recurringId===e.recurringId);
       await deleteAttFiles(seriesItems);
       await expMethods.deleteExpensesBySeries(e.recurringId);
-      addHist("Dépense supprimée",`🔄 Série : ${e?.label||""} — ${(e?.amount||0).toFixed(2)} ${currency}`,"exp");
-      pushNotif("🔄 Série supprimée","exp");
+      addHist(t.expDeleted||"Dépense supprimée",`🔄 ${t.expSeriesLabel||"Série"} : ${e?.label||""} — ${(e?.amount||0).toFixed(2)} ${currency}`,"exp");
+      pushNotif(`🔄 ${t.expSeriesDeleted||"Série supprimée"}`,"exp");
     } else {
       await deleteAttFiles([e]);
       await expMethods.deleteExpense(id);
-      addHist("Dépense supprimée",`${e?.label||""} — ${(e?.amount||0).toFixed(2)} ${currency}`,"exp");
+      addHist(t.expDeleted||"Dépense supprimée",`${e?.label||""} — ${(e?.amount||0).toFixed(2)} ${currency}`,"exp");
       pushNotif(t.expDeleted||"💰 Dépense supprimée","exp");
     }
     setRecurringDelModal(null);
@@ -10385,8 +10596,8 @@ function ExpTab() {
     const toName=cfg.parents[reimForm.to]?.name||`P${reimForm.to+1}`;
     if(editReimId){
       await expMethods.updateReimbursement(editReimId,{...reimForm,amount:parseFloat(reimForm.amount),status:"pending"});
-      addHist(t.expReimTitle||"Remboursement",`Modifié · ${fromName} → ${toName} · ${reimForm.amount}${currency}`,"exp");
-      pushNotif(`✏️ Remboursement de ${fromName} modifié (${reimForm.amount}${currency}) — revalidation requise`,"exp");
+      addHist(t.expReimTitle||"Remboursement",`${t.modifiedLabel||"Modifié"} · ${fromName} → ${toName} · ${reimForm.amount}${currency}`,"exp");
+      pushNotif(`✏️ ${(t.reimModifiedMsg||"Remboursement de {name} modifié ({amount}) — revalidation requise").replace("{name}",fromName).replace("{amount}",reimForm.amount+currency)}`,"exp");
       setEditReimId(null);
     } else {
       await expMethods.addReimbursement({...reimForm,amount:parseFloat(reimForm.amount),status:"pending"});
@@ -10400,12 +10611,12 @@ function ExpTab() {
   function confirmReim(id){
     const r=reimbursements.find(x=>x.id===id);
     expMethods.confirmReim(id);
-    if(r){ const fromName=cfg.parents[r.from]?.name||`P${r.from+1}`; pushNotif(`✅ Remboursement de ${fromName} (${r.amount}${currency}) confirmé`,"exp"); addHist("Remboursement confirmé",`${fromName} → ${r.amount}${currency}`,"exp"); }
+    if(r){ const fromName=cfg.parents[r.from]?.name||`P${r.from+1}`; pushNotif(`✅ ${(t.reimConfirmedMsg||"Remboursement de {name} ({amount}) confirmé").replace("{name}",fromName).replace("{amount}",r.amount+currency)}`,"exp"); addHist(t.reimConfirmedTitle||"Remboursement confirmé",`${fromName} → ${r.amount}${currency}`,"exp"); }
   }
   function rejectReim(id){
     const r=reimbursements.find(x=>x.id===id);
     expMethods.rejectReim(id);
-    if(r){ const fromName=cfg.parents[r.from]?.name||`P${r.from+1}`; pushNotif(`❌ Remboursement de ${fromName} (${r.amount}${currency}) refusé`,"exp"); addHist("Remboursement refusé",`${fromName} → ${r.amount} ${currency}`,"exp"); }
+    if(r){ const fromName=cfg.parents[r.from]?.name||`P${r.from+1}`; pushNotif(`❌ ${(t.reimRejectedMsg||"Remboursement de {name} ({amount}) refusé").replace("{name}",fromName).replace("{amount}",r.amount+currency)}`,"exp"); addHist(t.reimRejectedTitle||"Remboursement refusé",`${fromName} → ${r.amount} ${currency}`,"exp"); }
   }
 
   function confirmExp(id){
@@ -11215,7 +11426,7 @@ window.addEventListener('message',function(e){
           <div style={{display:"flex",gap:8,alignItems:"flex-start",background:`${C.vio}0c`,border:`1px solid ${C.vio}33`,borderRadius:8,padding:"8px 10px",marginBottom:10}}>
             <span style={{fontSize:14,flexShrink:0}}>ℹ️</span>
             <div style={{fontSize:11,color:C.mut,lineHeight:1.5}}>
-              Toute dépense ajoutée est <strong style={{color:C.yel}}>⏳ en attente</strong> jusqu'à validation par l'autre parent. Une fois <strong style={{color:C.grn}}>✅ acceptée</strong>, elle est comptabilisée. Si <strong style={{color:C.red}}>❌ refusée</strong>, elle reste visible mais exclue des totaux. Chaque action est enregistrée dans l'historique.
+              {t.expPendingInfo||"Toute dépense ajoutée est ⏳ en attente jusqu'à validation par l'autre parent. Une fois ✅ acceptée, elle est comptabilisée. Si ❌ refusée, elle reste visible mais exclue des totaux. Chaque action est enregistrée dans l'historique."}
             </div>
           </div>
           <div style={{display:"flex",gap:8,marginTop:4}}>
@@ -12333,7 +12544,8 @@ function formatFileSize(bytes){
 
 // ─── MESSAGING TAB ────────────────────────────────────────────────────────────
 function MessagingTab(){
-  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,myUid,uidToLocal,localToUid,emailToUid,familySync}=useApp();
+  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,myUid,uidToLocal,localToUid,emailToUid,familySync,lang}=useApp();
+  const MSG_LOCALE = {fr:"fr-FR",en:"en-GB",de:"de-DE",es:"es-ES",pt:"pt-PT"}[lang] || "fr-FR";
   const [view,setView]=useState("list");
   const [convId,setConvId]=useState(null);
   const [draft,setDraft]=useState("");
@@ -12730,7 +12942,7 @@ function MessagingTab(){
             const isPinned=pinnedMsgIds.includes(m.id);
             return(
               <div key={m.id}>
-                {showDate&&<div style={{textAlign:"center",fontSize:11,color:C.mut,margin:"12px 0 8px",fontWeight:600}}>{new Date(m.ts).toLocaleDateString()}</div>}
+                {showDate&&<div style={{textAlign:"center",fontSize:11,color:C.mut,margin:"12px 0 8px",fontWeight:600}}>{new Date(m.ts).toLocaleDateString(MSG_LOCALE)}</div>}
                 {/* Ligne principale : avatar + colonne bulle */}
                 <div style={{display:"flex",flexDirection:isMe?"row-reverse":"row",alignItems:"flex-start",gap:8,marginBottom:4,paddingLeft:isMe?48:0,paddingRight:isMe?0:48}}>
                   {/* Avatar — aligné en haut avec la bulle */}
@@ -13455,9 +13667,9 @@ function ContactsTab({readOnly,addOnly,prem: premProp}) {
         </div>
       </div>
 
-      {/* Category filter */}
+      {/* Category filter — seulement "Tous" + les catégories qui ont au moins un contact */}
       <div style={{display:"flex",gap:5,marginBottom:14,overflowX:"auto",paddingBottom:4}}>
-        {CATS.map(cat=>(
+        {CATS.filter(cat=>cat.key==="all"||allContacts.some(c=>c.cat===cat.key)).map(cat=>(
           <button key={cat.key} onClick={()=>setFilter(cat.key)} style={{whiteSpace:"nowrap",padding:"5px 11px",background:filter===cat.key?C.vio:C.sur,color:filter===cat.key?"#fff":C.mut,border:`1.5px solid ${filter===cat.key?C.vio:C.bor}`,borderRadius:20,fontSize:11,fontWeight:700,flexShrink:0}}>
             {cat.key==="all"?cat.label:cat.label}
           </button>
@@ -14095,11 +14307,11 @@ function GiftShopSection() {
             const allGifted   = childUsers.length > 0 && childUsers.every(ch => prizeAlreadyGifted(p.id, ch.id));
             const fullyOwned  = ownedSelf && (childUsers.length === 0 || allGifted);
             return (
-              <button key={p.id} onClick={()=>!fullyOwned&&startBuy(p)}
+              <button key={p.id} onClick={()=>{if(fullyOwned||isBeta())return;startBuy(p);}}
                 style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",
                   background:fullyOwned?C.sur:`${p.color}10`,borderRadius:12,
                   border:`1.5px solid ${fullyOwned?C.bor:p.color+"44"}`,
-                  cursor:fullyOwned?"default":"pointer",textAlign:"left"}}>
+                  cursor:(fullyOwned||isBeta())?"default":"pointer",textAlign:"left"}}>
                 <div style={{width:36,height:36,borderRadius:10,background:`${p.color}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{p.emoji}</div>
                 <div style={{flex:1}}>
                   <div style={{fontSize:13,fontWeight:800,color:fullyOwned?C.mut:p.color}}>{t[p.labelKey]||p.label}</div>
@@ -14111,7 +14323,9 @@ function GiftShopSection() {
                 </div>
                 {fullyOwned
                   ? <span style={{background:C.sur,color:C.mut,borderRadius:8,padding:"3px 9px",fontSize:11,fontWeight:700,flexShrink:0}}>{t.giftShopObtained}</span>
-                  : <span style={{background:`${p.color}22`,color:p.color,borderRadius:8,padding:"3px 9px",fontSize:12,fontWeight:900,flexShrink:0}}>{p.price.toFixed(2)} €</span>
+                  : isBeta()
+                    ? <span style={{background:C.sur,color:C.mut,borderRadius:8,padding:"3px 9px",fontSize:11,fontWeight:700,flexShrink:0,border:`1px solid ${C.bor}`}}>🔒 {t.betaLocked||"Bêta"}</span>
+                    : <span style={{background:`${p.color}22`,color:p.color,borderRadius:8,padding:"3px 9px",fontSize:12,fontWeight:900,flexShrink:0}}>{p.price.toFixed(2)} €</span>
                 }
               </button>
             );
@@ -14533,8 +14747,8 @@ function VaultTab() {
         await updateDoc(editDoc.id, {
           name: cleanDocName, category_idx: formCat, doc_date: formDate, notes: cleanNotes, shared: formShared,
         }, newFile, removeFile);
-        pushNotif(`✏️ Document modifié : "${cleanDocName}"`, "vault");
-        addHist("Document modifié", `${myDisplayName} — "${cleanDocName}"`, "vault");
+        pushNotif(`✏️ ${(t.vaultDocModifiedMsg||'Document modifié : "{name}"').replace("{name}",cleanDocName)}`, "vault");
+        addHist(t.vaultDocModifiedTitle||"Document modifié", `${myDisplayName} — "${cleanDocName}"`, "vault");
         setActivity(a=>({...a,vault:{ts:new Date().toISOString(),by:String(user?.id||"")}})); setCfg(c=>({...c,vaultActivity:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
         // Email notification
         try { supabase.functions.invoke("notify-vault", { body: { action:"update", docName:cleanDocName, byName:myDisplayName, familyId:familySync?.familyId } }).catch(()=>{}); } catch(e){}
@@ -14543,8 +14757,8 @@ function VaultTab() {
           name: cleanDocName, categoryIdx: formCat, docDate: formDate, notes: cleanNotes, shared: formShared,
           file: formFile ? formFile.rawFile : null,
         }, myDisplayName);
-        pushNotif(`🗄️ Document ajouté : "${cleanDocName}"`, "vault");
-        addHist("Nouveau document", `${myDisplayName} — "${cleanDocName}"`, "vault");
+        pushNotif(`🗄️ ${(t.vaultDocAddedMsg||'Document ajouté : "{name}"').replace("{name}",cleanDocName)}`, "vault");
+        addHist(t.vaultDocAddedTitle||"Nouveau document", `${myDisplayName} — "${cleanDocName}"`, "vault");
         setActivity(a=>({...a,vault:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
         setCfg(c=>({...c,vaultActivity:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
         // Email géré par le webhook Supabase (INSERT → notify-vault)
@@ -14565,8 +14779,8 @@ function VaultTab() {
     const docName = docToDelete?.name || "Document";
     try {
       await removeDoc(id);
-      pushNotif(`🗑️ Document supprimé : "${docName}"`, "vault");
-      addHist("Document supprimé", `${myDisplayName} — "${docName}"`, "vault");
+      pushNotif(`🗑️ ${(t.vaultDocDeletedMsg||'Document supprimé : "{name}"').replace("{name}",docName)}`, "vault");
+      addHist(t.vaultDocDeletedTitle||"Document supprimé", `${myDisplayName} — "${docName}"`, "vault");
       setActivity(a=>({...a,vault:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
       setCfg(c=>({...c,vaultActivity:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
       try { supabase.functions.invoke("notify-vault", { body: { action:"delete", docName, byName:myDisplayName, familyId:familySync?.familyId } }).catch(()=>{}); } catch(e){}
@@ -14774,7 +14988,7 @@ function VaultTab() {
         <div className="card" style={{display:"flex",flexDirection:"column",gap:14}}>
           <div className="field">
             <label className="lbl">{t.vaultName||"Nom du document"} *</label>
-            <input value={formName} onChange={e=>setFormName(e.target.value)} placeholder="ex : Jugement du 12/03/2023" className={shakeDocName?"duvia-shake":""} />
+            <input value={formName} onChange={e=>setFormName(e.target.value)} placeholder={t.vaultNamePlaceholder||"ex : Jugement du 12/03/2023"} className={shakeDocName?"duvia-shake":""} />
           </div>
           <div className="row" style={{alignItems:"stretch"}}>
             <div className="field" style={{flex:2,position:"relative",marginBottom:0}}>
@@ -14804,7 +15018,7 @@ function VaultTab() {
           <div className="field">
             <label className="lbl">{t.vaultNotes||"Notes"}</label>
             <textarea value={formNotes} onChange={e=>setFormNotes(e.target.value)}
-              placeholder="ex : Version signée par les deux parties..."
+              placeholder={t.vaultNotesPlaceholder||"ex : Version signée par les deux parties..."}
               style={{background:C.inp,border:`1.5px solid ${C.bor}`,color:C.txt,borderRadius:10,padding:"11px 13px",fontFamily:"inherit",fontSize:14,width:"100%",outline:"none",resize:"vertical",minHeight:72}} />
           </div>
           <div className="field">
@@ -14922,14 +15136,18 @@ function VaultTab() {
                 <span>{t.vaultAll||"Tous"}</span>
                 {filterCat==="all" && <span style={{marginLeft:"auto",fontSize:12}}>✓</span>}
               </button>
-              {vaultCats.map((c,i)=>(
+              {vaultCats.map((c,i)=>{
+                const count = docs.filter(d=>d.category_idx===i).length;
+                if (!count) return null;
+                return (
                 <button key={i} onClick={()=>{setFilterCat(String(i));setShowFilterMenu(false);}}
                   style={{width:"100%",height:44,padding:"0 14px",background:filterCat===String(i)?`${C.vio}18`:"transparent",color:filterCat===String(i)?C.vio:C.txt,textAlign:"left",fontSize:13,fontWeight:filterCat===String(i)?800:600,display:"flex",alignItems:"center",gap:8,borderBottom:i<vaultCats.length-1?`1px solid ${C.bor}`:"none",borderRadius:0,transition:"background .1s"}}>
                   <span style={{fontSize:17,width:24,textAlign:"center"}}>{c.split(" ")[0]}</span>
                   <span>{c.replace(/^[^\s]+ /,"")}</span>
                   {filterCat===String(i) && <span style={{marginLeft:"auto",fontSize:12}}>✓</span>}
                 </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
