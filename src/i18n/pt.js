@@ -120,6 +120,7 @@ const pt = {
     calLegend:"Legenda",calGrandparents:"Avós",calTodayBadge:"Hoje",calViewList:"Detalhada",calViewGrid:"Mês",
     calTipBody:"Visualize e gerencie a agenda de guarda mensal. É visível para todos os membros da família.",
     calTipGuardians:"🏠 Guardiões: uma pessoa convidada com a opção «Pode ser guardião» (Configuração → Acesso) aparece aqui em laranja. Pode então atribuir-lhe um dia de guarda — útil quando os avós cuidam das crianças em vez de um dos pais.",
+    calTipReset:"🔄 O botão «Reiniciar» apaga todas as trocas manuais feitas no calendário (clique num dia específico para alterar a guarda). O plano volta à regra base (semana A/B, guarda exclusiva, etc.). Esta ação é irreversível.",
     familySyncTitle:"Sincronização da família",
     familySyncDesc:"Dê este código ao outro progenitor: ele/ela poderá ver e editar o mesmo calendário e as mesmas informações a partir do seu próprio telemóvel.",
     familyCode:"Código da família",

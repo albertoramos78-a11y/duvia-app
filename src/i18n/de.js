@@ -120,6 +120,7 @@ const de = {
     calLegend:"Legende",calGrandparents:"Großeltern",calTodayBadge:"Heute",calViewList:"Detailliert",calViewGrid:"Monat",
     calTipBody:"Hier sehen Sie den monatlichen Betreuungsplan und können ihn bearbeiten. Er ist für alle Familienmitglieder sichtbar.",
     calTipGuardians:"🏠 Betreuer: Eine eingeladene Person mit der Option „Kann Betreuer sein“ (Konfiguration → Zugriff) erscheint hier in Orange. Sie können ihr dann einen Betreuungstag zuweisen — praktisch, wenn die Großeltern die Kinder anstelle eines Elternteils betreuen.",
+    calTipReset:"🔄 Die Schaltfläche „Zurücksetzen“ löscht alle manuellen Tauschtage, die Sie im Kalender vorgenommen haben (Klick auf einen bestimmten Tag zur Änderung der Betreuung). Der Plan kehrt zur Grundregel zurück (Woche A/B, exklusive Betreuung usw.). Diese Aktion ist unwiderruflich.",
     familySyncTitle:"Familien-Synchronisierung",
     familySyncDesc:"Gib diesen Code dem anderen Elternteil: Er/sie kann denselben Kalender und dieselben Informationen von seinem/ihrem eigenen Smartphone aus sehen und bearbeiten.",
     familyCode:"Familiencode",

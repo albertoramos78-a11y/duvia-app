@@ -120,6 +120,7 @@ const es = {
     calLegend:"Leyenda",calGrandparents:"Abuelos",calTodayBadge:"Hoy",calViewList:"Detallada",calViewGrid:"Mes",
     calTipBody:"Visualiza y gestiona el calendario de custodia mensual. Es visible para todos los miembros de la familia.",
     calTipGuardians:"🏠 Cuidadores: una persona invitada con la opción «Puede ser cuidador» (Configuración → Acceso) aparece aquí en naranja. Puedes asignarle un día de custodia, útil cuando los abuelos cuidan a los niños en lugar de un progenitor.",
+    calTipReset:"🔄 El botón «Reiniciar» borra todos los intercambios manuales que has hecho en el calendario (clic en un día concreto para cambiar la custodia). El plan vuelve a la regla base (semana A/B, custodia exclusiva, etc.). Esta acción es irreversible.",
     familySyncTitle:"Sincronización familiar",
     familySyncDesc:"Dale este código al otro progenitor: podrá ver y editar el mismo calendario y la misma información desde su propio teléfono.",
     familyCode:"Código de familia",

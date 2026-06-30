@@ -122,6 +122,7 @@ const en = {
     calLegend:"Legend",calGrandparents:"Grandparents",calTodayBadge:"Today",calViewList:"Detailed",calViewGrid:"Month",
     calTipBody:"View and manage the monthly custody schedule. It's visible to all family members.",
     calTipGuardians:"🏠 Guardians: a family member invited with the \"Can be a guardian\" option (Configuration → Access) appears here in orange. You can then assign them a custody day — handy when grandparents look after the kids instead of a parent.",
+    calTipReset:"🔄 The \"Reset\" button clears all manual exchanges you've made on the calendar (clicking a specific day to change custody). The schedule reverts to the base rule (week A/B, exclusive custody, etc.). This action is irreversible.",
     familySyncTitle:"Family sync",
     familySyncDesc:"Give this code to the other parent: they'll be able to see and edit the same calendar and information from their own phone.",
     familyCode:"Family code",

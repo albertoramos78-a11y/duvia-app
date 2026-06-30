@@ -146,6 +146,7 @@ const fr = {
     calLegend:"Légende",calGrandparents:"Grands-Parents",calTodayBadge:"Auj.",calViewList:"Détaillée",calViewGrid:"Mois",
     calTipBody:"Visualisez et gérez le planning de garde mensuel. Il est visible par tous les membres de la famille.",
     calTipGuardians:"🏠 Gardiens : un proche invité avec l'option « Peut être gardien » (Configuration → Accès) apparaît ici en orange. Vous pouvez alors lui attribuer une journée de garde — par exemple quand les grands-parents gardent les enfants à la place d'un parent.",
+    calTipReset:"🔄 Le bouton « Réinit. » efface tous les échanges manuels que vous avez faits sur le calendrier (clics sur un jour précis pour changer la garde). Le planning revient à la règle de base (semaine A/B, garde exclusive, etc.). Cette action est irréversible.",
     familySyncTitle:"Synchronisation famille",
     familySyncDesc:"Donnez ce code à l'autre parent : il/elle pourra voir et modifier le même calendrier et les mêmes informations, depuis son propre téléphone.",
     familyCode:"Code famille",
