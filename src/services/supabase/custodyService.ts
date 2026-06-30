@@ -87,6 +87,15 @@ export interface CustodyOverrideInput {
   note?: string | null;
 }
 
+export async function clearAllManualOverrides(familyId: string) {
+  const { error } = await supabase
+    .from("custody_overrides")
+    .delete()
+    .eq("family_id", familyId)
+    .eq("source", "manual");
+  if (error) throw error;
+}
+
 export async function upsertCustodyOverride(input: CustodyOverrideInput) {
   const { error } = await supabase.from("custody_overrides").upsert(
     {
