@@ -533,6 +533,7 @@ const fr = {
     bugReportError:"L'envoi a échoué. Le rapport est conservé et sera renvoyé automatiquement plus tard.",
     reinvite:"Réinviter",
     parentLeftOn:"A quitté la famille le {date}",
+    parentLeftOnAt:"S'est retiré(e) de la famille le {date} à {time}",
     childHealth:"🩺 Santé",
     childAllergy:"Allergies",
     childAllergyPh:"ex : arachides, latex…",

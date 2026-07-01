@@ -483,6 +483,7 @@ const en = {
     bugReportError:"Sending failed. The report is saved and will be resent automatically later.",
     reinvite:"Re-invite",
     parentLeftOn:"Left the family on {date}",
+    parentLeftOnAt:"Left the family on {date} at {time}",
     childHealth:"🩺 Health",
     childAllergy:"Allergies",
     childAllergyPh:"e.g. peanuts, latex…",

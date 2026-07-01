@@ -481,6 +481,7 @@ const de = {
     bugReportError:"Senden fehlgeschlagen. Der Bericht wird gespeichert und später automatisch erneut gesendet.",
     reinvite:"Erneut einladen",
     parentLeftOn:"Hat die Familie am {date} verlassen",
+    parentLeftOnAt:"Hat die Familie am {date} um {time} verlassen",
     childHealth:"🩺 Gesundheit",
     childAllergy:"Allergien",
     childAllergyPh:"z.B. Erdnüsse, Latex…",

@@ -481,6 +481,7 @@ const es = {
     bugReportError:"El envío ha fallado. El informe se ha guardado y se reenviará automáticamente más tarde.",
     reinvite:"Reinvitar",
     parentLeftOn:"Salió de la familia el {date}",
+    parentLeftOnAt:"Salió de la familia el {date} a las {time}",
     childHealth:"🩺 Salud",
     childAllergy:"Alergias",
     childAllergyPh:"ej: cacahuetes, látex…",
