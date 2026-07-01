@@ -6565,20 +6565,29 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
 
       <div className="sec">{t.parents}</div>
       {cfg.parents.map((p,i)=>{
-        if(p?.left) return (
-          <div key={i} className="card" style={{marginBottom:12,borderColor:C.bor,borderStyle:"dashed"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+        if(p?.left) {
+          // 🔧 Correctif : quand un parent quitte la famille, on affiche UNIQUEMENT
+          // le message d'information avec date + heure. Pas de bouton « Réinviter » :
+          // le parent restant peut réinviter (ou inviter un autre parent) via le
+          // bouton « Ajouter parent » standard. Le rôle « Créateur » bascule
+          // automatiquement au parent restant via effectiveCreatorIdx().
+          const dt = p.leftAt ? new Date(p.leftAt) : null;
+          const dateStr = dt ? dt.toLocaleDateString() : "—";
+          const timeStr = dt ? dt.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}) : "—";
+          const msg = (t.parentLeftOnAt || "S'est retiré(e) de la famille le {date} à {time}")
+            .replace("{date}", dateStr).replace("{time}", timeStr);
+          return (
+            <div key={i} className="card" style={{marginBottom:12,borderColor:C.bor,borderStyle:"dashed"}}>
               <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
                 <div style={{width:40,height:40,borderRadius:"50%",background:C.sur,border:`2px dashed ${C.bor}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,filter:"grayscale(1)",opacity:.8}}>🚪</div>
                 <div style={{minWidth:0}}>
                   <div style={{fontSize:13,fontWeight:800,color:C.mut,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.name||p.email||t.guestLabel}</div>
-                  <div style={{fontSize:11,color:C.mut}}>{(t.parentLeftOn||"A quitté la famille le {date}").replace("{date}", p.leftAt ? new Date(p.leftAt).toLocaleDateString() : "—")}</div>
+                  <div style={{fontSize:11,color:C.mut}}>{msg}</div>
                 </div>
               </div>
-              <button onClick={()=>reinvite&&reinvite(p)} style={{padding:"7px 14px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:10,fontSize:12,fontWeight:800,cursor:"pointer",flexShrink:0}}>↩️ {t.reinvite}</button>
             </div>
-          </div>
-        );
+          );
+        }
         const pKey=`p${i}`; const pErr=touched[pKey]&&!p.name.trim();
         // 🔒 Email = identifiant de connexion (« lié au compte »). Il n'est
         // éditable QUE sur un créneau non encore réclamé par un compte (ex. le
