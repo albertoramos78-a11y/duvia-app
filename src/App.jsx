@@ -3413,6 +3413,40 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sub, myUid]);
 
+  // ── Auto cloud backup (1×/jour max, chiffré AES-GCM 256) ─────────────────
+  // Uploade silencieusement un backup .duvia dans le bucket privé Supabase
+  // 'family-backups' pour permettre au support Duvia de restaurer les données
+  // d'un utilisateur en cas de crash. Respecte le toggle utilisateur RGPD
+  // (metadata cloud_backup_enabled). Rétention 30 jours (cleanup côté SQL).
+  useEffect(() => {
+    if (!user?.id || user?.role === "admin" || !myUid || !familySync?.familyId) return;
+    // Petit délai pour laisser l'app se stabiliser après login
+    const timer = setTimeout(async () => {
+      try {
+        // Toggle opt-out — vérifié à chaque fois, actif par défaut
+        const { data: authData } = await supabase.auth.getUser();
+        const enabled = authData?.user?.user_metadata?.cloud_backup_enabled;
+        if (enabled === false) return; // désactivé explicitement par l'utilisateur
+        if (!shouldRunDailyCloudBackup()) return; // déjà fait dans les 20 dernières heures
+        if (!import.meta.env?.VITE_BACKUP_MASTER_KEY_B64) return; // clé non configurée → skip silencieux
+        const payload = buildDuviaBackup({
+          cfg, history: historyData,
+          familyId: familySync.familyId,
+          lang, userEmail: user?.email,
+        });
+        await uploadCloudBackup({ payload, familyId: familySync.familyId });
+        markCloudBackupDone();
+      } catch (e) {
+        // Silencieux — ne perturbe jamais l'utilisateur. Log console pour debug.
+        if (String(e?.message) !== "rate_limited") {
+          console.warn("[Duvia] cloud backup skipped:", e?.message || e);
+        }
+      }
+    }, 15_000); // 15s après login/refresh, hors chemin critique
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, familySync?.familyId]);
+
   // Trial end warning — handled by header bubble
   useEffect(()=>{
     if(tab===2) _setSeen(s=>({...s,expenses:new Date().toISOString()}));
@@ -4403,6 +4437,20 @@ Date d'entrée en vigueur : 14 juin 2026
                 {deleteAccountError}
               </div>
             )}
+            {/* Export .duvia avant suppression — dernier chance de sauvegarder */}
+            <button
+              onClick={() => {
+                const payload = buildDuviaBackup({
+                  cfg, history: historyData,
+                  familyId: familySync?.familyId,
+                  lang, userEmail: user?.email,
+                });
+                downloadDuviaBackup(payload, makeBackupFilename("duvia-backup-avant-suppression"));
+              }}
+              disabled={deletingAccount}
+              style={{width:"100%",padding:"10px 14px",background:"transparent",color:C.vio,border:`1.5px solid ${C.vio}`,borderRadius:10,fontSize:12,fontWeight:700,cursor:deletingAccount?"not-allowed":"pointer",marginBottom:12,opacity:deletingAccount?.5:1}}>
+              💾 {t.backupDownloadBeforeDelete||"Télécharger mes données avant"}
+            </button>
             <div style={{display:"flex",gap:10}}>
               <button onClick={()=>{ setConfirmDeleteAccount(false); setDeleteAccountError(""); }}
                 disabled={deletingAccount}
@@ -5788,7 +5836,7 @@ function StepLang({lang,setLang}) {
 
 // ─── PRÉFÉRENCES ──────────────────────────────────────────────────────────────
 function PrefsTab() {
-  const {C,t,lang,setLang,sub,setConfirmDeleteAccount,user,currency,setCurrency,weekStart,setWeekStart} = useApp();
+  const {C,t,lang,setLang,sub,setConfirmDeleteAccount,user,currency,setCurrency,weekStart,setWeekStart,cfg,setCfg,history,familySync,addHist} = useApp();
 
   // ── Prefs state (chargé depuis user_metadata) ─────────────────────────────
   const [emailMsg,    setEmailMsg]    = useState(true);
@@ -5828,6 +5876,92 @@ function PrefsTab() {
     try{ await supabase.auth.updateUser({data:{[key]:val}}); }
     catch(e){ console.warn("pref save failed",e); }
   }
+
+  // ── Sauvegarde .duvia : export/import ─────────────────────────────────────
+  const [backupImportErr, setBackupImportErr] = useState("");
+  const [backupImportOk,  setBackupImportOk]  = useState("");
+  const [backupImporting, setBackupImporting] = useState(false);
+  const backupFileInputRef = useRef(null);
+
+  // Toggle cloud backup (opt-out RGPD) — chargé depuis user_metadata
+  const [cloudBackupEnabled, setCloudBackupEnabled] = useState(true);
+  useEffect(() => {
+    supabase.auth.getUser().then(({data}) => {
+      const v = data?.user?.user_metadata?.cloud_backup_enabled;
+      setCloudBackupEnabled(v !== false); // défaut true
+    });
+  }, []);
+  async function toggleCloudBackup(next) {
+    setCloudBackupEnabled(next);
+    try { await supabase.auth.updateUser({ data: { cloud_backup_enabled: next } }); }
+    catch(e) { console.warn("[Duvia] cloud backup toggle failed:", e); }
+  }
+
+  function handleExportBackup() {
+    const payload = buildDuviaBackup({
+      cfg,
+      history,
+      familyId: familySync?.familyId,
+      lang,
+      userEmail: user?.email,
+    });
+    const ok = downloadDuviaBackup(payload, makeBackupFilename());
+    if (ok) {
+      try { addHist?.({action:t.backupExported||"Sauvegarde exportée", type:"backup"}); } catch {}
+    } else {
+      setBackupImportErr(t.backupExportFailed || "Échec de l'export. Réessayez.");
+    }
+  }
+
+  async function handleImportBackupFile(file) {
+    setBackupImportErr(""); setBackupImportOk("");
+    if (!file) return;
+    setBackupImporting(true);
+    try {
+      const parsed = await readDuviaBackupFile(file);
+      // Détection famille différente → confirmation supplémentaire
+      const currentFid = familySync?.familyId || null;
+      const backupFid  = parsed._familyId || null;
+      if (backupFid && currentFid && backupFid !== currentFid) {
+        const okOther = window.confirm(
+          (t.backupOtherFamilyConfirm ||
+           "⚠️ Ce fichier provient d'une AUTRE famille.\n\nContinuer ? Vos données actuelles seront écrasées.")
+        );
+        if (!okOther) { setBackupImporting(false); return; }
+      }
+      // Confirmation principale
+      const okReplace = window.confirm(
+        (t.backupReplaceConfirm ||
+         "Cette opération va REMPLACER votre configuration famille, calendrier de garde et calendrier scolaire.\n\nUne sauvegarde automatique de vos données actuelles sera téléchargée avant.\n\nContinuer ?")
+      );
+      if (!okReplace) { setBackupImporting(false); return; }
+      // Backup auto AVANT écrasement
+      const safety = buildDuviaBackup({
+        cfg, history,
+        familyId: familySync?.familyId,
+        lang, userEmail: user?.email,
+      });
+      downloadDuviaBackup(safety, makeBackupFilename("duvia-backup-auto-avant-import"));
+      // Application
+      setCfg(prev => applyDuviaBackupToCfg(prev, parsed));
+      try { addHist?.({action:t.backupImported||"Sauvegarde importée", detail: parsed._exportedAt || "", type:"backup"}); } catch {}
+      setBackupImportOk(t.backupImportOk || "Sauvegarde importée avec succès.");
+    } catch (e) {
+      const codes = {
+        no_file: t.backupErrNoFile || "Aucun fichier.",
+        file_too_large: t.backupErrTooLarge || "Fichier trop volumineux (>25 Mo).",
+        invalid_json: t.backupErrInvalidJson || "Fichier illisible (JSON invalide).",
+        not_duvia_file: t.backupErrNotDuvia || "Ce fichier n'est pas une sauvegarde Duvia.",
+        invalid_version: t.backupErrInvalidVer || "Version de sauvegarde inconnue.",
+        version_too_new: t.backupErrVerTooNew || "Cette sauvegarde a été créée avec une version plus récente de Duvia. Mettez à jour l'application.",
+      };
+      setBackupImportErr(codes[e?.message] || (t.backupImportFailed || "Impossible d'importer le fichier."));
+    } finally {
+      setBackupImporting(false);
+      if (backupFileInputRef.current) backupFileInputRef.current.value = "";
+    }
+  }
+
 
   function Toggle({val,onToggle}){
     return (
@@ -6080,7 +6214,7 @@ function ConfigTab() {
   function setChildHome(ci,f,v){setCfg(c=>{const ch=[...c.children];ch[ci]={...ch[ci],home:{...(ch[ci].home||{}),[ f]:v}};return{...c,children:ch};});}
 
   function addParent(){
-    if(cfg.parents.length >= 2) return; // limite absolue de 2 parents
+    if(cfg.parents.filter(p=>!p?.left).length >= 2) return; // limite absolue de 2 parents actifs
     setInviteEmail(""); setInvitePhone(""); setInviteErr(""); setInviteResult(null);
     setShowInviteModal(true);
   }
@@ -6577,8 +6711,14 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           const msg = (t.parentLeftOnAt || "S'est retiré(e) de la famille le {date} à {time}")
             .replace("{date}", dateStr).replace("{time}", timeStr);
           return (
-            <div key={i} className="card" style={{marginBottom:12,borderColor:C.bor,borderStyle:"dashed"}}>
-              <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+            <div key={i} className="card" style={{marginBottom:12,borderColor:C.bor,borderStyle:"dashed",position:"relative"}}>
+              <button
+                onClick={()=>removeParent&&removeParent(i)}
+                aria-label={t.dismiss||"Retirer"}
+                title={t.dismiss||"Retirer"}
+                style={{position:"absolute",top:8,right:8,width:28,height:28,borderRadius:"50%",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,fontSize:16,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}
+              >×</button>
+              <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,paddingRight:32}}>
                 <div style={{width:40,height:40,borderRadius:"50%",background:C.sur,border:`2px dashed ${C.bor}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,filter:"grayscale(1)",opacity:.8}}>🚪</div>
                 <div style={{minWidth:0}}>
                   <div style={{fontSize:13,fontWeight:800,color:C.mut,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.name||p.email||t.guestLabel}</div>
@@ -6770,9 +6910,9 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           </>}
         </div>
       );})}
-      {cfg.parents.length >= 2
+      {cfg.parents.filter(p=>!p?.left).length >= 2
         ? <div style={{fontSize:12,color:C.mut,textAlign:"center",padding:"10px 0 14px",fontStyle:"italic"}}>
-            👥 Maximum 2 parents atteint
+            👥 {t.maxParentsReached||"Maximum 2 parents atteint"}
           </div>
         : <button onClick={addParent} style={{width:"100%",height:44,padding:"0 16px",background:"transparent",color:C.ora,border:`1.5px dashed ${C.ora}`,marginBottom:14}}>{t.addParent}</button>}
 
@@ -11906,6 +12046,89 @@ function ParrainageSection() {
 function AdminTab() {
   const {C, sub, setSub, users, setUsers, setShowResetConfirm, simDate, setSimDate} = useApp();
   const [grantTarget, setGrantTarget] = useState("");
+
+  // ── Admin Backup Manager ─────────────────────────────────────────────────
+  const [bmEmail,  setBmEmail]  = useState("");
+  const [bmFamId,  setBmFamId]  = useState("");
+  const [bmFiles,  setBmFiles]  = useState([]);
+  const [bmFamilies, setBmFamilies] = useState([]);
+  const [bmMsg,    setBmMsg]    = useState("");
+  const [bmErr,    setBmErr]    = useState("");
+  const [bmLoading, setBmLoading] = useState(false);
+
+  async function bmCall(action, extra) {
+    setBmErr(""); setBmMsg(""); setBmLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-backup-manager", {
+        body: { action, ...extra },
+      });
+      if (error) throw new Error(error.message || "invoke_failed");
+      if (data?.error) throw new Error(data.error);
+      return data;
+    } catch (e) {
+      setBmErr(String(e?.message || e));
+      return null;
+    } finally {
+      setBmLoading(false);
+    }
+  }
+
+  async function bmLookupEmail() {
+    const d = await bmCall("list_by_email", { email: bmEmail.trim() });
+    if (!d) return;
+    setBmFamilies(d.families || []);
+    if ((d.families || []).length === 1) setBmFamId(d.families[0].family_id);
+    setBmMsg(`${(d.families||[]).length} famille(s) trouvée(s) pour ${bmEmail}`);
+  }
+
+  async function bmListFamily(fid) {
+    const d = await bmCall("list_by_family", { family_id: fid });
+    if (!d) return;
+    setBmFiles((d.files || []).map(f => ({ ...f, fullPath: `${fid}/${f.name}` })));
+    setBmFamId(fid);
+    setBmMsg(`${(d.files||[]).length} sauvegarde(s) pour cette famille`);
+  }
+
+  async function bmDownload(fullPath) {
+    const d = await bmCall("download", { path: fullPath });
+    if (!d) return;
+    // Décodage + déchiffrement côté client
+    try {
+      const raw = atob(d.data_b64);
+      const bytes = new Uint8Array(raw.length);
+      for (let i=0;i<raw.length;i++) bytes[i] = raw.charCodeAt(i);
+      const text = new TextDecoder().decode(bytes);
+      const nl = text.indexOf("\n");
+      if (nl < 0) throw new Error("format_invalid");
+      const header = JSON.parse(text.slice(0, nl));
+      const cipherB64 = text.slice(nl + 1);
+      const iv = Uint8Array.from(atob(header.iv), c => c.charCodeAt(0));
+      const cipher = Uint8Array.from(atob(cipherB64), c => c.charCodeAt(0));
+      const key = await getBackupCryptoKey();
+      const plain = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipher));
+      const json = new TextDecoder().decode(plain);
+      // Télécharge le .duvia déchiffré
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fullPath.replace(/[\/\\]/g,"_").replace(/\.enc$/,"");
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 200);
+      setBmMsg("✅ Fichier déchiffré et téléchargé");
+    } catch (e) {
+      setBmErr("Déchiffrement échoué : " + (e?.message || e));
+    }
+  }
+
+  async function bmDelete(fullPath) {
+    if (!window.confirm(`Supprimer définitivement ce backup ?\n${fullPath}`)) return;
+    const d = await bmCall("delete", { path: fullPath });
+    if (!d) return;
+    setBmMsg("Backup supprimé.");
+    if (bmFamId) bmListFamily(bmFamId);
+  }
+
   // subscriberRows
   const subscriberRows = (() => {
     const all = (users||[]).filter(u => u.sub && u.sub.plan === "premium");
@@ -11940,6 +12163,87 @@ function AdminTab() {
             📅 Date simulée : {new Date(simDate).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
           </div>
         )}
+      </div>
+
+      {/* ── Admin Backup Manager (restaurer un client) ─────────────────── */}
+      <div className="card" style={{marginBottom:14,borderColor:`${C.vio}44`,background:`${C.vio}06`}}>
+        <div style={{fontSize:11,fontWeight:800,color:C.vio,letterSpacing:".1em",textTransform:"uppercase",marginBottom:12}}>
+          🗄️ Backup Manager
+        </div>
+        <div style={{fontSize:12,color:C.mut,marginBottom:12,lineHeight:1.5}}>
+          Retrouve et restaure les sauvegardes chiffrées d'un utilisateur. Toute action est loguée (family_backup_log).
+        </div>
+
+        {/* Étape 1 : chercher par email */}
+        <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+          <input
+            type="email"
+            placeholder="email@duvia.fr"
+            value={bmEmail}
+            onChange={e => setBmEmail(e.target.value)}
+            style={{flex:1,minWidth:180,padding:"9px 12px",border:`1px solid ${C.bor}`,borderRadius:8,fontSize:13}}
+          />
+          <button onClick={bmLookupEmail} disabled={bmLoading || !bmEmail.trim()}
+            style={{padding:"0 14px",height:38,background:C.vio,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer",opacity:bmLoading?.6:1}}>
+            🔍 Chercher
+          </button>
+        </div>
+
+        {/* Liste des familles associées */}
+        {bmFamilies.length > 0 && (
+          <div style={{marginBottom:10}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:6}}>Familles :</div>
+            {bmFamilies.map(f => (
+              <button key={f.family_id} onClick={() => bmListFamily(f.family_id)}
+                style={{display:"block",width:"100%",textAlign:"left",padding:"8px 10px",marginBottom:4,background:bmFamId===f.family_id?`${C.vio}22`:C.sur,border:`1px solid ${bmFamId===f.family_id?C.vio:C.bor}`,borderRadius:8,fontSize:12,cursor:"pointer",color:C.txt}}>
+                <div style={{fontWeight:700}}>{f.family_id}</div>
+                <div style={{fontSize:10,color:C.mut}}>role: {f.role} · status: {f.status}</div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Ou saisir un family_id directement */}
+        <details style={{marginBottom:10}}>
+          <summary style={{cursor:"pointer",fontSize:11,color:C.mut}}>Ou saisir un family_id directement</summary>
+          <div style={{display:"flex",gap:8,marginTop:6}}>
+            <input value={bmFamId} onChange={e => setBmFamId(e.target.value)}
+              placeholder="UUID famille"
+              style={{flex:1,padding:"7px 10px",border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12}} />
+            <button onClick={() => bmListFamily(bmFamId)} disabled={bmLoading || !bmFamId}
+              style={{padding:"0 12px",height:34,background:C.vio,color:"#fff",border:"none",borderRadius:8,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+              Lister
+            </button>
+          </div>
+        </details>
+
+        {/* Liste des backups */}
+        {bmFiles.length > 0 && (
+          <div style={{maxHeight:260,overflowY:"auto",border:`1px solid ${C.bor}`,borderRadius:8,marginTop:8}}>
+            {bmFiles.map(f => (
+              <div key={f.name} style={{padding:"8px 10px",borderBottom:`1px solid ${C.bor}`,display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:11,color:C.txt,wordBreak:"break-all"}}>{f.name}</div>
+                  <div style={{fontSize:10,color:C.mut}}>
+                    {f.created_at ? new Date(f.created_at).toLocaleString() : "—"}
+                    {f.metadata?.size ? ` · ${Math.round(f.metadata.size/1024)} Ko` : ""}
+                  </div>
+                </div>
+                <button onClick={() => bmDownload(f.fullPath)}
+                  style={{padding:"5px 10px",background:C.grn,color:"#fff",border:"none",borderRadius:6,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                  📥 Déchiffrer
+                </button>
+                <button onClick={() => bmDelete(f.fullPath)}
+                  style={{padding:"5px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:6,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                  🗑️
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {bmMsg && <div style={{marginTop:8,fontSize:11,color:C.grn}}>{bmMsg}</div>}
+        {bmErr && <div style={{marginTop:8,fontSize:11,color:C.red,background:`${C.red}10`,padding:"6px 10px",borderRadius:6}}>⚠️ {bmErr}</div>}
       </div>
 
       {/* ── Réinitialisation ─────────────────────────────────────────── */}
@@ -12286,6 +12590,62 @@ function PremiumTab() {
         </div>
       )}
 
+      {/* Sauvegarde des données (.duvia) */}
+      <div className="card" style={{marginBottom:14}}>
+        <div className="sec">💾 {t.backupTitle||"Sauvegarde de mes données"}</div>
+        <div style={{fontSize:12,color:C.mut,marginBottom:12,lineHeight:1.5}}>
+          {t.backupDesc||"Exportez un fichier .duvia contenant votre configuration famille, calendrier de garde et calendrier scolaire. Utile en cas de crash ou pour le service client Duvia."}
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <button
+            onClick={handleExportBackup}
+            style={{padding:"11px 16px",background:"transparent",color:C.vio,border:`1.5px solid ${C.vio}`,fontSize:13,borderRadius:10,cursor:"pointer",fontWeight:700}}>
+            📤 {t.backupExport||"Exporter mes données"}
+          </button>
+          <input
+            ref={backupFileInputRef}
+            type="file"
+            accept=".duvia,application/json,.json"
+            onChange={e => handleImportBackupFile(e.target.files?.[0])}
+            style={{display:"none"}}
+          />
+          <button
+            onClick={() => backupFileInputRef.current?.click()}
+            disabled={backupImporting}
+            style={{padding:"11px 16px",background:"transparent",color:C.blu,border:`1.5px solid ${C.blu}`,fontSize:13,borderRadius:10,cursor:backupImporting?"not-allowed":"pointer",fontWeight:700,opacity:backupImporting?.6:1}}>
+            {backupImporting ? "…" : `📥 ${t.backupImport||"Importer une sauvegarde"}`}
+          </button>
+        </div>
+        {backupImportErr && (
+          <div style={{marginTop:10,background:`${C.red}10`,border:`1px solid ${C.red}44`,borderRadius:10,padding:"8px 12px",fontSize:12,color:C.red}}>
+            {backupImportErr}
+          </div>
+        )}
+        {backupImportOk && (
+          <div style={{marginTop:10,background:`${C.grn}10`,border:`1px solid ${C.grn}44`,borderRadius:10,padding:"8px 12px",fontSize:12,color:C.grn}}>
+            ✅ {backupImportOk}
+          </div>
+        )}
+
+        {/* Cloud backup toggle (RGPD opt-out) */}
+        <div style={{marginTop:16,paddingTop:16,borderTop:`1px solid ${C.bor}`}}>
+          <label style={{display:"flex",alignItems:"center",gap:12,cursor:"pointer"}}>
+            <input
+              type="checkbox"
+              checked={cloudBackupEnabled}
+              onChange={e => toggleCloudBackup(e.target.checked)}
+              style={{width:18,height:18,cursor:"pointer",accentColor:C.vio}}
+            />
+            <div style={{flex:1}}>
+              <div style={{fontSize:13,fontWeight:700,color:C.txt}}>☁️ {t.cloudBackupLabel||"Sauvegarde cloud automatique"}</div>
+              <div style={{fontSize:11,color:C.mut,marginTop:3,lineHeight:1.5}}>
+                {t.cloudBackupDesc||"Une copie chiffrée de vos données est conservée 30 jours sur nos serveurs pour permettre au support Duvia de restaurer votre compte en cas de problème."}
+              </div>
+            </div>
+          </label>
+        </div>
+      </div>
+
       {/* Supprimer le compte */}
       {user?.role !== "admin" && (
         <div className="card" style={{borderColor:`${C.red}22`}}>
@@ -12305,7 +12665,159 @@ function PremiumTab() {
   );
 }
 
-// ─── HASH INTEGRITY ───────────────────────────────────────────────────────────
+// ─── BACKUP EXPORT / IMPORT ───────────────────────────────────────────────────
+// Fichier .duvia (JSON) : sauvegarde locale des données non-reproductibles par
+// re-sync serveur (config famille, calendrier de garde, calendrier scolaire,
+// historique). NE contient PAS : messages, coffre-fort, dépenses (déjà en base).
+// Format versionné pour compatibilité future. Utilisable en cas de crash ou
+// fourni au support Duvia pour restauration.
+const DUVIA_BACKUP_VERSION = 1;
+const DUVIA_BACKUP_EXT = ".duvia";
+
+function buildDuviaBackup({cfg, history, familyId, lang, userEmail}) {
+  const safe = (v, fb) => (v === undefined || v === null ? fb : v);
+  return {
+    _duvia: true,
+    _version: DUVIA_BACKUP_VERSION,
+    _exportedAt: new Date().toISOString(),
+    _familyId: safe(familyId, null),
+    _userEmail: safe(userEmail, null),
+    _lang: safe(lang, "fr"),
+    family: {
+      parents: safe(cfg?.parents, []),
+      children: safe(cfg?.children, []),
+    },
+    custody: {
+      main: safe(cfg?.custody, null),
+      perChild: safe(cfg?.custodyPerChild, {}),
+      sameGuardAll: safe(cfg?.sameGuardAll, true),
+    },
+    schoolCalendar: safe(cfg?.specialDates, {}),
+    history: Array.isArray(history) ? history : [],
+  };
+}
+
+function downloadDuviaBackup(payload, filename) {
+  try {
+    const json = JSON.stringify(payload, null, 2);
+    const blob = new Blob([json], {type: "application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 200);
+    return true;
+  } catch (e) {
+    console.error("[Duvia][backup] download error:", e);
+    return false;
+  }
+}
+
+function makeBackupFilename(prefix = "duvia-backup") {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  const ts = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
+  return `${prefix}_${ts}${DUVIA_BACKUP_EXT}`;
+}
+
+async function readDuviaBackupFile(file) {
+  if (!file) throw new Error("no_file");
+  if (file.size > 25 * 1024 * 1024) throw new Error("file_too_large");
+  const text = await file.text();
+  let data;
+  try { data = JSON.parse(text); }
+  catch { throw new Error("invalid_json"); }
+  if (!data || data._duvia !== true) throw new Error("not_duvia_file");
+  if (typeof data._version !== "number") throw new Error("invalid_version");
+  if (data._version > DUVIA_BACKUP_VERSION) throw new Error("version_too_new");
+  return data;
+}
+
+// Applique un backup au cfg actuel. Renvoie le nouveau cfg (à passer à setCfg).
+function applyDuviaBackupToCfg(currentCfg, backup) {
+  const b = backup || {};
+  const fam = b.family || {};
+  const cust = b.custody || {};
+  return {
+    ...currentCfg,
+    parents: Array.isArray(fam.parents) ? fam.parents : (currentCfg?.parents || []),
+    children: Array.isArray(fam.children) ? fam.children : (currentCfg?.children || []),
+    custody: cust.main || currentCfg?.custody || {},
+    custodyPerChild: cust.perChild || currentCfg?.custodyPerChild || {},
+    sameGuardAll: typeof cust.sameGuardAll === "boolean" ? cust.sameGuardAll : (currentCfg?.sameGuardAll ?? true),
+    specialDates: b.schoolCalendar || currentCfg?.specialDates || {},
+  };
+}
+
+// ─── BACKUP CLOUD (Supabase Storage, AES-GCM 256) ─────────────────────────────
+// Le contenu du .duvia est chiffré côté navigateur avant upload. La clé maître
+// est stockée en env var Supabase (VITE_BACKUP_MASTER_KEY_B64 côté client — clé
+// dérivée, non-secrète par elle-même : sert de sel pour l'AES ; la vraie
+// sécurité vient du fait que le bucket est privé et que l'accès admin est
+// tracé). Pour un vrai zero-knowledge il faudrait dériver la clé du mot de
+// passe (rejeté ici car casse le support restauration — voir choix Option B).
+//
+// Clé attendue : 32 octets en base64 dans import.meta.env.VITE_BACKUP_MASTER_KEY_B64
+async function getBackupCryptoKey() {
+  const b64 = import.meta.env?.VITE_BACKUP_MASTER_KEY_B64;
+  if (!b64) throw new Error("no_backup_key");
+  const raw = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  if (raw.byteLength !== 32) throw new Error("invalid_key_length");
+  return await crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+}
+
+function bytesToBase64(bytes) {
+  let bin = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(bin);
+}
+
+async function encryptBackupPayload(payloadObj) {
+  const key = await getBackupCryptoKey();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const plaintext = new TextEncoder().encode(JSON.stringify(payloadObj));
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plaintext));
+  return { ciphertext_b64: bytesToBase64(ciphertext), iv_b64: bytesToBase64(iv) };
+}
+
+// Upload d'un backup chiffré vers l'Edge Function 'backup-upload'.
+// Rate-limité côté serveur (20 min entre uploads d'un même user).
+async function uploadCloudBackup({ payload, familyId }) {
+  if (!familyId) throw new Error("no_family_id");
+  const { ciphertext_b64, iv_b64 } = await encryptBackupPayload(payload);
+  const { data, error } = await supabase.functions.invoke("backup-upload", {
+    body: { family_id: familyId, ciphertext_b64, iv_b64, version: DUVIA_BACKUP_VERSION },
+  });
+  if (error) throw new Error(error.message || "upload_failed");
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+// Clé localStorage pour se souvenir du dernier upload (au max 1×/jour).
+const CLOUD_BACKUP_LAST_KEY = "duvia_cloud_backup_last_iso";
+
+function shouldRunDailyCloudBackup() {
+  try {
+    const last = localStorage.getItem(CLOUD_BACKUP_LAST_KEY);
+    if (!last) return true;
+    const lastDate = new Date(last);
+    if (isNaN(lastDate.getTime())) return true;
+    const hoursSince = (Date.now() - lastDate.getTime()) / 3_600_000;
+    return hoursSince >= 20; // marge de 4h — évite les cas limites
+  } catch { return true; }
+}
+
+function markCloudBackupDone() {
+  try { localStorage.setItem(CLOUD_BACKUP_LAST_KEY, new Date().toISOString()); } catch {}
+}
+
+
 function hashMsg(from,toArr,content,ts){
   const s=[String(from),...[...toArr].map(String).sort(),content,ts].join('\x01');
   let h=0x811c9dc5>>>0;
