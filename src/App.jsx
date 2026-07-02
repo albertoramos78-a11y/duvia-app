@@ -4046,10 +4046,10 @@ export default function App() {
                     </button>
                   )}
                   <button onClick={()=>{setMenuTab("config");setConfigStep(0);setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
-                    <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🏠</span><span style={{flex:1,textAlign:"left"}}>{t.tabConfig||"Configuration"} famille</span>
+                    <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🏠</span><span style={{flex:1,textAlign:"left"}}>{t.menuConfigFamily||"Configuration famille"}</span>
                   </button>
                   <button onClick={()=>{setMenuTab("prefs");setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
-                    <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>⚙️</span><span style={{flex:1,textAlign:"left"}}>Préférences</span>
+                    <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>⚙️</span><span style={{flex:1,textAlign:"left"}}>{t.menuPrefs||"Préférences"}</span>
                   </button>
                   <button onClick={()=>{setMenuTab("notifs");setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
                     <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🔔</span><span style={{flex:1,textAlign:"left"}}>{t.tabNotifs}</span>
@@ -4096,8 +4096,8 @@ export default function App() {
                 <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🚪</span><span style={{flex:1,textAlign:"left"}}>{t.logout}</span>
               </button>
               <div style={{padding:"10px 16px",borderTop:`1px solid ${C.bor}`,textAlign:"center",fontSize:10,color:C.mut,lineHeight:1.5}}>
-                DUVIA — Licence Propriétaire<br/>
-                © 2026 Alberto Ramos — Tous droits réservés<br/>
+                {t.licenseLine1||"DUVIA — Licence Propriétaire"}<br/>
+                {t.licenseLine2||"© 2026 Alberto Ramos — Tous droits réservés"}<br/>
                 <button onClick={()=>setShowLicenseModal(true)} style={{background:"none",border:"none",color:C.vio,textDecoration:"underline",fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit"}}>{t.viewLicense}</button>
               </div>
             </div>
@@ -4262,7 +4262,7 @@ Date d'entrée en vigueur : 14 juin 2026
               {/* Barre retour + titre */}
               <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px 6px"}}>
                 <button onClick={()=>{setMenuTab(null);setConfigStep(0);}} style={{width:34,height:34,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:18,borderRadius:8,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>🔙</button>
-                <div style={{fontSize:14,fontWeight:900,flex:1}}>🏠 {t.tabConfig||"Configuration"} famille</div>
+                <div style={{fontSize:14,fontWeight:900,flex:1}}>🏠 {t.menuConfigFamily||"Configuration famille"}</div>
                 {configStep===0 && <StepIdInfoButton C={C} t={t} />}
                 {configStep===1 && <StepAccessInfoButton C={C} t={t} />}
                 {configStep===2 && <StepDatesInfoButton C={C} t={t} />}
@@ -4365,7 +4365,7 @@ Date d'entrée en vigueur : 14 juin 2026
             {menuTab==="prefs" && (
               <div>
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
-                  <div style={{fontSize:15,fontWeight:900}}>⚙️ Préférences</div>
+                  <div style={{fontSize:15,fontWeight:900}}>⚙️ {t.menuPrefs||"Préférences"}</div>
                 </div>
                 <PrefsTab />
               </div>
@@ -5408,7 +5408,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
             <>
               <div style={{display:"flex",alignItems:"center",gap:8,margin:"4px 0"}}>
                 <div style={{flex:1,height:1,background:C.bor}} />
-                <span style={{fontSize:11,color:C.mut,fontWeight:600}}>ou</span>
+                <span style={{fontSize:11,color:C.mut,fontWeight:600}}>{t.or||"ou"}</span>
                 <div style={{flex:1,height:1,background:C.bor}} />
               </div>
               <button onClick={async()=>{
@@ -5427,7 +5427,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
                 });
               }} style={{width:"100%",height:44,background:"#fff",border:"1.5px solid #dadce0",borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",gap:10,fontSize:14,fontWeight:700,color:"#3c4043",cursor:"pointer",marginBottom:4,boxShadow:"0 1px 4px rgba(0,0,0,.08)"}}>
                 <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.8 2.5 30.2 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.9 6.1C12.4 13 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.5-4.1 7-10.2 7-17.1z"/><path fill="#FBBC05" d="M10.5 28.6A14.8 14.8 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6l-7.9-6.1A23.8 23.8 0 0 0 0 24c0 3.9.9 7.5 2.6 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.6-5.9c-2 1.4-4.7 2.2-7.6 2.2-6.3 0-11.6-3.5-13.5-9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>
-                Continuer avec Google
+                {t.continueWithGoogle||"Continuer avec Google"}
               </button>
             </>
           )}
@@ -5458,7 +5458,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
             >
               <span style={{color:"#FFB800",fontSize:14}}>{"★".repeat(Math.round(avgRating.avg_stars))}{"☆".repeat(5-Math.round(avgRating.avg_stars))}</span>
               <span style={{fontSize:12,color:"#888",fontWeight:700}}>{avgRating.avg_stars}/5</span>
-              <span style={{fontSize:11,color:"#aaa"}}> · {avgRating.total_count} avis</span>
+              <span style={{fontSize:11,color:"#aaa"}}> · {avgRating.total_count} {t.reviews||"avis"}</span>
               <span style={{fontSize:10,color:"#999",marginLeft:2,display:"inline-block",transition:"transform .2s",transform:reviewsOpen?"rotate(180deg)":"rotate(0deg)"}}>▾</span>
             </div>
             {reviewsOpen && publicReviews.map((r,i)=>(
@@ -6008,17 +6008,9 @@ function PrefsTab() {
   }
 
   function exportRGPD(){
-    const data = {
-      export_date: new Date().toISOString(),
-      compte: {nom:user?.name, email:user?.email},
-      preferences: {langue:lang, devise:currency, premier_jour:weekStart, emails_messages:emailMsg, emails_depenses:emailExp, emails_coffre:emailVault},
-      abonnement: {plan:sub?.plan, depuis:sub?.premiumSince},
-    };
-    const blob = new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href=url; a.download="duvia-mes-donnees.json"; a.click();
-    URL.revokeObjectURL(url);
+    // ⚠️ Fonction obsolète — remplacée par handleExportBackup (.duvia).
+    // Conservée temporairement pour compat, sera supprimée à la prochaine version.
+    return handleExportBackup();
   }
 
   const row = {display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`,cursor:"pointer",width:"100%",textAlign:"left"};
@@ -6032,18 +6024,18 @@ function PrefsTab() {
 
       {/* ── Notifications email ── */}
       <div style={{marginBottom:28}}>
-        <div className="sec">📧 Notifications email</div>
-        <NotifRow label="Nouveau message reçu" desc="Email quand l'autre parent vous écrit"
+        <div className="sec">📧 {t.emailNotifs||"Notifications email"}</div>
+        <NotifRow label={t.notifMsg||"Nouveau message reçu"} desc={t.notifMsgDesc||"Email quand l'autre parent vous écrit"}
           val={emailMsg} onToggle={()=>{ const v=!emailMsg; setEmailMsg(v); savePref("email_notifs",v); }} />
-        <NotifRow label="Nouvelle dépense" desc="Email quand une dépense est ajoutée ou modifiée"
+        <NotifRow label={t.notifExp||"Nouvelle dépense"} desc={t.notifExpDesc||"Email quand une dépense est ajoutée ou modifiée"}
           val={emailExp} onToggle={()=>{ const v=!emailExp; setEmailExp(v); savePref("email_expenses",v); }} />
-        <NotifRow label="Nouveau document (coffre)" desc="Email quand un document est ajouté au coffre-fort"
+        <NotifRow label={t.notifVault||"Nouveau document (coffre)"} desc={t.notifVaultDesc||"Email quand un document est ajouté au coffre-fort"}
           val={emailVault} onToggle={()=>{ const v=!emailVault; setEmailVault(v); savePref("email_vault",v); }} />
       </div>
 
       {/* ── Devise ── */}
       <div style={{marginBottom:28}}>
-        <div className="sec">💰 Devise par défaut</div>
+        <div className="sec">💰 {t.defaultCurrency||"Devise par défaut"}</div>
         <div style={{display:"flex",gap:8}}>
           {["€","$","CHF","£"].map(c=>(
             <button key={c} onClick={()=>{ setCurrency(c); savePref("currency",c); }}
@@ -6056,7 +6048,7 @@ function PrefsTab() {
 
       {/* ── Premier jour de la semaine ── */}
       <div style={{marginBottom:28}}>
-        <div className="sec">📅 Premier jour de la semaine</div>
+        <div className="sec">📅 {t.weekStart||"Premier jour de la semaine"}</div>
         <div style={{display:"flex",gap:8}}>
           {[{k:"lundi",l:"Lundi"},{k:"dimanche",l:"Dimanche"}].map(({k,l})=>(
             <button key={k} onClick={()=>{ setWeekStart(k); savePref("week_start",k); }}
@@ -6065,85 +6057,6 @@ function PrefsTab() {
             </button>
           ))}
         </div>
-      </div>
-
-      {/* ── Sécurité ── */}
-      <div style={{marginBottom:28}}>
-        <div className="sec">🔒 Sécurité</div>
-        {isGoogleUser ? (
-          <div style={{padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`,display:"flex",alignItems:"center",gap:12}}>
-            <span style={{fontSize:20}}>🔗</span>
-            <div>
-              <div style={{fontSize:13,fontWeight:700,color:C.txt}}>Compte Google</div>
-              <div style={{fontSize:11,color:C.mut,marginTop:2}}>Votre email et mot de passe sont gérés par Google. Modifiez-les sur <a href="https://myaccount.google.com" target="_blank" rel="noreferrer" style={{color:C.vio}}>myaccount.google.com</a></div>
-            </div>
-          </div>
-        ) : (
-          <>
-            {pwOk && <div style={{color:C.grn,fontSize:12,fontWeight:700,marginBottom:8,padding:"7px 12px",background:`${C.grn}12`,borderRadius:8}}>{pwOk}</div>}
-            {!pwMode ? (
-              <button onClick={()=>setPwMode(true)} style={{...row,marginBottom:8}}>
-                <span style={{fontSize:13,fontWeight:700,color:C.txt}}>🔒 Changer mon mot de passe</span>
-              </button>
-            ) : (
-              <div style={{background:C.sur,borderRadius:12,padding:16,border:`1px solid ${C.bor}`,marginBottom:8}}>
-                {[
-                  {val:pwOld,set:setPwOld,show:showPwOld,setShow:setShowPwOld,ph:"Mot de passe actuel"},
-                  {val:pw,   set:setPw,   show:showPw,   setShow:setShowPw,   ph:"Nouveau mot de passe (8 car. · majuscule · spécial)"},
-                  {val:pw2,  set:setPw2,  show:showPw2,  setShow:setShowPw2,  ph:"Confirmer le nouveau mot de passe"},
-                ].map(({val,set,show,setShow,ph},i)=>(
-                  <div key={i} style={{position:"relative",marginBottom:8}}>
-                    {i===1&&<div style={{height:1,background:C.bor,margin:"4px 0 12px"}}/>}
-                    <input type={show?"text":"password"} value={val} onChange={e=>set(e.target.value)}
-                      placeholder={ph}
-                      style={{width:"100%",height:42,borderRadius:8,border:`1.5px solid ${C.bor}`,padding:"0 40px 0 12px",fontSize:13,boxSizing:"border-box",fontFamily:"inherit"}} />
-                    <button onClick={()=>setShow(s=>!s)} type="button"
-                      style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:15,color:C.mut,padding:0,lineHeight:1}}>
-                      {show?"🙈":"👁️"}
-                    </button>
-                  </div>
-                ))}
-                {pwErr && <div style={{color:C.red,fontSize:12,marginBottom:8,padding:"6px 10px",background:`${C.red}10`,borderRadius:8}}>{pwErr}</div>}
-                <div style={{display:"flex",gap:8}}>
-                  <button onClick={changePassword} disabled={saving} style={{flex:1,height:38,background:C.vio,color:"#fff",borderRadius:8,fontSize:13,fontWeight:800,border:"none",cursor:"pointer",opacity:saving?.6:1}}>
-                    {saving?"…":"Confirmer"}
-                  </button>
-                  <button onClick={()=>{setPwMode(false);setPwOld("");setPw("");setPw2("");setPwErr("");setShowPwOld(false);setShowPw(false);setShowPw2(false);}} style={{height:38,padding:"0 16px",background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",fontSize:13,color:C.txt}}>
-                    Annuler
-                  </button>
-                </div>
-              </div>
-            )}
-            {/* ── Changer l'email ── */}
-            {emailOk && <div style={{color:C.grn,fontSize:12,fontWeight:700,marginBottom:8,padding:"7px 12px",background:`${C.grn}12`,borderRadius:8,lineHeight:1.5}}>{emailOk}</div>}
-            {!emailMode ? (
-              <button onClick={()=>setEmailMode(true)} style={{...row}}>
-                <div>
-                  <div style={{fontSize:13,fontWeight:700,color:C.txt}}>✉️ Changer mon adresse email</div>
-                  <div style={{fontSize:11,color:C.mut,marginTop:2}}>Actuelle : {user?.email}</div>
-                </div>
-              </button>
-            ) : (
-              <div style={{background:C.sur,borderRadius:12,padding:16,border:`1px solid ${C.bor}`}}>
-                <input type="email" value={newEmail} onChange={e=>setNewEmail(e.target.value)}
-                  placeholder="Nouvelle adresse email"
-                  style={{width:"100%",height:42,borderRadius:8,border:`1.5px solid ${C.bor}`,padding:"0 12px",fontSize:13,marginBottom:8,boxSizing:"border-box",fontFamily:"inherit"}} />
-                {emailErr && <div style={{color:C.red,fontSize:12,marginBottom:8,padding:"6px 10px",background:`${C.red}10`,borderRadius:8}}>{emailErr}</div>}
-                <div style={{fontSize:11,color:C.mut,marginBottom:10,lineHeight:1.5}}>
-                  📩 Un email de confirmation sera envoyé à la nouvelle adresse. L'ancienne reste active jusqu'à validation.
-                </div>
-                <div style={{display:"flex",gap:8}}>
-                  <button onClick={changeEmail} disabled={savingEmail} style={{flex:1,height:38,background:C.vio,color:"#fff",borderRadius:8,fontSize:13,fontWeight:800,border:"none",cursor:"pointer",opacity:savingEmail?.6:1}}>
-                    {savingEmail?"…":"Envoyer la confirmation"}
-                  </button>
-                  <button onClick={()=>{setEmailMode(false);setNewEmail("");setEmailErr("");}} style={{height:38,padding:"0 16px",background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",fontSize:13,color:C.txt}}>
-                    Annuler
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
       </div>
 
       {/* ── Mon identifiant Duvia ── */}
@@ -6173,26 +6086,82 @@ function PrefsTab() {
         </div>
       </div>
 
-      {/* ── Export RGPD ── */}
+      {/* ── Sécurité ── */}
       <div style={{marginBottom:28}}>
-        <div className="sec">📋 Mes données (RGPD)</div>
-        <button onClick={exportRGPD} style={{...row}}>
-          <span style={{fontSize:13,fontWeight:700,color:C.txt}}>📤 Télécharger mes données</span>
-        </button>
-        <div style={{fontSize:11,color:C.mut,marginTop:6,paddingLeft:4}}>Format JSON · Vos données personnelles uniquement</div>
-        <button onClick={()=>{
-            try {
-              window.localStorage.removeItem("duvia_family_snapshot");
-              window.localStorage.removeItem("duvia_ejected");
-            } catch {}
-            setLocalDataCleared(true);
-            setTimeout(()=>setLocalDataCleared(false), 2500);
-          }} style={{...row, marginTop:8}}>
-          <span style={{fontSize:13,fontWeight:700,color:C.txt}}>🧹 Supprimer mes données locales</span>
-        </button>
-        <div style={{fontSize:11,color:C.mut,marginTop:6,paddingLeft:4}}>Efface la sauvegarde de secours stockée sur cet appareil</div>
-        {localDataCleared && (
-          <div style={{fontSize:12,color:C.grn,fontWeight:700,marginTop:6,paddingLeft:4}}>✅ Données locales supprimées</div>
+        <div className="sec">🔒 {t.security||"Sécurité"}</div>
+        {isGoogleUser ? (
+          <div style={{padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`,display:"flex",alignItems:"center",gap:12}}>
+            <span style={{fontSize:20}}>🔗</span>
+            <div>
+              <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{t.googleAccount||"Compte Google"}</div>
+              <div style={{fontSize:11,color:C.mut,marginTop:2}}>{t.googleAccountDesc||"Votre email et mot de passe sont gérés par Google. Modifiez-les sur"} <a href="https://myaccount.google.com" target="_blank" rel="noreferrer" style={{color:C.vio}}>myaccount.google.com</a></div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {pwOk && <div style={{color:C.grn,fontSize:12,fontWeight:700,marginBottom:8,padding:"7px 12px",background:`${C.grn}12`,borderRadius:8}}>{pwOk}</div>}
+            {!pwMode ? (
+              <button onClick={()=>setPwMode(true)} style={{...row,marginBottom:8}}>
+                <span style={{fontSize:13,fontWeight:700,color:C.txt}}>🔒 {t.changePw||"Changer mon mot de passe"}</span>
+              </button>
+            ) : (
+              <div style={{background:C.sur,borderRadius:12,padding:16,border:`1px solid ${C.bor}`,marginBottom:8}}>
+                {[
+                  {val:pwOld,set:setPwOld,show:showPwOld,setShow:setShowPwOld,ph:t.pwCurrent||"Mot de passe actuel"},
+                  {val:pw,   set:setPw,   show:showPw,   setShow:setShowPw,   ph:t.pwNew||"Nouveau mot de passe (8 car. · majuscule · spécial)"},
+                  {val:pw2,  set:setPw2,  show:showPw2,  setShow:setShowPw2,  ph:t.pwConfirm||"Confirmer le nouveau mot de passe"},
+                ].map(({val,set,show,setShow,ph},i)=>(
+                  <div key={i} style={{position:"relative",marginBottom:8}}>
+                    {i===1&&<div style={{height:1,background:C.bor,margin:"4px 0 12px"}}/>}
+                    <input type={show?"text":"password"} value={val} onChange={e=>set(e.target.value)}
+                      placeholder={ph}
+                      style={{width:"100%",height:42,borderRadius:8,border:`1.5px solid ${C.bor}`,padding:"0 40px 0 12px",fontSize:13,boxSizing:"border-box",fontFamily:"inherit"}} />
+                    <button onClick={()=>setShow(s=>!s)} type="button"
+                      style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:15,color:C.mut,padding:0,lineHeight:1}}>
+                      {show?"🙈":"👁️"}
+                    </button>
+                  </div>
+                ))}
+                {pwErr && <div style={{color:C.red,fontSize:12,marginBottom:8,padding:"6px 10px",background:`${C.red}10`,borderRadius:8}}>{pwErr}</div>}
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={changePassword} disabled={saving} style={{flex:1,height:38,background:C.vio,color:"#fff",borderRadius:8,fontSize:13,fontWeight:800,border:"none",cursor:"pointer",opacity:saving?.6:1}}>
+                    {saving?"…":(t.confirm||"Confirmer")}
+                  </button>
+                  <button onClick={()=>{setPwMode(false);setPwOld("");setPw("");setPw2("");setPwErr("");setShowPwOld(false);setShowPw(false);setShowPw2(false);}} style={{height:38,padding:"0 16px",background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",fontSize:13,color:C.txt}}>
+                    {t.cancel||"Annuler"}
+                  </button>
+                </div>
+              </div>
+            )}
+            {/* ── Changer l'email ── */}
+            {emailOk && <div style={{color:C.grn,fontSize:12,fontWeight:700,marginBottom:8,padding:"7px 12px",background:`${C.grn}12`,borderRadius:8,lineHeight:1.5}}>{emailOk}</div>}
+            {!emailMode ? (
+              <button onClick={()=>setEmailMode(true)} style={{...row}}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:C.txt}}>✉️ {t.changeEmail||"Changer mon adresse email"}</div>
+                  <div style={{fontSize:11,color:C.mut,marginTop:2}}>{t.currentEmail||"Actuelle :"} {user?.email}</div>
+                </div>
+              </button>
+            ) : (
+              <div style={{background:C.sur,borderRadius:12,padding:16,border:`1px solid ${C.bor}`}}>
+                <input type="email" value={newEmail} onChange={e=>setNewEmail(e.target.value)}
+                  placeholder={t.newEmailPh||"Nouvelle adresse email"}
+                  style={{width:"100%",height:42,borderRadius:8,border:`1.5px solid ${C.bor}`,padding:"0 12px",fontSize:13,marginBottom:8,boxSizing:"border-box",fontFamily:"inherit"}} />
+                {emailErr && <div style={{color:C.red,fontSize:12,marginBottom:8,padding:"6px 10px",background:`${C.red}10`,borderRadius:8}}>{emailErr}</div>}
+                <div style={{fontSize:11,color:C.mut,marginBottom:10,lineHeight:1.5}}>
+                  📩 {t.emailChangeInfo||"Un email de confirmation sera envoyé à la nouvelle adresse. L'ancienne reste active jusqu'à validation."}
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={changeEmail} disabled={savingEmail} style={{flex:1,height:38,background:C.vio,color:"#fff",borderRadius:8,fontSize:13,fontWeight:800,border:"none",cursor:"pointer",opacity:savingEmail?.6:1}}>
+                    {savingEmail?"…":(t.sendConfirm||"Envoyer la confirmation")}
+                  </button>
+                  <button onClick={()=>{setEmailMode(false);setNewEmail("");setEmailErr("");}} style={{height:38,padding:"0 16px",background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",fontSize:13,color:C.txt}}>
+                    {t.cancel||"Annuler"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -6244,6 +6213,27 @@ function PrefsTab() {
               </div>
             </div>
           </label>
+        </div>
+
+        {/* Supprimer sauvegarde locale (données de secours navigateur) */}
+        <div style={{marginTop:16,paddingTop:16,borderTop:`1px solid ${C.bor}`}}>
+          <button onClick={()=>{
+              try {
+                window.localStorage.removeItem("duvia_family_snapshot");
+                window.localStorage.removeItem("duvia_ejected");
+              } catch {}
+              setLocalDataCleared(true);
+              setTimeout(()=>setLocalDataCleared(false), 2500);
+            }}
+            style={{width:"100%",padding:"10px 14px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,fontSize:12,borderRadius:8,cursor:"pointer",fontWeight:700}}>
+            🧹 {t.clearLocalData||"Supprimer la sauvegarde locale"}
+          </button>
+          <div style={{fontSize:11,color:C.mut,marginTop:6,textAlign:"center"}}>
+            {t.clearLocalDataHint||"Efface la copie stockée sur cet appareil (les données restent sur le serveur)."}
+          </div>
+          {localDataCleared && (
+            <div style={{fontSize:12,color:C.grn,fontWeight:700,marginTop:6,textAlign:"center"}}>✅ {t.localDataCleared||"Données locales supprimées"}</div>
+          )}
         </div>
       </div>
 
@@ -7630,7 +7620,7 @@ function StepDates() {
             </div>
             <div style={{fontSize:11,color:C.mut,marginTop:2,lineHeight:1.4}}>
               {prem&&cfg.sameGuardAll
-                ? "✅ Planning identique pour tous les enfants"
+                ? `✅ ${t.sameSchedHint||"Planning identique pour tous les enfants"}`
                 : prem
                   ? "⚙️ Chaque enfant a sa propre zone scolaire et ses propres vacances"
                   : "Passez en Premium pour personnaliser par enfant"}
@@ -7680,7 +7670,7 @@ function StepDates() {
           const chOddIdx = sd.oddParentIdx ?? 1;
 
           return (
-            <div style={{marginBottom:16,border:`1.5px solid ${C.bor}`,borderRadius:14,overflow:"hidden"}}>
+            <div style={{marginBottom:16,border:`1.5px solid ${C.bor}`,borderRadius:14}}>
               <div style={{padding:"14px 14px 4px"}}>
 
                 {/* Pays */}
@@ -7728,9 +7718,9 @@ function StepDates() {
                               {/* Boutons tout assigner */}
                               <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
                                 {cfg.parents.map((p,pi)=>(
-                                  <button key={pi} onClick={()=>{const base=chGetHolDetails();const newDet={...base,[hol.n]:{...(base[hol.n]||{})}};days.forEach(d2=>{newDet[hol.n][d2]=pi;});chSetHolDetails(newDet);}} style={{padding:"4px 10px",background:`${p.color}22`,color:p.color,border:`1.5px solid ${p.color}`,borderRadius:20,fontSize:11,fontWeight:700}}>Tout → {p.name||`P${pi+1}`}</button>
+                                  <button key={pi} onClick={()=>{const base=chGetHolDetails();const newDet={...base,[hol.n]:{...(base[hol.n]||{})}};days.forEach(d2=>{newDet[hol.n][d2]=pi;});chSetHolDetails(newDet);}} style={{padding:"4px 10px",background:`${p.color}22`,color:p.color,border:`1.5px solid ${p.color}`,borderRadius:20,fontSize:11,fontWeight:700}}>{(t.assignAllTo||"Tout → {name}").replace("{name}", p.name||`P${pi+1}`)}</button>
                                 ))}
-                                <button onClick={()=>{const base=chGetHolDetails();chSetHolDetails({...base,[hol.n]:{}});}} style={{padding:"4px 8px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,borderRadius:20,fontSize:11}}>Effacer</button>
+                                <button onClick={()=>{const base=chGetHolDetails();chSetHolDetails({...base,[hol.n]:{}});}} style={{padding:"4px 8px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,borderRadius:20,fontSize:11}}>{t.clear||"Effacer"}</button>
                               </div>
                               {/* Vue par semaines */}
                               {(()=>{
@@ -7951,9 +7941,9 @@ function StepDates() {
                           <div style={{padding:"10px 11px"}}>
                             <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
                               {cfg.parents.map((p,pi)=>(
-                                <button key={pi} onClick={()=>{const base=chGetHolDetails();const newDet={...base,[hol.n]:{...(base[hol.n]||{})}};days.forEach(d2=>{newDet[hol.n][d2]=pi;});chSetHolDetails(newDet);}} style={{padding:"4px 10px",background:`${p.color}22`,color:p.color,border:`1.5px solid ${p.color}`,borderRadius:20,fontSize:11,fontWeight:700}}>Tout → {p.name||`P${pi+1}`}</button>
+                                <button key={pi} onClick={()=>{const base=chGetHolDetails();const newDet={...base,[hol.n]:{...(base[hol.n]||{})}};days.forEach(d2=>{newDet[hol.n][d2]=pi;});chSetHolDetails(newDet);}} style={{padding:"4px 10px",background:`${p.color}22`,color:p.color,border:`1.5px solid ${p.color}`,borderRadius:20,fontSize:11,fontWeight:700}}>{(t.assignAllTo||"Tout → {name}").replace("{name}", p.name||`P${pi+1}`)}</button>
                               ))}
-                              <button onClick={()=>{const base=chGetHolDetails();chSetHolDetails({...base,[hol.n]:{}});}} style={{padding:"4px 8px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,borderRadius:20,fontSize:11}}>Effacer</button>
+                              <button onClick={()=>{const base=chGetHolDetails();chSetHolDetails({...base,[hol.n]:{}});}} style={{padding:"4px 8px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,borderRadius:20,fontSize:11}}>{t.clear||"Effacer"}</button>
                             </div>
                             {(()=>{
                               const weeks=[];let week=[];
@@ -8088,50 +8078,50 @@ function StepDates() {
               </div>
               {/* Label */}
               <div style={{...fld,marginBottom:10}}>
-                <span style={lbl}>Nom de l'événement</span>
-                <input value={cd.label||""} onChange={e=>updCd("label",e.target.value)} placeholder="Ex: Vacances ski, Mariage..." disabled={!prem} style={inp} />
+                <span style={lbl}>{t.cdEventName||"Nom de l'événement"}</span>
+                <input value={cd.label||""} onChange={e=>updCd("label",e.target.value)} placeholder={t.cdEventPh||"Ex: Vacances ski, Mariage..."} disabled={!prem} style={inp} />
               </div>
               {/* Date row */}
               <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:10}}>
                 <div style={{...fld,flex:1}}>
-                  <span style={lbl}>Jour</span>
+                  <span style={lbl}>{t.cdDay||"Jour"}</span>
                   <input type="number" min="1" max="31" value={cd.day||""} onChange={e=>updCd("day",e.target.value)} placeholder={t.dayPlaceholder||"JJ"} disabled={!prem} style={inp} />
                 </div>
                 <div style={{...fld,flex:2}}>
-                  <span style={lbl}>Mois</span>
+                  <span style={lbl}>{t.cdMonth||"Mois"}</span>
                   <select value={cd.month||""} onChange={e=>updCd("month",e.target.value)} disabled={!prem} style={inp}>
                     <option value="">--</option>
                     {t.months.map((m,j)=><option key={j} value={pad(j+1)}>{m}</option>)}
                   </select>
                 </div>
                 <div style={{...fld,flex:1}}>
-                  <span style={lbl}>Année</span>
+                  <span style={lbl}>{t.cdYear||"Année"}</span>
                   <input type="number" min="2020" max="2099" value={cd.year||""} onChange={e=>updCd("year",e.target.value)} placeholder={cd.yearly?"—":new Date().getFullYear()} disabled={!prem||cd.yearly} style={{...inp,opacity:cd.yearly?0.4:1}} />
                 </div>
               </div>
               {/* Who has custody */}
               <div className="field">
-                <label className="lbl">🧒 Concerne</label>
+                <label className="lbl">🧒 {t.cdConcerns||"Concerne"}</label>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                   <button onClick={()=>updCd("childId","all")} style={{padding:"6px 14px",background:(!cd.childId||cd.childId==="all")?C.vio:C.sur,color:(!cd.childId||cd.childId==="all")?"#fff":C.mut,border:`1.5px solid ${(!cd.childId||cd.childId==="all")?C.vio:C.bor}`,borderRadius:20,fontSize:12,fontWeight:700}}>
-                    Tous
+                    {t.all||"Tous"}
                   </button>
-                  {children.map(ch=>(
+                  {children.map((ch,cIdx)=>(
                     <button key={ch.id} onClick={()=>updCd("childId",String(ch.id))} style={{padding:"6px 14px",background:cd.childId===String(ch.id)?C.vio:C.sur,color:cd.childId===String(ch.id)?"#fff":C.mut,border:`1.5px solid ${cd.childId===String(ch.id)?C.vio:C.bor}`,borderRadius:20,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
-                      {ch.avatar&&<span>{ch.avatar}</span>}{ch.name||`Enfant ${ch.id}`}
+                      {ch.avatar&&<span>{ch.avatar}</span>}{ch.name||`${t.childN||"Enfant"} ${cIdx+1}`}
                     </button>
                   ))}
                 </div>
               </div>
               {/* Which parent */}
               <div className="field">
-                <label className="lbl">👤 Garde chez</label>
+                <label className="lbl">👤 {t.cdCustodyAt||"Garde chez"}</label>
                 <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                  {parents.map(p=>(
+                  {parents.map((p,pIdx)=>(
                     <button key={p.id} onClick={()=>updCd("parentId",String(p.id))} style={{flex:1,minWidth:80,padding:"9px",background:cd.parentId===String(p.id)?p.color:C.sur,color:cd.parentId===String(p.id)?"#fff":C.mut,border:`2px solid ${cd.parentId===String(p.id)?p.color:C.bor}`,borderRadius:10,fontSize:13,fontWeight:800,display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>
                       {p.avatar&&(typeof p.avatar==="string"&&p.avatar.startsWith("http")
                         ? <img src={p.avatar} alt="" style={{width:22,height:22,borderRadius:"50%",objectFit:"cover",verticalAlign:"middle"}} />
-                        : <span style={{fontSize:18}}>{p.avatar}</span>)}{p.name||`Parent ${p.id}`}
+                        : <span style={{fontSize:18}}>{p.avatar}</span>)}{p.name||`${t.parentN||"Parent"} ${pIdx+1}`}
                     </button>
                   ))}
                 </div>
@@ -8139,7 +8129,7 @@ function StepDates() {
               {/* Yearly recurrence */}
               <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13}}>
                 <input type="checkbox" checked={!!cd.yearly} onChange={e=>updCd("yearly",e.target.checked)} />
-                <span>🔁 Reconduire tous les ans</span>
+                <span>🔁 {t.cdRepeatYearly||"Reconduire tous les ans"}</span>
               </label>
             </div>
           );
@@ -8755,7 +8745,7 @@ function StepAccess() {
             </div>
           </div>
           <div style={{marginBottom:10}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>🏠 {t.obsAddress||"📍 Adresse postale"}</div>
+            <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>🏠 {t.obsAddress||"Adresse postale"}</div>
             <input value={o.address||""} onChange={e=>setObsField("address",e.target.value)} placeholder={t.obsAddressPh||"Numéro, rue, code postal, ville"} style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt}} />
           </div>
           {/* Notes supprimées (simplification UX) */}
@@ -11329,7 +11319,7 @@ window.addEventListener('message',function(e){
                   borderRadius:10,cursor:"pointer",transition:"all .15s"}}>
                 <span style={{fontSize:16}}>🔄</span>
                 <span style={{flex:1,fontSize:13,fontWeight:700,color:form.recurring?C.vio:C.mut,textAlign:"left"}}>
-                  Dépense récurrente
+                  {t.expRecurring||"Dépense récurrente"}
                 </span>
                 <span style={{width:20,height:20,borderRadius:10,
                   background:form.recurring?C.vio:C.bor,
@@ -11436,7 +11426,14 @@ window.addEventListener('message',function(e){
           <div style={{display:"flex",gap:8,alignItems:"flex-start",background:`${C.vio}0c`,border:`1px solid ${C.vio}33`,borderRadius:8,padding:"8px 10px",marginBottom:10}}>
             <span style={{fontSize:14,flexShrink:0}}>ℹ️</span>
             <div style={{fontSize:11,color:C.mut,lineHeight:1.5}}>
-              Toute dépense ajoutée est <strong style={{color:C.yel}}>⏳ en attente</strong> jusqu'à validation par l'autre parent. Une fois <strong style={{color:C.grn}}>✅ acceptée</strong>, elle est comptabilisée. Si <strong style={{color:C.red}}>❌ refusée</strong>, elle reste visible mais exclue des totaux. Chaque action est enregistrée dans l'historique.
+              {(t.expWorkflowInfo||"Toute dépense ajoutée est {pending} jusqu'à validation par l'autre parent. Une fois {accepted}, elle est comptabilisée. Si {refused}, elle reste visible mais exclue des totaux. Chaque action est enregistrée dans l'historique.")
+                .split(/(\{pending\}|\{accepted\}|\{refused\})/)
+                .map((part,i)=>{
+                  if(part==="{pending}")  return <strong key={i} style={{color:C.yel}}>⏳ {t.expStatusPending||"en attente"}</strong>;
+                  if(part==="{accepted}") return <strong key={i} style={{color:C.grn}}>✅ {t.expStatusAccepted||"acceptée"}</strong>;
+                  if(part==="{refused}")  return <strong key={i} style={{color:C.red}}>❌ {t.expStatusRefused||"refusée"}</strong>;
+                  return part;
+                })}
             </div>
           </div>
           <div style={{display:"flex",gap:8,marginTop:4}}>
@@ -13998,7 +13995,7 @@ function ContactsTab({readOnly,addOnly,prem: premProp}) {
   // Default contacts seeded on first render if none exist
   const allContacts = [...emergencyNums, ...autoContacts, ...customContacts];
 
-  const CATS = [
+  const CATS_ALL = [
     {key:"all",label:t.contactsCatAll||"🔍 Tous"},
     {key:"emergency",label:t.contactsCatEmergency||"🆘 Urgences"},
     {key:"parents",label:t.contactsCatParents||"👨‍👩‍👧 Parents"},
@@ -14007,6 +14004,9 @@ function ContactsTab({readOnly,addOnly,prem: premProp}) {
     {key:"health",label:t.contactsCatHealth||"🏥 Santé"},
     {key:"other",label:t.contactsCatOther||"📋 Autres"},
   ];
+  // N'affiche que les catégories avec au moins 1 contact ("all" toujours visible)
+  const nonEmptyCats = new Set(allContacts.map(c=>c.cat));
+  const CATS = CATS_ALL.filter(c => c.key==="all" || nonEmptyCats.has(c.key));
 
   const filtered = filter==="all" ? allContacts : allContacts.filter(c=>c.cat===filter);
 
@@ -14698,6 +14698,13 @@ function GiftShopSection() {
         </div>
       </div>
 
+      {/* Bandeau info bêta : achats désactivés mais la roue permet de les gagner */}
+      {isBeta() && (
+        <div style={{background:`${C.yel}12`,border:`1px solid ${C.yel}44`,borderRadius:10,padding:"10px 12px",marginBottom:10,fontSize:12,color:C.txt,lineHeight:1.5}}>
+          🚧 {t.shopBetaLocked||"Les achats sont désactivés pendant la bêta. Tournez la roue chaque jour pour tenter de gagner les thèmes gratuitement !"}
+        </div>
+      )}
+
       {/* STEP: idle — grille des lots */}
       {step === "idle" && (
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -14705,15 +14712,18 @@ function GiftShopSection() {
             const ownedSelf   = prizeOwnedBySelf(p.id);
             const allGifted   = childUsers.length > 0 && childUsers.every(ch => prizeAlreadyGifted(p.id, ch.id));
             const fullyOwned  = ownedSelf && (childUsers.length === 0 || allGifted);
+            const betaLocked  = isBeta();
+            const disabled    = fullyOwned || betaLocked;
             return (
-              <button key={p.id} onClick={()=>!fullyOwned&&startBuy(p)}
+              <button key={p.id} onClick={()=>!disabled&&startBuy(p)}
                 style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",
-                  background:fullyOwned?C.sur:`${p.color}10`,borderRadius:12,
-                  border:`1.5px solid ${fullyOwned?C.bor:p.color+"44"}`,
-                  cursor:fullyOwned?"default":"pointer",textAlign:"left"}}>
-                <div style={{width:36,height:36,borderRadius:10,background:`${p.color}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{p.emoji}</div>
+                  background:disabled?C.sur:`${p.color}10`,borderRadius:12,
+                  border:`1.5px solid ${disabled?C.bor:p.color+"44"}`,
+                  cursor:disabled?"not-allowed":"pointer",textAlign:"left",
+                  opacity:betaLocked&&!fullyOwned?0.6:1}}>
+                <div style={{width:36,height:36,borderRadius:10,background:`${p.color}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0,filter:betaLocked&&!fullyOwned?"grayscale(.3)":"none"}}>{p.emoji}</div>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:13,fontWeight:800,color:fullyOwned?C.mut:p.color}}>{t[p.labelKey]||p.label}</div>
+                  <div style={{fontSize:13,fontWeight:800,color:disabled?C.mut:p.color}}>{t[p.labelKey]||p.label}</div>
                   <div style={{fontSize:10,color:C.mut,marginTop:1}}>
                     {p.validStart
                       ? `${p.validStart.toLocaleDateString(LOCALE,{day:"2-digit",month:"2-digit"})} → ${p.validEnd.toLocaleDateString(LOCALE,{day:"2-digit",month:"2-digit"})}${t.giftShopPermanentAfterPurchase}`
@@ -14722,7 +14732,9 @@ function GiftShopSection() {
                 </div>
                 {fullyOwned
                   ? <span style={{background:C.sur,color:C.mut,borderRadius:8,padding:"3px 9px",fontSize:11,fontWeight:700,flexShrink:0}}>{t.giftShopObtained}</span>
-                  : <span style={{background:`${p.color}22`,color:p.color,borderRadius:8,padding:"3px 9px",fontSize:12,fontWeight:900,flexShrink:0}}>{p.price.toFixed(2)} €</span>
+                  : betaLocked
+                    ? <span style={{background:C.sur,color:C.mut,borderRadius:8,padding:"3px 9px",fontSize:11,fontWeight:700,flexShrink:0}}>🔒 {t.shopBetaBadge||"Bêta"}</span>
+                    : <span style={{background:`${p.color}22`,color:p.color,borderRadius:8,padding:"3px 9px",fontSize:12,fontWeight:900,flexShrink:0}}>{p.price.toFixed(2)} €</span>
                 }
               </button>
             );
@@ -15385,7 +15397,7 @@ function VaultTab() {
         <div className="card" style={{display:"flex",flexDirection:"column",gap:14}}>
           <div className="field">
             <label className="lbl">{t.vaultName||"Nom du document"} *</label>
-            <input value={formName} onChange={e=>setFormName(e.target.value)} placeholder="ex : Jugement du 12/03/2023" className={shakeDocName?"duvia-shake":""} />
+            <input value={formName} onChange={e=>setFormName(e.target.value)} placeholder={t.vaultDocNamePh||"ex : Jugement du 12/03/2023"} className={shakeDocName?"duvia-shake":""} />
           </div>
           <div className="row" style={{alignItems:"stretch"}}>
             <div className="field" style={{flex:2,position:"relative",marginBottom:0}}>
@@ -15415,7 +15427,7 @@ function VaultTab() {
           <div className="field">
             <label className="lbl">{t.vaultNotes||"Notes"}</label>
             <textarea value={formNotes} onChange={e=>setFormNotes(e.target.value)}
-              placeholder="ex : Version signée par les deux parties..."
+              placeholder={t.vaultNotesPh||"ex : Version signée par les deux parties..."}
               style={{background:C.inp,border:`1.5px solid ${C.bor}`,color:C.txt,borderRadius:10,padding:"11px 13px",fontFamily:"inherit",fontSize:14,width:"100%",outline:"none",resize:"vertical",minHeight:72}} />
           </div>
           <div className="field">
@@ -15498,7 +15510,7 @@ function VaultTab() {
       {prem && (
         <div style={{marginBottom:14}}>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.mut,fontWeight:700,marginBottom:4}}>
-            <span>Stockage utilisé</span>
+            <span>{t.vaultStorageUsed||"Stockage utilisé"}</span>
             <span>{totalSizeBytes < 1024*1024 ? `${(totalSizeBytes/1024).toFixed(0)} Ko` : totalSizeMB + " Mo"} / {VAULT_MAX_LABEL}</span>
           </div>
           <div style={{height:6,background:C.bor,borderRadius:4,overflow:"hidden"}}>
@@ -15574,7 +15586,7 @@ function VaultTab() {
         <div style={{textAlign:"center",padding:"48px 20px",color:C.mut}}>
           <div style={{fontSize:44,marginBottom:12}}>🗄️</div>
           <div style={{fontSize:14,fontWeight:700}}>{t.vaultEmpty||"Aucun document enregistré."}</div>
-          {!isObs && <div style={{fontSize:12,marginTop:8,opacity:.7}}>Appuyez sur + pour ajouter un premier document</div>}
+          {!isObs && <div style={{fontSize:12,marginTop:8,opacity:.7}}>{t.vaultEmptyHint||"Appuyez sur + pour ajouter un premier document"}</div>}
         </div>
       )}
 
