@@ -535,6 +535,7 @@ const fr = {
     parentLeftOn:"A quitté la famille le {date}",
     parentLeftOnAt:"S'est retiré(e) de la famille le {date} à {time}",
     dismiss:"Retirer",
+    dismissLeftConfirm:"Retirer {name} de la vue ?\n\nCe parent a déjà quitté la famille. L'historique reste conservé.",
     maxParentsReached:"Maximum 2 parents atteint",
     backupTitle:"Sauvegarde de mes données",
     backupDesc:"Exportez un fichier .duvia contenant votre configuration famille, calendrier de garde et calendrier scolaire. Utile en cas de crash ou pour le service client Duvia.",

@@ -483,6 +483,7 @@ const de = {
     parentLeftOn:"Hat die Familie am {date} verlassen",
     parentLeftOnAt:"Hat die Familie am {date} um {time} verlassen",
     dismiss:"Entfernen",
+    dismissLeftConfirm:"{name} aus der Ansicht entfernen?\n\nDieser Elternteil hat die Familie bereits verlassen. Der Verlauf bleibt erhalten.",
     maxParentsReached:"Maximal 2 Elternteile erreicht",
     backupTitle:"Sicherung meiner Daten",
     backupDesc:"Exportieren Sie eine .duvia-Datei mit Ihrer Familienkonfiguration, dem Sorgerechtskalender und dem Schulkalender. Nützlich bei Abstürzen oder für den Duvia-Kundendienst.",

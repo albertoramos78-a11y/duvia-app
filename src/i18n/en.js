@@ -485,6 +485,7 @@ const en = {
     parentLeftOn:"Left the family on {date}",
     parentLeftOnAt:"Left the family on {date} at {time}",
     dismiss:"Remove",
+    dismissLeftConfirm:"Remove {name} from view?\n\nThis parent has already left the family. History is preserved.",
     maxParentsReached:"Maximum 2 parents reached",
     backupTitle:"My data backup",
     backupDesc:"Export a .duvia file containing your family setup, custody calendar and school calendar. Useful in case of a crash or for Duvia customer service.",

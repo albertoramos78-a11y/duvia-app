@@ -483,6 +483,7 @@ const pt = {
     parentLeftOn:"Saiu da família a {date}",
     parentLeftOnAt:"Saiu da família a {date} às {time}",
     dismiss:"Remover",
+    dismissLeftConfirm:"Remover {name} da vista?\n\nEste pai já saiu da família. O histórico é preservado.",
     maxParentsReached:"Máximo de 2 pais atingido",
     backupTitle:"Cópia de segurança dos meus dados",
     backupDesc:"Exporte um ficheiro .duvia com a configuração da sua família, calendário de guarda e calendário escolar. Útil em caso de falha ou para o serviço de apoio ao cliente Duvia.",
