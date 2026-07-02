@@ -5836,7 +5836,7 @@ function StepLang({lang,setLang}) {
 
 // ─── PRÉFÉRENCES ──────────────────────────────────────────────────────────────
 function PrefsTab() {
-  const {C,t,lang,setLang,sub,setConfirmDeleteAccount,user,currency,setCurrency,weekStart,setWeekStart} = useApp();
+  const {C,t,lang,setLang,sub,setConfirmDeleteAccount,user,currency,setCurrency,weekStart,setWeekStart,cfg,setCfg,history,familySync,addHist} = useApp();
 
   // ── Prefs state (chargé depuis user_metadata) ─────────────────────────────
   const [emailMsg,    setEmailMsg]    = useState(true);
@@ -5875,6 +5875,71 @@ function PrefsTab() {
   async function savePref(key, val){
     try{ await supabase.auth.updateUser({data:{[key]:val}}); }
     catch(e){ console.warn("pref save failed",e); }
+  }
+
+  // ── Sauvegarde .duvia : export/import (local + cloud) ─────────────────
+  const [backupImportErr, setBackupImportErr] = useState("");
+  const [backupImportOk,  setBackupImportOk]  = useState("");
+  const [backupImporting, setBackupImporting] = useState(false);
+  const backupFileInputRef = useRef(null);
+  const [cloudBackupEnabled, setCloudBackupEnabled] = useState(true);
+  useEffect(() => {
+    supabase.auth.getUser().then(({data}) => {
+      const v = data?.user?.user_metadata?.cloud_backup_enabled;
+      setCloudBackupEnabled(v !== false);
+    });
+  }, []);
+  async function toggleCloudBackup(next) {
+    setCloudBackupEnabled(next);
+    try { await supabase.auth.updateUser({ data: { cloud_backup_enabled: next } }); }
+    catch(e) { console.warn("[Duvia] cloud backup toggle failed:", e); }
+  }
+  function handleExportBackup() {
+    const payload = buildDuviaBackup({
+      cfg, history,
+      familyId: familySync?.familyId,
+      lang, userEmail: user?.email,
+    });
+    const ok = downloadDuviaBackup(payload, makeBackupFilename());
+    if (ok) {
+      try { addHist?.({action:t.backupExported||"Sauvegarde exportée", type:"backup"}); } catch {}
+    } else {
+      setBackupImportErr(t.backupExportFailed || "Échec de l'export. Réessayez.");
+    }
+  }
+  async function handleImportBackupFile(file) {
+    setBackupImportErr(""); setBackupImportOk("");
+    if (!file) return;
+    setBackupImporting(true);
+    try {
+      const parsed = await readDuviaBackupFile(file);
+      const currentFid = familySync?.familyId || null;
+      const backupFid  = parsed._familyId || null;
+      if (backupFid && currentFid && backupFid !== currentFid) {
+        const okOther = window.confirm(t.backupOtherFamilyConfirm || "⚠️ Ce fichier provient d'une AUTRE famille.\n\nContinuer ? Vos données actuelles seront écrasées.");
+        if (!okOther) { setBackupImporting(false); return; }
+      }
+      const okReplace = window.confirm(t.backupReplaceConfirm || "Cette opération va REMPLACER votre configuration famille, calendrier de garde et calendrier scolaire.\n\nUne sauvegarde automatique de vos données actuelles sera téléchargée avant.\n\nContinuer ?");
+      if (!okReplace) { setBackupImporting(false); return; }
+      const safety = buildDuviaBackup({ cfg, history, familyId: familySync?.familyId, lang, userEmail: user?.email });
+      downloadDuviaBackup(safety, makeBackupFilename("duvia-backup-auto-avant-import"));
+      setCfg(prev => applyDuviaBackupToCfg(prev, parsed));
+      try { addHist?.({action:t.backupImported||"Sauvegarde importée", detail: parsed._exportedAt || "", type:"backup"}); } catch {}
+      setBackupImportOk(t.backupImportOk || "Sauvegarde importée avec succès.");
+    } catch (e) {
+      const codes = {
+        no_file: t.backupErrNoFile || "Aucun fichier.",
+        file_too_large: t.backupErrTooLarge || "Fichier trop volumineux (>25 Mo).",
+        invalid_json: t.backupErrInvalidJson || "Fichier illisible (JSON invalide).",
+        not_duvia_file: t.backupErrNotDuvia || "Ce fichier n'est pas une sauvegarde Duvia.",
+        invalid_version: t.backupErrInvalidVer || "Version de sauvegarde inconnue.",
+        version_too_new: t.backupErrVerTooNew || "Cette sauvegarde a été créée avec une version plus récente de Duvia. Mettez à jour l'application.",
+      };
+      setBackupImportErr(codes[e?.message] || (t.backupImportFailed || "Impossible d'importer le fichier."));
+    } finally {
+      setBackupImporting(false);
+      if (backupFileInputRef.current) backupFileInputRef.current.value = "";
+    }
   }
 
 
@@ -6094,6 +6159,57 @@ function PrefsTab() {
         {localDataCleared && (
           <div style={{fontSize:12,color:C.grn,fontWeight:700,marginTop:6,paddingLeft:4}}>✅ Données locales supprimées</div>
         )}
+      </div>
+
+      {/* ── Sauvegarde des données (.duvia) ── */}
+      <div className="card" style={{marginBottom:14}}>
+        <div className="sec">💾 {t.backupTitle||"Sauvegarde de mes données"}</div>
+        <div style={{fontSize:12,color:C.mut,marginBottom:12,lineHeight:1.5}}>
+          {t.backupDesc||"Exportez un fichier .duvia contenant votre configuration famille, calendrier de garde et calendrier scolaire. Utile en cas de crash ou pour le service client Duvia."}
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <button
+            onClick={handleExportBackup}
+            style={{padding:"11px 16px",background:"transparent",color:C.vio,border:`1.5px solid ${C.vio}`,fontSize:13,borderRadius:10,cursor:"pointer",fontWeight:700}}>
+            📤 {t.backupExport||"Exporter mes données"}
+          </button>
+          <input
+            ref={backupFileInputRef}
+            type="file"
+            accept=".duvia,application/json,.json"
+            onChange={e => handleImportBackupFile(e.target.files?.[0])}
+            style={{display:"none"}}
+          />
+          <button
+            onClick={() => backupFileInputRef.current?.click()}
+            disabled={backupImporting}
+            style={{padding:"11px 16px",background:"transparent",color:C.blu,border:`1.5px solid ${C.blu}`,fontSize:13,borderRadius:10,cursor:backupImporting?"not-allowed":"pointer",fontWeight:700,opacity:backupImporting?.6:1}}>
+            {backupImporting ? "…" : `📥 ${t.backupImport||"Importer une sauvegarde"}`}
+          </button>
+        </div>
+        {backupImportErr && (
+          <div style={{marginTop:10,background:`${C.red}10`,border:`1px solid ${C.red}44`,borderRadius:10,padding:"8px 12px",fontSize:12,color:C.red}}>
+            {backupImportErr}
+          </div>
+        )}
+        {backupImportOk && (
+          <div style={{marginTop:10,background:`${C.grn}10`,border:`1px solid ${C.grn}44`,borderRadius:10,padding:"8px 12px",fontSize:12,color:C.grn}}>
+            ✅ {backupImportOk}
+          </div>
+        )}
+        <div style={{marginTop:16,paddingTop:16,borderTop:`1px solid ${C.bor}`}}>
+          <label style={{display:"flex",alignItems:"center",gap:12,cursor:"pointer"}}>
+            <input type="checkbox" checked={cloudBackupEnabled}
+              onChange={e => toggleCloudBackup(e.target.checked)}
+              style={{width:18,height:18,cursor:"pointer",accentColor:C.vio}} />
+            <div style={{flex:1}}>
+              <div style={{fontSize:13,fontWeight:700,color:C.txt}}>☁️ {t.cloudBackupLabel||"Sauvegarde cloud automatique"}</div>
+              <div style={{fontSize:11,color:C.mut,marginTop:3,lineHeight:1.5}}>
+                {t.cloudBackupDesc||"Une copie chiffrée de vos données est conservée 30 jours sur nos serveurs pour permettre au support Duvia de restaurer votre compte en cas de problème."}
+              </div>
+            </div>
+          </label>
+        </div>
       </div>
 
       {/* ── Zone de danger ── */}
@@ -12331,73 +12447,29 @@ function AdminTab() {
 
 
 function PremiumTab() {
-  const {C,t,sub,setSub,st,days,perms,setMenuTab,setShowMenu,users,user,setConfirmDeleteAccount,cfg,setCfg,history,familySync,addHist,lang} = useApp();
+  const {C,t,sub,setSub,st,days,perms,setMenuTab,setShowMenu,users,user,setConfirmDeleteAccount} = useApp();
   const [confirm,setConfirm]=useState(false);
+  const [confirmCancelSub,setConfirmCancelSub] = useState(false);
   const isPremium=st==="premium"||sub._admin;
 
-  // ── Sauvegarde .duvia : export/import (local + cloud) ─────────────────
-  const [backupImportErr, setBackupImportErr] = useState("");
-  const [backupImportOk,  setBackupImportOk]  = useState("");
-  const [backupImporting, setBackupImporting] = useState(false);
-  const backupFileInputRef = useRef(null);
-  const [cloudBackupEnabled, setCloudBackupEnabled] = useState(true);
-  useEffect(() => {
-    supabase.auth.getUser().then(({data}) => {
-      const v = data?.user?.user_metadata?.cloud_backup_enabled;
-      setCloudBackupEnabled(v !== false);
-    });
-  }, []);
-  async function toggleCloudBackup(next) {
-    setCloudBackupEnabled(next);
-    try { await supabase.auth.updateUser({ data: { cloud_backup_enabled: next } }); }
-    catch(e) { console.warn("[Duvia] cloud backup toggle failed:", e); }
+  // ── Annuler l'abonnement (fin de période) ────────────────────────────
+  // Ne coupe pas le premium immédiatement : marque cancelAtPeriodEnd=true,
+  // le premium reste actif jusqu'à la date de fin de période. Comportement
+  // standard Netflix / Spotify → rassure l'utilisateur, augmente la conversion.
+  function computePeriodEnd() {
+    if (!sub?.premiumSince) return null;
+    const d = new Date(sub.premiumSince);
+    if (sub.cycle === "yearly") d.setFullYear(d.getFullYear() + 1);
+    else d.setMonth(d.getMonth() + 1);
+    return d;
   }
-  function handleExportBackup() {
-    const payload = buildDuviaBackup({
-      cfg, history,
-      familyId: familySync?.familyId,
-      lang, userEmail: user?.email,
-    });
-    const ok = downloadDuviaBackup(payload, makeBackupFilename());
-    if (ok) {
-      try { addHist?.({action:t.backupExported||"Sauvegarde exportée", type:"backup"}); } catch {}
-    } else {
-      setBackupImportErr(t.backupExportFailed || "Échec de l'export. Réessayez.");
-    }
+  function handleCancelSubscription() {
+    const end = computePeriodEnd();
+    setSub(s => ({ ...s, cancelAtPeriodEnd: true, cancelledAt: new Date().toISOString(), periodEnd: end ? end.toISOString() : null }));
+    setConfirmCancelSub(false);
   }
-  async function handleImportBackupFile(file) {
-    setBackupImportErr(""); setBackupImportOk("");
-    if (!file) return;
-    setBackupImporting(true);
-    try {
-      const parsed = await readDuviaBackupFile(file);
-      const currentFid = familySync?.familyId || null;
-      const backupFid  = parsed._familyId || null;
-      if (backupFid && currentFid && backupFid !== currentFid) {
-        const okOther = window.confirm(t.backupOtherFamilyConfirm || "⚠️ Ce fichier provient d'une AUTRE famille.\n\nContinuer ? Vos données actuelles seront écrasées.");
-        if (!okOther) { setBackupImporting(false); return; }
-      }
-      const okReplace = window.confirm(t.backupReplaceConfirm || "Cette opération va REMPLACER votre configuration famille, calendrier de garde et calendrier scolaire.\n\nUne sauvegarde automatique de vos données actuelles sera téléchargée avant.\n\nContinuer ?");
-      if (!okReplace) { setBackupImporting(false); return; }
-      const safety = buildDuviaBackup({ cfg, history, familyId: familySync?.familyId, lang, userEmail: user?.email });
-      downloadDuviaBackup(safety, makeBackupFilename("duvia-backup-auto-avant-import"));
-      setCfg(prev => applyDuviaBackupToCfg(prev, parsed));
-      try { addHist?.({action:t.backupImported||"Sauvegarde importée", detail: parsed._exportedAt || "", type:"backup"}); } catch {}
-      setBackupImportOk(t.backupImportOk || "Sauvegarde importée avec succès.");
-    } catch (e) {
-      const codes = {
-        no_file: t.backupErrNoFile || "Aucun fichier.",
-        file_too_large: t.backupErrTooLarge || "Fichier trop volumineux (>25 Mo).",
-        invalid_json: t.backupErrInvalidJson || "Fichier illisible (JSON invalide).",
-        not_duvia_file: t.backupErrNotDuvia || "Ce fichier n'est pas une sauvegarde Duvia.",
-        invalid_version: t.backupErrInvalidVer || "Version de sauvegarde inconnue.",
-        version_too_new: t.backupErrVerTooNew || "Cette sauvegarde a été créée avec une version plus récente de Duvia. Mettez à jour l'application.",
-      };
-      setBackupImportErr(codes[e?.message] || (t.backupImportFailed || "Impossible d'importer le fichier."));
-    } finally {
-      setBackupImporting(false);
-      if (backupFileInputRef.current) backupFileInputRef.current.value = "";
-    }
+  function handleResumeSubscription() {
+    setSub(s => ({ ...s, cancelAtPeriodEnd: false, cancelledAt: null }));
   }
 
 
@@ -12499,6 +12571,58 @@ function PremiumTab() {
         </div>
       )}
 
+      {/* Gestion abonnement : annuler / reprendre (Netflix-style, fin de période) */}
+      {isPremium && !sub._admin && !isBeta() && (
+        <div className="card" style={{marginBottom:14}}>
+          {!sub.cancelAtPeriodEnd ? (
+            <>
+              <div className="sec">🎫 {t.subManage||"Gérer mon abonnement"}</div>
+              <div style={{fontSize:12,color:C.mut,marginBottom:12,lineHeight:1.5}}>
+                {t.subCancelDesc||"Vous pouvez annuler à tout moment. Votre abonnement restera actif jusqu'à la fin de la période payée, puis vous repasserez automatiquement en Freemium. Vos données sont conservées."}
+              </div>
+              <button onClick={()=>setConfirmCancelSub(true)}
+                style={{padding:"10px 16px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13,borderRadius:10,cursor:"pointer",fontWeight:700}}>
+                ↩️ {t.subCancel||"Annuler mon abonnement"}
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="sec" style={{color:C.yel}}>⏳ {t.subCancelledTitle||"Annulation programmée"}</div>
+              <div style={{fontSize:12,color:C.mut,marginBottom:12,lineHeight:1.5}}>
+                {(t.subCancelledDesc||"Votre abonnement restera actif jusqu'au {date}, puis vous repasserez en Freemium.").replace("{date}", sub.periodEnd ? new Date(sub.periodEnd).toLocaleDateString() : "—")}
+              </div>
+              <button onClick={handleResumeSubscription}
+                style={{padding:"10px 16px",background:C.vio,color:"#fff",border:"none",fontSize:13,borderRadius:10,cursor:"pointer",fontWeight:700}}>
+                ↻ {t.subResume||"Reprendre mon abonnement"}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Modal confirmation annulation */}
+      {confirmCancelSub && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:340,width:"100%",border:`1.5px solid ${C.bor}`,textAlign:"center"}}>
+            <div style={{fontSize:40,marginBottom:10}}>↩️</div>
+            <div style={{fontSize:16,fontWeight:900,color:C.txt,marginBottom:8}}>{t.subCancelConfirmTitle||"Annuler l'abonnement ?"}</div>
+            <div style={{fontSize:12,color:C.mut,lineHeight:1.6,marginBottom:20}}>
+              {(t.subCancelConfirmDesc||"Votre abonnement restera actif jusqu'au {date}. Vous repasserez ensuite en Freemium. Vos données seront conservées.").replace("{date}", (()=>{const e=computePeriodEnd();return e?e.toLocaleDateString():"—";})())}
+            </div>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setConfirmCancelSub(false)}
+                style={{flex:1,height:44,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                {t.no||"Non"}
+              </button>
+              <button onClick={handleCancelSubscription}
+                style={{flex:1,height:44,background:C.vio,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13,cursor:"pointer"}}>
+                {t.subCancelYes||"Confirmer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Pricing — verrouillé pendant la bêta */}
       {!isPremium&&(
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
@@ -12570,62 +12694,6 @@ function PremiumTab() {
           )}
         </div>
       )}
-
-      {/* Sauvegarde des données (.duvia) */}
-      <div className="card" style={{marginBottom:14}}>
-        <div className="sec">💾 {t.backupTitle||"Sauvegarde de mes données"}</div>
-        <div style={{fontSize:12,color:C.mut,marginBottom:12,lineHeight:1.5}}>
-          {t.backupDesc||"Exportez un fichier .duvia contenant votre configuration famille, calendrier de garde et calendrier scolaire. Utile en cas de crash ou pour le service client Duvia."}
-        </div>
-        <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          <button
-            onClick={handleExportBackup}
-            style={{padding:"11px 16px",background:"transparent",color:C.vio,border:`1.5px solid ${C.vio}`,fontSize:13,borderRadius:10,cursor:"pointer",fontWeight:700}}>
-            📤 {t.backupExport||"Exporter mes données"}
-          </button>
-          <input
-            ref={backupFileInputRef}
-            type="file"
-            accept=".duvia,application/json,.json"
-            onChange={e => handleImportBackupFile(e.target.files?.[0])}
-            style={{display:"none"}}
-          />
-          <button
-            onClick={() => backupFileInputRef.current?.click()}
-            disabled={backupImporting}
-            style={{padding:"11px 16px",background:"transparent",color:C.blu,border:`1.5px solid ${C.blu}`,fontSize:13,borderRadius:10,cursor:backupImporting?"not-allowed":"pointer",fontWeight:700,opacity:backupImporting?.6:1}}>
-            {backupImporting ? "…" : `📥 ${t.backupImport||"Importer une sauvegarde"}`}
-          </button>
-        </div>
-        {backupImportErr && (
-          <div style={{marginTop:10,background:`${C.red}10`,border:`1px solid ${C.red}44`,borderRadius:10,padding:"8px 12px",fontSize:12,color:C.red}}>
-            {backupImportErr}
-          </div>
-        )}
-        {backupImportOk && (
-          <div style={{marginTop:10,background:`${C.grn}10`,border:`1px solid ${C.grn}44`,borderRadius:10,padding:"8px 12px",fontSize:12,color:C.grn}}>
-            ✅ {backupImportOk}
-          </div>
-        )}
-
-        {/* Cloud backup toggle (RGPD opt-out) */}
-        <div style={{marginTop:16,paddingTop:16,borderTop:`1px solid ${C.bor}`}}>
-          <label style={{display:"flex",alignItems:"center",gap:12,cursor:"pointer"}}>
-            <input
-              type="checkbox"
-              checked={cloudBackupEnabled}
-              onChange={e => toggleCloudBackup(e.target.checked)}
-              style={{width:18,height:18,cursor:"pointer",accentColor:C.vio}}
-            />
-            <div style={{flex:1}}>
-              <div style={{fontSize:13,fontWeight:700,color:C.txt}}>☁️ {t.cloudBackupLabel||"Sauvegarde cloud automatique"}</div>
-              <div style={{fontSize:11,color:C.mut,marginTop:3,lineHeight:1.5}}>
-                {t.cloudBackupDesc||"Une copie chiffrée de vos données est conservée 30 jours sur nos serveurs pour permettre au support Duvia de restaurer votre compte en cas de problème."}
-              </div>
-            </div>
-          </label>
-        </div>
-      </div>
 
       {/* Supprimer le compte */}
       {user?.role !== "admin" && (
