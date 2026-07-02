@@ -5857,6 +5857,14 @@ function PrefsTab() {
   const [emailErr,setEmailErr]     = useState("");
   const [emailOk,setEmailOk]       = useState("");
   const [savingEmail,setSavingEmail] = useState(false);
+  const [customerId, setCustomerId] = useState("");
+  const [cidCopied,  setCidCopied]  = useState(false);
+
+  useEffect(()=>{
+    supabase.from("customer_ids").select("customer_id").maybeSingle().then(({data})=>{
+      if (data?.customer_id) setCustomerId(data.customer_id);
+    });
+  },[]);
 
   useEffect(()=>{
     supabase.auth.getUser().then(({data})=>{
@@ -6136,6 +6144,33 @@ function PrefsTab() {
             )}
           </>
         )}
+      </div>
+
+      {/* ── Mon identifiant Duvia ── */}
+      <div style={{marginBottom:28}}>
+        <div className="sec">🪪 {t.myDuviaId||"Mon identifiant Duvia"}</div>
+        <div style={{...row,display:"flex",alignItems:"center",gap:10}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:16,fontWeight:800,color:C.vio,fontFamily:"monospace",letterSpacing:".05em"}}>
+              {customerId || "…"}
+            </div>
+            <div style={{fontSize:11,color:C.mut,marginTop:2}}>
+              {t.myDuviaIdHint||"À communiquer au support Duvia en cas de problème."}
+            </div>
+          </div>
+          <button
+            onClick={()=>{
+              if (!customerId) return;
+              navigator.clipboard?.writeText(customerId).then(
+                ()=>{ setCidCopied(true); setTimeout(()=>setCidCopied(false),1800); },
+                ()=>{}
+              );
+            }}
+            disabled={!customerId}
+            style={{padding:"8px 12px",background:cidCopied?C.grn:C.vio,color:"#fff",border:"none",borderRadius:8,fontSize:12,fontWeight:700,cursor:customerId?"pointer":"not-allowed",flexShrink:0}}>
+            {cidCopied ? `✅ ${t.copied||"Copié"}` : `📋 ${t.copy||"Copier"}`}
+          </button>
+        </div>
       </div>
 
       {/* ── Export RGPD ── */}
