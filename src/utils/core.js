@@ -284,7 +284,10 @@ export function insertValidatedParent(parents, member) {
     ...existing,
     userId: member.userId,
     name,
-    email: existing.email || member.email || "",
+    // 🔧 Le vrai email/téléphone du compte Supabase de l'invité PRIME sur
+    // l'ancien saisi par l'inviteur (souvent différent ou pas encore utilisé).
+    // Sans ça, la messagerie ne pouvait pas matcher l'invité à son compte.
+    email: member.email || existing.email || "",
     gender: member.gender || existing.gender || "M",
     color: existing.color || PARENT_COLORS[idx % PARENT_COLORS.length],
     inviteStatus: "accepted",
@@ -299,7 +302,14 @@ export function insertValidatedParent(parents, member) {
 export function reconcileOwnParentSlot(parents, me, uid) {
   if (!me || me.role !== "parent") return null;
   const out = [...(parents || [])];
-  let slot = out.findIndex(p => p && (p.userId === uid || (p.email && p.email === me.email)));
+  let slot = out.findIndex(p => p && (
+    p.userId === uid ||
+    (p.email && me.email && p.email.toLowerCase() === me.email.toLowerCase()) ||
+    // 🔧 Fallback téléphone : si l'invité s'est inscrit par téléphone (email
+    // synthétique tel...@phone.duvia.app), on retrouve son slot par le numéro
+    // normalisé (ex : "06 12 34 56 78" ↔ "33612345678").
+    (p.phone && me.phone && normalizePhoneDigits(p.phone) && normalizePhoneDigits(p.phone) === normalizePhoneDigits(me.phone))
+  ));
   if (slot < 0 && typeof me.parentIdx === "number") slot = me.parentIdx;
   if (slot < 0) return null;
   const existing = out[slot] || {};
@@ -309,7 +319,8 @@ export function reconcileOwnParentSlot(parents, me, uid) {
   out[slot] = {
     ...existing, userId: uid,
     name: me.name,
-    email: existing.email || me.email || "",
+    // 🔧 Cf. insertValidatedParent : le vrai email prime sur l'ancien.
+    email: me.email || existing.email || "",
     gender: existing.gender || me.gender || "M",
     phone: existing.phone || me.phone || "",
     inviteStatus: existing.inviteStatus || "accepted",
