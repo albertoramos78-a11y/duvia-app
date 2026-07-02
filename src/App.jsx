@@ -6744,7 +6744,13 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           return (
             <div key={i} className="card" style={{marginBottom:12,borderColor:C.bor,borderStyle:"dashed",position:"relative"}}>
               <button
-                onClick={()=>removeParent&&removeParent(i)}
+                onClick={()=>{
+                  const label = p.name || p.email || t.guestLabel || "ce parent";
+                  const q = (t.dismissLeftConfirm || "Retirer {name} de la vue ?\n\nCe parent a déjà quitté la famille. L'historique reste conservé.").replace("{name}", label);
+                  if (window.confirm(q)) {
+                    setCfg(c => ({ ...c, parents: c.parents.filter((_, idx) => idx !== i) }));
+                  }
+                }}
                 aria-label={t.dismiss||"Retirer"}
                 title={t.dismiss||"Retirer"}
                 style={{position:"absolute",top:8,right:8,width:28,height:28,borderRadius:"50%",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,fontSize:16,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}
