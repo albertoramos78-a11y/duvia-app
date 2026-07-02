@@ -5836,7 +5836,7 @@ function StepLang({lang,setLang}) {
 
 // ─── PRÉFÉRENCES ──────────────────────────────────────────────────────────────
 function PrefsTab() {
-  const {C,t,lang,setLang,sub,setConfirmDeleteAccount,user,currency,setCurrency,weekStart,setWeekStart,cfg,setCfg,history,familySync,addHist} = useApp();
+  const {C,t,lang,setLang,sub,setConfirmDeleteAccount,user,currency,setCurrency,weekStart,setWeekStart} = useApp();
 
   // ── Prefs state (chargé depuis user_metadata) ─────────────────────────────
   const [emailMsg,    setEmailMsg]    = useState(true);
@@ -5875,91 +5875,6 @@ function PrefsTab() {
   async function savePref(key, val){
     try{ await supabase.auth.updateUser({data:{[key]:val}}); }
     catch(e){ console.warn("pref save failed",e); }
-  }
-
-  // ── Sauvegarde .duvia : export/import ─────────────────────────────────────
-  const [backupImportErr, setBackupImportErr] = useState("");
-  const [backupImportOk,  setBackupImportOk]  = useState("");
-  const [backupImporting, setBackupImporting] = useState(false);
-  const backupFileInputRef = useRef(null);
-
-  // Toggle cloud backup (opt-out RGPD) — chargé depuis user_metadata
-  const [cloudBackupEnabled, setCloudBackupEnabled] = useState(true);
-  useEffect(() => {
-    supabase.auth.getUser().then(({data}) => {
-      const v = data?.user?.user_metadata?.cloud_backup_enabled;
-      setCloudBackupEnabled(v !== false); // défaut true
-    });
-  }, []);
-  async function toggleCloudBackup(next) {
-    setCloudBackupEnabled(next);
-    try { await supabase.auth.updateUser({ data: { cloud_backup_enabled: next } }); }
-    catch(e) { console.warn("[Duvia] cloud backup toggle failed:", e); }
-  }
-
-  function handleExportBackup() {
-    const payload = buildDuviaBackup({
-      cfg,
-      history,
-      familyId: familySync?.familyId,
-      lang,
-      userEmail: user?.email,
-    });
-    const ok = downloadDuviaBackup(payload, makeBackupFilename());
-    if (ok) {
-      try { addHist?.({action:t.backupExported||"Sauvegarde exportée", type:"backup"}); } catch {}
-    } else {
-      setBackupImportErr(t.backupExportFailed || "Échec de l'export. Réessayez.");
-    }
-  }
-
-  async function handleImportBackupFile(file) {
-    setBackupImportErr(""); setBackupImportOk("");
-    if (!file) return;
-    setBackupImporting(true);
-    try {
-      const parsed = await readDuviaBackupFile(file);
-      // Détection famille différente → confirmation supplémentaire
-      const currentFid = familySync?.familyId || null;
-      const backupFid  = parsed._familyId || null;
-      if (backupFid && currentFid && backupFid !== currentFid) {
-        const okOther = window.confirm(
-          (t.backupOtherFamilyConfirm ||
-           "⚠️ Ce fichier provient d'une AUTRE famille.\n\nContinuer ? Vos données actuelles seront écrasées.")
-        );
-        if (!okOther) { setBackupImporting(false); return; }
-      }
-      // Confirmation principale
-      const okReplace = window.confirm(
-        (t.backupReplaceConfirm ||
-         "Cette opération va REMPLACER votre configuration famille, calendrier de garde et calendrier scolaire.\n\nUne sauvegarde automatique de vos données actuelles sera téléchargée avant.\n\nContinuer ?")
-      );
-      if (!okReplace) { setBackupImporting(false); return; }
-      // Backup auto AVANT écrasement
-      const safety = buildDuviaBackup({
-        cfg, history,
-        familyId: familySync?.familyId,
-        lang, userEmail: user?.email,
-      });
-      downloadDuviaBackup(safety, makeBackupFilename("duvia-backup-auto-avant-import"));
-      // Application
-      setCfg(prev => applyDuviaBackupToCfg(prev, parsed));
-      try { addHist?.({action:t.backupImported||"Sauvegarde importée", detail: parsed._exportedAt || "", type:"backup"}); } catch {}
-      setBackupImportOk(t.backupImportOk || "Sauvegarde importée avec succès.");
-    } catch (e) {
-      const codes = {
-        no_file: t.backupErrNoFile || "Aucun fichier.",
-        file_too_large: t.backupErrTooLarge || "Fichier trop volumineux (>25 Mo).",
-        invalid_json: t.backupErrInvalidJson || "Fichier illisible (JSON invalide).",
-        not_duvia_file: t.backupErrNotDuvia || "Ce fichier n'est pas une sauvegarde Duvia.",
-        invalid_version: t.backupErrInvalidVer || "Version de sauvegarde inconnue.",
-        version_too_new: t.backupErrVerTooNew || "Cette sauvegarde a été créée avec une version plus récente de Duvia. Mettez à jour l'application.",
-      };
-      setBackupImportErr(codes[e?.message] || (t.backupImportFailed || "Impossible d'importer le fichier."));
-    } finally {
-      setBackupImporting(false);
-      if (backupFileInputRef.current) backupFileInputRef.current.value = "";
-    }
   }
 
 
@@ -12416,9 +12331,75 @@ function AdminTab() {
 
 
 function PremiumTab() {
-  const {C,t,sub,setSub,st,days,perms,setMenuTab,setShowMenu,users,user,setConfirmDeleteAccount} = useApp();
+  const {C,t,sub,setSub,st,days,perms,setMenuTab,setShowMenu,users,user,setConfirmDeleteAccount,cfg,setCfg,history,familySync,addHist,lang} = useApp();
   const [confirm,setConfirm]=useState(false);
   const isPremium=st==="premium"||sub._admin;
+
+  // ── Sauvegarde .duvia : export/import (local + cloud) ─────────────────
+  const [backupImportErr, setBackupImportErr] = useState("");
+  const [backupImportOk,  setBackupImportOk]  = useState("");
+  const [backupImporting, setBackupImporting] = useState(false);
+  const backupFileInputRef = useRef(null);
+  const [cloudBackupEnabled, setCloudBackupEnabled] = useState(true);
+  useEffect(() => {
+    supabase.auth.getUser().then(({data}) => {
+      const v = data?.user?.user_metadata?.cloud_backup_enabled;
+      setCloudBackupEnabled(v !== false);
+    });
+  }, []);
+  async function toggleCloudBackup(next) {
+    setCloudBackupEnabled(next);
+    try { await supabase.auth.updateUser({ data: { cloud_backup_enabled: next } }); }
+    catch(e) { console.warn("[Duvia] cloud backup toggle failed:", e); }
+  }
+  function handleExportBackup() {
+    const payload = buildDuviaBackup({
+      cfg, history,
+      familyId: familySync?.familyId,
+      lang, userEmail: user?.email,
+    });
+    const ok = downloadDuviaBackup(payload, makeBackupFilename());
+    if (ok) {
+      try { addHist?.({action:t.backupExported||"Sauvegarde exportée", type:"backup"}); } catch {}
+    } else {
+      setBackupImportErr(t.backupExportFailed || "Échec de l'export. Réessayez.");
+    }
+  }
+  async function handleImportBackupFile(file) {
+    setBackupImportErr(""); setBackupImportOk("");
+    if (!file) return;
+    setBackupImporting(true);
+    try {
+      const parsed = await readDuviaBackupFile(file);
+      const currentFid = familySync?.familyId || null;
+      const backupFid  = parsed._familyId || null;
+      if (backupFid && currentFid && backupFid !== currentFid) {
+        const okOther = window.confirm(t.backupOtherFamilyConfirm || "⚠️ Ce fichier provient d'une AUTRE famille.\n\nContinuer ? Vos données actuelles seront écrasées.");
+        if (!okOther) { setBackupImporting(false); return; }
+      }
+      const okReplace = window.confirm(t.backupReplaceConfirm || "Cette opération va REMPLACER votre configuration famille, calendrier de garde et calendrier scolaire.\n\nUne sauvegarde automatique de vos données actuelles sera téléchargée avant.\n\nContinuer ?");
+      if (!okReplace) { setBackupImporting(false); return; }
+      const safety = buildDuviaBackup({ cfg, history, familyId: familySync?.familyId, lang, userEmail: user?.email });
+      downloadDuviaBackup(safety, makeBackupFilename("duvia-backup-auto-avant-import"));
+      setCfg(prev => applyDuviaBackupToCfg(prev, parsed));
+      try { addHist?.({action:t.backupImported||"Sauvegarde importée", detail: parsed._exportedAt || "", type:"backup"}); } catch {}
+      setBackupImportOk(t.backupImportOk || "Sauvegarde importée avec succès.");
+    } catch (e) {
+      const codes = {
+        no_file: t.backupErrNoFile || "Aucun fichier.",
+        file_too_large: t.backupErrTooLarge || "Fichier trop volumineux (>25 Mo).",
+        invalid_json: t.backupErrInvalidJson || "Fichier illisible (JSON invalide).",
+        not_duvia_file: t.backupErrNotDuvia || "Ce fichier n'est pas une sauvegarde Duvia.",
+        invalid_version: t.backupErrInvalidVer || "Version de sauvegarde inconnue.",
+        version_too_new: t.backupErrVerTooNew || "Cette sauvegarde a été créée avec une version plus récente de Duvia. Mettez à jour l'application.",
+      };
+      setBackupImportErr(codes[e?.message] || (t.backupImportFailed || "Impossible d'importer le fichier."));
+    } finally {
+      setBackupImporting(false);
+      if (backupFileInputRef.current) backupFileInputRef.current.value = "";
+    }
+  }
+
 
   // ── Admin: build subscriber list from stored users ──────────────────────────
   // Each user may have sub data stored under user.sub (set at login/subscribe)
