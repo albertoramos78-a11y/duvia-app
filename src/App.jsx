@@ -13027,9 +13027,18 @@ function MessagingTab(){
       pMap[String(u.id)]={name:u.name,role:u.role||"parent",color:col,
         avatar:u.role==="observer"?(cfgAv||"👁️"):u.role==="child"?"🧒":(cfgAv||"👤")};
     }
-    // Détecter si le destinataire a un compte Supabase (= peut recevoir un message)
-    u._registered = (uidToLocal&&Array.from(uidToLocal.values()).map(String).includes(String(u.id)))
-      || (u.email && emailToUid&&emailToUid.has(u.email));
+    // 🔧 Détecter si le destinataire a un compte Supabase :
+    //   • par local_id (compte créé sur cet appareil)
+    //   • par email exact (Sissi a réutilisé son vrai email)
+    //   • par téléphone → email synthétique tel<num>@phone.duvia.app
+    //     (Isa s'est inscrite par téléphone : son "email" Supabase est synthétique)
+    let reg = (uidToLocal&&Array.from(uidToLocal.values()).map(String).includes(String(u.id)))
+      || (u.email && emailToUid&&emailToUid.has(String(u.email).toLowerCase()));
+    if (!reg && u.phone && emailToUid) {
+      const synthEmail = identifierToAuthEmail(u.phone);
+      if (synthEmail && emailToUid.has(synthEmail)) reg = true;
+    }
+    u._registered = reg;
   });
 
   // pMap par UID Supabase (les messages cloud utilisent des UIDs)
@@ -13187,8 +13196,20 @@ function MessagingTab(){
       if(emailToUid){
         for(const [email, uid] of emailToUid){
           if(uid===id){
-            const cfgP=(cfg.parents||[]).find(p=>p.email===email);
-            const cfgO=(cfg.observers||[]).find(o=>o.email===email);
+            const emailLc = String(email).toLowerCase();
+            // Match par email exact
+            let cfgP=(cfg.parents||[]).find(p=>p.email&&p.email.toLowerCase()===emailLc);
+            let cfgO=(cfg.observers||[]).find(o=>o.email&&o.email.toLowerCase()===emailLc);
+            // 🔧 Fallback : email synthétique tel<num>@phone.duvia.app
+            // → retrouver le membre par son téléphone normalisé
+            if(!cfgP && !cfgO && emailLc.startsWith("tel") && emailLc.includes("@phone.duvia.app")){
+              const m = emailLc.match(/^tel(\d+)/);
+              const digits = m ? m[1] : "";
+              if(digits){
+                cfgP=(cfg.parents||[]).find(p=>p.phone && normalizePhoneDigits(p.phone)===digits);
+                cfgO=(cfg.observers||[]).find(o=>o.phone && normalizePhoneDigits(o.phone)===digits);
+              }
+            }
             if(cfgP||cfgO) return (cfgP||cfgO).name;
           }
         }
