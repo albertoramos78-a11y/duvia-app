@@ -7303,7 +7303,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           <div onClick={()=>toggleChild(i)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:expandedChildren.has(i)?12:0,cursor:"pointer",userSelect:"none"}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
               <span style={{fontSize:11,fontWeight:800,color:C.vio,textTransform:"uppercase",letterSpacing:".06em"}}>{t.childN} {i+1}{ch.name.trim()?` — ${ch.name.trim()}`:""}</span>
-              <span style={{fontSize:16,color:C.mut,transition:"transform .2s",display:"inline-block",transform:expandedChildren.has(i)?"rotate(180deg)":"rotate(0deg)"}}>⌄</span>
+              <span style={{fontSize:16,color:C.ora,transition:"transform .2s",display:"inline-block",transform:expandedChildren.has(i)?"rotate(180deg)":"rotate(0deg)"}}>⌄</span>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
               {!isChild && <button onClick={e=>{e.stopPropagation();if(!window.confirm((t.removeFromFamilyConfirm||"Retirer {name} de la famille ?").replace("{name}",ch.name.trim()||`${t.childN||"l'enfant"} ${i+1}`))) return;removeChild(i);}} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12}}>{t.remove}</button>}
@@ -8410,7 +8410,7 @@ function StepDates() {
                   </div>
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                  <span style={{fontSize:14,color:C.mut,transition:"transform .2s",display:"inline-block",transform:isCollapsed?"rotate(0deg)":"rotate(180deg)"}}>⌄</span>
+                  <span style={{fontSize:14,color:C.ora,transition:"transform .2s",display:"inline-block",transform:isCollapsed?"rotate(0deg)":"rotate(180deg)"}}>⌄</span>
                   <button onClick={e=>{e.stopPropagation();if(!prem)return;setCfg(prev=>{const arr=[...(prev.specialDates?.custom||[])];arr.splice(i,1);return {...prev,specialDates:{...prev.specialDates,custom:arr}};});}} style={{padding:"3px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:11,borderRadius:6}}>✕</button>
                 </div>
               </div>
