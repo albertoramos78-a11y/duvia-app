@@ -9031,8 +9031,8 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
   function resetManualOverrides() {
     setCfg(c => ({...c, overrides: {}}));
     custodyShadow?.shadowClearAllOverrides?.();
-    addHist?.(t.tabCal || "Calendrier", "Réinitialisation des échanges manuels", "cal");
-    pushNotif?.("📅 Tous les échanges manuels ont été réinitialisés");
+    addHist?.(t.tabCal || "Calendrier", t.calResetHistLabel || "Manual exchanges reset", "cal");
+    pushNotif?.(t.calResetNotif || "📅 All manual exchanges have been reset");
     setConfirmResetOverrides(false);
   }
   const y=cur.getFullYear(),m=cur.getMonth();
@@ -9288,22 +9288,22 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
           {!isObs && !isChild && (
             <>
               <button onClick={()=>downloadICS(cfg)}
-                title="Exporter dans Google Calendar / Apple Calendar"
+                title={t.calExportICalTitle||"Export to Google Calendar / Apple Calendar"}
                 style={{display:"flex",alignItems:"center",gap:3,padding:"3px 7px",background:`${C.grn}15`,border:`1px solid ${C.grn}44`,borderRadius:6,cursor:"pointer",transition:"all .15s"}}>
                 <span style={{fontSize:10}}>📅</span>
                 <span style={{fontSize:9,color:C.grn,fontWeight:800}}>iCal</span>
               </button>
               <button onClick={()=>{ if(!premFull){ onUpgrade(); return; } generateCalendarPDF(); }}
-                title={premFull ? "Exporter le planning annuel en PDF" : "Réservé aux membres Premium abonnés"}
+                title={premFull ? (t.calExportPDFTitle||"Export the yearly schedule to PDF") : (t.premiumSubscribersOnly||"Reserved for Premium subscribers")}
                 style={{display:"flex",alignItems:"center",gap:3,padding:"3px 7px",background:premFull?`${C.vio}15`:`${C.mut}15`,border:`1px solid ${premFull?C.vio:C.mut}44`,borderRadius:6,cursor:"pointer",transition:"all .15s",opacity:premFull?1:.6}}>
                 <span style={{fontSize:10}}>{premFull?"📄":"🔒"}</span>
                 <span style={{fontSize:9,color:premFull?C.vio:C.mut,fontWeight:800}}>PDF</span>
               </button>
               <button onClick={()=>setConfirmResetOverrides(true)} disabled={overridesCount===0}
-                title="Réinitialiser tous les échanges manuels du calendrier"
+                title={t.calResetBtnTitle||"Reset all manual exchanges on the calendar"}
                 style={{display:"flex",alignItems:"center",gap:3,padding:"3px 7px",background:overridesCount?`${C.red}15`:`${C.mut}10`,border:`1px solid ${overridesCount?C.red:C.mut}33`,borderRadius:6,cursor:overridesCount?"pointer":"not-allowed",transition:"all .15s",opacity:overridesCount?1:.5}}>
                 <span style={{fontSize:10}}>🔄</span>
-                <span style={{fontSize:9,color:overridesCount?C.red:C.mut,fontWeight:800}}>Réinit.</span>
+                <span style={{fontSize:9,color:overridesCount?C.red:C.mut,fontWeight:800}}>{t.calResetBtnLabel||"Reset"}</span>
               </button>
             </>
           )}
@@ -9324,18 +9324,18 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:20}}
           onClick={()=>setConfirmResetOverrides(false)}>
           <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:16,padding:22,maxWidth:380,width:"100%",border:`1.5px solid ${C.red}44`}}>
-            <div style={{fontSize:16,fontWeight:900,color:C.txt,marginBottom:8}}>🔄 Réinitialiser les échanges manuels ?</div>
+            <div style={{fontSize:16,fontWeight:900,color:C.txt,marginBottom:8}}>{t.calResetTitle||"🔄 Reset manual exchanges?"}</div>
             <div style={{fontSize:13,color:C.mut,lineHeight:1.5,marginBottom:16}}>
-              {overridesCount} échange{overridesCount>1?"s":""} manuel{overridesCount>1?"s":""} sur le calendrier {overridesCount>1?"seront supprimés":"sera supprimé"}. Le planning reviendra à la règle de base (semaine A/B, garde exclusive...). Cette action est <b>irréversible</b>.
+              {(overridesCount>1?(t.calResetBodyOther||"{n} manual exchanges on the calendar will be deleted. The schedule will revert to the base rule (week A/B, exclusive custody…). This action is irreversible.").replace("{n}",overridesCount):(t.calResetBodyOne||"1 manual exchange on the calendar will be deleted. The schedule will revert to the base rule (week A/B, exclusive custody…). This action is irreversible."))}
             </div>
             <div style={{display:"flex",gap:10}}>
               <button onClick={()=>setConfirmResetOverrides(false)}
                 style={{flex:1,padding:"10px",background:C.sur,color:C.txt,border:`1.5px solid ${C.bor}`,borderRadius:10,fontWeight:700,fontSize:13,cursor:"pointer"}}>
-                Annuler
+                {t.cancel||"Cancel"}
               </button>
               <button onClick={resetManualOverrides}
                 style={{flex:1,padding:"10px",background:C.red,color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:13,cursor:"pointer"}}>
-                Réinitialiser
+                {t.calResetConfirm||"Reset"}
               </button>
             </div>
           </div>
