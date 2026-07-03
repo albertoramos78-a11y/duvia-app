@@ -4086,15 +4086,20 @@ export default function App() {
               )}
               {/* ── Lots gagnés déplacés dans le bouton 🏆 de la barre ───── */}
               {isObs && !isAdm && (
-                <button onClick={async()=>{
-                  if(!window.confirm(t.obsLeaveFamilyConfirm||"Quitter la famille ? Vous n'aurez plus accès au calendrier ni à la messagerie.")) return;
-                  await familySync?.leaveFamily?.();
-                  setShowMenu(false);
-                  handleSetUser(null); setTab(0);
-                }} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.red,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
-                  <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🚪</span>
-                  <span style={{flex:1,textAlign:"left"}}>{t.obsLeaveFamily||"Quitter la famille"}</span>
-                </button>
+                <>
+                  <button onClick={()=>{setMenuTab("prefs");setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                    <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>⚙️</span><span style={{flex:1,textAlign:"left"}}>{t.obsPrefsMenu||t.menuPrefs||"Préférences"}</span>
+                  </button>
+                  <button onClick={async()=>{
+                    if(!window.confirm(t.obsLeaveFamilyConfirm||"Quitter la famille ? Vous n'aurez plus accès au calendrier ni à la messagerie.")) return;
+                    await familySync?.leaveFamily?.();
+                    setShowMenu(false);
+                    handleSetUser(null); setTab(0);
+                  }} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.red,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                    <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🚪</span>
+                    <span style={{flex:1,textAlign:"left"}}>{t.obsLeaveFamily||"Quitter la famille"}</span>
+                  </button>
+                </>
               )}
               {isChild && !isAdm && (
                 <button onClick={()=>{setMenuTab("notifs");setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
@@ -4363,10 +4368,21 @@ Date d'entrée en vigueur : 14 juin 2026
             </div>
           ) : (
           <div>
-            {tab===0 && <CalTab readOnly updateCal={()=>{}} />}
-            {tab===1 && <ContactsTab readOnly />}
-            {tab===2 && <MessagingTab />}
-            {tab===3 && <GameTab />}
+            {menuTab==="prefs" ? (
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+                  <div style={{fontSize:15,fontWeight:900}}>⚙️ {t.obsPrefsMenu||t.menuPrefs||"Préférences"}</div>
+                </div>
+                <ObserverPrefsTab />
+              </div>
+            ) : (
+              <>
+                {tab===0 && <CalTab readOnly updateCal={()=>{}} />}
+                {tab===1 && <ContactsTab readOnly />}
+                {tab===2 && <MessagingTab />}
+                {tab===3 && <GameTab />}
+              </>
+            )}
           </div>
           ) /* fin condition 0 parents */
         ) : (isChild && !isAdm) ? (
@@ -4455,19 +4471,29 @@ Date d'entrée en vigueur : 14 juin 2026
               </div>
             )}
             {/* Export .duvia avant suppression — dernier chance de sauvegarder */}
+            {/* ⚠️ Un observateur ne doit JAMAIS pouvoir télécharger les données de la
+                famille (dépenses, messages, calendrier...) : uniquement sa fiche
+                d'identité, via buildDuviaIdentityBackup(). */}
             <button
               onClick={() => {
-                const payload = buildDuviaBackup({
-                  cfg, history: historyData,
-                  familyId: familySync?.familyId,
-                  lang, userEmail: user?.email,
-                });
+                const payload = isObs && !isAdm
+                  ? buildDuviaIdentityBackup({ user, cfg, lang })
+                  : buildDuviaBackup({
+                      cfg, history: historyData,
+                      familyId: familySync?.familyId,
+                      lang, userEmail: user?.email,
+                    });
                 downloadDuviaBackup(payload, makeBackupFilename("duvia-backup-avant-suppression"));
               }}
               disabled={deletingAccount}
-              style={{width:"100%",padding:"10px 14px",background:"transparent",color:C.vio,border:`1.5px solid ${C.vio}`,borderRadius:10,fontSize:12,fontWeight:700,cursor:deletingAccount?"not-allowed":"pointer",marginBottom:12,opacity:deletingAccount?.5:1}}>
+              style={{width:"100%",padding:"10px 14px",background:"transparent",color:C.vio,border:`1.5px solid ${C.vio}`,borderRadius:10,fontSize:12,fontWeight:700,cursor:deletingAccount?"not-allowed":"pointer",marginBottom:isObs&&!isAdm?4:12,opacity:deletingAccount?.5:1}}>
               💾 {t.backupDownloadBeforeDelete||"Télécharger mes données avant"}
             </button>
+            {isObs && !isAdm && (
+              <div style={{fontSize:10,color:C.mut,marginBottom:12,lineHeight:1.4}}>
+                {t.obsBackupBeforeDeleteHint||"Seule votre fiche d'identité (nom, email, téléphone) sera téléchargée — pas les données de la famille."}
+              </div>
+            )}
             <div style={{display:"flex",gap:10}}>
               <button onClick={()=>{ setConfirmDeleteAccount(false); setDeleteAccountError(""); }}
                 disabled={deletingAccount}
@@ -6272,6 +6298,258 @@ function PrefsTab() {
             <div style={{fontSize:12,color:C.grn,fontWeight:700,marginTop:6,textAlign:"center"}}>✅ {t.localDataCleared||"Données locales supprimées"}</div>
           )}
         </div>
+      </div>
+
+      {/* ── Zone de danger ── */}
+      <div style={{marginBottom:8}}>
+        <div className="sec" style={{color:C.red}}>⚠️ Zone de danger</div>
+        <button onClick={()=>setConfirmDeleteAccount(true)} style={{...row,background:`${C.red}10`,border:`1px solid ${C.red}33`,color:C.red}}>
+          <span style={{fontSize:13,fontWeight:700}}>🗑️ Supprimer mon compte</span>
+        </button>
+        <div style={{fontSize:11,color:C.mut,marginTop:6,paddingLeft:4}}>Action définitive · Toutes vos données seront effacées</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Préférences — observateur ────────────────────────────────────────────
+// ⚠️ Accès volontairement restreint : un observateur ne doit JAMAIS pouvoir
+// consulter/modifier/exporter autre chose que sa propre fiche d'identité
+// (nom, email, téléphone, mot de passe, identifiant Duvia, langue, notif
+// "message"). Pas de dépenses, pas de messages, pas de calendrier de garde
+// ou scolaire, pas de config famille — voir buildDuviaIdentityBackup().
+function ObserverPrefsTab() {
+  const {C,t,lang,setLang,setConfirmDeleteAccount,user} = useApp();
+
+  const [emailMsg, setEmailMsg] = useState(true);
+  const [isGoogleUser, setIsGoogleUser] = useState(false);
+  const [pwMode, setPwMode] = useState(false);
+  const [pwOld,setPwOld] = useState("");
+  const [pw,setPw] = useState(""); const [pw2,setPw2] = useState("");
+  const [showPwOld,setShowPwOld] = useState(false);
+  const [showPw,setShowPw] = useState(false);
+  const [showPw2,setShowPw2] = useState(false);
+  const [pwErr,setPwErr] = useState(""); const [pwOk,setPwOk] = useState("");
+  const [saving,setSaving] = useState(false);
+  const [localDataCleared, setLocalDataCleared] = useState(false);
+  const [emailMode,setEmailMode] = useState(false);
+  const [newEmail,setNewEmail] = useState("");
+  const [emailErr,setEmailErr] = useState("");
+  const [emailOk,setEmailOk] = useState("");
+  const [savingEmail,setSavingEmail] = useState(false);
+  const [customerId, setCustomerId] = useState("");
+  const [cidCopied, setCidCopied] = useState(false);
+
+  useEffect(()=>{
+    supabase.from("customer_ids").select("customer_id").maybeSingle().then(({data})=>{
+      if (data?.customer_id) setCustomerId(data.customer_id);
+    });
+  },[]);
+
+  useEffect(()=>{
+    supabase.auth.getUser().then(({data})=>{
+      const m = data?.user?.user_metadata || {};
+      setEmailMsg(m.email_notifs !== false);
+      const provider = data?.user?.app_metadata?.provider;
+      setIsGoogleUser(provider === "google");
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  async function savePref(key, val){
+    try{ await supabase.auth.updateUser({data:{[key]:val}}); }
+    catch(e){ console.warn("pref save failed",e); }
+  }
+
+  function Toggle({val,onToggle}){
+    return (
+      <button onClick={onToggle} style={{width:44,height:24,borderRadius:12,background:val?C.grn:"#ccc",border:"none",cursor:"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
+        <div style={{position:"absolute",top:2,left:val?22:2,width:20,height:20,borderRadius:10,background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.25)"}} />
+      </button>
+    );
+  }
+
+  async function changePassword(){
+    if(!pwOld){ setPwErr("Veuillez saisir votre mot de passe actuel."); return; }
+    const err = validatePassword(pw);
+    if(err){ setPwErr(err); return; }
+    if(pw !== pw2){ setPwErr("Les mots de passe ne correspondent pas."); return; }
+    setSaving(true); setPwErr("");
+    const {error:signInErr} = await supabase.auth.signInWithPassword({
+      email: user?.email || "", password: pwOld,
+    });
+    if(signInErr){ setSaving(false); setPwErr("Mot de passe actuel incorrect."); return; }
+    const {error} = await supabase.auth.updateUser({password:pw});
+    setSaving(false);
+    if(error){ setPwErr("Erreur : "+error.message); return; }
+    try{ await supabase.functions.invoke("notify-password-change", {body:{}}).catch(()=>{}); }catch{}
+    setPwOld(""); setPwOk("✅ Mot de passe mis à jour !"); setPwMode(false); setPw(""); setPw2("");
+    setShowPwOld(false); setShowPw(false); setShowPw2(false);
+    setTimeout(()=>setPwOk(""),3000);
+  }
+
+  async function changeEmail(){
+    if(!newEmail || !newEmail.includes("@")){ setEmailErr("Adresse email invalide."); return; }
+    if(newEmail === user?.email){ setEmailErr("C'est déjà votre adresse email actuelle."); return; }
+    setSavingEmail(true); setEmailErr("");
+    const {error} = await supabase.auth.updateUser({email: newEmail});
+    setSavingEmail(false);
+    if(error){ setEmailErr("Erreur : "+error.message); return; }
+    setEmailOk(`✅ Un email de confirmation a été envoyé à ${newEmail}. Cliquez sur le lien pour valider.`);
+    setEmailMode(false); setNewEmail("");
+    setTimeout(()=>setEmailOk(""),8000);
+  }
+
+  const row = {display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`,cursor:"pointer",width:"100%",textAlign:"left"};
+
+  return (
+    <div>
+      <div style={{fontSize:12,color:C.mut,lineHeight:1.6,marginBottom:20,padding:"10px 12px",background:`${C.blu}0c`,border:`1px solid ${C.blu}33`,borderRadius:10}}>
+        👁️ {t.obsPrefsIntro||"En tant qu'observateur, vous ne pouvez modifier que votre propre fiche : langue, notifications, identifiant, email/mot de passe et compte."}
+      </div>
+
+      {/* ── Langue ── */}
+      <div style={{marginBottom:28}}>
+        <StepLang lang={lang} setLang={setLang} />
+      </div>
+
+      {/* ── Notifications email : messages uniquement ── */}
+      <div style={{marginBottom:28}}>
+        <div className="sec">📧 {t.emailNotifs||"Notifications email"}</div>
+        <div style={row}>
+          <div style={{flex:1,marginRight:12}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{t.notifMsg||"Nouveau message reçu"}</div>
+            <div style={{fontSize:11,color:C.mut,marginTop:2}}>{t.obsNotifMsgDesc||t.notifMsgDesc||"Email quand vous recevez un nouveau message"}</div>
+          </div>
+          <Toggle val={emailMsg} onToggle={()=>{ const v=!emailMsg; setEmailMsg(v); savePref("email_notifs",v); }} />
+        </div>
+      </div>
+
+      {/* ── Mon identifiant Duvia ── */}
+      <div style={{marginBottom:28}}>
+        <div className="sec">🪪 {t.myDuviaId||"Mon identifiant Duvia"}</div>
+        <div style={{...row,display:"flex",alignItems:"center",gap:10}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:16,fontWeight:800,color:C.vio,fontFamily:"monospace",letterSpacing:".05em"}}>
+              {customerId || "…"}
+            </div>
+            <div style={{fontSize:11,color:C.mut,marginTop:2}}>
+              {t.myDuviaIdHint||"À communiquer au support Duvia en cas de problème."}
+            </div>
+          </div>
+          <button
+            onClick={()=>{
+              if (!customerId) return;
+              navigator.clipboard?.writeText(customerId).then(
+                ()=>{ setCidCopied(true); setTimeout(()=>setCidCopied(false),1800); },
+                ()=>{}
+              );
+            }}
+            disabled={!customerId}
+            style={{padding:"8px 12px",background:cidCopied?C.grn:C.vio,color:"#fff",border:"none",borderRadius:8,fontSize:12,fontWeight:700,cursor:customerId?"pointer":"not-allowed",flexShrink:0}}>
+            {cidCopied ? `✅ ${t.copied||"Copié"}` : `📋 ${t.copy||"Copier"}`}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Sécurité : email + mot de passe ── */}
+      <div style={{marginBottom:28}}>
+        <div className="sec">🔒 {t.security||"Sécurité"}</div>
+        {isGoogleUser ? (
+          <div style={{padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`,display:"flex",alignItems:"center",gap:12}}>
+            <span style={{fontSize:20}}>🔗</span>
+            <div>
+              <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{t.googleAccount||"Compte Google"}</div>
+              <div style={{fontSize:11,color:C.mut,marginTop:2}}>{t.googleAccountDesc||"Votre email et mot de passe sont gérés par Google. Modifiez-les sur"} <a href="https://myaccount.google.com" target="_blank" rel="noreferrer" style={{color:C.vio}}>myaccount.google.com</a></div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {pwOk && <div style={{color:C.grn,fontSize:12,fontWeight:700,marginBottom:8,padding:"7px 12px",background:`${C.grn}12`,borderRadius:8}}>{pwOk}</div>}
+            {!pwMode ? (
+              <button onClick={()=>setPwMode(true)} style={{...row,marginBottom:8}}>
+                <span style={{fontSize:13,fontWeight:700,color:C.txt}}>🔒 {t.changePw||"Changer mon mot de passe"}</span>
+              </button>
+            ) : (
+              <div style={{background:C.sur,borderRadius:12,padding:16,border:`1px solid ${C.bor}`,marginBottom:8}}>
+                {[
+                  {val:pwOld,set:setPwOld,show:showPwOld,setShow:setShowPwOld,ph:t.pwCurrent||"Mot de passe actuel"},
+                  {val:pw,   set:setPw,   show:showPw,   setShow:setShowPw,   ph:t.pwNew||"Nouveau mot de passe (8 car. · majuscule · spécial)"},
+                  {val:pw2,  set:setPw2,  show:showPw2,  setShow:setShowPw2,  ph:t.pwConfirm||"Confirmer le nouveau mot de passe"},
+                ].map(({val,set,show,setShow,ph},i)=>(
+                  <div key={i} style={{position:"relative",marginBottom:8}}>
+                    {i===1&&<div style={{height:1,background:C.bor,margin:"4px 0 12px"}}/>}
+                    <input type={show?"text":"password"} value={val} onChange={e=>set(e.target.value)}
+                      placeholder={ph}
+                      style={{width:"100%",height:42,borderRadius:8,border:`1.5px solid ${C.bor}`,padding:"0 40px 0 12px",fontSize:13,boxSizing:"border-box",fontFamily:"inherit"}} />
+                    <button onClick={()=>setShow(s=>!s)} type="button"
+                      style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:15,color:C.mut,padding:0,lineHeight:1}}>
+                      {show?"🙈":"👁️"}
+                    </button>
+                  </div>
+                ))}
+                {pwErr && <div style={{color:C.red,fontSize:12,marginBottom:8,padding:"6px 10px",background:`${C.red}10`,borderRadius:8}}>{pwErr}</div>}
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={changePassword} disabled={saving} style={{flex:1,height:38,background:C.vio,color:"#fff",borderRadius:8,fontSize:13,fontWeight:800,border:"none",cursor:"pointer",opacity:saving?.6:1}}>
+                    {saving?"…":(t.confirm||"Confirmer")}
+                  </button>
+                  <button onClick={()=>{setPwMode(false);setPwOld("");setPw("");setPw2("");setPwErr("");setShowPwOld(false);setShowPw(false);setShowPw2(false);}} style={{height:38,padding:"0 16px",background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",fontSize:13,color:C.txt}}>
+                    {t.cancel||"Annuler"}
+                  </button>
+                </div>
+              </div>
+            )}
+            {/* ── Changer l'email ── */}
+            {emailOk && <div style={{color:C.grn,fontSize:12,fontWeight:700,marginBottom:8,padding:"7px 12px",background:`${C.grn}12`,borderRadius:8,lineHeight:1.5}}>{emailOk}</div>}
+            {!emailMode ? (
+              <button onClick={()=>setEmailMode(true)} style={{...row}}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:C.txt}}>✉️ {t.changeEmail||"Changer mon adresse email"}</div>
+                  <div style={{fontSize:11,color:C.mut,marginTop:2}}>{t.currentEmail||"Actuelle :"} {user?.email}</div>
+                </div>
+              </button>
+            ) : (
+              <div style={{background:C.sur,borderRadius:12,padding:16,border:`1px solid ${C.bor}`}}>
+                <input type="email" value={newEmail} onChange={e=>setNewEmail(e.target.value)}
+                  placeholder={t.newEmailPh||"Nouvelle adresse email"}
+                  style={{width:"100%",height:42,borderRadius:8,border:`1.5px solid ${C.bor}`,padding:"0 12px",fontSize:13,marginBottom:8,boxSizing:"border-box",fontFamily:"inherit"}} />
+                {emailErr && <div style={{color:C.red,fontSize:12,marginBottom:8,padding:"6px 10px",background:`${C.red}10`,borderRadius:8}}>{emailErr}</div>}
+                <div style={{fontSize:11,color:C.mut,marginBottom:10,lineHeight:1.5}}>
+                  📩 {t.emailChangeInfo||"Un email de confirmation sera envoyé à la nouvelle adresse. L'ancienne reste active jusqu'à validation."}
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={changeEmail} disabled={savingEmail} style={{flex:1,height:38,background:C.vio,color:"#fff",borderRadius:8,fontSize:13,fontWeight:800,border:"none",cursor:"pointer",opacity:savingEmail?.6:1}}>
+                    {savingEmail?"…":(t.sendConfirm||"Envoyer la confirmation")}
+                  </button>
+                  <button onClick={()=>{setEmailMode(false);setNewEmail("");setEmailErr("");}} style={{height:38,padding:"0 16px",background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",fontSize:13,color:C.txt}}>
+                    {t.cancel||"Annuler"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* ── Supprimer sauvegarde locale (données de secours navigateur) ── */}
+      <div className="card" style={{marginBottom:14}}>
+        <button onClick={()=>{
+            try {
+              window.localStorage.removeItem("duvia_family_snapshot");
+              window.localStorage.removeItem("duvia_ejected");
+            } catch {}
+            setLocalDataCleared(true);
+            setTimeout(()=>setLocalDataCleared(false), 2500);
+          }}
+          style={{width:"100%",padding:"10px 14px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,fontSize:12,borderRadius:8,cursor:"pointer",fontWeight:700}}>
+          🧹 {t.clearLocalData||"Supprimer la sauvegarde locale"}
+        </button>
+        <div style={{fontSize:11,color:C.mut,marginTop:6,textAlign:"center"}}>
+          {t.clearLocalDataHint||"Efface la copie stockée sur cet appareil (les données restent sur le serveur)."}
+        </div>
+        {localDataCleared && (
+          <div style={{fontSize:12,color:C.grn,fontWeight:700,marginTop:6,textAlign:"center"}}>✅ {t.localDataCleared||"Données locales supprimées"}</div>
+        )}
       </div>
 
       {/* ── Zone de danger ── */}
@@ -12909,6 +13187,34 @@ function buildDuviaBackup({cfg, history, familyId, lang, userEmail}) {
     },
     schoolCalendar: safe(cfg?.specialDates, {}),
     history: Array.isArray(history) ? history : [],
+  };
+}
+
+// ⚠️ Sauvegarde restreinte pour les OBSERVATEURS : ne contient JAMAIS les
+// données de la famille (dépenses, messages, calendrier de garde/scolaire,
+// autres membres...) — uniquement la fiche d'identité de l'observateur
+// lui-même. À utiliser à la place de buildDuviaBackup() partout où un
+// observateur peut déclencher un export/sauvegarde de "son profil".
+function buildDuviaIdentityBackup({user, cfg, lang}) {
+  const uid = String(user?.id || "");
+  const email = String(user?.email || "").toLowerCase();
+  const own = (cfg?.observers || []).find(o =>
+    String(o.id||"") === uid || String(o.email||"").toLowerCase() === email
+  ) || {};
+  return {
+    _duvia: true,
+    _version: DUVIA_BACKUP_VERSION,
+    _exportedAt: new Date().toISOString(),
+    _identityOnly: true,
+    _lang: lang || "fr",
+    identity: {
+      name: own.name || user?.displayName || "",
+      email: own.email || user?.email || "",
+      phone: own.phone || "",
+      role: "observer",
+      obsRole: own.obsRole || "",
+      canGuard: !!own.canGuard,
+    },
   };
 }
 
