@@ -9920,7 +9920,13 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
     const specials=getSpecialEvents(date,cfg);
     const isBirthday=specials.some(ev=>ev.label?.includes("🎂")||ev.label?.includes("🎁"));
     const guard=resolveGuard(ds,cfg,activeChildId);
-    return {day,ds,dw,fer,ferName,sco,scoName,specials,isBirthday,guard,isToday:ds===todayStr,isWE:dw>=5};
+    // Custom date avec parentId → override couleur de la case
+    const customParent = (cfg.specialDates?.custom||[]).reduce((found,cd)=>{
+      if(!cd.parentId||!cd.day||!cd.month) return found;
+      const yearMatch = cd.yearly||!cd.year||+cd.year===y;
+      return (+cd.day===day && +cd.month===m+1 && yearMatch) ? (cfg.parents.find(p=>String(p.id)===String(cd.parentId))||null) : found;
+    },null);
+    return {day,ds,dw,fer,ferName,sco,scoName,specials,isBirthday,guard,customParent,isToday:ds===todayStr,isWE:dw>=5};
   });
 
   // Le badge rond résume "qui garde cette semaine" : on l'affiche le dimanche (fin de semaine,
@@ -10002,9 +10008,11 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
 
   function renderDayCell(d){
     const hasSplit = d.splitBefore && d.splitAfter;
-    const bg = hasSplit
+    // Custom date → couleur de fond du parent concerné (override garde normale)
+    const customBg = d.customParent?.color ? d.customParent.color+"40" : null;
+    const bg = customBg || (hasSplit
       ? `linear-gradient(180deg, ${d.splitBefore}30 0%, ${d.splitBefore}30 calc(${d.splitPercent}% - 1px), ${d.splitAfter}30 calc(${d.splitPercent}% + 1px), ${d.splitAfter}30 100%)`
-      : cellBg(d.guard);
+      : cellBg(d.guard));
     // Priorité couleur du numéro : férié (rouge gras) > week-end (gris foncé gras) > normal
     const numColor = d.fer ? C.red : d.isWE ? "#52525b" : (d.isToday ? C.vio : C.txt);
     const numWeight = (d.fer || d.isWE || d.isToday) ? 900 : 700;
