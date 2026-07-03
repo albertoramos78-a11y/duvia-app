@@ -8409,11 +8409,11 @@ function StepGarde() {
               if(!rows.length) return null;
               const isEvenBlock = blockStart===0 ? firstBlockIsEven : !firstBlockIsEven;
               return (
-                <div key={blockStart} style={{display:"flex",gap:8,marginTop:blockStart===0?12:14}}>
-                  <div style={{writingMode:"vertical-rl",transform:"rotate(180deg)",fontSize:10,fontWeight:800,color:C.vio,textAlign:"center",letterSpacing:".05em",padding:"6px 4px",background:`${C.vio}12`,borderRadius:6,flexShrink:0,whiteSpace:"nowrap"}}>
+                <div key={blockStart} style={{marginTop:blockStart===0?12:14}}>
+                  <div style={{textAlign:"center",fontSize:12,fontWeight:800,color:C.vio,letterSpacing:".05em",padding:"8px 0",background:`${C.vio}12`,borderRadius:8,marginBottom:6,textTransform:"uppercase"}}>
                     {isEvenBlock?t.evenWeek:t.oddWeek}
                   </div>
-                  <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:6}}>
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
                     {rows.map(({d,i})=>(
                       <div key={i} style={{display:"flex",gap:6,alignItems:"center",padding:"6px",background:C.bg,borderRadius:8}}>
                         <span style={{fontFamily:"JetBrains Mono",fontSize:10,color:C.mut,minWidth:30}}>{d.label}{d.num}</span>
@@ -8430,6 +8430,7 @@ function StepGarde() {
                 </div>
               );
             })}
+
           </div>
         )}
       </div>
