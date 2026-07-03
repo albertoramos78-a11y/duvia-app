@@ -640,5 +640,15 @@ const en = {
     obsCanGuardDesc:"Appears in the calendar as a custody option",
     obsNoFamily:"You are not assigned to a family.",
     obsNoFamilyDesc:"Only a family can invite you to join Duvia. Contact the parent who wanted to give you access so they can generate a new invitation link.",
+    obsLeaveFamilyConfirm:"Leave the family? You will no longer have access to the calendar or messaging.",
+    leaveFamilyConfirmSimple:"Leave the family?",
+    deleteNotifConfirm:"Delete this notification?",
+    deleteAllNotifsConfirm:"Delete all notifications ({count})?",
+    quitterFamilleConfirm:"Leave this family?\n\nYou will start over with a blank personal family. A summary of your data is kept for export.",
+    retirerInviteConfirm:"Remove {name} from the family?\n\nThey will start over with a blank personal family. You keep the family and its code.",
+    createNewFamilyConfirm:"Create a new, separate family? You'll be able to switch between your families from the menu at the top of the app.",
+    rejectRequestConfirm:"Reject this request?",
+    removeFromFamilyConfirm:"Remove {name} from the family?",
+    deleteBackupConfirm:"Permanently delete this backup?\n{path}",
   };
 export default en;

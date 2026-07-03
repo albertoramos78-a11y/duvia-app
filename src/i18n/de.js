@@ -638,5 +638,15 @@ const de = {
     obsCanGuardDesc:"Erscheint im Kalender als Betreuungsoption",
     obsNoFamily:"Sie sind keiner Familie zugeteilt.",
     obsNoFamilyDesc:"Nur eine Familie kann Sie zu Duvia einladen. Kontaktieren Sie das Elternteil, das Ihnen Zugang gewähren wollte, damit es einen neuen Einladungslink erstellt.",
+    obsLeaveFamilyConfirm:"Familie verlassen? Sie haben dann keinen Zugriff mehr auf den Kalender oder die Nachrichten.",
+    leaveFamilyConfirmSimple:"Familie verlassen?",
+    deleteNotifConfirm:"Diese Benachrichtigung löschen?",
+    deleteAllNotifsConfirm:"Alle Benachrichtigungen löschen ({count})?",
+    quitterFamilleConfirm:"Diese Familie verlassen?\n\nSie beginnen wieder mit einer leeren persönlichen Familie. Eine Zusammenfassung Ihrer Daten wird für den Export aufbewahrt.",
+    retirerInviteConfirm:"{name} aus der Familie entfernen?\n\nDiese Person beginnt wieder mit einer leeren persönlichen Familie. Sie behalten die Familie und ihren Code.",
+    createNewFamilyConfirm:"Eine neue, separate Familie erstellen? Sie können über das Menü oben in der App zwischen Ihren Familien wechseln.",
+    rejectRequestConfirm:"Diese Anfrage ablehnen?",
+    removeFromFamilyConfirm:"{name} aus der Familie entfernen?",
+    deleteBackupConfirm:"Dieses Backup endgültig löschen?\n{path}",
   };
 export default de;
