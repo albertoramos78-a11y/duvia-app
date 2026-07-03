@@ -7953,18 +7953,20 @@ function StepDates() {
       )}
 
       {/* Start date */}
-      <div className="card" style={{marginBottom:16}}>
-        <div style={{fontSize:10,fontWeight:800,letterSpacing:".13em",textTransform:"uppercase",color:C.mut,marginBottom:12}}>{t.startDate}</div>
-        <div style={{display:"flex",gap:10,alignItems:"flex-end"}}>
-          <div style={{...fld,flex:1}}>
-            <span style={lbl}>{t.month}</span>
-            <select value={cfg.custody.startMonth} onChange={e=>setCfg(c=>({...c,custody:{...c.custody,startMonth:e.target.value}}))} style={inp}>
-              {t.months.map((m,i)=><option key={i} value={pad(i+1)}>{m}</option>)}
-            </select>
-          </div>
-          <div style={{...fld,flex:1}}>
-            <span style={lbl}>{t.year}</span>
-            <input type="number" value={cfg.custody.startYear} onChange={e=>setCfg(c=>({...c,custody:{...c.custody,startYear:e.target.value}}))} style={inp} />
+      <div style={{marginBottom:16,border:`1.5px solid ${C.bor}`,borderRadius:14}}>
+        <div style={{padding:"14px 14px 10px"}}>
+          <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:10}}>{t.startDate}</div>
+          <div style={{display:"flex",gap:10,alignItems:"flex-end"}}>
+            <div style={{...fld,flex:1}}>
+              <span style={lbl}>{t.month}</span>
+              <select value={cfg.custody.startMonth} onChange={e=>setCfg(c=>({...c,custody:{...c.custody,startMonth:e.target.value}}))} style={inp}>
+                {t.months.map((m,i)=><option key={i} value={pad(i+1)}>{m}</option>)}
+              </select>
+            </div>
+            <div style={{...fld,flex:1}}>
+              <span style={lbl}>{t.year}</span>
+              <input type="number" value={cfg.custody.startYear} onChange={e=>setCfg(c=>({...c,custody:{...c.custody,startYear:e.target.value}}))} style={inp} />
+            </div>
           </div>
         </div>
       </div>
