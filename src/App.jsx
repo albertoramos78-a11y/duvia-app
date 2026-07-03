@@ -7858,6 +7858,8 @@ function StepDates() {
   const {C,t,cfg,setCfg,prem,perms,onUpgrade,apiData,apiLoading} = useApp();
   const sd=cfg.specialDates;
   const [openHol,setOpenHol]=useState(null);
+  const [collapsedDates,setCollapsedDates]=useState(()=>new Set());
+  const toggleDate = i => setCollapsedDates(s=>{const n=new Set(s);n.has(i)?n.delete(i):n.add(i);return n;});
 
   // ── Mode multi-enfant ──────────────────────────────────────────────────────
   const children = cfg.children || [];
@@ -8393,13 +8395,31 @@ function StepDates() {
           };
           const children = cfg.children.length > 0 ? cfg.children : [];
           const parents = cfg.parents.length > 0 ? cfg.parents : [];
+          const isCollapsed = collapsedDates.has(i);
           return (
-            <div key={i} style={{marginBottom:12,padding:"12px",background:C.sur,borderRadius:10,border:`1.5px solid ${C.bor}`}}>
-              {/* Header */}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                <div style={{fontSize:12,fontWeight:800,color:C.vio}}>📌 Date {i+1}</div>
-                <button onClick={()=>{if(!prem)return;setCfg(prev=>{const arr=[...(prev.specialDates?.custom||[])];arr.splice(i,1);return {...prev,specialDates:{...prev.specialDates,custom:arr}};});}} style={{padding:"3px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:11}}>✕</button>
+            <div key={i} style={{marginBottom:12,background:C.sur,borderRadius:10,border:`1.5px solid ${isCollapsed?C.bor:C.vio}`,overflow:"hidden"}}>
+              {/* Header — cliquable pour réduire */}
+              <div onClick={()=>toggleDate(i)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",cursor:"pointer",userSelect:"none"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+                  <span style={{fontSize:14,flexShrink:0}}>📌</span>
+                  <div style={{minWidth:0}}>
+                    <div style={{fontSize:12,fontWeight:800,color:C.vio,lineHeight:1.2}}>
+                      {cd.label ? cd.label : `${t.cdDate||"Date"} ${i+1}`}
+                    </div>
+                    {isCollapsed && (cd.day||cd.month) && (
+                      <div style={{fontSize:10,color:C.mut,marginTop:1}}>
+                        {cd.day&&cd.month ? `${pad(+cd.day)} / ${cd.month}${cd.year&&!cd.yearly?" / "+cd.year:""}` : ""}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                  <span style={{fontSize:14,color:C.mut,transition:"transform .2s",display:"inline-block",transform:isCollapsed?"rotate(0deg)":"rotate(180deg)"}}>⌄</span>
+                  <button onClick={e=>{e.stopPropagation();if(!prem)return;setCfg(prev=>{const arr=[...(prev.specialDates?.custom||[])];arr.splice(i,1);return {...prev,specialDates:{...prev.specialDates,custom:arr}};});}} style={{padding:"3px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:11,borderRadius:6}}>✕</button>
+                </div>
               </div>
+              {/* Contenu — masqué si réduit */}
+              {!isCollapsed && <div style={{padding:"0 12px 12px"}}>
               {/* Label */}
               <div style={{...fld,marginBottom:10}}>
                 <span style={lbl}>{t.cdEventName||"Nom de l'événement"}</span>
@@ -8457,6 +8477,7 @@ function StepDates() {
                 <input type="checkbox" checked={!!cd.yearly} onChange={e=>updCd("yearly",e.target.checked)} />
                 <span>🔁 {t.cdRepeatYearly||"Reconduire tous les ans"}</span>
               </label>
+              </div>}
             </div>
           );
         })}
