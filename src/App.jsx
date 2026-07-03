@@ -4080,7 +4080,7 @@ export default function App() {
               {/* ── Lots gagnés déplacés dans le bouton 🏆 de la barre ───── */}
               {isObs && !isAdm && (
                 <button onClick={async()=>{
-                  if(!window.confirm("Quitter la famille ? Vous n'aurez plus accès au calendrier ni à la messagerie.")) return;
+                  if(!window.confirm(t.obsLeaveFamilyConfirm||"Quitter la famille ? Vous n'aurez plus accès au calendrier ni à la messagerie.")) return;
                   await familySync?.leaveFamily?.();
                   setShowMenu(false);
                   handleSetUser(null); setTab(0);
@@ -4348,7 +4348,7 @@ Date d'entrée en vigueur : 14 juin 2026
                 <div style={{fontSize:44,marginBottom:12}}>🏚️</div>
                 <div style={{fontWeight:900,fontSize:17,color:C.txt,marginBottom:8}}>{t.familyDisbanded||"Cette famille n'a plus de parent actif."}</div>
                 <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:20}}>{t.familyDisbandedObs||"Votre accès est maintenu mais aucun parent ne gère plus cette famille. Vous pouvez quitter."}</div>
-                <button onClick={async()=>{if(!window.confirm("Quitter la famille ?")) return; await familySync?.leaveFamily?.(); handleSetUser(null); setTab(0);}}
+                <button onClick={async()=>{if(!window.confirm(t.leaveFamilyConfirmSimple||"Quitter la famille ?")) return; await familySync?.leaveFamily?.(); handleSetUser(null); setTab(0);}}
                   style={{height:44,padding:"0 24px",background:C.red,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:14,cursor:"pointer"}}>
                   🚪 {t.obsLeaveFamily||"Quitter la famille"}
                 </button>
@@ -5536,8 +5536,8 @@ function NotifTab({prem: premProp}) {
   const storageKey = `duvia_deleted_notifs_${user?.id||"guest"}`;
   const [deletedIds,setDeletedIds] = useLocalStorage(storageKey,[]);
   const notifs = allNotifs.filter(n=>!deletedIds.includes(n.id));
-  function deleteNotif(id){ if(window.confirm("Supprimer cette notification ?")) setDeletedIds(ids=>[...ids,id]); }
-  function deleteAll(){ if(window.confirm(`Supprimer toutes les notifications (${notifs.length}) ?`)) setDeletedIds(ids=>[...ids,...allNotifs.map(n=>n.id)]); }
+  function deleteNotif(id){ if(window.confirm(t.deleteNotifConfirm||"Supprimer cette notification ?")) setDeletedIds(ids=>[...ids,id]); }
+  function deleteAll(){ if(window.confirm((t.deleteAllNotifsConfirm||"Supprimer toutes les notifications ({count}) ?").replace("{count}",notifs.length))) setDeletedIds(ids=>[...ids,...allNotifs.map(n=>n.id)]); }
   function markAll(){setCfg(c=>({...c,notifs:c.notifs.map(n=>({...n,read:true}))}));}
 
   // Map notif type → tab index (parent layout: 0=Cal, 1=Schedule, 2=Exp, 3=Contacts, 4=Vault, 5=Msg)
@@ -6380,7 +6380,7 @@ function ConfigTab() {
 
   // « Quitter la famille » — pour le parent connecté (créateur OU invité).
   async function quitterFamille(){
-    if(!window.confirm("Quitter cette famille ?\n\nVous repartirez sur une famille personnelle vierge. Une synthèse de vos données est conservée pour export.")) return;
+    if(!window.confirm(t.quitterFamilleConfirm||"Quitter cette famille ?\n\nVous repartirez sur une famille personnelle vierge. Une synthèse de vos données est conservée pour export.")) return;
     const res = await familySync?.leaveFamily?.();
     if(res?.ok){ duviaReload(); }
     else { alert("⚠️ Impossible de quitter la famille.\n\nDétail : "+(res?.error||"inconnu")+"\n\n(Si l'erreur mentionne « leave_family », la migration SQL 0018 n'est pas encore exécutée sur Supabase.)"); }
@@ -6390,7 +6390,7 @@ function ConfigTab() {
   async function retirerInvite(i){
     const p = cfg.parents[i];
     if(!p?.userId){ alert("Cet invité n'a pas encore rejoint — utilisez « Retirer » sur l'invitation."); return; }
-    if(!window.confirm(`Retirer ${p.name||"l'invité"} de la famille ?\n\nIl repartira sur une famille personnelle vierge. Vous conservez la famille et son code.`)) return;
+    if(!window.confirm((t.retirerInviteConfirm||"Retirer {name} de la famille ?\n\nIl repartira sur une famille personnelle vierge. Vous conservez la famille et son code.").replace("{name}",p.name||t.guestLabel||"l'invité"))) return;
     const res = await familySync?.removeFamilyMember?.(p.userId);
     if(res?.ok){
       setCfg(c=>({...c, parents:c.parents.filter((_,j)=>j!==i)}));
@@ -6739,7 +6739,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
         <button
           disabled={creatingFamily}
           onClick={async ()=>{
-            if(!window.confirm("Créer une nouvelle famille distincte ? Tu pourras basculer entre tes familles depuis le menu en haut de l'app.")) return;
+            if(!window.confirm(t.createNewFamilyConfirm||"Créer une nouvelle famille distincte ? Tu pourras basculer entre tes familles depuis le menu en haut de l'app.")) return;
             setCreatingFamily(true);
             const myProfile = (typeof user?.parentIdx === "number" ? cfg.parents[user.parentIdx] : null) || {};
             const prefillParent = {
@@ -6858,7 +6858,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
                       {pidActing===m.userId?"⏳…":"✅ Valider"}
                     </button>
                     <button disabled={pidActing===m.userId} onClick={async()=>{
-                      if(!window.confirm("Refuser cette demande ?")) return;
+                      if(!window.confirm(t.rejectRequestConfirm||"Refuser cette demande ?")) return;
                       setPidActing(m.userId);
                       const res=await familySync.rejectMember(m.userId);
                       setPidActing(null);
@@ -7002,7 +7002,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
               <span style={{fontSize:16,color:C.mut,transition:"transform .2s",display:"inline-block",transform:expandedChildren.has(i)?"rotate(180deg)":"rotate(0deg)"}}>⌄</span>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              {!isChild && <button onClick={e=>{e.stopPropagation();if(!window.confirm(`Retirer ${ch.name.trim()||`l'enfant ${i+1}`} de la famille ?`)) return;removeChild(i);}} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12}}>{t.remove}</button>}
+              {!isChild && <button onClick={e=>{e.stopPropagation();if(!window.confirm((t.removeFromFamilyConfirm||"Retirer {name} de la famille ?").replace("{name}",ch.name.trim()||`${t.childN||"l'enfant"} ${i+1}`))) return;removeChild(i);}} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12}}>{t.remove}</button>}
             </div>
           </div>
 
@@ -8658,7 +8658,7 @@ function StepAccess() {
               if(!res.ok) alert("⚠️ Erreur lors de la validation.");
             }} style={{padding:"7px 12px",background:C.grn,color:"#fff",borderRadius:8,fontSize:12,fontWeight:800,opacity:pendingActionId===m.userId?0.6:1}}>Valider</button>
             <button disabled={pendingActionId===m.userId} onClick={async ()=>{
-              if(!window.confirm("Refuser cette demande ?")) return;
+              if(!window.confirm(t.rejectRequestConfirm||"Refuser cette demande ?")) return;
               setPendingActionId(m.userId);
               const res = await familySync.rejectMember(m.userId);
               setPendingActionId(null);
@@ -8754,7 +8754,7 @@ function StepAccess() {
               }
             </div>
             <button onClick={async()=>{
-              if(!window.confirm(`Retirer ${o.name||o.email||"cet observateur"} de la famille ?`)) return;
+              if(!window.confirm((t.removeFromFamilyConfirm||"Retirer {name} de la famille ?").replace("{name}",o.name||o.email||"cet observateur"))) return;
               // Supprimer de Supabase si l'observateur a un compte (userId)
               if(o.userId){ await familySync.removeFamilyMember(o.userId); }
               // Supprimer de cfg local
@@ -8821,7 +8821,7 @@ function StepAccess() {
                 if(!res.ok) alert("⚠️ Erreur lors de la validation.");
               }} style={{flex:1,height:42,background:C.grn,color:"#fff",fontSize:13,fontWeight:800,borderRadius:10,opacity:pendingActionId===matchingPending.userId?0.6:1}}>{t.obsApprove||"Accepter"}</button>
               <button disabled={pendingActionId===matchingPending.userId} onClick={async()=>{
-                if(!window.confirm("Refuser cette demande ?")) return;
+                if(!window.confirm(t.rejectRequestConfirm||"Refuser cette demande ?")) return;
                 setPendingActionId(matchingPending.userId);
                 const res = await familySync.rejectMember(matchingPending.userId);
                 setPendingActionId(null);
