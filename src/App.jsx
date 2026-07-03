@@ -11383,51 +11383,71 @@ window.addEventListener('message',function(e){
 
           <div className="field">
             <label className="lbl">{t.expShareLabel||"⚖️ Partage de la dépense"}</label>
-            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
-              <div style={{fontSize:12,fontWeight:800,color:cfg.parents[form.paidBy]?.color||C.vio,minWidth:80,textAlign:"center"}}>
-                {cfg.parents[form.paidBy]?.name||"P1"}<br/><span style={{fontSize:16}}>{100-(form.split??50)}%</span>
-              </div>
-              <input type="range" min="0" max="100" step="1" value={form.split??50} onChange={e=>setForm(f=>({...f,split:+e.target.value}))} onTouchEnd={e=>e.target.blur()} onMouseUp={e=>e.target.blur()} style={{flex:1,accentColor:C.vio}} />
-              <div style={{fontSize:12,fontWeight:800,color:C.mut,minWidth:80,textAlign:"center"}}>
-                {cfg.parents.find((_,i)=>i!==form.paidBy)?.name||"P2"}<br/><span style={{fontSize:16,color:C.txt}}>{form.split??50}%</span>
-              </div>
-            </div>
-            {/* Boutons raccourcis pour les splits courants */}
-            <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap",justifyContent:"center"}}>
-              {[0,25,50,75,100].map(v=>(
-                <button key={v} onClick={()=>setForm(f=>({...f,split:v}))}
-                  style={{padding:"4px 10px",fontSize:11,fontWeight:700,borderRadius:8,
-                    background:(form.split??50)===v?C.vio:C.sur,
-                    color:(form.split??50)===v?"#fff":C.mut,
-                    border:`1px solid ${(form.split??50)===v?C.vio:C.bor}`,
-                    cursor:"pointer"}}>{v}%</button>
-              ))}
-            </div>
             {(()=>{
-              const amt=parseFloat(form.amount)||0;
-              const sp=form.split??50;
-              const payerAmt=amt*(100-sp)/100;
-              const otherAmt=amt*sp/100;
-              const payerName=cfg.parents[form.paidBy]?.name||"P1";
-              const otherName=cfg.parents.find((_,i)=>i!==form.paidBy)?.name||"P2";
-              const payerColor=cfg.parents[form.paidBy]?.color||C.vio;
+              // 🔧 form.split représente TOUJOURS la part de cfg.parents[1] (position
+              // fixe, droite), quel que soit le payeur. Avant ce fix, la valeur
+              // représentait "la part de l'autre parent" — donc changer le payeur
+              // dans le menu déroulant inversait silencieusement le sens du montant
+              // déjà saisi (bug de fond, pas juste UX). Positions fixes = plus de
+              // saut visuel + plus de risque d'inversion de calcul.
+              const p0 = cfg.parents[0], p1 = cfg.parents[1];
+              const sp = form.split??50;
+              const leftPct = 100-sp, rightPct = sp;
+              const payerIdx = form.paidBy ?? 0;
               return (
-                <div style={{display:"flex",gap:8}}>
-                  <div style={{flex:1,background:`${payerColor}14`,border:`1px solid ${payerColor}44`,borderRadius:8,padding:"6px 10px",textAlign:"center"}}>
-                    <div style={{fontSize:10,color:payerColor,fontWeight:800,marginBottom:2}}>{payerName}</div>
-                    <div style={{fontSize:15,fontWeight:900,color:payerColor,fontFamily:"JetBrains Mono"}}>
-                      {amt>0?`${payerAmt.toFixed(2)} ${currency}`:"–"}
+                <>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+                    <div style={{fontSize:12,fontWeight:800,color:p0?.color||C.vio,minWidth:80,textAlign:"center"}}>
+                      {payerIdx===0 && <div style={{fontSize:9,color:C.grn,fontWeight:900,marginBottom:1}}>💳 {t.expPayerBadge||"Payeur"}</div>}
+                      {p0?.name||"P1"}<br/><span style={{fontSize:16}}>{leftPct}%</span>
                     </div>
-                    <div style={{fontSize:9,color:C.mut}}>{100-sp}% · {t.expSharePayer||"part payeur"}</div>
-                  </div>
-                  <div style={{flex:1,background:`${C.bor}55`,border:`1px solid ${C.bor}`,borderRadius:8,padding:"6px 10px",textAlign:"center"}}>
-                    <div style={{fontSize:10,color:C.mut,fontWeight:800,marginBottom:2}}>{otherName}</div>
-                    <div style={{fontSize:15,fontWeight:900,color:C.txt,fontFamily:"JetBrains Mono"}}>
-                      {amt>0?`${otherAmt.toFixed(2)} ${currency}`:"–"}
+                    <input type="range" min="0" max="100" step="1" value={sp} onChange={e=>setForm(f=>({...f,split:+e.target.value}))} onTouchEnd={e=>e.target.blur()} onMouseUp={e=>e.target.blur()} style={{flex:1,accentColor:C.vio}} />
+                    <div style={{fontSize:12,fontWeight:800,color:C.mut,minWidth:80,textAlign:"center"}}>
+                      {payerIdx===1 && <div style={{fontSize:9,color:C.grn,fontWeight:900,marginBottom:1}}>💳 {t.expPayerBadge||"Payeur"}</div>}
+                      {p1?.name||"P2"}<br/><span style={{fontSize:16,color:C.txt}}>{rightPct}%</span>
                     </div>
-                    <div style={{fontSize:9,color:C.mut}}>{sp}% · {t.expShareDue||"part due"}</div>
                   </div>
-                </div>
+                  {/* Boutons raccourcis — toujours relatifs à la part de P1 (droite) */}
+                  <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap",justifyContent:"center"}}>
+                    {[0,25,50,75,100].map(v=>(
+                      <button key={v} onClick={()=>setForm(f=>({...f,split:v}))}
+                        style={{padding:"4px 10px",fontSize:11,fontWeight:700,borderRadius:8,
+                          background:sp===v?C.vio:C.sur,
+                          color:sp===v?"#fff":C.mut,
+                          border:`1px solid ${sp===v?C.vio:C.bor}`,
+                          cursor:"pointer"}}>{v}%</button>
+                    ))}
+                  </div>
+                  {(()=>{
+                    const amt=parseFloat(form.amount)||0;
+                    const otherIdx = payerIdx===0?1:0;
+                    const payerPct = payerIdx===0?leftPct:rightPct;
+                    const otherPct = otherIdx===0?leftPct:rightPct;
+                    const payerAmt = amt*payerPct/100;
+                    const otherAmt = amt*otherPct/100;
+                    const payerName = cfg.parents[payerIdx]?.name||"P1";
+                    const otherName = cfg.parents[otherIdx]?.name||"P2";
+                    const payerColor = cfg.parents[payerIdx]?.color||C.vio;
+                    return (
+                      <div style={{display:"flex",gap:8}}>
+                        <div style={{flex:1,background:`${payerColor}14`,border:`1px solid ${payerColor}44`,borderRadius:8,padding:"6px 10px",textAlign:"center"}}>
+                          <div style={{fontSize:10,color:payerColor,fontWeight:800,marginBottom:2}}>{payerName}</div>
+                          <div style={{fontSize:15,fontWeight:900,color:payerColor,fontFamily:"JetBrains Mono"}}>
+                            {amt>0?`${payerAmt.toFixed(2)} ${currency}`:"–"}
+                          </div>
+                          <div style={{fontSize:9,color:C.mut}}>{payerPct}% · {t.expSharePayer||"part payeur"}</div>
+                        </div>
+                        <div style={{flex:1,background:`${C.bor}55`,border:`1px solid ${C.bor}`,borderRadius:8,padding:"6px 10px",textAlign:"center"}}>
+                          <div style={{fontSize:10,color:C.mut,fontWeight:800,marginBottom:2}}>{otherName}</div>
+                          <div style={{fontSize:15,fontWeight:900,color:C.txt,fontFamily:"JetBrains Mono"}}>
+                            {amt>0?`${otherAmt.toFixed(2)} ${currency}`:"–"}
+                          </div>
+                          <div style={{fontSize:9,color:C.mut}}>{otherPct}% · {t.expShareDue||"part due"}</div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </>
               );
             })()}
           </div>
