@@ -14600,7 +14600,7 @@ function ContactsTab({readOnly,addOnly,prem: premProp}) {
       {/* Add button (not for readOnly) */}
       {canAdd && !showForm && (
         <button onClick={()=>{if(!prem){onUpgrade();return;}setShowForm(true);setEditId(null);setForm({name:"",phone:"",note:"",cat:"other"});}} style={{width:"100%",height:44,padding:"11px",background:prem?C.vio:`${C.ora}22`,color:prem?"#fff":C.ora,border:prem?"none":`1.5px solid ${C.ora}`,borderRadius:10,fontSize:13,fontWeight:800,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-          <span style={{fontSize:16}}>{prem?"":"🔒"}</span> {prem?((t.contactsAdd||"Ajouter un contact").replace(/^\+\s*/,"")):`${t.lockSection} — ${t.upgradeCTA}`}
+          <span style={{fontSize:16}}>{prem?"":"🔒"}</span> {prem?(t.contactsAdd||"+ Ajouter un contact"):`${t.lockSection} — ${t.upgradeCTA}`}
         </button>
       )}
 
@@ -14676,7 +14676,7 @@ function ContactsTab({readOnly,addOnly,prem: premProp}) {
             return (
               <div key={contact.id} style={{display:"flex",alignItems:"center",gap:12,background:contact.emergency?`${C.red}0d`:C.card,border:`1.5px solid ${contact.emergency?C.red:C.bor}`,borderLeft:`4px solid ${color}`,borderRadius:"0 12px 12px 0",padding:"12px 14px",marginBottom:8}}>
                 {/* Avatar */}
-                <div style={{width:38,height:38,borderRadius:12,background:`${color}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0,border:`2px solid ${color}44`,overflow:"hidden"}}>
+                <div style={{width:38,height:38,borderRadius:"50%",background:`${color}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0,border:`2px solid ${color}44`,overflow:"hidden"}}>
                   {contact.avatar
                     ? (typeof contact.avatar==="string" && contact.avatar.startsWith("http")
                         ? <img src={contact.avatar} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} />
