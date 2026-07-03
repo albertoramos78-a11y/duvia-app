@@ -2121,7 +2121,7 @@ function useFamilySync(cfg, setCfg) {
                   ? { ...o, id: m.userId, userId: m.userId,
                       status: "active",
                       // Si le nom stocké ressemble à un email, on préfère le vrai nom Supabase
-                      name: (m.displayName && !m.displayName.includes("@")) ? m.displayName : (o.name && !o.name.includes("@") && o.name !== "Observateur") ? o.name : (m.displayName||m.email||o.name||"Observateur"),
+                      name: (m.displayName && !m.displayName.includes("@")) ? m.displayName : (o.name && !o.name.includes("@") && o.name !== "Observateur" && o.name !== "Observateur invité") ? o.name : (m.displayName||m.email||o.name||"Observateur"),
                       email: o.email || m.email || "" }
                   : o
               )
@@ -8572,7 +8572,7 @@ function StepAccess() {
         if (alreadyThere) return c;
         return { ...c, observers: [...(c.observers||[]), {
           id: `invite-${token.slice(0,8)}`, inviteToken: token,
-          name: email||phone||"Observateur invité",
+          name: "Observateur invité",
           email: email||"", phone: phone||"",
           address: address||"", role, canGuard,
           status: "pending_invite",
@@ -8745,11 +8745,11 @@ function StepAccess() {
               : <AvatarPicker current={o.avatar||(o.role==="grandparent"?"👴":"👥")} color={C.ora} pool={OBS_AVATARS} onSelect={av=>setObsField("avatar",av)} />
             }
             <div style={{flex:1}}>
-              <div style={{fontWeight:800,fontSize:14,color:C.txt}}>{o.name}</div>
+              <div style={{fontWeight:800,fontSize:14,color:C.txt}}>{(o.name==="Observateur invité"||o.name==="Observateur")?(t.obsGenericLabel||o.name):o.name}</div>
               {matchingPending
                 ? <span className="badge" style={{background:`${C.grn}22`,color:C.grn,display:"inline-block",marginTop:2}}>🔔 A rejoint — en attente de validation</span>
                 : o.status==="pending_invite"
-                  ? <span className="badge" style={{background:`${C.yel}22`,color:C.yel,display:"inline-block",marginTop:2}}>⏳ En attente — lien non encore cliqué</span>
+                  ? <span className="badge" style={{background:`${C.yel}22`,color:C.yel,display:"inline-block",marginTop:2}}>⏳ {t.obsPendingLink||"En attente — lien non encore cliqué"}</span>
                   : <span className="badge" style={{background:`${C.grn}22`,color:C.grn,display:"inline-block",marginTop:2}}>{rl[o.role]||o.role} · {t.obsStatusActive}</span>
               }
             </div>
@@ -8806,7 +8806,7 @@ function StepAccess() {
                 <button onClick={handleSendWhatsApp} disabled={!o.phone} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:o.phone?"pointer":"not-allowed",opacity:o.phone?1:.4,background:"#25D36618",color:"#25D366",border:"1.5px solid #25D36644"}}><span style={{fontSize:14}}>📱</span> WhatsApp</button>
                 <button onClick={handleSendEmail} disabled={!o.email} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:o.email?"pointer":"not-allowed",opacity:o.email?1:.4,background:`${C.vio}18`,color:C.vio,border:`1.5px solid ${C.vio}44`}}>✉️ Email</button>
                 <button onClick={copyInvite} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:copied?`${C.grn}18`:C.sur,color:copied?C.grn:C.mut,border:`1.5px solid ${C.bor}`}}>
-                  {copied ? "✅ Copié !" : "📋 Copier"}
+                  {copied ? `✅ ${t.copied||"Copié"} !` : `📋 ${t.copy||"Copier"}`}
                 </button>
               </div>
             </div>
