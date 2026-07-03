@@ -659,6 +659,7 @@ const es = {
     removeFromFamilyConfirm:"¿Retirar a {name} de la familia?",
     deleteBackupConfirm:"¿Eliminar definitivamente esta copia de seguridad?\n{path}",
   // --- i18n additions ---
+    cdDate:"Fecha",
     myFamilies:"Mis familias",
     dangerZone:"Zona de peligro",
     deleteAccount:"Eliminar mi cuenta",

@@ -661,6 +661,7 @@ const en = {
     removeFromFamilyConfirm:"Remove {name} from the family?",
     deleteBackupConfirm:"Permanently delete this backup?\n{path}",
   // --- i18n additions ---
+    cdDate:"Date",
     myFamilies:"My families",
     dangerZone:"Danger zone",
     deleteAccount:"Delete my account",
