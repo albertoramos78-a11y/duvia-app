@@ -8375,8 +8375,12 @@ function StepDates() {
       }))}
 
       {/* Custom dates — locked */}
-      <div className="card" style={{position:"relative"}}>
-        <div className="sec">{t.customDates} {!prem&&<span className="badge" style={{background:`${C.ora}10`,color:C.ora,border:`1px dashed ${C.ora}66`,marginLeft:4}}>🔒 Réservé Premium</span>}</div>
+      <div style={{marginBottom:16,border:`1.5px solid ${C.bor}`,borderRadius:14,overflow:"hidden"}}>
+        <div style={{padding:"14px 14px 4px"}}>
+        <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
+          {t.customDates}
+          {!prem&&<span className="badge" style={{background:`${C.ora}10`,color:C.ora,border:`1px dashed ${C.ora}66`}}>🔒 Premium</span>}
+        </div>
         {!prem&&(
           <div style={{borderRadius:10,background:`${C.bg}cc`,backdropFilter:"blur(3px)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,zIndex:2,cursor:"pointer",padding:"24px 16px"}} onClick={onUpgrade}>
             <div style={{fontSize:24}}>🔒</div>
@@ -8481,9 +8485,10 @@ function StepDates() {
             </div>
           );
         })}
-        <button onClick={()=>prem?setCfg(c=>({...c,specialDates:{...c.specialDates,custom:[...(c.specialDates.custom||[]),{label:"",day:"",month:"",year:"",parentIdx:0,childIdx:"all",yearly:false}]}})):onUpgrade()} style={{width:"100%",height:44,padding:"0 16px",background:"transparent",color:prem?C.vio:C.mut,border:`1.5px dashed ${prem?C.vio:C.bor}`,fontSize:13}}>
+        <button onClick={()=>prem?setCfg(c=>({...c,specialDates:{...c.specialDates,custom:[...(c.specialDates.custom||[]),{label:"",day:"",month:"",year:"",parentIdx:0,childIdx:"all",yearly:false}]}})):onUpgrade()} style={{width:"100%",height:44,padding:"0 16px",background:"transparent",color:prem?C.vio:C.mut,border:`1.5px dashed ${prem?C.vio:C.bor}`,fontSize:13,borderRadius:8}}>
           {prem?t.addDate:`🔒 ${t.addDate} — Premium`}
         </button>
+        </div>
       </div>
     </div>
   );
