@@ -6895,7 +6895,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             ) : (user?.parentIdx===0 && i===1) ? (
               sub?.subscriberParentIdx===i
                 ? <span style={{fontSize:11,color:C.mut,fontStyle:"italic"}}>🔒 Protégé</span>
-                : <button onClick={()=>retirerInvite(i)} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>Retirer l'invité</button>
+                : <button onClick={()=>retirerInvite(i)} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.obsRemoveGuest||"Retirer l'invité"}</button>
             ) : null}
           </div>
 
@@ -8702,8 +8702,8 @@ function StepAccess() {
                 {canGuard&&<span style={{color:"#fff",fontSize:13,fontWeight:900}}>✓</span>}
               </div>
               <div>
-                <div style={{fontSize:13,fontWeight:700,color:canGuard?"#f59e0b":C.txt}}>🏠 Peut être gardien</div>
-                <div style={{fontSize:11,color:C.mut}}>Apparaît dans le calendrier comme option de garde</div>
+                <div style={{fontSize:13,fontWeight:700,color:canGuard?"#f59e0b":C.txt}}>🏠 {t.obsCanGuard||"Peut être gardien"}</div>
+                <div style={{fontSize:11,color:C.mut}}>{t.obsCanGuardDesc||"Apparaît dans le calendrier comme option de garde"}</div>
               </div>
             </div>
             <button onClick={sendInvite} disabled={(!email&&!phone)||genLoading}
