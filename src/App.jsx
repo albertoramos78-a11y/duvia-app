@@ -4449,19 +4449,19 @@ Date d'entrée en vigueur : 14 juin 2026
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:340,width:"100%",border:`1.5px solid ${C.bor}`,textAlign:"center"}}>
             <div style={{fontSize:40,marginBottom:10}}>⚠️</div>
-            <div style={{fontSize:16,fontWeight:900,color:C.txt,marginBottom:8}}>Supprimer mon compte ?</div>
-            <div style={{fontSize:12,color:C.mut,lineHeight:1.6,marginBottom:8}}>
-              Cette action est <strong style={{color:C.red}}>définitive</strong>. Vous serez déconnecté(e) et ne pourrez plus accéder à votre compte.
-            </div>
+            <div style={{fontSize:16,fontWeight:900,color:C.txt,marginBottom:8}}>{t.deleteAccountTitle||"Supprimer mon compte ?"}</div>
+            <div style={{fontSize:12,color:C.mut,lineHeight:1.6,marginBottom:8}}
+              dangerouslySetInnerHTML={{__html:(t.deleteAccountWarning||"Cette action est <strong>définitive</strong>. Vous serez déconnecté(e) et ne pourrez plus accéder à votre compte.").replace("<strong>",`<strong style="color:${C.red}">`)}}
+            />
             <div style={{background:`${C.red}10`,border:`1px solid ${C.red}33`,borderRadius:10,padding:"10px 12px",margin:"12px 0 20px",textAlign:"left"}}>
-              <div style={{fontSize:11,fontWeight:800,color:C.red,marginBottom:6}}>Ce qui se passera :</div>
-              {["👤 Votre compte sera supprimé","🗓️ Le planning de garde sera réinitialisé si nécessaire","💰 Les dépenses partagées seront remises à zéro","📞 Vous serez retiré(e) des contacts de la famille","💬 Vos messages resteront visibles (marqués « compte supprimé »)"].map((l,i)=>(
+              <div style={{fontSize:11,fontWeight:800,color:C.red,marginBottom:6}}>{t.deleteWhatWillHappen||"Ce qui se passera :"}</div>
+              {[t.deleteItem1||"👤 Votre compte sera supprimé",t.deleteItem2||"🗓️ Le planning de garde sera réinitialisé si nécessaire",t.deleteItem3||"💰 Les dépenses partagées seront remises à zéro",t.deleteItem4||"📞 Vous serez retiré(e) des contacts de la famille",t.deleteItem5||"💬 Vos messages resteront visibles (marqués « compte supprimé »)"].map((l,i)=>(
                 <div key={i} style={{fontSize:11,color:C.mut,marginBottom:3}}>{l}</div>
               ))}
               {sub?.plan==="premium" && (
                 <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${C.red}33`}}>
-                  <div style={{fontSize:11,fontWeight:800,color:C.red,marginBottom:4}}>⭐ Abonnement Premium</div>
-                  <div style={{fontSize:11,color:C.mut}}>Votre abonnement sera annulé. Pensez à le résilier manuellement depuis votre gestionnaire de paiement pour éviter toute facturation future.</div>
+                  <div style={{fontSize:11,fontWeight:800,color:C.red,marginBottom:4}}>⭐ {t.premiumSubscription||"Abonnement Premium"}</div>
+                  <div style={{fontSize:11,color:C.mut}}>{t.deleteAccountPremiumNote||"Votre abonnement sera annulé. Pensez à le résilier manuellement depuis votre gestionnaire de paiement pour éviter toute facturation future."}</div>
                 </div>
               )}
             </div>
@@ -4498,13 +4498,13 @@ Date d'entrée en vigueur : 14 juin 2026
               <button onClick={()=>{ setConfirmDeleteAccount(false); setDeleteAccountError(""); }}
                 disabled={deletingAccount}
                 style={{flex:1,height:44,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13,cursor:deletingAccount?"not-allowed":"pointer",opacity:deletingAccount?.5:1}}>
-                Annuler
+                {t.cancel||"Annuler"}
               </button>
               <button onClick={deleteMyAccount} disabled={deletingAccount}
                 style={{flex:1,height:44,background:C.red,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13,cursor:deletingAccount?"not-allowed":"pointer",opacity:deletingAccount?.7:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
                 {deletingAccount
-                  ? <><span style={{width:16,height:16,border:"2px solid #fff4",borderTopColor:"#fff",borderRadius:"50%",display:"inline-block",animation:"spin 0.7s linear infinite"}}/>Suppression…</>
-                  : "🗑️ Supprimer"}
+                  ? <><span style={{width:16,height:16,border:"2px solid #fff4",borderTopColor:"#fff",borderRadius:"50%",display:"inline-block",animation:"spin 0.7s linear infinite"}}/>{t.deleting||"Suppression…"}</>
+                  : (t.deleteConfirmBtn||"🗑️ Supprimer")}
               </button>
             </div>
           </div>
@@ -6302,11 +6302,11 @@ function PrefsTab() {
 
       {/* ── Zone de danger ── */}
       <div style={{marginBottom:8}}>
-        <div className="sec" style={{color:C.red}}>⚠️ Zone de danger</div>
+        <div className="sec" style={{color:C.red}}>⚠️ {t.dangerZone||"Zone de danger"}</div>
         <button onClick={()=>setConfirmDeleteAccount(true)} style={{...row,background:`${C.red}10`,border:`1px solid ${C.red}33`,color:C.red}}>
-          <span style={{fontSize:13,fontWeight:700}}>🗑️ Supprimer mon compte</span>
+          <span style={{fontSize:13,fontWeight:700}}>🗑️ {t.deleteAccount||"Supprimer mon compte"}</span>
         </button>
-        <div style={{fontSize:11,color:C.mut,marginTop:6,paddingLeft:4}}>Action définitive · Toutes vos données seront effacées</div>
+        <div style={{fontSize:11,color:C.mut,marginTop:6,paddingLeft:4}}>{t.deleteAccountDesc||"Action définitive · Toutes vos données seront effacées"}</div>
       </div>
     </div>
   );
@@ -6554,11 +6554,11 @@ function ObserverPrefsTab() {
 
       {/* ── Zone de danger ── */}
       <div style={{marginBottom:8}}>
-        <div className="sec" style={{color:C.red}}>⚠️ Zone de danger</div>
+        <div className="sec" style={{color:C.red}}>⚠️ {t.dangerZone||"Zone de danger"}</div>
         <button onClick={()=>setConfirmDeleteAccount(true)} style={{...row,background:`${C.red}10`,border:`1px solid ${C.red}33`,color:C.red}}>
-          <span style={{fontSize:13,fontWeight:700}}>🗑️ Supprimer mon compte</span>
+          <span style={{fontSize:13,fontWeight:700}}>🗑️ {t.deleteAccount||"Supprimer mon compte"}</span>
         </button>
-        <div style={{fontSize:11,color:C.mut,marginTop:6,paddingLeft:4}}>Action définitive · Toutes vos données seront effacées</div>
+        <div style={{fontSize:11,color:C.mut,marginTop:6,paddingLeft:4}}>{t.deleteAccountDesc||"Action définitive · Toutes vos données seront effacées"}</div>
       </div>
     </div>
   );
@@ -7030,7 +7030,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
       {/* ── Mes familles (multi-familles) — parents uniquement ── */}
       {!isObs && !isChild && (
       <>
-      <div className="sec">🏠 Mes familles</div>
+      <div className="sec">🏠 {t.myFamilies||"Mes familles"}</div>
       <div className="card" style={{marginBottom:16}}>
         {familySync.families.length > 0 && (
           <div style={{marginBottom:10}}>
@@ -8423,7 +8423,9 @@ function StepDates() {
                   </button>
                   {children.map((ch,cIdx)=>(
                     <button key={ch.id} onClick={()=>updCd("childId",String(ch.id))} style={{padding:"6px 14px",background:cd.childId===String(ch.id)?C.vio:C.sur,color:cd.childId===String(ch.id)?"#fff":C.mut,border:`1.5px solid ${cd.childId===String(ch.id)?C.vio:C.bor}`,borderRadius:20,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
-                      {ch.avatar&&<span>{ch.avatar}</span>}{ch.name||`${t.childN||"Enfant"} ${cIdx+1}`}
+                      {ch.avatar&&(typeof ch.avatar==="string"&&ch.avatar.startsWith("http")
+                        ? <img src={ch.avatar} alt="" style={{width:20,height:20,borderRadius:"50%",objectFit:"cover",flexShrink:0}} />
+                        : <span style={{fontSize:16}}>{ch.avatar}</span>)}{ch.name||`${t.childN||"Enfant"} ${cIdx+1}`}
                     </button>
                   ))}
                 </div>
@@ -8675,7 +8677,7 @@ function StepGarde() {
               </div>
             </div>
             <div style={{marginTop:12,fontSize:12,color:C.mut,padding:"8px 12px",background:`${C.vio}11`,borderRadius:8,lineHeight:1.7}}>
-              📋 <strong style={{color:C.vio}}>{parents[ex.mainIdx]?.name||`P${ex.mainIdx+1}`}</strong> — semaine<br/>
+              📋 <strong style={{color:C.vio}}>{parents[ex.mainIdx]?.name||`P${ex.mainIdx+1}`}</strong> — {t.weekdaysLabel||"semaine"}<br/>
               🏠 <strong style={{color:parents[ex.weIdx]?.color}}>{parents[ex.weIdx]?.name||`P${ex.weIdx+1}`}</strong> — WE {ex.parity==="even"?t.evenWeek:t.oddWeek}
             </div>
           </div>
