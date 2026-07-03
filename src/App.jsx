@@ -5051,6 +5051,16 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
         setErr(msg.includes("expired") ? (t.obsInvErrExpired||"❌ Ce lien a expiré.") : (t.obsInvErrInvalid||"❌ Lien invalide."));
       } else {
         try{ window.localStorage.setItem("duvia_family_id", obsFamId); }catch{}
+        // 🔧 CORRECTIF : contrairement au parent (joinFamilyByToken), l'observateur
+        // n'avait aucun appel à set_member_identity — son prénom n'était donc
+        // jamais envoyé au serveur et display_name restait NULL/email en base.
+        try{
+          await supabase.rpc("set_member_identity", {
+            p_family_id: obsFamId,
+            p_display_name: cleanName || null,
+            p_gender: parentGender || null,
+          });
+        }catch(e){ console.warn("[Duvia] set_member_identity (observer):", e); }
         onObsJoin({id:realUserId,name:cleanName,email:cleanEmail,phone:regPhoneId||undefined,role:"observer",obsRole:parentGender||"grandparent",status:"pending",inviteCode:obsInviteCode.code});
         setMode("obs_waiting"); setErr("");
       }
@@ -5159,6 +5169,16 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
           // "already used" → Papi a déjà accepté, on montre juste l'attente
         } else {
           try{ window.localStorage.setItem("duvia_family_id", obsFamId); }catch{}
+          // 🔧 CORRECTIF : même bug que sur le chemin "nouveau compte" — sans cet
+          // appel, le prénom de l'observateur (compte déjà existant) n'était
+          // jamais envoyé au serveur et display_name restait NULL/email en base.
+          try{
+            await supabase.rpc("set_member_identity", {
+              p_family_id: obsFamId,
+              p_display_name: (u.name||updatedUser.name) || null,
+              p_gender: (meta.gender||parentGender) || null,
+            });
+          }catch(e){ console.warn("[Duvia] set_member_identity (observer login):", e); }
         }
       }
       // 🔧 UUID réel depuis signInWithPassword — garantit que matchFn trouve la carte
