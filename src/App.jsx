@@ -3919,10 +3919,7 @@ export default function App() {
       <div style={{padding:"0 14px",display:"flex",alignItems:"center",gap:12,height:58}}>
         <img src="/logo-nav.png" alt="Duvia" style={{width:84,height:84,objectFit:"contain",flexShrink:0,animation:(sub?.pendingSpins||0)>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}} />
         <div style={{display:"flex",flexDirection:"column",justifyContent:"center",minWidth:0,flex:1}}>
-          <div style={{fontSize:10,color:C.mut,fontStyle:"italic",lineHeight:1.2}}>
-            <span>Two homes · One family</span>
-            {C._wc && <span style={{fontSize:14,display:"inline-block",animation:"wcBall 3s ease-in-out infinite",transformOrigin:"center",marginLeft:4}}>⚽</span>}
-          </div>
+          {C._wc && <span style={{fontSize:14,display:"inline-block",animation:"wcBall 3s ease-in-out infinite",transformOrigin:"center"}}>⚽</span>}
         </div>
         {/* Right controls: palette → 🏆 lots → ☰ */}
         <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
@@ -7956,8 +7953,8 @@ function StepDates() {
       )}
 
       {/* Start date */}
-      <div className="sec">{t.startDate}</div>
       <div className="card" style={{marginBottom:16}}>
+        <div style={{fontSize:10,fontWeight:800,letterSpacing:".13em",textTransform:"uppercase",color:C.mut,marginBottom:12}}>{t.startDate}</div>
         <div style={{display:"flex",gap:10,alignItems:"flex-end"}}>
           <div style={{...fld,flex:1}}>
             <span style={lbl}>{t.month}</span>
@@ -8637,8 +8634,8 @@ function StepGarde() {
         </div>
       )}
 
-      <div className="sec">{t.patternTitle}</div>
       <div className="card" style={{marginBottom:14}}>
+        <div style={{fontSize:10,fontWeight:800,letterSpacing:".13em",textTransform:"uppercase",color:C.mut,marginBottom:12}}>{t.patternTitle}</div>
         <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
           <div style={{display:"flex",gap:8}}>
             {[["weekAlt",t.patWeekAlt],["exclusive",t.patExclusive]].map(([tp,lb])=>(
@@ -9853,6 +9850,15 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
           const activeZoneData = (multiChild && activeChildId && cfg.childrenZones?.[activeChildId]) || {subdivisionCode:cfg.subdivisionCode||"",zone:cfg.zone||""};
           const ds=toStr(date),ferName=getPublicHolName(ds,activeCountry,apiData),fer=!!ferName,scoZone=activeZoneData.subdivisionCode||activeZoneData.zone,scoName=getHolName(ds,scoZone,activeCountry,apiData),sco=!!scoName,specials=getSpecialEvents(date,cfg);
           const guard=resolveGuard(ds,cfg,activeChildId),wk=wkNum(date),isInl=inlineDs===ds;
+          // Custom date → override garde dans la vue liste (même logique que vue grille)
+          const _cdList=(cfg.specialDates?.custom||[]).reduce((f,cd)=>{
+            if(!cd.parentId||!cd.day||!cd.month) return f;
+            const yr=cd.yearly||!cd.year||+cd.year===date.getFullYear();
+            return (+cd.day===day && +cd.month===m+1 && yr) ? cd : f;
+          },null);
+          const effectiveGuard = _cdList
+            ? (()=>{ const pi=cfg.parents.findIndex(p=>String(p.id)===String(_cdList.parentId)); return pi>=0?{...guard,parentIdx:pi,allParents:false,obsId:undefined}:guard; })()
+            : guard;
           const todayStr=toStr(new Date()),isToday=ds===todayStr;
           return (
             <div key={i}>
@@ -9872,7 +9878,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
                     <span key={ei} className="badge" style={{background:`${ev.color}22`,color:ev.color,maxWidth:110,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={ev.label}>{ev.label}</span>
                   ))}
                 </div>
-                <GuardCell guard={guard} readOnly={readOnly} isOpen={isInl}
+                <GuardCell guard={effectiveGuard} readOnly={readOnly} isOpen={isInl}
                   onClick={()=>{if(!readOnly){setInlineDs(isInl?null:ds);setFullDs(null);}}}
                   onFull={()=>{if(!editBlocked){setFullDs(ds);setInlineDs(null);}}} />
               </div>
