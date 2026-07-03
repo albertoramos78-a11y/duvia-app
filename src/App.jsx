@@ -1506,6 +1506,9 @@ function useFamilySync(cfg, setCfg) {
     let cancelled = false;
     (async () => {
       try {
+        // 🔧 Compte vient d'être supprimé → ne pas recréer de famille vierge
+        if (window.localStorage.getItem("duvia_account_deleted") === "1") return;
+
         // 1. S'assurer d'avoir une session (compte anonyme automatique)
         const { data: sessData } = await supabase.auth.getSession();
         if (!sessData?.session) {
@@ -2967,6 +2970,7 @@ export default function App() {
   }
   // Message après éjection (retiré de la famille par le créateur / dissolution).
   const [ejectedNotice,setEjectedNotice] = useState(()=>{ try{return window.localStorage.getItem("duvia_ejected")==="1";}catch{return false;} });
+  const [accountJustDeleted,setAccountJustDeleted] = useState(()=>{ try{return window.localStorage.getItem("duvia_account_deleted")==="1";}catch{return false;} });
   function dismissEjected(){ try{window.localStorage.removeItem("duvia_ejected");}catch{} setEjectedNotice(false); }
   // Notification au créateur quand un invité quitte/est retiré (temps réel).
   const [inviteLeftNotice,setInviteLeftNotice] = useState(null);
@@ -3655,6 +3659,11 @@ export default function App() {
     // ── 1. Suppression réelle en base via Edge Function Supabase ──────────────
     if(myUid){
       try {
+        // 🔧 Couper le Realtime AVANT de quitter les familles pour éviter
+        // que le listener "éjection" déclenche duviaReload() pendant la suppression
+        // (ce qui créait une nouvelle famille vide au lieu de supprimer le compte).
+        try { await supabase.removeAllChannels(); } catch {}
+
         // Nettoyage table subscriptions avant suppression du compte
         if(myUid) await supabase.from("subscriptions").delete().eq("user_id", myUid);
         // 🔧 Quitter TOUTES les familles AVANT de détruire le compte auth
@@ -3708,12 +3717,21 @@ export default function App() {
       });
     } catch {}
 
-    // ── 3. Déconnexion ────────────────────────────────────────────────────────
-    setDeletingAccount(false);
-    setConfirmDeleteAccount(false);
-    setShowMenu(false);
-    setTab(0);
-    handleSetUser(null);
+    // ── 3. Déconnexion + nettoyage complet ───────────────────────────────────
+    // 🔧 On ne passe plus par handleSetUser(null) qui déclenchait le boot
+    // et recréait une famille vierge. On signe out, on vide le localStorage
+    // duvia_ et on pose un flag "compte_deleted" avant de recharger.
+    try { await supabase.auth.signOut(); } catch {}
+    try {
+      const toRemove = [];
+      for(let i = 0; i < window.localStorage.length; i++){
+        const k = window.localStorage.key(i);
+        if(k?.startsWith("duvia_") || k?.startsWith("sb-")) toRemove.push(k);
+      }
+      toRemove.forEach(k => { try { window.localStorage.removeItem(k); } catch {} });
+    } catch {}
+    try { window.localStorage.setItem("duvia_account_deleted", "1"); } catch {}
+    window.location.replace(window.location.origin + window.location.pathname);
   }
 
   // Called by LoginScreen — intercept parent role for consent
@@ -3721,6 +3739,24 @@ export default function App() {
     if(u.role==="parent") { setPendingUser(u); }
     else { handleSetUser(u); }
   }
+
+  if(accountJustDeleted) return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
+      <div style={{textAlign:"center",maxWidth:320}}>
+        <div style={{fontSize:52,marginBottom:16}}>✅</div>
+        <div style={{fontWeight:900,fontSize:20,marginBottom:10,color:C.txt}}>Compte supprimé</div>
+        <div style={{fontSize:14,color:C.mut,lineHeight:1.6,marginBottom:28}}>
+          Vos données ont été effacées définitivement. Merci d'avoir utilisé Duvia.
+        </div>
+        <button onClick={()=>{
+          try { window.localStorage.removeItem("duvia_account_deleted"); } catch {}
+          window.location.replace(window.location.origin + window.location.pathname);
+        }} style={{padding:"12px 28px",background:C.vio,color:"#fff",border:"none",borderRadius:12,fontSize:15,fontWeight:700,cursor:"pointer"}}>
+          Retour à l'accueil
+        </button>
+      </div>
+    </div>
+  );
 
   if(showPasswordReset) return (
     <PasswordResetScreen onDone={async()=>{ await supabase.auth.signOut(); setShowPasswordReset(false); }} />
