@@ -11387,7 +11387,7 @@ window.addEventListener('message',function(e){
               <div style={{fontSize:12,fontWeight:800,color:cfg.parents[form.paidBy]?.color||C.vio,minWidth:80,textAlign:"center"}}>
                 {cfg.parents[form.paidBy]?.name||"P1"}<br/><span style={{fontSize:16}}>{100-(form.split??50)}%</span>
               </div>
-              <input type="range" min="0" max="100" step="1" value={form.split??50} onChange={e=>setForm(f=>({...f,split:+e.target.value}))} style={{flex:1,accentColor:C.vio}} />
+              <input type="range" min="0" max="100" step="1" value={form.split??50} onChange={e=>setForm(f=>({...f,split:+e.target.value}))} onTouchEnd={e=>e.target.blur()} onMouseUp={e=>e.target.blur()} style={{flex:1,accentColor:C.vio}} />
               <div style={{fontSize:12,fontWeight:800,color:C.mut,minWidth:80,textAlign:"center"}}>
                 {cfg.parents.find((_,i)=>i!==form.paidBy)?.name||"P2"}<br/><span style={{fontSize:16,color:C.txt}}>{form.split??50}%</span>
               </div>
