@@ -7303,10 +7303,10 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           <div onClick={()=>toggleChild(i)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:expandedChildren.has(i)?12:0,cursor:"pointer",userSelect:"none"}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
               <span style={{fontSize:11,fontWeight:800,color:C.vio,textTransform:"uppercase",letterSpacing:".06em"}}>{t.childN} {i+1}{ch.name.trim()?` — ${ch.name.trim()}`:""}</span>
-              <span style={{fontSize:16,color:C.ora,transition:"transform .2s",display:"inline-block",transform:expandedChildren.has(i)?"rotate(180deg)":"rotate(0deg)"}}>⌄</span>
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              {!isChild && <button onClick={e=>{e.stopPropagation();if(!window.confirm((t.removeFromFamilyConfirm||"Retirer {name} de la famille ?").replace("{name}",ch.name.trim()||`${t.childN||"l'enfant"} ${i+1}`))) return;removeChild(i);}} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12}}>{t.remove}</button>}
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <button onClick={e=>{e.stopPropagation();toggleChild(i);}} style={{width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",color:C.txt,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12,lineHeight:1,transition:"transform .2s",transform:expandedChildren.has(i)?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>▾</button>
+              {!isChild && <button onClick={e=>{e.stopPropagation();if(!window.confirm((t.removeFromFamilyConfirm||"Retirer {name} de la famille ?").replace("{name}",ch.name.trim()||`${t.childN||"l'enfant"} ${i+1}`))) return;removeChild(i);}} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:8}}>{t.remove}</button>}
             </div>
           </div>
 
@@ -8410,8 +8410,8 @@ function StepDates() {
                   </div>
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                  <span style={{fontSize:14,color:C.ora,transition:"transform .2s",display:"inline-block",transform:isCollapsed?"rotate(0deg)":"rotate(180deg)"}}>⌄</span>
-                  <button onClick={e=>{e.stopPropagation();if(!prem)return;setCfg(prev=>{const arr=[...(prev.specialDates?.custom||[])];arr.splice(i,1);return {...prev,specialDates:{...prev.specialDates,custom:arr}};});}} style={{padding:"3px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:11,borderRadius:6}}>✕</button>
+                  <button onClick={e=>{e.stopPropagation();toggleDate(i);}} style={{width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",color:C.txt,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12,lineHeight:1,transition:"transform .2s",transform:isCollapsed?"rotate(0deg)":"rotate(180deg)",flexShrink:0}}>▾</button>
+                  <button onClick={e=>{e.stopPropagation();if(!prem)return;setCfg(prev=>{const arr=[...(prev.specialDates?.custom||[])];arr.splice(i,1);return {...prev,specialDates:{...prev.specialDates,custom:arr}};});}} style={{width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",padding:0,background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:8,flexShrink:0}}>✕</button>
                 </div>
               </div>
               {/* Contenu — masqué si réduit */}
@@ -14599,7 +14599,7 @@ function ContactsTab({readOnly,addOnly,prem: premProp}) {
 
       {/* Add button (not for readOnly) */}
       {canAdd && !showForm && (
-        <button onClick={()=>{if(!prem){onUpgrade();return;}setShowForm(true);setEditId(null);setForm({name:"",phone:"",note:"",cat:"other"});}} style={{width:"100%",padding:"11px",background:prem?`linear-gradient(135deg,${C.grn},${C.blu})`:`${C.ora}22`,color:prem?"#fff":C.ora,border:prem?"none":`1.5px solid ${C.ora}`,fontSize:13,fontWeight:800,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+        <button onClick={()=>{if(!prem){onUpgrade();return;}setShowForm(true);setEditId(null);setForm({name:"",phone:"",note:"",cat:"other"});}} style={{width:"100%",height:44,padding:"11px",background:prem?C.vio:`${C.ora}22`,color:prem?"#fff":C.ora,border:prem?"none":`1.5px solid ${C.ora}`,borderRadius:10,fontSize:13,fontWeight:800,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
           <span style={{fontSize:16}}>{prem?"":"🔒"}</span> {prem?((t.contactsAdd||"Ajouter un contact").replace(/^\+\s*/,"")):`${t.lockSection} — ${t.upgradeCTA}`}
         </button>
       )}
