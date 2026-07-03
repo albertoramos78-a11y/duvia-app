@@ -658,5 +658,21 @@ const de = {
     rejectRequestConfirm:"Diese Anfrage ablehnen?",
     removeFromFamilyConfirm:"{name} aus der Familie entfernen?",
     deleteBackupConfirm:"Dieses Backup endgültig löschen?\n{path}",
+  // --- i18n additions ---
+    myFamilies:"Meine Familien",
+    dangerZone:"Gefahrenbereich",
+    deleteAccount:"Mein Konto löschen",
+    deleteAccountDesc:"Endgültige Aktion. Alle Ihre Daten werden gelöscht.",
+    deleteAccountTitle:"Mein Konto löschen?",
+    deleteAccountWarning:"Diese Aktion ist <strong>endgültig</strong>. Sie werden abgemeldet und können nicht mehr auf Ihr Konto zugreifen.",
+    deleteWhatWillHappen:"Was passiert:",
+    deleteItem1:"👤 Ihr Konto wird gelöscht",
+    deleteItem2:"🗓️ Der Sorgerechtsplan wird bei Bedarf zurückgesetzt",
+    deleteItem3:"💰 Gemeinsame Ausgaben werden auf null zurückgesetzt",
+    deleteItem4:"📞 Sie werden aus den Familienkontakten entfernt",
+    deleteItem5:"💬 Ihre Nachrichten bleiben sichtbar (als 'gelöschtes Konto' markiert)",
+    deleteConfirmBtn:"🗑️ Löschen",
+    deleting:"Wird gelöscht…",
+    weekdaysLabel:"Wochentage",
   };
 export default de;

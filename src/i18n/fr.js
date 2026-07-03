@@ -710,5 +710,21 @@ const fr = {
     rejectRequestConfirm:"Refuser cette demande ?",
     removeFromFamilyConfirm:"Retirer {name} de la famille ?",
     deleteBackupConfirm:"Supprimer définitivement ce backup ?\n{path}",
+  // --- i18n additions ---
+    myFamilies:"Mes familles",
+    dangerZone:"Zone de danger",
+    deleteAccount:"Supprimer mon compte",
+    deleteAccountDesc:"Action définitive. Toutes vos données seront effacées.",
+    deleteAccountTitle:"Supprimer mon compte ?",
+    deleteAccountWarning:"Cette action est <strong>définitive</strong>. Vous serez déconnecté(e) et ne pourrez plus accéder à votre compte.",
+    deleteWhatWillHappen:"Ce qui se passera :",
+    deleteItem1:"👤 Votre compte sera supprimé",
+    deleteItem2:"🗓️ Le planning de garde sera réinitialisé si nécessaire",
+    deleteItem3:"💰 Les dépenses partagées seront remises à zéro",
+    deleteItem4:"📞 Vous serez retiré(e) des contacts de la famille",
+    deleteItem5:"💬 Vos messages resteront visibles (marqués « compte supprimé »)",
+    deleteConfirmBtn:"🗑️ Supprimer",
+    deleting:"Suppression…",
+    weekdaysLabel:"semaine",
   };
 export default fr;

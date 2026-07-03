@@ -658,5 +658,21 @@ const es = {
     rejectRequestConfirm:"¿Rechazar esta solicitud?",
     removeFromFamilyConfirm:"¿Retirar a {name} de la familia?",
     deleteBackupConfirm:"¿Eliminar definitivamente esta copia de seguridad?\n{path}",
+  // --- i18n additions ---
+    myFamilies:"Mis familias",
+    dangerZone:"Zona de peligro",
+    deleteAccount:"Eliminar mi cuenta",
+    deleteAccountDesc:"Acción definitiva. Todos sus datos serán eliminados.",
+    deleteAccountTitle:"¿Eliminar mi cuenta?",
+    deleteAccountWarning:"Esta acción es <strong>definitiva</strong>. Se cerrará su sesión y no podrá acceder a su cuenta.",
+    deleteWhatWillHappen:"Lo que sucederá:",
+    deleteItem1:"👤 Su cuenta será eliminada",
+    deleteItem2:"🗓️ El plan de custodia se restablecerá si es necesario",
+    deleteItem3:"💰 Los gastos compartidos se pondrán a cero",
+    deleteItem4:"📞 Será eliminado de los contactos de la familia",
+    deleteItem5:"💬 Sus mensajes seguirán visibles (marcados como 'cuenta eliminada')",
+    deleteConfirmBtn:"🗑️ Eliminar",
+    deleting:"Eliminando…",
+    weekdaysLabel:"días de semana",
   };
 export default es;

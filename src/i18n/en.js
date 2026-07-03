@@ -660,5 +660,21 @@ const en = {
     rejectRequestConfirm:"Reject this request?",
     removeFromFamilyConfirm:"Remove {name} from the family?",
     deleteBackupConfirm:"Permanently delete this backup?\n{path}",
+  // --- i18n additions ---
+    myFamilies:"My families",
+    dangerZone:"Danger zone",
+    deleteAccount:"Delete my account",
+    deleteAccountDesc:"Permanent action. All your data will be deleted.",
+    deleteAccountTitle:"Delete my account?",
+    deleteAccountWarning:"This action is <strong>permanent</strong>. You will be logged out and will no longer be able to access your account.",
+    deleteWhatWillHappen:"What will happen:",
+    deleteItem1:"👤 Your account will be deleted",
+    deleteItem2:"🗓️ The custody schedule will be reset if necessary",
+    deleteItem3:"💰 Shared expenses will be reset to zero",
+    deleteItem4:"📞 You will be removed from the family contacts",
+    deleteItem5:"💬 Your messages will remain visible (marked as 'deleted account')",
+    deleteConfirmBtn:"🗑️ Delete",
+    deleting:"Deleting…",
+    weekdaysLabel:"weekdays",
   };
 export default en;
