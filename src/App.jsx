@@ -8418,7 +8418,7 @@ function StepGarde() {
                       <div key={i} style={{display:"flex",gap:6,alignItems:"center",padding:"6px",background:C.bg,borderRadius:8}}>
                         <span style={{fontFamily:"JetBrains Mono",fontSize:10,color:C.mut,minWidth:30}}>{d.label}{d.num}</span>
                         <span style={{width:8,height:8,borderRadius:"50%",background:parents[pat[i].parentIdx]?.color,flexShrink:0}} />
-                        <select value={pat[i]?.timeType||"full"} onChange={e=>{const p=[...pat];p[i]={...p[i],timeType:e.target.value};setPat(p);}} style={{flex:1,fontSize:11}}>
+                        <select value={pat[i]?.timeType||"full"} onChange={e=>{const p=[...pat];const tt=e.target.value;p[i]={...p[i],timeType:tt,startTime:(tt==="start"||tt==="split")?p[i]?.startTime:"",endTime:(tt==="end"||tt==="split")?p[i]?.endTime:"",location:tt!=="full"?p[i]?.location:""};setPat(p);}} style={{flex:1,fontSize:11}}>
                           <option value="full">{t.wholeDay}</option><option value="start">{t.pickup}</option><option value="end">{t.dropoff}</option><option value="split">{t.both}</option>
                         </select>
                         {(pat[i]?.timeType==="start"||pat[i]?.timeType==="split")&&<input type="time" value={pat[i]?.startTime||""} onChange={e=>{const p=[...pat];p[i]={...p[i],startTime:e.target.value};setPat(p);}} style={{flex:1,fontSize:11}} />}
@@ -9716,7 +9716,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
       else if(g.timeType==="split"&&st) cellTime=`▶ ${st}`;
       else if(g.timeType==="split"&&et) cellTime=`⏹ ${et}`;
     }
-    const cellLocation = g?.location || "";
+    const cellLocation = (g && g.timeType && g.timeType!=="full") ? (g.location||"") : "";
     // 🔄 masqué si une heure de prise/fin est déjà affichée (lisibilité)
     const hasBadge = d.isRealChange && d.guard && !d.isBirthday && !cellTime;
     return (
@@ -9881,7 +9881,7 @@ function InlinePicker({ds,guard,onClose,onFull,dayInfo}) {
     if(guard.timeType==="split"&&et) return `⏹ ${et}`;
     return "";
   })();
-  const hasRdv = !!(timeStr || guard?.location || guard?.note);
+  const hasRdv = !!(timeStr || (guard?.timeType && guard.timeType!=="full" && guard?.location) || guard?.note);
   return (
     <div className="fi" style={{background:C.sur,borderBottom:`1.5px solid ${C.bor}`,padding:"9px 12px 12px",display:"flex",flexDirection:"column",gap:8}}>
       {dayInfo && dayInfo.length>0 && (
@@ -9896,7 +9896,7 @@ function InlinePicker({ds,guard,onClose,onFull,dayInfo}) {
       {hasRdv && (
         <div style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:12,background:`${C.vio}14`,border:`1.5px solid ${C.vio}33`,flexWrap:"wrap"}}>
           {timeStr && <span style={{fontSize:14,fontWeight:900,color:C.vio,fontFamily:"JetBrains Mono"}}>{timeStr}</span>}
-          {guard?.location && (
+          {guard?.timeType && guard.timeType!=="full" && guard?.location && (
             <span style={{fontSize:12,fontWeight:800,color:C.pin,display:"flex",alignItems:"center",gap:3}}>
               📍 {guard.location}
             </span>
@@ -9940,12 +9940,18 @@ function EditDay({ds,onClose,editRef}) {
   const [note,setNote]=useState(ex.note||"");
   const guardianObs=(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard);
   function save(){
+    // Journée entière : ni heure ni lieu — on efface les valeurs résiduelles
+    // d'une précédente config (ex: prise de garde à 07:50 à l'école) pour
+    // qu'elles ne réapparaissent pas dans le calendrier.
+    const st_ = (tt==="start"||tt==="split") ? st : "";
+    const et_ = (tt==="end"||tt==="split") ? et : "";
+    const loc_ = tt!=="full" ? loc : "";
     if(pi.startsWith("obs:")){
       const obsId=pi.slice(4);
       const obs=guardianObs.find(o=>String(o.id)===obsId);
-      updateCal(ds,{parentIdx:undefined,obsId,obsName:obs?.name||"",timeType:tt,startTime:st,endTime:et,location:loc,note});
+      updateCal(ds,{parentIdx:undefined,obsId,obsName:obs?.name||"",timeType:tt,startTime:st_,endTime:et_,location:loc_,note});
     } else {
-      updateCal(ds,{parentIdx:pi===""?undefined:+pi,obsId:undefined,obsName:undefined,timeType:tt,startTime:st,endTime:et,location:loc,note});
+      updateCal(ds,{parentIdx:pi===""?undefined:+pi,obsId:undefined,obsName:undefined,timeType:tt,startTime:st_,endTime:et_,location:loc_,note});
     }
     onClose();
   }
