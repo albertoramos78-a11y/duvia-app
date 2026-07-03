@@ -9655,7 +9655,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
           const hasSplit = d.splitBefore && d.splitAfter;
           const bg = hasSplit
             ? `linear-gradient(180deg, ${d.splitBefore}30 0%, ${d.splitBefore}30 calc(${d.splitPercent}% - 1px), ${d.splitAfter}30 calc(${d.splitPercent}% + 1px), ${d.splitAfter}30 100%)`
-            : (d.isToday ? `${C.vio}22` : cellBg(d.guard));
+            : cellBg(d.guard);
           // Priorité couleur du numéro : férié (rouge gras) > week-end (gris foncé gras) > normal
           const numColor = d.fer ? C.red : d.isWE ? "#52525b" : (d.isToday ? C.vio : C.txt);
           const numWeight = (d.fer || d.isWE || d.isToday) ? 900 : 700;
@@ -9671,8 +9671,8 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
             ? d.specials[0]?.color
             : null;
           // Encadrement vert si vacances scolaires (priorité sur bordure today/inline/grise)
-          const scoBorder = d.sco ? `2px solid ${C.grn}` : null;
-          const activeBorder = d.isToday ? `1.5px solid ${C.vio}` : inlineDs===d.ds ? `1.5px solid ${C.vio}` : `1.5px solid ${C.bor}`;
+          const scoBorder = d.sco ? `3px solid ${C.grn}` : null;
+          const activeBorder = d.isToday ? `3px solid ${C.vio}` : inlineDs===d.ds ? `1.5px solid ${C.vio}` : `1.5px solid ${C.bor}`;
           // Heure + lieu du rendez-vous de garde (ex: "12:00 → 14:00" / "📍 MANTES")
           const g = d.guard;
           let cellTime = "";
