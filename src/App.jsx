@@ -11387,10 +11387,21 @@ window.addEventListener('message',function(e){
               <div style={{fontSize:12,fontWeight:800,color:cfg.parents[form.paidBy]?.color||C.vio,minWidth:80,textAlign:"center"}}>
                 {cfg.parents[form.paidBy]?.name||"P1"}<br/><span style={{fontSize:16}}>{100-(form.split||50)}%</span>
               </div>
-              <input type="range" min="0" max="100" step="5" value={form.split||50} onChange={e=>setForm(f=>({...f,split:+e.target.value}))} style={{flex:1,accentColor:C.vio}} />
+              <input type="range" min="0" max="100" step="1" value={form.split||50} onChange={e=>setForm(f=>({...f,split:+e.target.value}))} style={{flex:1,accentColor:C.vio}} />
               <div style={{fontSize:12,fontWeight:800,color:C.mut,minWidth:80,textAlign:"center"}}>
                 {cfg.parents.find((_,i)=>i!==form.paidBy)?.name||"P2"}<br/><span style={{fontSize:16,color:C.txt}}>{form.split||50}%</span>
               </div>
+            </div>
+            {/* Boutons raccourcis pour les splits courants */}
+            <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap",justifyContent:"center"}}>
+              {[0,25,50,75,100].map(v=>(
+                <button key={v} onClick={()=>setForm(f=>({...f,split:v}))}
+                  style={{padding:"4px 10px",fontSize:11,fontWeight:700,borderRadius:8,
+                    background:(form.split||50)===v?C.vio:C.sur,
+                    color:(form.split||50)===v?"#fff":C.mut,
+                    border:`1px solid ${(form.split||50)===v?C.vio:C.bor}`,
+                    cursor:"pointer"}}>{v}%</button>
+              ))}
             </div>
             {(()=>{
               const amt=parseFloat(form.amount)||0;
