@@ -7881,7 +7881,7 @@ function StepDates() {
           <div key={chId} style={{marginBottom:16,border:`2px solid ${C.bor}`,borderRadius:16,overflow:"hidden"}}>
             {/* Enfant header */}
             <div style={{padding:"10px 14px",background:C.sur,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`}}>
-              <span style={{fontSize:18}}>{ch.avatar||"🧒"}</span>
+              {(ch.avatar&&ch.avatar.startsWith("http"))?<img src={ch.avatar} alt="" style={{width:18,height:18,borderRadius:"50%",objectFit:"cover",display:"inline-block",verticalAlign:"middle"}}/>:<span style={{fontSize:18}}>{ch.avatar||"🧒"}</span>}
               <div style={{flex:1}}>
                 <div style={{fontSize:14,fontWeight:900,color:C.txt}}>{ch.name||`${t.childN} ${chi+1}`}</div>
                 {ch.birthDay&&ch.birthMonth&&<div style={{fontSize:11,color:C.mut,fontFamily:"JetBrains Mono"}}>{ch.birthDay}/{ch.birthMonth}</div>}
@@ -9353,7 +9353,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
                 style={{padding:"7px 14px",background:isActive?C.vio:C.sur,color:isActive?"#fff":C.mut,
                   border:`1.5px solid ${isActive?C.vio:C.bor}`,borderRadius:10,fontSize:13,fontWeight:700,
                   display:"flex",alignItems:"center",gap:6}}>
-                {ch.avatar||"🧒"} {ch.name||`Enfant`}
+                {(ch.avatar&&ch.avatar.startsWith("http"))?<img src={ch.avatar} alt="" style={{width:16,height:16,borderRadius:"50%",objectFit:"cover",display:"inline-block",verticalAlign:"middle",marginRight:4}}/>:<span>{ch.avatar||"🧒"}</span>} {ch.name||`Enfant`}
                 {confirmed
                   ? <span style={{fontSize:10,opacity:.8}}>✅</span>
                   : <span style={{fontSize:10,opacity:.5}}>⏳</span>}
@@ -13008,7 +13008,28 @@ function MessagingTab(){
   const contacts=[
     ...(cfg.parents||[])
       .filter(p=>p.name && p.email && p.email!==user?.email)
-      .map(p=>{ const u=_uByEmail[p.email]; return u?{...u,name:p.name}:{id:`cfgp_${p.email}`,name:p.name,email:p.email,role:"parent"}; }),
+      .map(p=>{
+        // Match par email exact, ou par email case-insensitive, ou par téléphone (email synthétique)
+        const emailLc = String(p.email).toLowerCase();
+        let u = _uByEmail[p.email] || _uByEmail[emailLc];
+        if (!u && p.phone) {
+          const synth = identifierToAuthEmail(p.phone);
+          u = _uByEmail[synth];
+        }
+        // 🔧 Fallback serveur : si pas de user local, chercher dans emailToUid (cross-device)
+        // pour obtenir le vrai Supabase UID — indispensable pour envoyer un message.
+        if (!u && emailToUid) {
+          const srvUid = emailToUid.get(emailLc) || emailToUid.get(p.email);
+          // Fallback téléphone → email synthétique
+          const srvUidPhone = !srvUid && p.phone ? emailToUid.get(identifierToAuthEmail(p.phone)) : null;
+          const resolvedUid = srvUid || srvUidPhone;
+          if (resolvedUid) {
+            u = { id: resolvedUid, name: p.name, email: p.email, phone: p.phone, role: "parent" };
+          }
+        }
+        // Le nom affiché est TOUJOURS celui de cfg (saisi par le créateur), pas le user.name Supabase
+        return u ? {...u, name: p.name || u.name} : {id:`cfgp_${p.email}`,name:p.name,email:p.email,phone:p.phone,role:"parent"};
+      }),
     ...(cfg.children||[])
       .filter(c=>c.name && _uByName[c.name])  // enfants seulement si compte local existant
       .map(c=>_uByName[c.name]),
@@ -13704,7 +13725,7 @@ function ScheduleTab({prem: premProp, childReadOnly}) {
           {cfg.children.filter(c=>c.name).map((ch,i)=>(
             <button key={ch.id} onClick={()=>{if(childReadOnly&&i!==ownChildIdx)return;setChildIdx(i);setShowForm(false);}}
               style={{padding:"3px 10px",background:childIdx===i?C.vio:C.sur,color:childIdx===i?"#fff":childReadOnly&&i!==ownChildIdx?C.mut+"88":C.mut,border:`1.5px solid ${childIdx===i?C.vio:C.bor}`,fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:5,opacity:childReadOnly&&i!==ownChildIdx?0.5:1}}>
-              <span style={{fontSize:16,flexShrink:0}}>{ch.avatar||"🧒"}</span>{ch.name}
+              {(ch.avatar&&ch.avatar.startsWith("http"))?<img src={ch.avatar} alt="" style={{width:16,height:16,borderRadius:"50%",objectFit:"cover",display:"inline-block",verticalAlign:"middle",flexShrink:0}}/>:<span style={{fontSize:16,flexShrink:0}}>{ch.avatar||"🧒"}</span>}{ch.name}
               {childReadOnly&&i!==ownChildIdx&&<span style={{fontSize:10}}>🔒</span>}
             </button>
           ))}
@@ -13712,7 +13733,7 @@ function ScheduleTab({prem: premProp, childReadOnly}) {
       )}
       {cfg.children.filter(c=>c.name).length>0 && (
         <div style={{marginBottom:8,fontSize:12,color:C.txt,display:"flex",alignItems:"center",gap:5}}>
-          <span style={{fontSize:15}}>{cfg.children[childIdx]?.avatar||"🧒"}</span>
+          <span style={{fontSize:15}}>{(cfg.children[childIdx]?.avatar&&cfg.children[childIdx].avatar.startsWith("http"))?<img src={cfg.children[childIdx].avatar} alt="" style={{width:15,height:15,borderRadius:"50%",objectFit:"cover",display:"inline-block",verticalAlign:"middle"}}/>:<span>{cfg.children[childIdx]?.avatar||"🧒"}</span>}</span>
           <span style={{fontWeight:800,color:C.vio}}>{cfg.children[childIdx]?.name}</span>
         </div>
       )}
