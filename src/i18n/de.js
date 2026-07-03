@@ -621,6 +621,8 @@ const de = {
     childMinorNotice:"✅ Zugang von einem Elternteil genehmigt — willkommen {name}!",
     obsAddress:"Postanschrift",
     obsAddressPh:"Hausnummer, Straße, PLZ, Ort",
+    obsGenericLabel:"Eingeladene Person",
+    obsPendingLink:"Ausstehend — Link noch nicht angeklickt",
     obsInvitePhone:"Telefon",
     obsInviteContactHint:"Geben Sie mindestens eine Kontaktmöglichkeit an (E-Mail oder Telefon).",
     optional:"optional",

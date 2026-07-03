@@ -673,6 +673,8 @@ const fr = {
     childMinorNotice:"✅ Accès autorisé par un parent — bienvenue {name} !",
     obsAddress:"Adresse postale",
     obsAddressPh:"Numéro, rue, code postal, ville",
+    obsGenericLabel:"Personne invitée",
+    obsPendingLink:"En attente — lien non encore cliqué",
     obsInvitePhone:"Téléphone",
     obsInviteContactHint:"Renseignez au moins un moyen de contact (email ou téléphone).",
     optional:"optionnel",

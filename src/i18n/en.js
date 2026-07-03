@@ -623,6 +623,8 @@ const en = {
     childMinorNotice:"✅ Access authorized by a parent — welcome {name}!",
     obsAddress:"Postal address",
     obsAddressPh:"Number, street, postcode, city",
+    obsGenericLabel:"Invited person",
+    obsPendingLink:"Pending — link not clicked yet",
     obsInvitePhone:"Phone",
     obsInviteContactHint:"Provide at least one contact method (email or phone).",
     optional:"optional",

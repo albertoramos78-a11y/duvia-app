@@ -621,6 +621,8 @@ const es = {
     childMinorNotice:"✅ Acceso autorizado por un progenitor — ¡bienvenido/a {name}!",
     obsAddress:"Dirección postal",
     obsAddressPh:"Número, calle, código postal, ciudad",
+    obsGenericLabel:"Persona invitada",
+    obsPendingLink:"Pendiente — enlace aún no abierto",
     obsInvitePhone:"Teléfono",
     obsInviteContactHint:"Indica al menos un medio de contacto (email o teléfono).",
     optional:"opcional",
