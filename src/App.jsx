@@ -8173,6 +8173,14 @@ function StepGarde() {
   const activeCustody = loadCustody(multiChild ? selChildId : null);
 
   const D14=Array.from({length:14},(_,i)=>({label:t.dayShort[i%7],name:t.dayNames[i%7],num:i+1,we:i>=5&&i<=6||i>=12}));
+  // 🔧 Fix : le bloc "jours 1-7" de la grille personnalisée ne tombe pas toujours
+  // sur une vraie semaine paire du calendrier — ça dépend du lundi de départ
+  // (startMonth/startYear, recalé comme dans resolveGuard). On calcule donc la
+  // parité réelle pour étiqueter les deux blocs correctement (au lieu d'un
+  // "semaine paire" / "semaine impaire" figé qui pouvait être inversé).
+  const patStart = new Date(+(cfg.custody.startYear||new Date().getFullYear()), +(cfg.custody.startMonth||1)-1, 1);
+  patStart.setDate(patStart.getDate() - ((patStart.getDay()+6)%7));
+  const firstBlockIsEven = wkNum(patStart)%2===0;
   const [type,setType]=useState(activeCustody.type||"weekAlt");
   const [wA,setWA]=useState(activeCustody.weekAlt||{evenIdx:0});
   const [ex,setEx]=useState(activeCustody.exclusive||{mainIdx:0,weIdx:1,parity:"even"});
@@ -8372,8 +8380,8 @@ function StepGarde() {
           <div className="fi">
             <div style={{overflowX:"auto"}}>
               <div style={{display:"grid",gridTemplateColumns:"repeat(14,1fr)",gap:3,minWidth:520,marginBottom:4}}>
-                <div style={{gridColumn:"1 / span 7",textAlign:"center",fontSize:9,fontWeight:800,color:C.vio,background:`${C.vio}12`,borderRadius:6,padding:"3px 0",textTransform:"uppercase",letterSpacing:".05em"}}>{t.evenWeek}</div>
-                <div style={{gridColumn:"8 / span 7",textAlign:"center",fontSize:9,fontWeight:800,color:C.blu,background:`${C.blu}12`,borderRadius:6,padding:"3px 0",textTransform:"uppercase",letterSpacing:".05em"}}>{t.oddWeek}</div>
+                <div style={{gridColumn:"1 / span 7",textAlign:"center",fontSize:9,fontWeight:800,color:C.vio,background:`${C.vio}12`,borderRadius:6,padding:"3px 0",textTransform:"uppercase",letterSpacing:".05em"}}>{firstBlockIsEven?t.evenWeek:t.oddWeek}</div>
+                <div style={{gridColumn:"8 / span 7",textAlign:"center",fontSize:9,fontWeight:800,color:C.blu,background:`${C.blu}12`,borderRadius:6,padding:"3px 0",textTransform:"uppercase",letterSpacing:".05em"}}>{firstBlockIsEven?t.oddWeek:t.evenWeek}</div>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(14,1fr)",gap:3,minWidth:520}}>
                 {D14.map((d,i)=>(
