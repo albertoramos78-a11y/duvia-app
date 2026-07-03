@@ -8402,18 +8402,34 @@ function StepGarde() {
                 ))}
               </div>
             </div>
-            {D14.map((d,i)=>pat[i]?.parentIdx!==undefined&&(
-              <div key={i} style={{display:"flex",gap:6,alignItems:"center",marginBottom:6,padding:"6px",background:C.bg,borderRadius:8,marginTop:i===0?12:0}}>
-                <span style={{fontFamily:"JetBrains Mono",fontSize:10,color:C.mut,minWidth:30}}>{d.label}{d.num}</span>
-                <span style={{width:8,height:8,borderRadius:"50%",background:parents[pat[i].parentIdx]?.color,flexShrink:0}} />
-                <select value={pat[i]?.timeType||"full"} onChange={e=>{const p=[...pat];p[i]={...p[i],timeType:e.target.value};setPat(p);}} style={{flex:1,fontSize:11}}>
-                  <option value="full">{t.wholeDay}</option><option value="start">{t.pickup}</option><option value="end">{t.dropoff}</option><option value="split">{t.both}</option>
-                </select>
-                {(pat[i]?.timeType==="start"||pat[i]?.timeType==="split")&&<input type="time" value={pat[i]?.startTime||""} onChange={e=>{const p=[...pat];p[i]={...p[i],startTime:e.target.value};setPat(p);}} style={{flex:1,fontSize:11}} />}
-                {(pat[i]?.timeType==="end"||pat[i]?.timeType==="split")&&<input type="time" value={pat[i]?.endTime||""} onChange={e=>{const p=[...pat];p[i]={...p[i],endTime:e.target.value};setPat(p);}} style={{flex:1,fontSize:11}} />}
-                {pat[i]?.timeType!=="full"&&<input value={pat[i]?.location||""} onChange={e=>{const p=[...pat];p[i]={...p[i],location:e.target.value};setPat(p);}} placeholder={t.place} style={{flex:2,fontSize:11}} />}
-              </div>
-            ))}
+            {[0,7].map(blockStart=>{
+              const rows = D14.slice(blockStart,blockStart+7)
+                .map((d,ii)=>({d,i:blockStart+ii}))
+                .filter(({i})=>pat[i]?.parentIdx!==undefined);
+              if(!rows.length) return null;
+              const isEvenBlock = blockStart===0 ? firstBlockIsEven : !firstBlockIsEven;
+              return (
+                <div key={blockStart} style={{display:"flex",gap:8,marginTop:blockStart===0?12:14}}>
+                  <div style={{writingMode:"vertical-rl",transform:"rotate(180deg)",fontSize:10,fontWeight:800,color:C.vio,textAlign:"center",letterSpacing:".05em",padding:"6px 4px",background:`${C.vio}12`,borderRadius:6,flexShrink:0,whiteSpace:"nowrap"}}>
+                    {isEvenBlock?t.evenWeek:t.oddWeek}
+                  </div>
+                  <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:6}}>
+                    {rows.map(({d,i})=>(
+                      <div key={i} style={{display:"flex",gap:6,alignItems:"center",padding:"6px",background:C.bg,borderRadius:8}}>
+                        <span style={{fontFamily:"JetBrains Mono",fontSize:10,color:C.mut,minWidth:30}}>{d.label}{d.num}</span>
+                        <span style={{width:8,height:8,borderRadius:"50%",background:parents[pat[i].parentIdx]?.color,flexShrink:0}} />
+                        <select value={pat[i]?.timeType||"full"} onChange={e=>{const p=[...pat];p[i]={...p[i],timeType:e.target.value};setPat(p);}} style={{flex:1,fontSize:11}}>
+                          <option value="full">{t.wholeDay}</option><option value="start">{t.pickup}</option><option value="end">{t.dropoff}</option><option value="split">{t.both}</option>
+                        </select>
+                        {(pat[i]?.timeType==="start"||pat[i]?.timeType==="split")&&<input type="time" value={pat[i]?.startTime||""} onChange={e=>{const p=[...pat];p[i]={...p[i],startTime:e.target.value};setPat(p);}} style={{flex:1,fontSize:11}} />}
+                        {(pat[i]?.timeType==="end"||pat[i]?.timeType==="split")&&<input type="time" value={pat[i]?.endTime||""} onChange={e=>{const p=[...pat];p[i]={...p[i],endTime:e.target.value};setPat(p);}} style={{flex:1,fontSize:11}} />}
+                        {pat[i]?.timeType!=="full"&&<input value={pat[i]?.location||""} onChange={e=>{const p=[...pat];p[i]={...p[i],location:e.target.value};setPat(p);}} placeholder={t.place} style={{flex:2,fontSize:11}} />}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
