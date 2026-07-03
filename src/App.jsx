@@ -6915,14 +6915,6 @@ function ConfigTab() {
         {step===2 && <StepDates />}
         {step===3 && <StepGarde />}
       </div>
-      <div style={{display:"flex",justifyContent:"flex-end",marginTop:18,gap:10,paddingTop:14}}>
-        {step>0&&<button onClick={()=>setStep(s=>s-1)} style={{height:44,padding:"0 20px",background:C.sur,color:C.txt,border:`1.5px solid ${C.bor}`,borderRadius:10,fontWeight:700}}>{t.prev}</button>}
-        {step<3&&(()=>{
-          const namesOk=step!==0||([...cfg.parents,...cfg.children].every(x=>x.name.trim()));
-          return <button onClick={()=>namesOk&&setStep(s=>s+1)} style={{height:44,padding:"0 20px",background:namesOk?C.vio:`${C.vio}55`,color:"#fff",cursor:namesOk?"pointer":"not-allowed",opacity:namesOk?1:0.6,borderRadius:10}} title={!namesOk?(t.nameRequired||"Le nom est obligatoire."):undefined}>{t.next}</button>;
-        })()}
-
-      </div>
     </div>
   );
 }
