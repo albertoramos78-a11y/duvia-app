@@ -1526,7 +1526,7 @@ function useFamilySync(cfg, setCfg) {
         try {
           const { data: memberships, error: memErr } = await supabase
             .from("family_members")
-            .select("family_id, status")
+            .select("family_id, status, role")
             .eq("user_id", uid);
           if (memErr) throw memErr;
           const actives = (memberships || []).filter(m => m.status === "active");
@@ -1665,8 +1665,13 @@ function useFamilySync(cfg, setCfg) {
         } else {
           // S'assurer que ce compte est bien membre (sécurité) — le serveur a
           // confirmé ci-dessus que cette famille est bien la sienne.
+          // 🔧 CORRECTIF : cette upsert forçait role:"parent" en dur, quel que
+          // soit le rôle réel du membre — un observateur validé (role="observer")
+          // se le voyait donc écrasé en "parent" à CHAQUE chargement de l'app
+          // (la ligne existe déjà, "active" ; on ne fait que préserver son rôle,
+          // jamais le redéfinir en dur).
           await supabase.from("family_members").upsert(
-            { family_id: familyId, user_id: uid, role: "parent" },
+            { family_id: familyId, user_id: uid, role: active?.role || "parent" },
             { onConflict: "family_id,user_id" }
           );
         }
