@@ -4037,14 +4037,14 @@ export default function App() {
             <div style={{position:"fixed",top:85,right:14,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:16,minWidth:260,maxWidth:"90vw",zIndex:300,boxShadow:"0 12px 40px rgba(0,0,0,.2)",overflow:"hidden"}}>
               {/* User header */}
               <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.bor}`,display:"flex",alignItems:"center",gap:10}}>
-                <div style={{width:36,height:36,borderRadius:10,background:`linear-gradient(135deg,${isAdm?"#FFD700":isObs?C.ora:isChild?C.grn:((cfg.parents||[]).find(p=>p.email&&p.email===user?.email)?.color||C.vio)},${isAdm?"#ff9f43":C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
+                <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${isAdm?"#FFD700":isObs?C.ora:isChild?C.grn:((cfg.parents||[]).find(p=>p.email&&p.email===user?.email)?.color||C.vio)},${isAdm?"#ff9f43":C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0,overflow:"hidden"}}>
                   {(() => {
                     if(isAdm) return "👑";
                     if(isObs) return "👁️";
                     if(isChild) return "🧒";
                     const av = (cfg.parents||[]).find(p=>p.email&&p.email===user?.email)?.avatar || user?.avatar || "👤";
                     return (typeof av==="string"&&av.startsWith("http"))
-                      ? <img src={av} alt="" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:10}} />
+                      ? <img src={av} alt="" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:"50%"}} />
                       : av;
                   })()}
                 </div>
