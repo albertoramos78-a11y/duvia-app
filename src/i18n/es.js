@@ -545,6 +545,7 @@ const es = {
     expWorkflowInfo:"Todo gasto añadido queda {pending} hasta que el otro padre lo valide. Una vez {accepted}, se contabiliza. Si es {refused}, sigue visible pero excluido de los totales. Cada acción se registra en el historial.",
     expStatusPending:"pendiente",
     expStatusAccepted:"aceptado",
+    expPayerBadge:"Pagador",
     expStatusRefused:"rechazado",
     menuConfigFamily:"Configuración familiar",
     menuPrefs:"Preferencias",

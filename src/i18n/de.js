@@ -545,6 +545,7 @@ const de = {
     expWorkflowInfo:"Jede hinzugefügte Ausgabe ist {pending}, bis der andere Elternteil sie bestätigt. Nach {accepted} wird sie gezählt. Bei {refused} bleibt sie sichtbar, wird aber nicht in die Summen einbezogen. Jede Aktion wird im Verlauf gespeichert.",
     expStatusPending:"ausstehend",
     expStatusAccepted:"akzeptiert",
+    expPayerBadge:"Zahler",
     expStatusRefused:"abgelehnt",
     menuConfigFamily:"Familien-Einrichtung",
     menuPrefs:"Einstellungen",

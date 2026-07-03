@@ -545,6 +545,7 @@ const pt = {
     expWorkflowInfo:"Toda a despesa adicionada fica {pending} até validação pelo outro progenitor. Uma vez {accepted}, é contabilizada. Se {refused}, permanece visível mas excluída dos totais. Cada ação é registada no histórico.",
     expStatusPending:"pendente",
     expStatusAccepted:"aceite",
+    expPayerBadge:"Pagador",
     expStatusRefused:"recusada",
     menuConfigFamily:"Configuração da família",
     menuPrefs:"Preferências",

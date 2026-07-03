@@ -597,6 +597,7 @@ const fr = {
     expWorkflowInfo:"Toute dépense ajoutée est {pending} jusqu'à validation par l'autre parent. Une fois {accepted}, elle est comptabilisée. Si {refused}, elle reste visible mais exclue des totaux. Chaque action est enregistrée dans l'historique.",
     expStatusPending:"en attente",
     expStatusAccepted:"acceptée",
+    expPayerBadge:"Payeur",
     expStatusRefused:"refusée",
     menuConfigFamily:"Configuration famille",
     menuPrefs:"Préférences",

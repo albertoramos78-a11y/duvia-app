@@ -547,6 +547,7 @@ const en = {
     expWorkflowInfo:"Every expense added is {pending} until the other parent validates it. Once {accepted}, it counts towards the totals. If {refused}, it stays visible but excluded from totals. Every action is logged in history.",
     expStatusPending:"pending",
     expStatusAccepted:"accepted",
+    expPayerBadge:"Payer",
     expStatusRefused:"refused",
     menuConfigFamily:"Family setup",
     menuPrefs:"Preferences",
