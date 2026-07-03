@@ -3606,6 +3606,41 @@ export default function App() {
     pushNotif(`📅 ${ds}`,"cal");
   }
 
+  // ── Quitte TOUTES mes familles avant suppression du compte ──────────────────
+  // 🔧 Corrige le bug : le créateur qui supprime son compte restait dans les
+  // familles → le parent invité ne pouvait plus l'enlever. On vide son
+  // créneau (userId/email/name/phone) dans CHAQUE famille où il est membre,
+  // et on supprime sa ligne family_members, AVANT que le compte auth ne soit
+  // détruit (sinon RLS bloque l'écriture car auth.uid() n'existe plus).
+  async function leaveAllFamiliesOnDelete(uid, myEmail){
+    if(!uid) return;
+    try {
+      const { data: memberships } = await supabase
+        .from("family_members").select("family_id").eq("user_id", uid);
+      if(!memberships?.length) return;
+      for(const m of memberships){
+        const fid = m.family_id;
+        try {
+          const { data: fam } = await supabase.from("families").select("data").eq("id", fid).maybeSingle();
+          if(fam?.data?.parents){
+            const parents = fam.data.parents.map(p => {
+              const mine = p && ((uid && p.userId === uid) || (myEmail && p.email && p.email.toLowerCase() === myEmail.toLowerCase()));
+              return mine ? { ...p, userId: null, email: "", name: "", phone: "" } : p;
+            });
+            await supabase.from("families").update({ data: { ...fam.data, parents } }).eq("id", fid);
+          }
+        } catch(e){ console.warn("[Duvia] deleteAccount: nettoyage parents famille", fid, e); }
+        try {
+          await supabase.rpc("leave_family", { p_family_id: fid });
+        } catch(e){
+          console.warn("[Duvia] deleteAccount: leave_family rpc", fid, e);
+          // Filet de sécurité si le RPC échoue : suppression directe de la ligne.
+          try { await supabase.from("family_members").delete().eq("family_id", fid).eq("user_id", uid); } catch {}
+        }
+      }
+    } catch(e){ console.warn("[Duvia] deleteAccount: leaveAllFamiliesOnDelete", e); }
+  }
+
   // ── Suppression de mon propre compte ───────────────────────────────────────
   async function deleteMyAccount(){
     if(!user || deletingAccount) return;
@@ -3622,6 +3657,9 @@ export default function App() {
       try {
         // Nettoyage table subscriptions avant suppression du compte
         if(myUid) await supabase.from("subscriptions").delete().eq("user_id", myUid);
+        // 🔧 Quitter TOUTES les familles AVANT de détruire le compte auth
+        // (sinon auth.uid() n'existe plus et RLS bloque l'écriture).
+        await leaveAllFamiliesOnDelete(myUid, myEmail);
         await supabase.functions.invoke("delete-account", {
           body: {
             userId:   myUid || String(myId),
