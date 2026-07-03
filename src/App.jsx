@@ -1,4 +1,8 @@
 import { useState, useEffect, useRef, useMemo, useCallback, createContext, useContext, Fragment } from "react";
+import iconFamily        from "./assets/tab_family.png";
+import iconObservers     from "./assets/tab_observers.png";
+import iconSpecialDates  from "./assets/tab_special_dates.png";
+import iconCustody       from "./assets/tab_custody_pattern.png";
 import posthog from "posthog-js";
 import { supabase } from "./supabaseClient";
 import { initDiagnostics, retryPendingReport, submitBugReport } from "./services/diagnostics";
@@ -2270,6 +2274,12 @@ function useFamilySync(cfg, setCfg) {
   return { syncStatus, familyId, families, joinFamily, linkAccount, signInExisting, switchFamily, createNewFamily, refreshFamilies, joinFamilyByToken, pendingMembers, refreshPendingMembers, validateMember, rejectMember, removeFamilyMember, leaveFamily, pendingApproval, removedObserver };
 }
 
+const SETUP_ICONS = {
+  family:          iconFamily,
+  observers:       iconObservers,
+  special_dates:   iconSpecialDates,
+  custody_pattern: iconCustody,
+};
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONTEXT — shared app state accessible anywhere without prop-drilling
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -4278,7 +4288,7 @@ Date d'entrée en vigueur : 14 juin 2026
       {/* NAV — en haut. En config : remplacée par les étapes au même endroit */}
       {menuTab==="config" ? (
         (() => {
-          const STEPS=[{i:"👤",l:t.stepId},{i:"👥",l:t.stepAccess},{i:"🗓️",l:t.stepDates},{i:"📆",l:t.stepGarde}];
+          const STEPS=[{i:SETUP_ICONS.family,l:t.stepId},{i:SETUP_ICONS.observers,l:t.stepAccess},{i:SETUP_ICONS.special_dates,l:t.stepDates},{i:SETUP_ICONS.custody_pattern,l:t.stepGarde}];
           return (
             <div style={{flexShrink:0,background:C.card,borderBottom:`1.5px solid ${C.bor}`,boxShadow:"0 1px 6px rgba(0,0,0,.05)"}}>
               {/* Barre retour + titre */}
@@ -4295,8 +4305,8 @@ Date d'entrée en vigueur : 14 juin 2026
               {STEPS.map((s,i)=>(
                 <button key={i} onClick={()=>setConfigStep(i)}
                   style={{flex:1,padding:"8px 4px 7px",background:configStep===i?C.sur:"transparent",color:configStep===i?C.vio:C.mut,borderBottom:configStep===i?`2.5px solid ${C.vio}`:"2.5px solid transparent",borderRadius:0,fontSize:16,height:"auto",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,transition:"all .15s",cursor:"pointer"}}>
-                  <span style={{lineHeight:1,position:"relative"}}>
-                    {s.i}
+                  <span style={{lineHeight:1,position:"relative",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <img src={s.i} alt="" style={{width:28,height:28,objectFit:"contain",display:"block",opacity:configStep===i?1:0.55,filter:configStep===i?"none":"grayscale(40%)",transition:"opacity .15s"}} />
                     {s.badge>0&&!s.wobbleOnly&&<span style={{position:"absolute",top:-4,right:-6,width:14,height:14,borderRadius:"50%",background:C.red,color:"#fff",fontSize:8,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{s.badge}</span>}
                   </span>
                   <span style={{fontSize:9,fontWeight:800,letterSpacing:".03em",textTransform:"uppercase"}}>{s.l}</span>
@@ -6566,7 +6576,7 @@ function ObserverPrefsTab() {
 
 function ConfigTab() {
   const {C,t,cfg,setCfg,addHist,pushNotif,prem,perms,onUpgrade,apiData,apiLoading,sub,setSub,lang,setLang,msgs,setMsgs,setUsers,user,familySync,configStep:step,setConfigStep:setStep} = useApp();
-  const STEPS=[{i:"👤",l:t.stepId},{i:"👥",l:t.stepAccess},{i:"🗓️",l:t.stepDates},{i:"📆",l:t.stepGarde}];
+  const STEPS=[{i:SETUP_ICONS.family,l:t.stepId},{i:SETUP_ICONS.observers,l:t.stepAccess},{i:SETUP_ICONS.special_dates,l:t.stepDates},{i:SETUP_ICONS.custody_pattern,l:t.stepGarde}];
 
   // ── Invite modal state ─────────────────────────────────────────────────────
   const [showInviteModal, setShowInviteModal] = useState(false);
