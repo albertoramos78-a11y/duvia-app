@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback, createContext, useContext } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, createContext, useContext, Fragment } from "react";
 import posthog from "posthog-js";
 import { supabase } from "./supabaseClient";
 import { initDiagnostics, retryPendingReport, submitBugReport } from "./services/diagnostics";
@@ -797,6 +797,16 @@ const pad = n => String(n).padStart(2,"0");
 function toStr(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
 function dInMonth(y,m) { return new Date(y,m+1,0).getDate(); }
 function dow(y,m,d) { return (new Date(y,m,d).getDay()+6)%7; }
+// Numéro de semaine ISO-8601 (semaine du lundi contenant le 1er jeudi de l'année)
+function isoWeekNumber(y,m,d) {
+  const date = new Date(Date.UTC(y,m,d));
+  const dayNum = (date.getUTCDay()+6)%7; // Mon=0 ... Sun=6
+  date.setUTCDate(date.getUTCDate()-dayNum+3); // jeudi de cette semaine
+  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(),0,4));
+  const firstDayNum = (firstThursday.getUTCDay()+6)%7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate()-firstDayNum+3);
+  return 1 + Math.round((date-firstThursday)/(7*24*3600*1000));
+}
 function wkNum(date) {
   const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));
   d.setUTCDate(d.getUTCDate()+4-(d.getUTCDay()||7));
@@ -9552,6 +9562,14 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
     ? new Date(y,m,1).getDay()     // Sun=0, Mon=1, ..., Sat=6
     : dow(y,m,1);                  // Mon=0, ..., Sun=6 (ISO)
 
+  // Numéro de semaine ISO affiché à gauche de chaque ligne
+  const gridStartDate = new Date(y,m,1-firstDow);
+  const numRows = Math.ceil((firstDow+dc)/7);
+  const rowWeekNumbers = Array.from({length:numRows},(_,r)=>{
+    const wd = new Date(gridStartDate); wd.setDate(wd.getDate()+r*7);
+    return isoWeekNumber(wd.getFullYear(),wd.getMonth(),wd.getDate());
+  });
+
   // Pré-calcule la garde + infos de chaque jour du mois
   const days = Array.from({length:dc},(_,i)=>{
     const day=i+1, date=new Date(y,m,day), ds=toStr(date), dw=dow(y,m,day);
@@ -9640,89 +9658,110 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
     setInlineDs(inlineDs===ds?null:ds);
   }
 
+  function renderDayCell(d){
+    const hasSplit = d.splitBefore && d.splitAfter;
+    const bg = hasSplit
+      ? `linear-gradient(180deg, ${d.splitBefore}30 0%, ${d.splitBefore}30 calc(${d.splitPercent}% - 1px), ${d.splitAfter}30 calc(${d.splitPercent}% + 1px), ${d.splitAfter}30 100%)`
+      : cellBg(d.guard);
+    // Priorité couleur du numéro : férié (rouge gras) > week-end (gris foncé gras) > normal
+    const numColor = d.fer ? C.red : d.isWE ? "#52525b" : (d.isToday ? C.vio : C.txt);
+    const numWeight = (d.fer || d.isWE || d.isToday) ? 900 : 700;
+    // Détection icône spéciale (fête des mères, pères, grands-parents)
+    const specialIcon = !d.isBirthday && !d.fer && !d.sco
+      ? d.specials.find(ev => ev.label?.includes("🌸") || ev.label?.includes("🎩") || ev.label?.includes("👴") || ev.label?.includes("👵"))
+      : null;
+    const specialIconChar = specialIcon
+      ? (specialIcon.label?.match(/🌸|🎩|👴|👵/)?.[0] || null)
+      : null;
+    // Point coloré uniquement si ni vacances, ni jour férié, ni icône spéciale, ni anniversaire
+    const dotColor = !d.isBirthday && !d.fer && !d.sco && !specialIconChar
+      ? d.specials[0]?.color
+      : null;
+    // Encadrement vert si vacances scolaires (priorité sur bordure today/inline/grise)
+    const scoBorder = d.sco ? `3px solid ${C.grn}` : null;
+    const activeBorder = d.isToday ? `3px solid ${C.vio}` : inlineDs===d.ds ? `1.5px solid ${C.vio}` : `1.5px solid ${C.bor}`;
+    // Heure + lieu du rendez-vous de garde (ex: "12:00 → 14:00" / "📍 MANTES")
+    const g = d.guard;
+    let cellTime = "";
+    if(g && g.timeType && g.timeType!=="full"){
+      const st=g.startTime, et=g.endTime;
+      if(g.timeType==="start"&&st) cellTime=`▶ ${st}`;
+      else if(g.timeType==="end"&&et) cellTime=`⏹ ${et}`;
+      else if(g.timeType==="split"&&st&&et) cellTime=`${st} → ${et}`;
+      else if(g.timeType==="split"&&st) cellTime=`▶ ${st}`;
+      else if(g.timeType==="split"&&et) cellTime=`⏹ ${et}`;
+    }
+    const cellLocation = g?.location || "";
+    // 🔄 masqué si une heure de prise/fin est déjà affichée (lisibilité)
+    const hasBadge = d.isRealChange && d.guard && !d.isBirthday && !cellTime;
+    return (
+      <div key={d.ds} onClick={()=>openDay(d.ds)}
+        title={d.ferName||d.scoName||d.specials[0]?.label||undefined}
+        style={{
+          aspectRatio:"1",borderRadius:10,background:bg,padding:"6px 6px",
+          display:"flex",flexDirection:"column",justifyContent:"space-between",
+          cursor:readOnly?"default":"pointer",position:"relative",
+          border:scoBorder || activeBorder,
+          transition:"transform .12s, box-shadow .12s",
+          minWidth:0,boxSizing:"border-box",overflow:"hidden",
+        }}>
+        <span style={{display:"flex",alignItems:"center",gap:3}}>
+          <span style={{fontSize:13,fontWeight:numWeight,color:numColor}}>{d.day}</span>
+          {d.isBirthday && <span style={{fontSize:11,lineHeight:1}}>🎂</span>}
+        </span>
+        {(cellTime || cellLocation) && (
+          <span style={{textAlign:"center",minWidth:0,overflow:"hidden"}}>
+            {cellTime && <span style={{display:"block",fontSize:9,fontWeight:800,color:C.vio,fontFamily:"JetBrains Mono",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cellTime}</span>}
+            {cellLocation && <span style={{display:"block",fontSize:8,fontWeight:700,color:C.pin,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {cellLocation}</span>}
+          </span>
+        )}
+        {specialIconChar && (
+          <span style={{position:"absolute",top:5,right:5,fontSize:12,lineHeight:1}}>{specialIconChar}</span>
+        )}
+        {dotColor && (
+          <span style={{position:"absolute",top:7,right:7,width:6,height:6,borderRadius:"50%",background:dotColor}} />
+        )}
+        {hasBadge && (
+          <span style={{
+            position:"absolute",bottom:5,right:5,
+            fontSize:11,lineHeight:1,opacity:0.75,
+          }}>🔄</span>
+        )}
+      </div>
+    );
+  }
+
+  // Liste à plat des cases (vides + jours), puis découpage en lignes de 7 pour
+  // pouvoir intercaler le numéro de semaine en tête de chaque ligne.
+  const flatCells = [
+    ...Array.from({length:firstDow},(_,i)=>({type:"pad",key:`pad-${i}`})),
+    ...days.map(d=>({type:"day",d})),
+  ];
+  const weekRows = [];
+  for(let i=0;i<flatCells.length;i+=7) weekRows.push(flatCells.slice(i,i+7));
+
+  const WEEKNUM_COL = 26;
+
   return (
     <div className="card" style={{padding:14,overflow:"hidden",width:"100%",boxSizing:"border-box"}}>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5,marginBottom:6,width:"100%",boxSizing:"border-box"}}>
+      <div style={{display:"grid",gridTemplateColumns:`${WEEKNUM_COL}px repeat(7,1fr)`,gap:5,marginBottom:6,width:"100%",boxSizing:"border-box"}}>
+        <div />
         {dayLetters.map((lbl,i)=>(
           <div key={i} style={{textAlign:"center",fontSize:10,fontWeight:800,letterSpacing:".04em",color:C.mut,padding:"2px 0",minWidth:0,overflow:"hidden"}}>{lbl}</div>
         ))}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5,width:"100%",boxSizing:"border-box"}}>
-        {Array.from({length:firstDow}).map((_,i)=>(
-          <div key={`pad-${i}`} style={{aspectRatio:"1",borderRadius:10,background:`${C.sur}66`,minWidth:0,boxSizing:"border-box"}} />
-        ))}
-        {days.map(d=>{
-          const hasSplit = d.splitBefore && d.splitAfter;
-          const bg = hasSplit
-            ? `linear-gradient(180deg, ${d.splitBefore}30 0%, ${d.splitBefore}30 calc(${d.splitPercent}% - 1px), ${d.splitAfter}30 calc(${d.splitPercent}% + 1px), ${d.splitAfter}30 100%)`
-            : cellBg(d.guard);
-          // Priorité couleur du numéro : férié (rouge gras) > week-end (gris foncé gras) > normal
-          const numColor = d.fer ? C.red : d.isWE ? "#52525b" : (d.isToday ? C.vio : C.txt);
-          const numWeight = (d.fer || d.isWE || d.isToday) ? 900 : 700;
-          // Détection icône spéciale (fête des mères, pères, grands-parents)
-          const specialIcon = !d.isBirthday && !d.fer && !d.sco
-            ? d.specials.find(ev => ev.label?.includes("🌸") || ev.label?.includes("🎩") || ev.label?.includes("👴") || ev.label?.includes("👵"))
-            : null;
-          const specialIconChar = specialIcon
-            ? (specialIcon.label?.match(/🌸|🎩|👴|👵/)?.[0] || null)
-            : null;
-          // Point coloré uniquement si ni vacances, ni jour férié, ni icône spéciale, ni anniversaire
-          const dotColor = !d.isBirthday && !d.fer && !d.sco && !specialIconChar
-            ? d.specials[0]?.color
-            : null;
-          // Encadrement vert si vacances scolaires (priorité sur bordure today/inline/grise)
-          const scoBorder = d.sco ? `3px solid ${C.grn}` : null;
-          const activeBorder = d.isToday ? `3px solid ${C.vio}` : inlineDs===d.ds ? `1.5px solid ${C.vio}` : `1.5px solid ${C.bor}`;
-          // Heure + lieu du rendez-vous de garde (ex: "12:00 → 14:00" / "📍 MANTES")
-          const g = d.guard;
-          let cellTime = "";
-          if(g && g.timeType && g.timeType!=="full"){
-            const st=g.startTime, et=g.endTime;
-            if(g.timeType==="start"&&st) cellTime=`▶ ${st}`;
-            else if(g.timeType==="end"&&et) cellTime=`⏹ ${et}`;
-            else if(g.timeType==="split"&&st&&et) cellTime=`${st} → ${et}`;
-            else if(g.timeType==="split"&&st) cellTime=`▶ ${st}`;
-            else if(g.timeType==="split"&&et) cellTime=`⏹ ${et}`;
-          }
-          const cellLocation = g?.location || "";
-          // 🔄 masqué si une heure de prise/fin est déjà affichée (lisibilité)
-          const hasBadge = d.isRealChange && d.guard && !d.isBirthday && !cellTime;
-          return (
-            <div key={d.ds} onClick={()=>openDay(d.ds)}
-              title={d.ferName||d.scoName||d.specials[0]?.label||undefined}
-              style={{
-                aspectRatio:"1",borderRadius:10,background:bg,padding:"6px 6px",
-                display:"flex",flexDirection:"column",justifyContent:"space-between",
-                cursor:readOnly?"default":"pointer",position:"relative",
-                border:scoBorder || activeBorder,
-                transition:"transform .12s, box-shadow .12s",
-                minWidth:0,boxSizing:"border-box",overflow:"hidden",
-              }}>
-              <span style={{display:"flex",alignItems:"center",gap:3}}>
-                <span style={{fontSize:13,fontWeight:numWeight,color:numColor}}>{d.day}</span>
-                {d.isBirthday && <span style={{fontSize:11,lineHeight:1}}>🎂</span>}
-              </span>
-              {(cellTime || cellLocation) && (
-                <span style={{textAlign:"center",minWidth:0,overflow:"hidden"}}>
-                  {cellTime && <span style={{display:"block",fontSize:9,fontWeight:800,color:C.vio,fontFamily:"JetBrains Mono",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cellTime}</span>}
-                  {cellLocation && <span style={{display:"block",fontSize:8,fontWeight:700,color:C.pin,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📍 {cellLocation}</span>}
-                </span>
-              )}
-              {specialIconChar && (
-                <span style={{position:"absolute",top:5,right:5,fontSize:12,lineHeight:1}}>{specialIconChar}</span>
-              )}
-              {dotColor && (
-                <span style={{position:"absolute",top:7,right:7,width:6,height:6,borderRadius:"50%",background:dotColor}} />
-              )}
-              {hasBadge && (
-                <span style={{
-                  position:"absolute",bottom:5,right:5,
-                  fontSize:11,lineHeight:1,opacity:0.75,
-                }}>🔄</span>
-              )}
+      <div style={{display:"grid",gridTemplateColumns:`${WEEKNUM_COL}px repeat(7,1fr)`,gap:5,width:"100%",boxSizing:"border-box"}}>
+        {weekRows.map((row,ri)=>(
+          <Fragment key={`row-${ri}`}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,color:C.mut,minWidth:0}}>
+              {rowWeekNumbers[ri]}
             </div>
-          );
-        })}
+            {row.map(cell => cell.type==="pad"
+              ? <div key={cell.key} style={{aspectRatio:"1",borderRadius:10,background:`${C.sur}66`,minWidth:0,boxSizing:"border-box"}} />
+              : renderDayCell(cell.d)
+            )}
+          </Fragment>
+        ))}
       </div>
       {inlineDs && !readOnly && (() => {
         const d = days.find(d=>d.ds===inlineDs);
