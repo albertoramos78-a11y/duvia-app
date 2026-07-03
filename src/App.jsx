@@ -1519,6 +1519,7 @@ function useFamilySync(cfg, setCfg) {
         // compte, lui, reste bien lié — sans ça, l'app créait une nouvelle
         // famille vide à chaque fois que la note locale manquait.
         let familyId = null;
+        let myRole = null;
         let hasPendingOnly = false;
         let wasRemoved = false;
         let wasRemovedObserver = false;
@@ -1542,6 +1543,7 @@ function useFamilySync(cfg, setCfg) {
           if (!active) active = actives[0] || null;
           if (active?.family_id) {
             familyId = active.family_id;
+            myRole = active.role || null;
             try { window.localStorage.setItem("duvia_family_id", familyId); } catch {}
           } else if ((memberships || []).some(m => m.status === "pending")) {
             // 🔒 Le compte n'a QUE des adhésions en attente de validation —
@@ -1671,7 +1673,7 @@ function useFamilySync(cfg, setCfg) {
           // (la ligne existe déjà, "active" ; on ne fait que préserver son rôle,
           // jamais le redéfinir en dur).
           await supabase.from("family_members").upsert(
-            { family_id: familyId, user_id: uid, role: active?.role || "parent" },
+            { family_id: familyId, user_id: uid, role: myRole || "parent" },
             { onConflict: "family_id,user_id" }
           );
         }
