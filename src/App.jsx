@@ -1439,12 +1439,16 @@ function useFamilySync(cfg, setCfg) {
         .on("postgres_changes",
           { event: "*", schema: "public", table: "family_members", filter: `family_id=eq.${familyId}` },
           (payload) => {
-            const row = payload.new;
+            // 🔧 Sur DELETE, payload.new est null → utiliser payload.old.
+            // Cas typique : suppression de compte via Edge Function qui DELETE
+            // la ligne family_members (au lieu d'un UPDATE status='removed').
+            const row = payload.new || payload.old;
+            const isDelete = payload.eventType === "DELETE";
             // (a) Quelqu'un rejoint / change de statut → rafraîchir mes demandes
             //     en attente pour pouvoir valider EN DIRECT (sans recharger).
             try { refreshPendingMembers(); } catch {}
             // (b) Mon propre statut passe à ≠ 'active' → je suis éjecté.
-            if (row?.user_id === uid && row?.status && row.status !== "active") {
+            if (!isDelete && row?.user_id === uid && row?.status && row.status !== "active") {
               const voluntary = (() => { try { return window.localStorage.getItem("duvia_left") === "1"; } catch { return false; } })();
               try {
                 window.localStorage.setItem("duvia_family_snapshot", JSON.stringify({ at: new Date().toISOString(), cfg: cfgRef.current || null }));
@@ -1453,9 +1457,9 @@ function useFamilySync(cfg, setCfg) {
               duviaReload();
               return;
             }
-            // (c) Un AUTRE membre s'est retiré/a quitté → le retirer de ma donnée
-            //     partagée (cfg.parents) et prévenir (notification au créateur).
-            if (row?.user_id && row.user_id !== uid && (row.status === "removed" || row.status === "left")) {
+            // (c) Un AUTRE membre s'est retiré/a quitté/supprimé son compte
+            //     → le retirer de ma donnée partagée (cfg.parents) et prévenir.
+            if (row?.user_id && row.user_id !== uid && (isDelete || row.status === "removed" || row.status === "left")) {
               const parents = cfgRef.current?.parents || [];
               let myEmail2 = ""; try { myEmail2 = JSON.parse(window.localStorage.getItem("duvia_session") || "null") || ""; } catch {}
               const activeIds = parents.map(p => p?.userId).filter(Boolean).filter(id => id !== row.user_id);
@@ -6840,7 +6844,17 @@ function ConfigTab() {
   // « Retirer l'invité » — réservé au créateur (parents[0]).
   async function retirerInvite(i){
     const p = cfg.parents[i];
-    if(!p?.userId){ alert("Cet invité n'a pas encore rejoint — utilisez « Retirer » sur l'invitation."); return; }
+    if(!p?.userId){
+      // Cas 1 : invitation pas encore acceptée → utiliser le bouton « Retirer » sur l'invitation
+      if(p?.inviteStatus === "pending"){
+        alert("Cet invité n'a pas encore rejoint — utilisez « Retirer » sur l'invitation.");
+        return;
+      }
+      // Cas 2 : ancien membre parti (compte supprimé) → nettoyer le slot local
+      if(!window.confirm("Cet invité a quitté la famille (compte supprimé). Retirer sa carte ?")) return;
+      setCfg(c=>({...c, parents:c.parents.filter((_,j)=>j!==i)}));
+      return;
+    }
     if(!window.confirm((t.retirerInviteConfirm||"Retirer {name} de la famille ?\n\nIl repartira sur une famille personnelle vierge. Vous conservez la famille et son code.").replace("{name}",p.name||t.guestLabel||"l'invité"))) return;
     const res = await familySync?.removeFamilyMember?.(p.userId);
     if(res?.ok){
