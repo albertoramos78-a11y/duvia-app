@@ -393,7 +393,14 @@ export function markDepartedParents(parents, opts = {}) {
     else if (!p.userId && unexplained > 0 && (p.email || p.name)) { shouldLeave = true; unexplained--; }
 
     if (shouldLeave && !p.left) { changed = true; return { ...p, left: true, leftAt: p.leftAt || nowIso }; }
-    if (!shouldLeave && p.left) { changed = true; const { left, leftAt, ...rest } = p; return rest; }
+    if (!shouldLeave && p.left) {
+      // 🔧 Ne PAS retirer left:true si le slot a été vidé (userId=null, email/nom vides).
+      // C'est la trace d'un compte supprimé : l'Edge Function delete-account nettoie
+      // les champs perso + pose left:true. Sans cette garde, le listener DELETE
+      // family_members retirerait le flag et la carte grise "s'est retiré" disparaîtrait.
+      if (!p.userId && !p.email && !p.name) return p;
+      changed = true; const { left, leftAt, ...rest } = p; return rest;
+    }
     return p;
   });
   return changed ? out : null;
