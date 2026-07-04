@@ -1461,14 +1461,18 @@ function useFamilySync(cfg, setCfg) {
             //     → le retirer de ma donnée partagée (cfg.parents) et prévenir.
             if (row?.user_id && row.user_id !== uid && (isDelete || row.status === "removed" || row.status === "left")) {
               const parents = cfgRef.current?.parents || [];
-              // 🔧 Récupérer le nom du parti AVANT traitement : on le cherche par
-              // son userId dans le cfg local (qui a encore le vrai nom à cet instant).
-              const departedParent = parents.find(p => p?.userId === row.user_id);
-              const departedName = departedParent?.name || "L'invité";
-              let myEmail2 = ""; try { myEmail2 = JSON.parse(window.localStorage.getItem("duvia_session") || "null") || ""; } catch {}
-              const activeIds = parents.map(p => p?.userId).filter(Boolean).filter(id => id !== row.user_id);
-              const next = markDepartedParents(parents, { activeIds, inactiveIds: [row.user_id], myUid: uid, myEmail: myEmail2 });
-              if (next) {
+              // 🔧 Marquage CIBLÉ uniquement : on ne marque que le slot dont le
+              // userId correspond au membre parti. Si aucun slot ne matche (déjà
+              // nettoyé par l'Edge Function), on NE TOUCHE À RIEN — le realtime
+              // UPDATE de `families` apportera l'état correct du serveur. L'ancien
+              // fallback "départ inexpliqué" marquait parfois le MAUVAIS slot
+              // (celui du créateur resté) puis l'autosave écrasait le serveur.
+              const idx = parents.findIndex(p => p?.userId === row.user_id);
+              if (idx >= 0 && !parents[idx].left) {
+                const departedName = parents[idx].name || "L'invité";
+                const next = parents.map((p, j) =>
+                  j === idx ? { ...p, userId: null, left: true, leftAt: new Date().toISOString() } : p
+                );
                 setCfg(c => ({ ...c, parents: next }));
                 try { window.dispatchEvent(new CustomEvent("duvia-invite-left", { detail: departedName })); } catch {}
               }
