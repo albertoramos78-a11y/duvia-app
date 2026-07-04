@@ -7374,15 +7374,13 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             </div>
           </div>
 
-          {/* Lignes privées (naissance, téléphone, email) — visibles UNIQUEMENT
-              sur MA propre fiche. Un parent ne voit pas la fiche identité de
-              l'autre (vie privée des co-parents séparés). */}
-          {isMine && <>
+          {/* Lignes identité : naissance, téléphone, email — visibles pour
+              les 2 parents mais lecture seule pour l'autre. */}
           {/* Row 2 : Jour naissance | Mois naissance */}
-          <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:12}}>
+          <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:12,...(isMine?{}:lockStyle)}}>
             <div style={{...fieldBox,flex:1}}>
               <span style={lbl}>{t.birthDay}</span>
-              <input type="number" min="1" max="31" value={p.birthDay} onChange={e=>setParent(i,"birthDay",e.target.value)} placeholder={t.dayPlaceholder||"JJ"} style={inp} />
+              <input type="number" min="1" max="31" value={p.birthDay} onChange={e=>setParent(i,"birthDay",e.target.value)} placeholder={t.dayPlaceholder||"JJ"} readOnly={!isMine} style={inp} />
             </div>
             <div style={{...fieldBox,flex:2}}>
               <span style={lbl}>{t.birthMonth}</span>
@@ -7395,9 +7393,9 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
 
           {/* Row 3 : Téléphone + Email */}
           <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:0}}>
-            <div style={{...fieldBox,flex:1}}>
+            <div style={{...fieldBox,flex:1,...(isMine?{}:lockStyle)}}>
               <span style={lbl}>📞 {t.contactsPhone||"Téléphone"}</span>
-              <input type="tel" value={p.phone||""} onChange={e=>setParent(i,"phone",e.target.value)} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} style={inp} />
+              <input type="tel" value={p.phone||""} onChange={e=>setParent(i,"phone",e.target.value)} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} readOnly={!isMine} style={inp} />
             </div>
             <div style={{...fieldBox,flex:2}}>
               <span style={lbl}>
@@ -7412,17 +7410,16 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
                 type="email"
                 value={p.email||(p.inviteStatus==="accepted"?p.inviteEmail:"")}
                 onChange={e=>setParent(i,"email",e.target.value)}
-                readOnly={emailLocked}
+                readOnly={emailLocked || !isMine}
                 placeholder="email@exemple.com"
                 style={{...inp,
-                  background:emailLocked?C.sur:undefined,
-                  color:emailLocked?C.mut:undefined,
-                  cursor:emailLocked?"default":undefined,
+                  background:(emailLocked||!isMine)?C.sur:undefined,
+                  color:(emailLocked||!isMine)?C.mut:undefined,
+                  cursor:(emailLocked||!isMine)?"default":undefined,
                 }}
               />
             </div>
           </div>
-          </>}
         </div>
       );})}
       {cfg.parents.filter(p=>!p?.left).length >= 2
