@@ -5035,10 +5035,10 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
       <div style={{background:C.card,borderRadius:20,padding:"30px 24px",maxWidth:420,width:"100%",textAlign:"center",boxShadow:"0 10px 40px rgba(0,0,0,.12)"}}>
         <div style={{fontSize:44,marginBottom:12}}>⏳</div>
         <div style={{fontWeight:900,fontSize:18,marginBottom:8,color:C.txt}}>{t.obsJoinWaiting||"En attente d'approbation"}</div>
-        <div style={{fontSize:13.5,color:C.mut,lineHeight:1.6,marginBottom:18}}>{t.obsJoinWaitingInfo||"Votre demande a été envoyée aux parents. Vous recevrez une notification dès qu'elle sera approuvée."}</div>
+        <div style={{fontSize:13.5,color:C.mut,lineHeight:1.6,marginBottom:18,whiteSpace:"pre-line"}}>{t.obsJoinWaitingInfo||"Votre demande pour rejoindre la famille a bien été envoyée.\n\nPour des raisons de sécurité, la personne qui vous a invité(e) doit valider votre entrée.\n\nUne fois approuvé(e), vous pourrez vous connecter sur app.duvia.fr."}</div>
         <button onClick={()=>{ try{ window.location.href = window.location.origin + "/"; }catch{ setMode("login"); } }}
-          style={{height:42,padding:"0 22px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13,borderRadius:10}}>
-          {t.backLogin||"Retour"}
+          style={{height:42,padding:"0 24px",background:C.vio,color:"#fff",border:"none",fontSize:13,fontWeight:700,borderRadius:10}}>
+          {t.understood||"Compris"}
         </button>
       </div>
     </div>
