@@ -3688,9 +3688,11 @@ export default function App() {
 
         // Nettoyage table subscriptions avant suppression du compte
         if(myUid) await supabase.from("subscriptions").delete().eq("user_id", myUid);
-        // 🔧 Quitter TOUTES les familles AVANT de détruire le compte auth
-        // (sinon auth.uid() n'existe plus et RLS bloque l'écriture).
-        await leaveAllFamiliesOnDelete(myUid, myEmail);
+        // 🔧 NE PAS nettoyer les familles côté client ici : l'Edge Function
+        // delete-account s'en charge avec la service role key (marque left:true,
+        // garde le nom pour la carte grise, supprime family_members, fichiers,
+        // backups). Le nettoyage client qui tournait AVANT vidait le slot et
+        // supprimait family_members → l'Edge Function ne trouvait plus rien.
         await supabase.functions.invoke("delete-account", {
           body: {
             userId:   myUid || String(myId),
