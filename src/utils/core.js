@@ -279,16 +279,24 @@ export function insertValidatedParent(parents, member) {
   while (out.length < 2) out.push({});
   const idx = 1;
   const existing = out[idx] || {};
-  const name = member.displayName || existing.name || placeholderNameFromEmail(member.email) || "Parent 2";
+
+  // 🔧 Sécurité : si le slot appartenait à un AUTRE userId (ex: parent supprimé
+  // puis nouveau parent invité au même slot), on wipe les champs perso hérités
+  // (email, phone, birthDay...) pour éviter que les données de l'ancien occupant
+  // polluent le nouveau. On garde uniquement la couleur (neutre).
+  const slotChangedOwner = existing.userId && member.userId && existing.userId !== member.userId;
+  const base = slotChangedOwner ? { color: existing.color } : existing;
+
+  const name = member.displayName || base.name || placeholderNameFromEmail(member.email) || "Parent 2";
   out[idx] = {
-    ...existing,
+    ...base,
     userId: member.userId,
     name,
     // 🔧 Le vrai email/téléphone du compte Supabase de l'invité PRIME sur
     // l'ancien saisi par l'inviteur (souvent différent ou pas encore utilisé).
     // Sans ça, la messagerie ne pouvait pas matcher l'invité à son compte.
-    email: member.email || existing.email || "",
-    gender: member.gender || existing.gender || "M",
+    email: member.email || base.email || "",
+    gender: member.gender || base.gender || "M",
     color: existing.color || PARENT_COLORS[idx % PARENT_COLORS.length],
     inviteStatus: "accepted",
   };
