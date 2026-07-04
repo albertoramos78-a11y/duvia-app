@@ -1461,14 +1461,16 @@ function useFamilySync(cfg, setCfg) {
             //     → le retirer de ma donnée partagée (cfg.parents) et prévenir.
             if (row?.user_id && row.user_id !== uid && (isDelete || row.status === "removed" || row.status === "left")) {
               const parents = cfgRef.current?.parents || [];
+              // 🔧 Récupérer le nom du parti AVANT traitement : on le cherche par
+              // son userId dans le cfg local (qui a encore le vrai nom à cet instant).
+              const departedParent = parents.find(p => p?.userId === row.user_id);
+              const departedName = departedParent?.name || "L'invité";
               let myEmail2 = ""; try { myEmail2 = JSON.parse(window.localStorage.getItem("duvia_session") || "null") || ""; } catch {}
               const activeIds = parents.map(p => p?.userId).filter(Boolean).filter(id => id !== row.user_id);
               const next = markDepartedParents(parents, { activeIds, inactiveIds: [row.user_id], myUid: uid, myEmail: myEmail2 });
               if (next) {
-                const idx = next.findIndex((p, j) => p?.left && !parents[j]?.left);
-                const leftName = idx >= 0 ? (parents[idx]?.name || "L'invité") : "L'invité";
                 setCfg(c => ({ ...c, parents: next }));
-                try { window.dispatchEvent(new CustomEvent("duvia-invite-left", { detail: leftName })); } catch {}
+                try { window.dispatchEvent(new CustomEvent("duvia-invite-left", { detail: departedName })); } catch {}
               }
             }
           })
