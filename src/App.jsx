@@ -3009,6 +3009,18 @@ export default function App() {
   const [confirmDeleteAccount,setConfirmDeleteAccount] = useState(false);
   const [deletingAccount,setDeletingAccount]           = useState(false);
   const [deleteAccountError,setDeleteAccountError]     = useState("");
+  const [isLastMember,setIsLastMember]                 = useState(false);
+  // Vérifie si l'utilisateur est le dernier parent quand la modale s'ouvre
+  useEffect(()=>{
+    if(!confirmDeleteAccount || !familySync?.familyId) return;
+    (async()=>{
+      try {
+        const { data } = await supabase.from("family_members")
+          .select("user_id").eq("family_id",familySync.familyId).eq("status","active");
+        setIsLastMember((data||[]).length <= 1);
+      } catch(e){ setIsLastMember(false); }
+    })();
+  },[confirmDeleteAccount, familySync?.familyId]);
 
   // ── Garde le user en mémoire synchronisé avec la liste users persistée ──────
   // (ex: après setUsers suite à un achat, upgrade, parrainage, etc.)
@@ -4546,6 +4558,12 @@ Date d'entrée en vigueur : 14 juin 2026
                 </div>
               )}
             </div>
+            {isLastMember && (
+              <div style={{background:`${C.red}12`,border:`1px solid ${C.red}55`,borderRadius:10,padding:"10px 12px",marginBottom:12,textAlign:"left"}}>
+                <div style={{fontSize:12,fontWeight:800,color:C.red,marginBottom:4}}>⚠️ Vous êtes le dernier parent</div>
+                <div style={{fontSize:11,color:C.mut,lineHeight:1.5}}>Tous les documents du coffre-fort, les pièces jointes et les messages de la famille seront définitivement supprimés.</div>
+              </div>
+            )}
             {deleteAccountError && (
               <div style={{background:`${C.red}10`,border:`1px solid ${C.red}44`,borderRadius:10,padding:"10px 12px",marginBottom:16,fontSize:12,color:C.red,textAlign:"left"}}>
                 {deleteAccountError}
@@ -6766,7 +6784,43 @@ function ConfigTab() {
 
   // « Quitter la famille » — pour le parent connecté (créateur OU invité).
   async function quitterFamille(){
-    if(!window.confirm(t.quitterFamilleConfirm||"Quitter cette famille ?\n\nVous repartirez sur une famille personnelle vierge. Une synthèse de vos données est conservée pour export.")) return;
+    const fid = familySync?.familyId;
+    const uid = user?.id;
+
+    // Vérifier si dernier membre actif de la famille
+    let isLast = false;
+    if(fid){
+      try {
+        const { data } = await supabase.from("family_members")
+          .select("user_id").eq("family_id", fid).eq("status","active");
+        isLast = (data||[]).length <= 1;
+      } catch(e){ console.warn("quitterFamille: isLast check", e); }
+    }
+
+    // Message adapté selon si dernier parent ou non
+    const msg = isLast
+      ? "Vous êtes le dernier parent de cette famille.\n\n⚠️ Tous les documents du coffre-fort, les pièces jointes et les messages seront définitivement supprimés.\n\nConfirmer ?"
+      : (t.quitterFamilleConfirm||"Quitter cette famille ?\n\nVous repartirez sur une famille personnelle vierge. Une synthèse de vos données est conservée pour export.");
+    if(!window.confirm(msg)) return;
+
+    // Supprimer l'avatar (toujours — fichier personnel)
+    if(uid){
+      try {
+        const { data: av } = await supabase.storage.from("avatars").list(uid, { limit:100 });
+        if(av?.length) await supabase.storage.from("avatars").remove(av.map(f=>`${uid}/${f.name}`));
+      } catch(e){ console.warn("quitterFamille: avatar cleanup", e); }
+    }
+
+    // Supprimer les fichiers de la famille si dernier parent
+    if(isLast && fid){
+      for(const bucket of ["vault","chat-attachments","expense-attachments"]){
+        try {
+          const { data: files } = await supabase.storage.from(bucket).list(fid, { limit:1000 });
+          if(files?.length) await supabase.storage.from(bucket).remove(files.map(f=>`${fid}/${f.name}`));
+        } catch(e){ console.warn(`quitterFamille: cleanup ${bucket}`, e); }
+      }
+    }
+
     const res = await familySync?.leaveFamily?.();
     if(res?.ok){ duviaReload(); }
     else { alert("⚠️ Impossible de quitter la famille.\n\nDétail : "+(res?.error||"inconnu")+"\n\n(Si l'erreur mentionne « leave_family », la migration SQL 0018 n'est pas encore exécutée sur Supabase.)"); }
