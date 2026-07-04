@@ -3475,7 +3475,7 @@ export default function App() {
         const payload = buildDuviaBackup({
           cfg, history: historyData,
           familyId: familySync.familyId,
-          lang, userEmail: user?.email,
+          lang, userEmail: user?.email, userId: user?.id,
         });
         await uploadCloudBackup({ payload, familyId: familySync.familyId });
         markCloudBackupDone();
@@ -4580,7 +4580,7 @@ Date d'entrée en vigueur : 14 juin 2026
                   : buildDuviaBackup({
                       cfg, history: historyData,
                       familyId: familySync?.familyId,
-                      lang, userEmail: user?.email,
+                      lang, userEmail: user?.email, userId: user?.id,
                     });
                 downloadDuviaBackup(payload, makeBackupFilename("duvia-backup-avant-suppression"));
               }}
@@ -5998,7 +5998,7 @@ function StepLang({lang,setLang}) {
 
 // ─── PRÉFÉRENCES ──────────────────────────────────────────────────────────────
 function PrefsTab() {
-  const {C,t,lang,setLang,sub,setConfirmDeleteAccount,user,currency,setCurrency,weekStart,setWeekStart,cfg,setCfg,history,familySync,addHist} = useApp();
+  const {C,t,lang,setLang,sub,setConfirmDeleteAccount,user,currency,setCurrency,weekStart,setWeekStart,cfg,setCfg,history,familySync,addHist,msgs,expenses,reimbursements} = useApp();
 
   // ── Prefs state (chargé depuis user_metadata) ─────────────────────────────
   const [emailMsg,    setEmailMsg]    = useState(true);
@@ -6064,11 +6064,22 @@ function PrefsTab() {
     try { await supabase.auth.updateUser({ data: { cloud_backup_enabled: next } }); }
     catch(e) { console.warn("[Duvia] cloud backup toggle failed:", e); }
   }
-  function handleExportBackup() {
+  async function handleExportBackup() {
+    // Récupérer la liste des documents du coffre-fort
+    let vaultDocs = [];
+    try {
+      const { data } = await supabase
+        .from("vault_documents")
+        .select("name,category_idx,doc_date,notes,shared,file_name,file_size,created_at")
+        .eq("family_id", familySync?.familyId);
+      vaultDocs = data || [];
+    } catch(e) { console.warn("export: vault docs", e); }
+
     const payload = buildDuviaBackup({
       cfg, history,
       familyId: familySync?.familyId,
-      lang, userEmail: user?.email,
+      lang, userEmail: user?.email, userId: user?.id,
+      msgs, expenses, reimbursements, vaultDocs,
     });
     const ok = downloadDuviaBackup(payload, makeBackupFilename());
     if (ok) {
@@ -6091,7 +6102,7 @@ function PrefsTab() {
       }
       const okReplace = window.confirm(t.backupReplaceConfirm || "Cette opération va REMPLACER votre configuration famille, calendrier de garde et calendrier scolaire.\n\nUne sauvegarde automatique de vos données actuelles sera téléchargée avant.\n\nContinuer ?");
       if (!okReplace) { setBackupImporting(false); return; }
-      const safety = buildDuviaBackup({ cfg, history, familyId: familySync?.familyId, lang, userEmail: user?.email });
+      const safety = buildDuviaBackup({ cfg, history, familyId: familySync?.familyId, lang, userEmail: user?.email, userId: user?.id });
       downloadDuviaBackup(safety, makeBackupFilename("duvia-backup-auto-avant-import"));
       setCfg(prev => applyDuviaBackupToCfg(prev, parsed));
       try { addHist?.({action:t.backupImported||"Sauvegarde importée", detail: parsed._exportedAt || "", type:"backup"}); } catch {}
@@ -6371,7 +6382,7 @@ function PrefsTab() {
             <div style={{flex:1}}>
               <div style={{fontSize:13,fontWeight:700,color:C.txt}}>☁️ {t.cloudBackupLabel||"Sauvegarde cloud automatique"}</div>
               <div style={{fontSize:11,color:C.mut,marginTop:3,lineHeight:1.5}}>
-                {t.cloudBackupDesc||"Une copie chiffrée de vos données est conservée 30 jours sur nos serveurs pour permettre au support Duvia de restaurer votre compte en cas de problème."}
+                {t.cloudBackupDesc||"Une copie chiffrée de vos données est conservée 7 jours sur nos serveurs pour permettre au support Duvia de restaurer votre compte en cas de problème."}
               </div>
             </div>
           </label>
@@ -13341,25 +13352,39 @@ function PremiumTab() {
 const DUVIA_BACKUP_VERSION = 1;
 const DUVIA_BACKUP_EXT = ".duvia";
 
-function buildDuviaBackup({cfg, history, familyId, lang, userEmail}) {
+function buildDuviaBackup({cfg, history, familyId, lang, userEmail, userId, msgs, expenses, reimbursements, vaultDocs}) {
   const safe = (v, fb) => (v === undefined || v === null ? fb : v);
   return {
     _duvia: true,
     _version: DUVIA_BACKUP_VERSION,
     _exportedAt: new Date().toISOString(),
     _familyId: safe(familyId, null),
+    _familyCode: safe(cfg?.shareCode, null),
     _userEmail: safe(userEmail, null),
+    _userId: safe(userId, null),
     _lang: safe(lang, "fr"),
     family: {
       parents: safe(cfg?.parents, []),
       children: safe(cfg?.children, []),
+      observers: safe(cfg?.observers, []),
+      contacts: safe(cfg?.contacts, []),
     },
     custody: {
       main: safe(cfg?.custody, null),
       perChild: safe(cfg?.custodyPerChild, {}),
       sameGuardAll: safe(cfg?.sameGuardAll, true),
     },
-    schoolCalendar: safe(cfg?.specialDates, {}),
+    calendar: {
+      overrides: safe(cfg?.overrides, {}),
+      specialDates: safe(cfg?.specialDates, {}),
+    },
+    expenses: Array.isArray(expenses) ? expenses : [],
+    reimbursements: Array.isArray(reimbursements) ? reimbursements : [],
+    messages: Array.isArray(msgs) ? msgs.map(m => ({
+      id: m.id, content: m.content, sender: m.senderName,
+      sentAt: m.sentAt || m.created_at, readBy: m.readBy,
+    })) : [],
+    vault: Array.isArray(vaultDocs) ? vaultDocs : [],
     history: Array.isArray(history) ? history : [],
   };
 }
