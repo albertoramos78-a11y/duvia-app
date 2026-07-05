@@ -1835,6 +1835,23 @@ function useFamilySync(cfg, setCfg) {
         { event: "UPDATE", schema: "public", table: "families", filter: `id=eq.${familyId}` },
         (payload) => {
           if (payload.new?.data && payload.new.data.parents) {
+            // 🔧 Détecter une transition « actif → left » sur CETTE mise à jour
+            // (départ volontaire via leaveFamily, ou suppression de compte via
+            // l'Edge Function — les deux écrivent left:true directement dans
+            // families.data) pour afficher la popup "X s'est retiré", sans
+            // dépendre de l'event DELETE sur family_members (qui a besoin de
+            // REPLICA IDENTITY FULL pour porter user_id/family_id).
+            try {
+              const oldParents = cfgRef.current?.parents || [];
+              const newParents = payload.new.data.parents;
+              newParents.forEach((p, j) => {
+                const was = oldParents[j];
+                if (p?.left && !was?.left && was?.userId !== uidRef.current) {
+                  const name = p.name || was?.name || "L'autre parent";
+                  window.dispatchEvent(new CustomEvent("duvia-invite-left", { detail: name }));
+                }
+              });
+            } catch {}
             skipNextSave.current = true;
             setCfg(() => payload.new.data);
           }
@@ -2214,22 +2231,31 @@ function useFamilySync(cfg, setCfg) {
         window.localStorage.setItem("duvia_family_snapshot", JSON.stringify({ at: new Date().toISOString(), cfg: cfgRef.current || null }));
         window.localStorage.setItem("duvia_left", "1");
       } catch {}
-      // 🔧 Retirer MON propre créneau de la donnée PARTAGÉE pour que l'autre
-      // parent ne me voie plus (la réconciliation par userId n'était pas fiable).
-      // On m'identifie par mon uid (posé sur mon créneau au boot) OU par mon email.
+      // 🔧 Marquer MON propre créneau comme parti (left:true) dans la donnée
+      // PARTAGÉE — jamais le retirer entièrement du tableau : ça préserve les
+      // index (l'autre parent détecte la transition « actif → left » pour
+      // afficher popup + champ gris) et garde le nom pour l'historique, même
+      // logique que la suppression de compte (Edge Function). On m'identifie
+      // par mon uid (posé sur mon créneau au boot) OU par mon email.
       try {
         const uid = uidRef.current;
         const myEmail = (cfgRef.current?.parents || []).find(p => p && p.userId === uid)?.email;
         const { data: fam } = await supabase.from("families").select("data").eq("id", fid).maybeSingle();
         if (fam?.data?.parents) {
-          const parents = fam.data.parents.filter((p, j) =>
-            j === 0 ? true : !(p && ((uid && p.userId === uid) || (myEmail && p.email && p.email.toLowerCase() === myEmail.toLowerCase())))
-          );
-          if (parents.length !== fam.data.parents.length) {
+          // Pas de garde spéciale sur l'index 0 : le créateur peut aussi quitter
+          // volontairement (ex. étape 14 du scénario de test) — effectiveCreatorIdx()
+          // recalcule le créateur effectif comme le premier parent non-« left ».
+          let changed = false;
+          const parents = fam.data.parents.map((p, j) => {
+            const isMe = p && ((uid && p.userId === uid) || (myEmail && p.email && p.email.toLowerCase() === myEmail.toLowerCase()));
+            if (isMe && !p.left) { changed = true; return { ...p, userId: null, left: true, leftAt: new Date().toISOString() }; }
+            return p;
+          });
+          if (changed) {
             await supabase.from("families").update({ data: { ...fam.data, parents } }).eq("id", fid);
           }
         }
-      } catch (e) { console.warn("[Duvia][sync] leaveFamily: nettoyage créneau partagé:", e); }
+      } catch (e) { console.warn("[Duvia][sync] leaveFamily: marquage créneau parti:", e); }
       const { error } = await supabase.rpc("leave_family", { p_family_id: fid });
       if (error) throw error;
 
@@ -2258,6 +2284,11 @@ function useFamilySync(cfg, setCfg) {
           await supabase.from("families").insert({ id: newId, share_code: fresh.shareCode, data: fresh });
           await supabase.from("family_members").insert({ family_id: newId, user_id: uid, role: "parent" });
           try { window.localStorage.setItem("duvia_family_id", newId); } catch {}
+          // 🔧 Remplacer aussi le cache local `duvia_cfg` : sans ça, il garde le
+          // contenu de l'ANCIENNE famille partagée (ex: l'autre parent en index 0)
+          // et le reload affiche une fiche mélangée le temps que le fetch réseau
+          // rattrape (même piège que le switch de compte, voir handleSetUser).
+          try { window.localStorage.setItem("duvia_cfg", JSON.stringify(fresh)); } catch {}
           try { window.localStorage.removeItem("duvia_left"); } catch {}
           // 🔧 Dans ma nouvelle famille je suis le parent UNIQUE (index 0) : il faut
           // mettre à jour mon parentIdx, sinon ma fiche d'identité complète reste
