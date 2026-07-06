@@ -4025,6 +4025,7 @@ export default function App() {
       {pendingReimPopup && (()=>{
         const r=pendingReimPopup;
         const fromP=cfg.parents[r.from];
+        const fromLabel=formatActorName(r.fromName||fromP?.name||`Parent ${r.from+1}`, r.fromUserId, familySync.removedUserIds);
         const dateStr=(r.date||"").split("-").reverse().join("/");
         const doConfirm=()=>{ dbConfirmReim(r.id); setPendingReimPopup(null); };
         const doReject=()=>{ dbRejectReim(r.id); setPendingReimPopup(null); };
@@ -4034,7 +4035,7 @@ export default function App() {
               <div style={{fontSize:40,textAlign:"center",marginBottom:10}}>💸</div>
               <div style={{fontSize:16,fontWeight:800,marginBottom:6,textAlign:"center",color:C.txt}}>Remboursement reçu</div>
               <div style={{fontSize:13,color:C.mut,marginBottom:20,textAlign:"center",lineHeight:1.6}}>
-                <strong style={{color:fromP?.color||C.grn}}>{fromP?.name||`Parent ${r.from+1}`}</strong> vous a envoyé un remboursement de{" "}
+                <strong style={{color:fromP?.color||C.grn}}>{fromLabel}</strong> vous a envoyé un remboursement de{" "}
                 <strong style={{color:C.txt}}>{r.amount.toFixed(2)} {currency}</strong>{" "}le {dateStr}.
                 {r.note && <><br/><em>"{r.note}"</em></>}<br/><br/>
                 Pouvez-vous confirmer la réception ?
@@ -11299,12 +11300,12 @@ function ExpTab() {
   function confirmReim(id){
     const r=reimbursements.find(x=>x.id===id);
     expMethods.confirmReim(id);
-    if(r){ const fromName=cfg.parents[r.from]?.name||`P${r.from+1}`; pushNotif(`✅ Remboursement de ${fromName} (${r.amount}${currency}) confirmé`,"exp"); addHist("Remboursement confirmé",`${fromName} → ${r.amount}${currency}`,"exp"); }
+    if(r){ const fromName=formatActorName(r.fromName||cfg.parents[r.from]?.name||`P${r.from+1}`, r.fromUserId, removedUserIds); pushNotif(`✅ Remboursement de ${fromName} (${r.amount}${currency}) confirmé`,"exp"); addHist("Remboursement confirmé",`${fromName} → ${r.amount}${currency}`,"exp"); }
   }
   function rejectReim(id){
     const r=reimbursements.find(x=>x.id===id);
     expMethods.rejectReim(id);
-    if(r){ const fromName=cfg.parents[r.from]?.name||`P${r.from+1}`; pushNotif(`❌ Remboursement de ${fromName} (${r.amount}${currency}) refusé`,"exp"); addHist("Remboursement refusé",`${fromName} → ${r.amount} ${currency}`,"exp"); }
+    if(r){ const fromName=formatActorName(r.fromName||cfg.parents[r.from]?.name||`P${r.from+1}`, r.fromUserId, removedUserIds); pushNotif(`❌ Remboursement de ${fromName} (${r.amount}${currency}) refusé`,"exp"); addHist("Remboursement refusé",`${fromName} → ${r.amount} ${currency}`,"exp"); }
   }
 
   function confirmExp(id){
@@ -11394,8 +11395,8 @@ function ExpTab() {
         return `<tr><td>${fmtDate(e.date)}</td><td>${dateSaisie}<br><span style="font-size:8px;color:#888;">${heureSaisie}</span></td><td>${e.category||"—"}</td><td><strong>${(e.label||"—").replace(/</g,"&lt;")}</strong>${e.note?`<br><span style="font-size:8px;color:#888;">${e.note.replace(/</g,"&lt;")}</span>`:""}</td><td style="text-align:right;font-weight:700;">${(e.amount||0).toFixed(2)} ${currency}</td><td>${pName}</td><td style="text-align:center;font-size:9px;">${sp}%/${100-sp}%</td><td>${statusBadge(e.status)}</td><td style="font-size:9px;">${creatorName}${hasAtt?" 📎":""}</td></tr>`;
       }).join("");
       const reimRows=filteredReims.slice().sort((a,b)=>new Date(a.date||0)-new Date(b.date||0)).map(r=>{
-        const fromName=cfg.parents[r.from]?.name||`Parent ${r.from+1}`;
-        const toName=cfg.parents[r.to]?.name||`Parent ${r.to+1}`;
+        const fromName=formatActorName(r.fromName||cfg.parents[r.from]?.name||`Parent ${r.from+1}`, r.fromUserId, removedUserIds);
+        const toName=formatActorName(r.toName||cfg.parents[r.to]?.name||`Parent ${r.to+1}`, r.toUserId, removedUserIds);
         const idTs=r.id?new Date(r.id):null;
         const dateSaisie=idTs&&!isNaN(idTs)?idTs.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}):"—";
         const heureSaisie=idTs&&!isNaN(idTs)?idTs.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"—";
@@ -12184,6 +12185,8 @@ window.addEventListener('message',function(e){
         : allItems.map(item=>{
             if(item._type==="reim"){
               const fromP=cfg.parents[item.from]; const toP=cfg.parents[item.to];
+              const fromLabel=formatActorName(item.fromName||fromP?.name||`P${item.from+1}`, item.fromUserId, removedUserIds);
+              const toLabel=formatActorName(item.toName||toP?.name||`P${item.to+1}`, item.toUserId, removedUserIds);
               const st=item.status||"confirmed"; // backward compat: old items without status = confirmed
               const iAmReceiver = user?.role==="parent" && user?.parentIdx===item.to;
               const iAmSender   = user?.role==="parent" && user?.parentIdx===item.from;
@@ -12200,9 +12203,9 @@ window.addEventListener('message',function(e){
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontWeight:700,fontSize:14,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                         <span style={{fontSize:16}}>💸</span>
-                        <span style={{color:fromP?.color||C.grn}}>{fromP?.name||`P${item.from+1}`}</span>
+                        <span style={{color:fromP?.color||C.grn}}>{fromLabel}</span>
                         <span style={{color:C.mut,fontWeight:400}}>→</span>
-                        <span style={{color:toP?.color||C.txt}}>{toP?.name||`P${item.to+1}`}</span>
+                        <span style={{color:toP?.color||C.txt}}>{toLabel}</span>
                       </div>
                       <div style={{fontSize:11,color:C.mut,marginTop:2}}>{(item.date||"").split("-").reverse().join("/")} · {t.expReimBadge||"Remboursement"}</div>
                       {item.note&&<div style={{fontSize:11,color:C.mut,marginTop:2}}>{item.note}</div>}
@@ -12224,7 +12227,7 @@ window.addEventListener('message',function(e){
                   {iAmReceiver && st==="pending" && (
                     <div style={{marginTop:12,padding:"12px 14px",background:`${C.yel}0d`,border:`1px solid ${C.yel}44`,borderRadius:10}}>
                       <div style={{fontSize:13,color:C.txt,marginBottom:10,lineHeight:1.5}}>
-                        <strong style={{color:fromP?.color||C.grn}}>{fromP?.name||`P${item.from+1}`}</strong> vous a envoyé un remboursement de <strong>{item.amount.toFixed(2)} {currency}</strong> le {(item.date||"").split("-").reverse().join("/")}.<br/>
+                        <strong style={{color:fromP?.color||C.grn}}>{fromLabel}</strong> vous a envoyé un remboursement de <strong>{item.amount.toFixed(2)} {currency}</strong> le {(item.date||"").split("-").reverse().join("/")}.<br/>
                         Pouvez-vous confirmer la réception ?
                       </div>
                       <div style={{display:"flex",gap:8}}>
