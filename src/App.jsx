@@ -3955,6 +3955,7 @@ export default function App() {
     expSubmittedPopup, setExpSubmittedPopup,
     setConfirmDeleteAccount,
     familySync,
+    removedUserIds: familySync.removedUserIds,
     uidToLocal,
     localToUid,
     emailToUid,
