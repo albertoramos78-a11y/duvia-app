@@ -11228,7 +11228,35 @@ function ExpTab() {
   function del(id){
     const e=(ctxExpenses||[]).find(x=>x.id===id);
     if(e?.recurringId){ setRecurringDelModal(e); return; }
+    // 🔒 Une dépense déjà acceptée par l'autre parent ne peut plus être
+    // supprimée unilatéralement : on demande confirmation au lieu de
+    // supprimer directement. Une dépense encore "pending"/"rejected" garde
+    // le comportement existant (suppression immédiate).
+    if(e?.status==="confirmed"){ requestDeleteExp(id); return; }
     doDelete(id,"single");
+  }
+
+  function requestDeleteExp(id){
+    const e=(ctxExpenses||[]).find(x=>x.id===id);
+    expMethods.updateExpense(id,{pendingDelete:true});
+    if(e){
+      pushNotif(`🗑️ Suppression demandée : ${e.label}`,"exp");
+      addHist("Suppression demandée",`${e.label} — ${Number(e.amount).toFixed(2)} ${currency}`,"exp");
+    }
+  }
+  function cancelDeleteExp(id){
+    expMethods.updateExpense(id,{pendingDelete:false});
+  }
+  function confirmDeleteExp(id){
+    doDelete(id,"single");
+  }
+  function rejectDeleteExp(id){
+    const e=(ctxExpenses||[]).find(x=>x.id===id);
+    expMethods.updateExpense(id,{pendingDelete:false});
+    if(e){
+      pushNotif(`❌ Suppression refusée : ${e.label}`,"exp");
+      addHist("Suppression refusée",`${e.label} — ${Number(e.amount).toFixed(2)} ${currency}`,"exp");
+    }
   }
 
   async function deleteAttFiles(items){
@@ -11299,7 +11327,29 @@ function ExpTab() {
     setShowReim(false);
     setReimForm(emptyReim);
   }
-  function delReim(id){ expMethods.deleteReimbursement(id); }
+  function delReim(id){
+    const r=reimbursements.find(x=>x.id===id);
+    if(r?.status==="confirmed"){ requestDeleteReim(id); return; }
+    expMethods.deleteReimbursement(id);
+  }
+  function requestDeleteReim(id){
+    const r=reimbursements.find(x=>x.id===id);
+    expMethods.updateReimbursement(id,{pendingDelete:true});
+    if(r){
+      const fromName=formatActorName(r.fromName||cfg.parents[r.from]?.name||`P${r.from+1}`, r.fromUserId, removedUserIds);
+      pushNotif(`🗑️ Suppression demandée : remboursement de ${fromName}`,"exp");
+      addHist("Suppression demandée",`Remboursement ${fromName} — ${r.amount}${currency}`,"exp");
+    }
+  }
+  function cancelDeleteReim(id){
+    expMethods.updateReimbursement(id,{pendingDelete:false});
+  }
+  function confirmDeleteReim(id){
+    expMethods.deleteReimbursement(id);
+  }
+  function rejectDeleteReim(id){
+    expMethods.updateReimbursement(id,{pendingDelete:false});
+  }
   function confirmReim(id){
     const r=reimbursements.find(x=>x.id===id);
     expMethods.confirmReim(id);
