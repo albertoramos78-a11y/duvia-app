@@ -11238,21 +11238,21 @@ function ExpTab() {
 
   function requestDeleteExp(id){
     const e=(ctxExpenses||[]).find(x=>x.id===id);
-    expMethods.updateExpense(id,{pendingDelete:true});
+    expMethods.updateExpense(id,{pendingDelete:true,deleteRequestedBy:user?.parentIdx??0});
     if(e){
       pushNotif(`🗑️ Suppression demandée : ${e.label}`,"exp");
       addHist("Suppression demandée",`${e.label} — ${Number(e.amount).toFixed(2)} ${currency}`,"exp");
     }
   }
   function cancelDeleteExp(id){
-    expMethods.updateExpense(id,{pendingDelete:false});
+    expMethods.updateExpense(id,{pendingDelete:false,deleteRequestedBy:null});
   }
   function confirmDeleteExp(id){
     doDelete(id,"single");
   }
   function rejectDeleteExp(id){
     const e=(ctxExpenses||[]).find(x=>x.id===id);
-    expMethods.updateExpense(id,{pendingDelete:false});
+    expMethods.updateExpense(id,{pendingDelete:false,deleteRequestedBy:null});
     if(e){
       pushNotif(`❌ Suppression refusée : ${e.label}`,"exp");
       addHist("Suppression refusée",`${e.label} — ${Number(e.amount).toFixed(2)} ${currency}`,"exp");
@@ -11334,7 +11334,7 @@ function ExpTab() {
   }
   function requestDeleteReim(id){
     const r=reimbursements.find(x=>x.id===id);
-    expMethods.updateReimbursement(id,{pendingDelete:true});
+    expMethods.updateReimbursement(id,{pendingDelete:true,deleteRequestedBy:user?.parentIdx??0});
     if(r){
       const fromName=formatActorName(r.fromName||cfg.parents[r.from]?.name||`P${r.from+1}`, r.fromUserId, removedUserIds);
       pushNotif(`🗑️ Suppression demandée : remboursement de ${fromName}`,"exp");
@@ -11342,13 +11342,13 @@ function ExpTab() {
     }
   }
   function cancelDeleteReim(id){
-    expMethods.updateReimbursement(id,{pendingDelete:false});
+    expMethods.updateReimbursement(id,{pendingDelete:false,deleteRequestedBy:null});
   }
   function confirmDeleteReim(id){
     expMethods.deleteReimbursement(id);
   }
   function rejectDeleteReim(id){
-    expMethods.updateReimbursement(id,{pendingDelete:false});
+    expMethods.updateReimbursement(id,{pendingDelete:false,deleteRequestedBy:null});
   }
   function confirmReim(id){
     const r=reimbursements.find(x=>x.id===id);
@@ -11700,6 +11700,9 @@ window.addEventListener('message',function(e){
         const sA=e.split??50; const sB=100-sA;
         const iAmSender=user?.role==="parent"&&e.createdBy!==undefined&&user?.parentIdx===e.createdBy;
         const iAmReceiver=user?.role==="parent"&&e.createdBy!==undefined&&user?.parentIdx!==e.createdBy;
+        const iAmDeleteRequester=e.pendingDelete && user?.parentIdx===e.deleteRequestedBy;
+        const deleteRequester=cfg.parents[e.deleteRequestedBy];
+        const deleteRequesterLabel=cfg.parents[e.deleteRequestedBy]?.name||`P${(e.deleteRequestedBy||0)+1}`;
         const isPending=st==="pending";
         return(
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:490,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setDetailExp(null)}>
@@ -11798,10 +11801,10 @@ window.addEventListener('message',function(e){
                   <button onClick={()=>{rejectExp(e.id);setDetailExp(null);}} style={{flex:1,padding:"12px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,borderRadius:12,fontWeight:700,fontSize:14}}>❌ {t.expRejectBtn||"Refuser"}</button>
                 </div>
               )}
-              {e.pendingDelete&&iAmReceiver&&(
+              {e.pendingDelete&&!iAmDeleteRequester&&(iAmSender||iAmReceiver)&&(
                 <div style={{marginBottom:10}}>
                   <div style={{fontSize:13,color:C.txt,marginBottom:10,lineHeight:1.5}}>
-                    🗑️ <strong style={{color:creator?.color||C.blu}}>{creatorLabel}</strong> souhaite supprimer cette dépense.
+                    🗑️ <strong style={{color:deleteRequester?.color||C.blu}}>{deleteRequesterLabel}</strong> souhaite supprimer cette dépense.
                   </div>
                   <div style={{display:"flex",gap:8}}>
                     <button onClick={()=>{confirmDeleteExp(e.id);setDetailExp(null);}} style={{flex:1,padding:"12px",background:C.red,color:"#fff",borderRadius:12,fontWeight:800,fontSize:13}}>🗑️ Confirmer la suppression</button>
@@ -11815,9 +11818,20 @@ window.addEventListener('message',function(e){
                   <button onClick={()=>{del(e.id);setDetailExp(null);}} style={{flex:1,padding:"12px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,borderRadius:12,fontWeight:700,fontSize:13}}>🗑 Supprimer</button>
                 </div>
               )}
-              {(iAmSender||isAdm)&&e.pendingDelete&&(
+              {(iAmSender||isAdm)&&e.pendingDelete&&iAmDeleteRequester&&(
                 <div style={{display:"flex",gap:8}}>
                   <button onClick={()=>{startEdit(e);setDetailExp(null);}} style={{flex:1,padding:"12px",background:C.sur,color:C.txt,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13}}>✎ Modifier</button>
+                  <button onClick={()=>{cancelDeleteExp(e.id);setDetailExp(null);}} style={{flex:1,padding:"12px",background:"transparent",color:C.yel,border:`1.5px solid ${C.yel}`,borderRadius:12,fontWeight:700,fontSize:13}}>⏳ Annuler la demande</button>
+                </div>
+              )}
+              {/* 🔓 Le receveur peut aussi demander la suppression d'une dépense acceptée */}
+              {iAmReceiver&&!e.pendingDelete&&(
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={()=>{del(e.id);setDetailExp(null);}} style={{flex:1,padding:"12px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,borderRadius:12,fontWeight:700,fontSize:13}}>🗑 Supprimer</button>
+                </div>
+              )}
+              {iAmReceiver&&e.pendingDelete&&iAmDeleteRequester&&(
+                <div style={{display:"flex",gap:8}}>
                   <button onClick={()=>{cancelDeleteExp(e.id);setDetailExp(null);}} style={{flex:1,padding:"12px",background:"transparent",color:C.yel,border:`1.5px solid ${C.yel}`,borderRadius:12,fontWeight:700,fontSize:13}}>⏳ Annuler la demande</button>
                 </div>
               )}
@@ -12260,6 +12274,9 @@ window.addEventListener('message',function(e){
               const st=item.status||"confirmed"; // backward compat: old items without status = confirmed
               const iAmReceiver = user?.role==="parent" && user?.parentIdx===item.to;
               const iAmSender   = user?.role==="parent" && user?.parentIdx===item.from;
+              const iAmReimDeleteRequester = item.pendingDelete && user?.parentIdx===item.deleteRequestedBy;
+              const deleteRequesterName = cfg.parents[item.deleteRequestedBy]?.name||`P${(item.deleteRequestedBy||0)+1}`;
+              const deleteRequesterColor = cfg.parents[item.deleteRequestedBy]?.color;
               const borderCol = st==="confirmed"?`${C.grn}66`:st==="rejected"?`${C.red}66`:`${C.yel}66`;
               const statusLabel = st==="confirmed"?"✅ Accepté":st==="rejected"?"❌ Refusé":"⏳ En attente";
               const statusColor = st==="confirmed"?C.grn:st==="rejected"?C.red:C.yel;
@@ -12292,15 +12309,22 @@ window.addEventListener('message',function(e){
                     {(iAmSender||isAdm) && st!=="pending" && !item.pendingDelete && (
                       <button onClick={()=>delReim(item.id)} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12,flexShrink:0}}>✕</button>
                     )}
-                    {(iAmSender||isAdm) && st!=="pending" && item.pendingDelete && (
+                    {(iAmSender||isAdm) && st!=="pending" && item.pendingDelete && iAmReimDeleteRequester && (
+                      <button onClick={()=>cancelDeleteReim(item.id)} title="Annuler la demande de suppression" style={{padding:"5px 9px",background:"transparent",color:C.yel,border:`1px solid ${C.yel}`,borderRadius:8,fontSize:12,flexShrink:0}}>⏳</button>
+                    )}
+                    {/* 🔓 Le receveur peut aussi demander la suppression d'un remboursement accepté */}
+                    {iAmReceiver && st!=="pending" && !item.pendingDelete && (
+                      <button onClick={()=>delReim(item.id)} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12,flexShrink:0}}>✕</button>
+                    )}
+                    {iAmReceiver && st!=="pending" && item.pendingDelete && iAmReimDeleteRequester && (
                       <button onClick={()=>cancelDeleteReim(item.id)} title="Annuler la demande de suppression" style={{padding:"5px 9px",background:"transparent",color:C.yel,border:`1px solid ${C.yel}`,borderRadius:8,fontSize:12,flexShrink:0}}>⏳</button>
                     )}
                   </div>
-                  {/* Receiver : confirmer/refuser une demande de suppression */}
-                  {iAmReceiver && item.pendingDelete && (
+                  {/* Confirmer/refuser une demande de suppression (l'autre parent que le demandeur) */}
+                  {(iAmSender||iAmReceiver) && item.pendingDelete && !iAmReimDeleteRequester && (
                     <div style={{marginTop:12,padding:"12px 14px",background:`${C.red}0d`,border:`1px solid ${C.red}44`,borderRadius:10}}>
                       <div style={{fontSize:13,color:C.txt,marginBottom:10,lineHeight:1.5}}>
-                        🗑️ <strong style={{color:fromP?.color||C.grn}}>{fromLabel}</strong> souhaite supprimer ce remboursement de <strong>{item.amount.toFixed(2)} {currency}</strong>.
+                        🗑️ <strong style={{color:deleteRequesterColor||C.grn}}>{deleteRequesterName}</strong> souhaite supprimer ce remboursement de <strong>{item.amount.toFixed(2)} {currency}</strong>.
                       </div>
                       <div style={{display:"flex",gap:8}}>
                         <button onClick={()=>confirmDeleteReim(item.id)}
@@ -12340,6 +12364,10 @@ window.addEventListener('message',function(e){
             const expSt=e.status||"confirmed"; // backward compat: old items = confirmed
             const iAmExpSender  = user?.role==="parent" && e.createdBy!==undefined && user?.parentIdx===e.createdBy;
             const iAmExpReceiver= user?.role==="parent" && e.createdBy!==undefined && user?.parentIdx!==e.createdBy;
+            // 🔓 N'importe quel parent peut demander la suppression d'une dépense
+            // déjà acceptée (pas seulement son créateur) — deleteRequestedBy
+            // retient qui, pour que ce soit bien l'AUTRE parent qui confirme.
+            const iAmExpDeleteRequester = e.pendingDelete && user?.parentIdx===e.deleteRequestedBy;
             const expBorderCol  = expSt==="confirmed"?C.bor:expSt==="rejected"?`${C.red}66`:`${C.yel}66`;
             const expStatusLabel= expSt==="confirmed"?(t.expStatusConfirmed||"✅ Accepté"):expSt==="rejected"?(t.expStatusRejected||"❌ Refusé"):(t.expStatusPending||"⏳ En attente");
             const expStatusColor= expSt==="confirmed"?C.grn:expSt==="rejected"?C.red:C.yel;
@@ -12380,11 +12408,18 @@ window.addEventListener('message',function(e){
                       <button onClick={ev=>{ev.stopPropagation();del(e.id);}} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12}}>✕</button>
                     </div>
                   )}
-                  {(iAmExpSender||isAdm) && expSt!=="pending" && e.pendingDelete && (
+                  {(iAmExpSender||isAdm) && expSt!=="pending" && e.pendingDelete && iAmExpDeleteRequester && (
                     <div style={{display:"flex",gap:5,flexShrink:0}}>
                       <button onClick={ev=>{ev.stopPropagation();startEdit(e);}} style={{padding:"5px 9px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12}}>✎</button>
                       <button onClick={ev=>{ev.stopPropagation();cancelDeleteExp(e.id);}} title="Annuler la demande de suppression" style={{padding:"5px 9px",background:"transparent",color:C.yel,border:`1px solid ${C.yel}`,borderRadius:8,fontSize:12}}>⏳</button>
                     </div>
+                  )}
+                  {/* 🔓 Le receveur peut aussi demander la suppression d'une dépense acceptée */}
+                  {iAmExpReceiver && expSt!=="pending" && !e.pendingDelete && (
+                    <button onClick={ev=>{ev.stopPropagation();del(e.id);}} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12,flexShrink:0}}>✕</button>
+                  )}
+                  {iAmExpReceiver && expSt!=="pending" && e.pendingDelete && iAmExpDeleteRequester && (
+                    <button onClick={ev=>{ev.stopPropagation();cancelDeleteExp(e.id);}} title="Annuler la demande de suppression" style={{padding:"5px 9px",background:"transparent",color:C.yel,border:`1px solid ${C.yel}`,borderRadius:8,fontSize:12,flexShrink:0}}>⏳</button>
                   )}
                   {/* Receiver sans createdBy (legacy) ou admin sans rôle parent */}
                   {!iAmExpSender && !iAmExpReceiver && isAdm && expSt==="confirmed" && (
@@ -12394,11 +12429,11 @@ window.addEventListener('message',function(e){
                     </div>
                   )}
                 </div>
-                {/* Zone confirmation suppression (receveur) */}
-                {iAmExpReceiver && e.pendingDelete && (
+                {/* Zone confirmation suppression (l'autre parent que le demandeur) */}
+                {(iAmExpSender||iAmExpReceiver) && e.pendingDelete && !iAmExpDeleteRequester && (
                   <div style={{marginTop:12,padding:"12px 14px",background:`${C.red}0d`,border:`1px solid ${C.red}44`,borderRadius:10}}>
                     <div style={{fontSize:13,color:C.txt,marginBottom:10,lineHeight:1.5}}>
-                      🗑️ <strong style={{color:cfg.parents[e.createdBy]?.color||C.blu}}>{formatActorName(e.createdByName||cfg.parents[e.createdBy]?.name||`P${(e.createdBy||0)+1}`, e.createdByUserId, removedUserIds)}</strong>{" "}
+                      🗑️ <strong style={{color:cfg.parents[e.deleteRequestedBy]?.color||C.blu}}>{cfg.parents[e.deleteRequestedBy]?.name||`P${(e.deleteRequestedBy||0)+1}`}</strong>{" "}
                       souhaite supprimer cette dépense ({e.label} — {e.amount.toFixed(2)} {currency}).
                     </div>
                     <div style={{display:"flex",gap:8}}>
