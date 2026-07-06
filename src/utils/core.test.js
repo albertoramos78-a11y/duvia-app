@@ -388,3 +388,28 @@ test("markDepartedParents : stampe leftAt à la date fournie, le retire au retou
   assert.equal("leftAt" in back2[0], false);
   assert.equal("left" in back2[0], false);
 });
+
+import { formatActorName } from "./core.js";
+
+test("formatActorName : renvoie le nom tel quel si la personne est toujours active", () => {
+  const removed = new Set(["uid-toti"]);
+  assert.strictEqual(formatActorName("Sissi", "uid-sissi", removed), "Sissi");
+});
+
+test("formatActorName : ajoute (parti) si le userId est dans removedUserIds", () => {
+  const removed = new Set(["uid-toti"]);
+  assert.strictEqual(formatActorName("Toti", "uid-toti", removed), "Toti (parti)");
+});
+
+test("formatActorName : pas de userId → nom tel quel (ancienne ligne sans instantané)", () => {
+  const removed = new Set(["uid-toti"]);
+  assert.strictEqual(formatActorName("Parent 1", null, removed), "Parent 1");
+});
+
+test("formatActorName : removedUserIds absent (famille pas encore chargée) → nom tel quel", () => {
+  assert.strictEqual(formatActorName("Toti", "uid-toti", null), "Toti");
+});
+
+test("formatActorName : nom vide → chaîne vide", () => {
+  assert.strictEqual(formatActorName("", "uid-toti", new Set(["uid-toti"])), "");
+});

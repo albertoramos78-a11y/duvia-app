@@ -415,3 +415,14 @@ export function effectiveCreatorIdx(parents) {
   const i = parents.findIndex(p => p && !p.left);
   return i < 0 ? 0 : i;
 }
+
+// ── Attribution légale dépenses/remboursements ───────────────────────────────
+// Le nom est un instantané figé à la création (voir 0021_expense_identity.sql) :
+// il ne dépend jamais du créneau de position actuel, qui peut être recyclé.
+// "removedUserIds" vient de family_members.status='removed' (jamais recyclé),
+// pas de cfg.parents.left (qui, lui, suit le créneau, pas la personne).
+export function formatActorName(name, userId, removedUserIds) {
+  if (!name) return "";
+  if (userId && removedUserIds && removedUserIds.has(userId)) return `${name} (parti)`;
+  return name;
+}
