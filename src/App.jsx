@@ -11798,10 +11798,27 @@ window.addEventListener('message',function(e){
                   <button onClick={()=>{rejectExp(e.id);setDetailExp(null);}} style={{flex:1,padding:"12px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,borderRadius:12,fontWeight:700,fontSize:14}}>❌ {t.expRejectBtn||"Refuser"}</button>
                 </div>
               )}
-              {(iAmSender||isAdm)&&(
+              {e.pendingDelete&&iAmReceiver&&(
+                <div style={{marginBottom:10}}>
+                  <div style={{fontSize:13,color:C.txt,marginBottom:10,lineHeight:1.5}}>
+                    🗑️ <strong style={{color:creator?.color||C.blu}}>{creatorLabel}</strong> souhaite supprimer cette dépense.
+                  </div>
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={()=>{confirmDeleteExp(e.id);setDetailExp(null);}} style={{flex:1,padding:"12px",background:C.red,color:"#fff",borderRadius:12,fontWeight:800,fontSize:13}}>🗑️ Confirmer la suppression</button>
+                    <button onClick={()=>{rejectDeleteExp(e.id);setDetailExp(null);}} style={{flex:1,padding:"12px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13}}>❌ Refuser</button>
+                  </div>
+                </div>
+              )}
+              {(iAmSender||isAdm)&&!e.pendingDelete&&(
                 <div style={{display:"flex",gap:8}}>
                   <button onClick={()=>{startEdit(e);setDetailExp(null);}} style={{flex:1,padding:"12px",background:C.sur,color:C.txt,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13}}>✎ Modifier</button>
                   <button onClick={()=>{del(e.id);setDetailExp(null);}} style={{flex:1,padding:"12px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,borderRadius:12,fontWeight:700,fontSize:13}}>🗑 Supprimer</button>
+                </div>
+              )}
+              {(iAmSender||isAdm)&&e.pendingDelete&&(
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={()=>{startEdit(e);setDetailExp(null);}} style={{flex:1,padding:"12px",background:C.sur,color:C.txt,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13}}>✎ Modifier</button>
+                  <button onClick={()=>{cancelDeleteExp(e.id);setDetailExp(null);}} style={{flex:1,padding:"12px",background:"transparent",color:C.yel,border:`1.5px solid ${C.yel}`,borderRadius:12,fontWeight:700,fontSize:13}}>⏳ Annuler la demande</button>
                 </div>
               )}
             </div>
