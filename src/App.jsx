@@ -1009,6 +1009,14 @@ function generateICS(cfg) {
   lines.push("END:VCALENDAR");
   return lines.join("\r\n");
 }
+function downloadICSFallback(blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href=url; a.download="duvia-garde.ics";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 500);
+}
+
 function downloadICS(cfg) {
   const content = generateICS(cfg);
   const blob = new Blob([content], {type:"text/calendar;charset=utf-8"});
@@ -1016,16 +1024,15 @@ function downloadICS(cfg) {
   if (navigator.share && navigator.canShare) {
     const file = new File([blob], "duvia-garde.ics", {type:"text/calendar"});
     if (navigator.canShare({files:[file]})) {
-      navigator.share({files:[file], title:"Duvia – Planning de garde"}).catch(()=>{});
+      // 🔧 Si le partage échoue ou est annulé, on ne doit pas laisser
+      // l'utilisateur sans rien : on retombe sur le téléchargement classique
+      // au lieu d'avaler l'erreur silencieusement (symptôme observé :
+      // "je clique sur iCal et rien ne se passe").
+      navigator.share({files:[file], title:"Duvia – Planning de garde"}).catch(()=>downloadICSFallback(blob));
       return;
     }
   }
-  // Fallback desktop : téléchargement classique
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href=url; a.download="duvia-garde.ics";
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url), 500);
+  downloadICSFallback(blob);
 }
 
 // ─── Helper : affiche le vrai prénom de l'observateur (jamais l'email brut) ──
