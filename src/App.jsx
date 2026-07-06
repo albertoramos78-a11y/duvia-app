@@ -1113,13 +1113,18 @@ ${brandExtras}
 
 /* ── Reset & Base ── */
 *{box-sizing:border-box;margin:0;padding:0;}
-/* 🔒 La page elle-même ne doit jamais défiler : l'app gère son propre défilement
-   interne (#duvia-scroll etc.). Sans ce blocage, le 100vh du conteneur racine
-   (calculé avant que la barre d'adresse mobile ne se réduise après un
-   rafraîchissement) rend le body plus grand que l'écran visible → une barre
-   de défilement globale apparaît sur mobile. */
-html,body{height:100%;overflow:hidden;}
 body{background:${C.bg};color:${C.txt};font-family:'Nunito',sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;}
+/* 🔒 Corrige le 100vh mobile (calculé avant que la barre d'adresse ne se
+   réduise après un rafraîchissement, ce qui rendait le body plus grand que
+   l'écran visible et faisait apparaître une barre de défilement pleine
+   page). Ciblé sur le conteneur racine de l'app connectée uniquement — pas
+   sur html/body, pour ne pas casser le "tirer pour actualiser" ni le
+   défilement naturel des écrans de connexion/consentement qui n'ont pas
+   leur propre zone de défilement interne. 100dvh (hauteur de viewport
+   dynamique) ignoré par les navigateurs qui ne le supportent pas, qui
+   gardent alors le 100vh existant.
+*/
+.duvia-app-root{height:100vh;height:100dvh;}
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar{width:4px;height:4px;}
@@ -3986,7 +3991,7 @@ export default function App() {
 
   return (
     <AppContext.Provider value={ctxValue}>
-    <div style={{display:"flex",flexDirection:"column",height:"100vh",maxWidth:940,margin:"0 auto",overflow:"hidden",width:"100%"}}>
+    <div className="duvia-app-root" style={{display:"flex",flexDirection:"column",maxWidth:940,margin:"0 auto",overflow:"hidden",width:"100%"}}>
       <style>{cssString}</style>
 
       {inviteLeftNotice && (
