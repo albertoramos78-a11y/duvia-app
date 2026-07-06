@@ -12357,10 +12357,16 @@ window.addEventListener('message',function(e){
                       <button onClick={ev=>{ev.stopPropagation();del(e.id);}} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12}}>✕</button>
                     </div>
                   )}
-                  {(iAmExpSender||isAdm) && expSt!=="pending" && (
+                  {(iAmExpSender||isAdm) && expSt!=="pending" && !e.pendingDelete && (
                     <div style={{display:"flex",gap:5,flexShrink:0}}>
                       <button onClick={ev=>{ev.stopPropagation();startEdit(e);}} style={{padding:"5px 9px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12}}>✎</button>
                       <button onClick={ev=>{ev.stopPropagation();del(e.id);}} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12}}>✕</button>
+                    </div>
+                  )}
+                  {(iAmExpSender||isAdm) && expSt!=="pending" && e.pendingDelete && (
+                    <div style={{display:"flex",gap:5,flexShrink:0}}>
+                      <button onClick={ev=>{ev.stopPropagation();startEdit(e);}} style={{padding:"5px 9px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12}}>✎</button>
+                      <button onClick={ev=>{ev.stopPropagation();cancelDeleteExp(e.id);}} title="Annuler la demande de suppression" style={{padding:"5px 9px",background:"transparent",color:C.yel,border:`1px solid ${C.yel}`,borderRadius:8,fontSize:12}}>⏳</button>
                     </div>
                   )}
                   {/* Receiver sans createdBy (legacy) ou admin sans rôle parent */}
@@ -12371,6 +12377,25 @@ window.addEventListener('message',function(e){
                     </div>
                   )}
                 </div>
+                {/* Zone confirmation suppression (receveur) */}
+                {iAmExpReceiver && e.pendingDelete && (
+                  <div style={{marginTop:12,padding:"12px 14px",background:`${C.red}0d`,border:`1px solid ${C.red}44`,borderRadius:10}}>
+                    <div style={{fontSize:13,color:C.txt,marginBottom:10,lineHeight:1.5}}>
+                      🗑️ <strong style={{color:cfg.parents[e.createdBy]?.color||C.blu}}>{formatActorName(e.createdByName||cfg.parents[e.createdBy]?.name||`P${(e.createdBy||0)+1}`, e.createdByUserId, removedUserIds)}</strong>{" "}
+                      souhaite supprimer cette dépense ({e.label} — {e.amount.toFixed(2)} {currency}).
+                    </div>
+                    <div style={{display:"flex",gap:8}}>
+                      <button onClick={ev=>{ev.stopPropagation();confirmDeleteExp(e.id);}}
+                        style={{flex:1,padding:"10px",background:C.red,color:"#fff",borderRadius:10,fontWeight:800,fontSize:13}}>
+                        🗑️ Confirmer la suppression
+                      </button>
+                      <button onClick={ev=>{ev.stopPropagation();rejectDeleteExp(e.id);}}
+                        style={{flex:1,padding:"10px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:10,fontWeight:700,fontSize:13}}>
+                        ❌ Refuser
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {/* Zone validation receveur */}
                 {iAmExpReceiver && expSt==="pending" && (
                   <div style={{marginTop:12,padding:"12px 14px",background:`${C.yel}0d`,border:`1px solid ${C.yel}44`,borderRadius:10}}>
