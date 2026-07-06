@@ -3203,6 +3203,30 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Lien d'invitation cliqué avec une session déjà active ────────────────
+  // 🔧 Le token ?inv= n'était traité que par LoginScreen (utilisateur
+  // déconnecté) ou par le listener OAuth Google ci-dessus (nouvelle connexion
+  // Google). Un utilisateur DÉJÀ connecté qui cliquait un lien d'invitation
+  // ne déclenchait rien tant qu'il ne se déconnectait pas manuellement.
+  const invJoinHandled = useRef(false);
+  useEffect(() => {
+    if (!user || user.role !== "parent" || invJoinHandled.current) return;
+    const urlInvParam = new URLSearchParams(window.location.search).get("inv");
+    if (!urlInvParam) return;
+    invJoinHandled.current = true;
+    (async () => {
+      try {
+        let joinToken = urlInvParam;
+        try { const d = JSON.parse(atob(urlInvParam)); joinToken = d.code || urlInvParam; } catch {}
+        const joinRes = await familySync.joinFamilyByToken(joinToken, { name: user.name, gender: user.gender });
+        if (joinRes?.ok) {
+          try { window.localStorage.setItem("duvia_family_id", joinRes.familyId); } catch {}
+          window.location.replace("https://app.duvia.fr");
+        }
+      } catch (e) { console.warn("[Duvia] invite join (session active):", e); }
+    })();
+  }, [user, familySync]);
+
   // ── Sync automatique des infos du parent connecté → cfg.parents ──────────
   // Découplé de handleSetUser : doit aussi s'exécuter après un rechargement
   // de page (nouveau compte / nouvelle famille créée), une fois que la
@@ -7291,11 +7315,9 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             <div key={i} className="card" style={{marginBottom:12,borderColor:C.bor,borderStyle:"dashed",position:"relative"}}>
               <button
                 onClick={()=>{
-                  const label = p.name || p.email || t.guestLabel || "ce parent";
-                  const q = (t.dismissLeftConfirm || "Retirer {name} de la vue ?\n\nCe parent a déjà quitté la famille. L'historique reste conservé.").replace("{name}", label);
-                  if (window.confirm(q)) {
-                    setCfg(c => ({ ...c, parents: c.parents.filter((_, idx) => idx !== i) }));
-                  }
+                  // Pas de confirmation : l'historique du départ reste conservé
+                  // (message affiché sur cette carte), rien n'est perdu à la fermeture.
+                  setCfg(c => ({ ...c, parents: c.parents.filter((_, idx) => idx !== i) }));
                 }}
                 aria-label={t.dismiss||"Retirer"}
                 title={t.dismiss||"Retirer"}
@@ -7495,11 +7517,24 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           </div>
         </div>
       );})}
-      {cfg.parents.filter(p=>!p?.left).length >= 2
-        ? <div style={{fontSize:12,color:C.mut,textAlign:"center",padding:"10px 0 14px",fontStyle:"italic"}}>
+      {(() => {
+        const hasDepartedCard = cfg.parents.some(p=>p?.left);
+        if (cfg.parents.filter(p=>!p?.left).length >= 2) {
+          return <div style={{fontSize:12,color:C.mut,textAlign:"center",padding:"10px 0 14px",fontStyle:"italic"}}>
             👥 {t.maxParentsReached||"Maximum 2 parents atteint"}
-          </div>
-        : <button onClick={addParent} style={{width:"100%",height:44,padding:"0 16px",background:"transparent",color:C.ora,border:`1.5px dashed ${C.ora}`,marginBottom:14}}>{t.addParent}</button>}
+          </div>;
+        }
+        if (hasDepartedCard) {
+          // 🔒 Tant que la carte du parent parti n'est pas fermée (bouton ×
+          // ci-dessus), on ne propose pas d'en ajouter un nouveau — évite la
+          // confusion entre l'ancien créneau encore affiché et un nouveau.
+          return <button disabled title={t.dismissLeftFirst||"Fermez d'abord la fiche du parent parti"}
+            style={{width:"100%",height:44,padding:"0 16px",background:"transparent",color:C.mut,border:`1.5px dashed ${C.bor}`,marginBottom:14,cursor:"not-allowed"}}>
+            {t.addParent}
+          </button>;
+        }
+        return <button onClick={addParent} style={{width:"100%",height:44,padding:"0 16px",background:"transparent",color:C.ora,border:`1.5px dashed ${C.ora}`,marginBottom:14}}>{t.addParent}</button>;
+      })()}
 
       <div className="sec">{t.children}</div>
       {cfg.children.map((ch,i)=>{
