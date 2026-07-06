@@ -1414,6 +1414,7 @@ function useFamilySync(cfg, setCfg) {
   const [pendingMembers, setPendingMembers] = useState([]); // [{userId,email,role,joinedAt}] — en attente de ma validation
   const [pendingApproval, setPendingApproval] = useState(false); // ce compte n'a qu'une adhésion "pending", pas d'accès
   const [removedObserver, setRemovedObserver] = useState(false); // observateur retiré → page no-access
+  const [removedUserIds, setRemovedUserIds] = useState(() => new Set()); // family_members.status='removed' — jamais recyclé, contrairement à cfg.parents
   const familyIdRef = useRef(null);
   const skipNextSave = useRef(true);
   const saveTimer = useRef(null);
@@ -1724,6 +1725,8 @@ function useFamilySync(cfg, setCfg) {
               .from("family_members").select("user_id,status").eq("family_id", familyId);
             const active = new Set((mems || []).filter(m => m.status === "active").map(m => m.user_id));
             const inactive = new Set((mems || []).filter(m => m.status !== "active").map(m => m.user_id));
+            const removed = new Set((mems || []).filter(m => m.status === "removed").map(m => m.user_id));
+            if (!cancelled) setRemovedUserIds(removed);
             let myEmail2 = ""; try { myEmail2 = JSON.parse(window.localStorage.getItem("duvia_session") || "null") || ""; } catch {}
             if (inactive.size && !cancelled) {
               setCfg(c => {
@@ -2319,7 +2322,7 @@ function useFamilySync(cfg, setCfg) {
     }
   }
 
-  return { syncStatus, familyId, families, joinFamily, linkAccount, signInExisting, switchFamily, createNewFamily, refreshFamilies, joinFamilyByToken, pendingMembers, refreshPendingMembers, validateMember, rejectMember, removeFamilyMember, leaveFamily, pendingApproval, removedObserver };
+  return { syncStatus, familyId, families, joinFamily, linkAccount, signInExisting, switchFamily, createNewFamily, refreshFamilies, joinFamilyByToken, pendingMembers, refreshPendingMembers, validateMember, rejectMember, removeFamilyMember, leaveFamily, pendingApproval, removedObserver, removedUserIds };
 }
 
 const SETUP_ICONS = {
