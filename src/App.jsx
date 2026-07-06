@@ -2079,13 +2079,17 @@ function useFamilySync(cfg, setCfg) {
     try {
       const { data: pendingRows, error } = await supabase
         .from("family_members")
-        .select("user_id, role, joined_at, display_name, gender")
+        .select("user_id, role, joined_at, display_name, gender, email")
         .eq("family_id", familyIdRef.current)
         .eq("status", "pending");
       if (error) throw error;
       if (!pendingRows?.length) { setPendingMembers([]); return; }
       // L'email + le token relient le membre DB à la carte locale.
       // Parents → family_invitations ; observateurs → observer_invitations.
+      // 🔧 family_members.email (le vrai compte, écrit par set_member_identity)
+      // prime sur celui de l'invitation d'origine — cf. 0020_member_email.sql :
+      // si l'invité a rejoint avec une adresse différente de celle invitée,
+      // seul family_members.email reflète le compte réellement utilisé.
       const emailByUid = {};
       const tokenByUid = {};
       const { data: invRows } = await supabase
@@ -2109,7 +2113,7 @@ function useFamilySync(cfg, setCfg) {
         userId: r.user_id, role: r.role, joinedAt: r.joined_at,
         displayName: r.display_name || null,
         gender: r.gender || null,
-        email: emailByUid[r.user_id] || null,
+        email: r.email || emailByUid[r.user_id] || null,
         inviteToken: tokenByUid[r.user_id] || null,
       })));
     } catch (e) {
