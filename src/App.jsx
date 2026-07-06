@@ -1113,6 +1113,12 @@ ${brandExtras}
 
 /* ── Reset & Base ── */
 *{box-sizing:border-box;margin:0;padding:0;}
+/* 🔒 La page elle-même ne doit jamais défiler : l'app gère son propre défilement
+   interne (#duvia-scroll etc.). Sans ce blocage, le 100vh du conteneur racine
+   (calculé avant que la barre d'adresse mobile ne se réduise après un
+   rafraîchissement) rend le body plus grand que l'écran visible → une barre
+   de défilement globale apparaît sur mobile. */
+html,body{height:100%;overflow:hidden;}
 body{background:${C.bg};color:${C.txt};font-family:'Nunito',sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;}
 
 /* ── Scrollbar ── */
