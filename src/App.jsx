@@ -11120,6 +11120,15 @@ function ExpTab() {
     return dates;
   }
 
+  // Résout l'identité réelle (user_id + nom au moment des faits) pour un index
+  // de position donné — utilisé pour figer l'attribution à la création (voir
+  // docs/superpowers/specs/2026-07-06-expense-identity-attribution-design.md).
+  // Ni user_id ni name ne sont relus plus tard : ils ne bougent plus jamais.
+  function resolveActorIdentity(parentIdx){
+    const p = cfg.parents[parentIdx];
+    return { userId: p?.userId || null, name: p?.name || null };
+  }
+
   async function add(){
     if(!form.label){setFormErr(t.expErrDesc||"⚠️ La description est obligatoire.");return;}
     if(!form.amount||isNaN(parseFloat(form.amount))){setFormErr(t.expErrAmount||"⚠️ Le montant est obligatoire.");return;}
@@ -11134,7 +11143,11 @@ function ExpTab() {
     if(form.recurring && form.recurringEnd < form.date){setFormErr("⚠️ La date de fin doit être après la date de début.");return;}
     setFormErr("");
     if(!prem&&!editId&&expenses.length>=1){} // no limit
-    const payload={...form,label:cleanLabel,amount:amt,split:form.split??50,attachments:form.attachments||[]};
+    const creatorIdentity = { userId: user?.id || null, name: user?.name || null };
+    const payerIdentity = resolveActorIdentity(form.paidBy);
+    const payload={...form,label:cleanLabel,amount:amt,split:form.split??50,attachments:form.attachments||[],
+      createdByUserId: creatorIdentity.userId, createdByName: creatorIdentity.name,
+      paidByUserId: payerIdentity.userId, paidByName: payerIdentity.name};
 
     try {
       if(editId){
@@ -11263,13 +11276,18 @@ function ExpTab() {
     setReimErr("");
     const fromName=cfg.parents[reimForm.from]?.name||`P${reimForm.from+1}`;
     const toName=cfg.parents[reimForm.to]?.name||`P${reimForm.to+1}`;
+    const fromIdentity = resolveActorIdentity(reimForm.from);
+    const toIdentity = resolveActorIdentity(reimForm.to);
+    const reimPayload = {...reimForm, amount:parseFloat(reimForm.amount), status:"pending",
+      fromUserId: fromIdentity.userId, fromName: fromIdentity.name,
+      toUserId: toIdentity.userId, toName: toIdentity.name};
     if(editReimId){
-      await expMethods.updateReimbursement(editReimId,{...reimForm,amount:parseFloat(reimForm.amount),status:"pending"});
+      await expMethods.updateReimbursement(editReimId, reimPayload);
       addHist(t.expReimTitle||"Remboursement",`Modifié · ${fromName} → ${toName} · ${reimForm.amount}${currency}`,"exp");
       pushNotif(`✏️ Remboursement de ${fromName} modifié (${reimForm.amount}${currency}) — revalidation requise`,"exp");
       setEditReimId(null);
     } else {
-      await expMethods.addReimbursement({...reimForm,amount:parseFloat(reimForm.amount),status:"pending"});
+      await expMethods.addReimbursement(reimPayload);
       addHist(t.expReimTitle||"Remboursement",`${fromName} → ${toName} · ${reimForm.amount}${currency}`,"exp");
       pushNotif(`💸 ${fromName} ${t.expReimAdded||"a remboursé"} ${toName} (${reimForm.amount}${currency})`,"exp");
     }
