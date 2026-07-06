@@ -11261,7 +11261,7 @@ function ExpTab() {
   const totals=cfg.parents.map((_,i)=>confirmedExpenses.filter(e=>e.paidBy===i).reduce((s,e)=>s+e.amount,0));
   const owed=cfg.parents.map((_,i)=>confirmedExpenses.reduce((s,e)=>{
     const sp=e.split||50;
-    return s+e.amount*(i===e.paidBy?(100-sp)/100:sp/100);
+    return s+e.amount*(i===e.paidBy?sp/100:(100-sp)/100);
   },0));
   // Reimbursements adjust the net balance: only confirmed ones are counted
   const confirmedReims=reimbursements.filter(r=>r.status==="confirmed");
@@ -11345,7 +11345,7 @@ function ExpTab() {
       const confirmedReims=filteredReims.filter(r=>r.status==="confirmed");
       const totalReims=confirmedReims.reduce((s,r)=>s+r.amount,0);
       const totalsPerParent=cfg.parents.map((_,i)=>confirmedExp.filter(e=>e.paidBy===i).reduce((s,e)=>s+e.amount,0));
-      const owedPerParent=cfg.parents.map((_,i)=>confirmedExp.reduce((s,e)=>{const sp=e.split||50;return s+e.amount*(i===e.paidBy?(100-sp)/100:sp/100);},0));
+      const owedPerParent=cfg.parents.map((_,i)=>confirmedExp.reduce((s,e)=>{const sp=e.split||50;return s+e.amount*(i===e.paidBy?sp/100:(100-sp)/100);},0));
       const reimSent2=cfg.parents.map((_,i)=>confirmedReims.filter(r=>r.from===i).reduce((s,r)=>s+r.amount,0));
       const reimReceived2=cfg.parents.map((_,i)=>confirmedReims.filter(r=>r.to===i).reduce((s,r)=>s+r.amount,0));
       const balances=cfg.parents.map((_,i)=>(totalsPerParent[i]||0)-(owedPerParent[i]||0)+(reimSent2[i]||0)-(reimReceived2[i]||0));
@@ -11679,7 +11679,7 @@ window.addEventListener('message',function(e){
               {/* Part de chaque parent */}
               <div style={{display:"flex",gap:8,marginBottom:12}}>
                 {cfg.parents.map((p,i)=>{
-                  const pct = i===0?sA:sB;
+                  const pct = i===e.paidBy?sA:sB;
                   const amt = (Number(e.amount)*pct/100).toFixed(2);
                   return(
                     <div key={i} style={{flex:1,background:C.sur,borderRadius:10,padding:"8px 10px",textAlign:"center",border:`1.5px solid ${i===e.paidBy?p.color||C.grn:C.bor}`}}>
