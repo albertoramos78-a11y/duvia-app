@@ -12272,10 +12272,31 @@ window.addEventListener('message',function(e){
                         <button onClick={()=>delReim(item.id)} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12}}>✕</button>
                       </div>
                     )}
-                    {(iAmSender||isAdm) && st!=="pending" && (
+                    {(iAmSender||isAdm) && st!=="pending" && !item.pendingDelete && (
                       <button onClick={()=>delReim(item.id)} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12,flexShrink:0}}>✕</button>
                     )}
+                    {(iAmSender||isAdm) && st!=="pending" && item.pendingDelete && (
+                      <button onClick={()=>cancelDeleteReim(item.id)} title="Annuler la demande de suppression" style={{padding:"5px 9px",background:"transparent",color:C.yel,border:`1px solid ${C.yel}`,borderRadius:8,fontSize:12,flexShrink:0}}>⏳</button>
+                    )}
                   </div>
+                  {/* Receiver : confirmer/refuser une demande de suppression */}
+                  {iAmReceiver && item.pendingDelete && (
+                    <div style={{marginTop:12,padding:"12px 14px",background:`${C.red}0d`,border:`1px solid ${C.red}44`,borderRadius:10}}>
+                      <div style={{fontSize:13,color:C.txt,marginBottom:10,lineHeight:1.5}}>
+                        🗑️ <strong style={{color:fromP?.color||C.grn}}>{fromLabel}</strong> souhaite supprimer ce remboursement de <strong>{item.amount.toFixed(2)} {currency}</strong>.
+                      </div>
+                      <div style={{display:"flex",gap:8}}>
+                        <button onClick={()=>confirmDeleteReim(item.id)}
+                          style={{flex:1,padding:"10px",background:C.red,color:"#fff",borderRadius:10,fontWeight:800,fontSize:13}}>
+                          🗑️ Confirmer la suppression
+                        </button>
+                        <button onClick={()=>rejectDeleteReim(item.id)}
+                          style={{flex:1,padding:"10px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:10,fontWeight:700,fontSize:13}}>
+                          ❌ Refuser
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {/* Receiver action buttons */}
                   {iAmReceiver && st==="pending" && (
                     <div style={{marginTop:12,padding:"12px 14px",background:`${C.yel}0d`,border:`1px solid ${C.yel}44`,borderRadius:10}}>
