@@ -7488,7 +7488,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           {/* Row 1 : Avatar | Nom | Genre | Couleur */}
           <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:12}}>
             {/* Avatar */}
-            <div style={{...fieldBox,flexShrink:0}}>
+            <div style={{...fieldBox,flexShrink:0,...lockStyle}}>
               <span style={lbl}>Avatar</span>
               <div style={{height:IH,display:"flex",alignItems:"center"}}>
                 <AvatarPicker current={p.avatar} color={p.color} pool={PARENT_AVATARS} onSelect={em=>setParent(i,"avatar",em)} />
