@@ -14,7 +14,7 @@ import { useExpenses } from "./hooks/useExpenses";
 import { useHistory } from "./hooks/useHistory";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, PRIVACY_URL, CGU_URL, RGPD_NOTICE_VERSION } from './config.js';
-import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx } from './utils/core.js';
+import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, BRAND, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 
 // ─── POSTHOG — Analytics (pays, logins, comportement) ───────────────────────
@@ -4054,6 +4054,7 @@ export default function App() {
       {pendingExpPopup && (()=>{
         const e=pendingExpPopup;
         const creatorP=cfg.parents[e.createdBy];
+        const creatorLabel=formatActorName(e.createdByName||creatorP?.name||`Parent ${(e.createdBy||0)+1}`, e.createdByUserId, familySync.removedUserIds);
         const dateStr=(e.date||"").split("-").reverse().join("/");
         const doConfirmE=()=>{ dbConfirmExp(e.id); setPendingExpPopup(null); };
         const doRejectE=()=>{ dbRejectExp(e.id); setPendingExpPopup(null); };
@@ -4063,7 +4064,7 @@ export default function App() {
               <div style={{fontSize:40,textAlign:"center",marginBottom:10}}>💰</div>
               <div style={{fontSize:16,fontWeight:800,marginBottom:6,textAlign:"center",color:C.txt}}>{t.expPendingPopupTitle||"Dépense à confirmer"}</div>
               <div style={{fontSize:13,color:C.mut,marginBottom:20,textAlign:"center",lineHeight:1.6}}>
-                <strong style={{color:creatorP?.color||C.blu}}>{creatorP?.name||`Parent ${(e.createdBy||0)+1}`}</strong>{" "}
+                <strong style={{color:creatorP?.color||C.blu}}>{creatorLabel}</strong>{" "}
                 {t.expPendingConfirmMsg||"a ajouté une dépense de"}{" "}
                 <strong style={{color:C.txt}}>{e.amount.toFixed(2)} {currency}</strong>{" "}—{" "}
                 <em>{e.label}</em>{" "}le {dateStr}.
@@ -10854,7 +10855,7 @@ function HistTab() {
 
 // ─── EXPENSES ─────────────────────────────────────────────────────────────────
 function ExpTab() {
-  const {C,t,cfg,setCfg,addHist,pushNotif,user,prem,perms,onUpgrade,isAdm,setActivity,sub,simDate,setExpSubmittedPopup,addRefAction,currency="€",expenses:ctxExpenses,reimbursements:ctxReimbursements,expMethods,history:ctxHistory,familySync} = useApp();
+  const {C,t,cfg,setCfg,addHist,pushNotif,user,prem,perms,onUpgrade,isAdm,setActivity,sub,simDate,setExpSubmittedPopup,addRefAction,currency="€",expenses:ctxExpenses,reimbursements:ctxReimbursements,expMethods,history:ctxHistory,familySync,removedUserIds} = useApp();
   const premFull = isPremFull(sub); // PDF réservé full premium uniquement
   const now = simDate ? new Date(simDate) : new Date();
   const todayStr = toStr(now);
@@ -11372,7 +11373,7 @@ function ExpTab() {
       if(expWithAtt.length>0){
         attachmentsHtml=`<div class="page-break"></div><div class="doc-header"><div class="doc-header-left">Duvia — Rapport de dépenses partagées</div><div class="doc-header-right">Période : ${periodLabel} · Export : ${exportDateStr}</div></div><div class="section-title">4. Justificatifs (${expWithAtt.length} dépenses avec pièce jointe)</div><p style="color:#666;font-size:10px;margin-bottom:16px;">Pièces jointes aux dépenses enregistrées sur la période sélectionnée.</p>`;
         expWithAtt.forEach(e=>{
-          const pName=cfg.parents[e.paidBy]?.name||`Parent ${e.paidBy+1}`;
+          const pName=formatActorName(e.paidByName||cfg.parents[e.paidBy]?.name||`Parent ${e.paidBy+1}`, e.paidByUserId, removedUserIds);
           attachmentsHtml+=`<div style="margin-bottom:24px;page-break-inside:avoid;"><div style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:6px;padding:8px 14px;margin-bottom:8px;font-size:10px;"><strong>${e.label||"—"}</strong> — ${pName} — ${fmtDate(e.date)} — ${(e.amount||0).toFixed(2)} ${currency}</div><div style="display:flex;flex-wrap:wrap;gap:10px;">`;
           (e.attachments||[]).forEach(a=>{
             { const imgSrc=a.storagePath?attUrlMap[a.storagePath]:(attUrlMap[a.id]||a.data);
@@ -11383,8 +11384,8 @@ function ExpTab() {
         });
       }
       const expRows=filteredExpenses.slice().sort((a,b)=>new Date(a.date||0)-new Date(b.date||0)).map(e=>{
-        const pName=cfg.parents[e.paidBy]?.name||`Parent ${e.paidBy+1}`;
-        const creatorName=e.createdBy!==undefined?(cfg.parents[e.createdBy]?.name||`Parent ${e.createdBy+1}`):pName;
+        const pName=formatActorName(e.paidByName||cfg.parents[e.paidBy]?.name||`Parent ${e.paidBy+1}`, e.paidByUserId, removedUserIds);
+        const creatorName=e.createdBy!==undefined?formatActorName(e.createdByName||cfg.parents[e.createdBy]?.name||`Parent ${e.createdBy+1}`, e.createdByUserId, removedUserIds):pName;
         const idTs=e.id?new Date(e.id):null;
         const dateSaisie=idTs&&!isNaN(idTs)?idTs.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}):"—";
         const heureSaisie=idTs&&!isNaN(idTs)?idTs.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"—";
@@ -11639,7 +11640,9 @@ window.addEventListener('message',function(e){
         const stLabel=st==="confirmed"?(t.expStatusConfirmed||"✅ Accepté"):st==="rejected"?(t.expStatusRejected||"❌ Refusé"):(t.expStatusPending||"⏳ En attente");
         const stColor=st==="confirmed"?C.grn:st==="rejected"?C.red:C.yel;
         const payer=cfg.parents[e.paidBy];
+        const payerLabel=formatActorName(e.paidByName||payer?.name||`P${e.paidBy+1}`, e.paidByUserId, removedUserIds);
         const creator=cfg.parents[e.createdBy];
+        const creatorLabel=formatActorName(e.createdByName||creator?.name||`P${(e.createdBy||0)+1}`, e.createdByUserId, removedUserIds);
         const sA=e.split||50; const sB=100-sA;
         const iAmSender=user?.role==="parent"&&e.createdBy!==undefined&&user?.parentIdx===e.createdBy;
         const iAmReceiver=user?.role==="parent"&&e.createdBy!==undefined&&user?.parentIdx!==e.createdBy;
@@ -11665,7 +11668,7 @@ window.addEventListener('message',function(e){
               <div style={{background:C.sur,borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                 <div>
                   <div style={{fontSize:28,fontWeight:900,color:C.blu,fontFamily:"JetBrains Mono"}}>{Number(e.amount).toFixed(2)} <span style={{fontSize:16}}>{currency}</span></div>
-                  <div style={{fontSize:12,color:C.mut,marginTop:2}}>{t.expPaidBy||"Payé par"} <strong style={{color:payer?.color||C.grn}}>{payer?.name||`P${e.paidBy+1}`}</strong></div>
+                  <div style={{fontSize:12,color:C.mut,marginTop:2}}>{t.expPaidBy||"Payé par"} <strong style={{color:payer?.color||C.grn}}>{payerLabel}</strong></div>
                 </div>
                 <div style={{textAlign:"right"}}>
                   <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{sA}/{sB}</div>
@@ -11703,10 +11706,10 @@ window.addEventListener('message',function(e){
                     <div style={{fontSize:13,color:C.txt}}>{e.note}</div>
                   </div>
                 )}
-                {creator&&(
+                {(creator||e.createdByName)&&(
                   <div style={{background:C.sur,borderRadius:10,padding:"10px 12px",gridColumn:"1/-1"}}>
                     <div style={{fontSize:10,color:C.mut,fontWeight:700,marginBottom:2}}>AJOUTÉ PAR</div>
-                    <div style={{fontSize:13,fontWeight:700,color:creator.color||C.txt}}>{creator.name}</div>
+                    <div style={{fontSize:13,fontWeight:700,color:creator?.color||C.txt}}>{creatorLabel}</div>
                   </div>
                 )}
               </div>
@@ -12260,7 +12263,7 @@ window.addEventListener('message',function(e){
                       {atts.length>0&&<span style={{background:`${C.vio}18`,color:C.vio,borderRadius:4,padding:"1px 6px",fontSize:10,fontWeight:800,flexShrink:0}}>📎 {atts.length}</span>}
                     </div>
                     <div style={{fontSize:12,color:C.mut,marginTop:2}}>
-                      <span style={{color:cfg.parents[e.paidBy]?.color}}>{cfg.parents[e.paidBy]?.name||`P${e.paidBy+1}`}</span>
+                      <span style={{color:cfg.parents[e.paidBy]?.color}}>{formatActorName(e.paidByName||cfg.parents[e.paidBy]?.name||`P${e.paidBy+1}`, e.paidByUserId, removedUserIds)}</span>
                       {" · "}{e.category}{" · "}{(e.date||"").split("-").reverse().join("/")}
                       {e.split&&e.split!==50?<span style={{marginLeft:4,background:`${C.vio}18`,color:C.vio,borderRadius:4,padding:"1px 5px",fontSize:10,fontWeight:800}}>⚖️ {100-e.split}%/{e.split}%</span>:""}
                     </div>
@@ -12295,7 +12298,7 @@ window.addEventListener('message',function(e){
                 {iAmExpReceiver && expSt==="pending" && (
                   <div style={{marginTop:12,padding:"12px 14px",background:`${C.yel}0d`,border:`1px solid ${C.yel}44`,borderRadius:10}}>
                     <div style={{fontSize:13,color:C.txt,marginBottom:10,lineHeight:1.5}}>
-                      <strong style={{color:cfg.parents[e.createdBy]?.color||C.blu}}>{cfg.parents[e.createdBy]?.name||`P${(e.createdBy||0)+1}`}</strong>{" "}
+                      <strong style={{color:cfg.parents[e.createdBy]?.color||C.blu}}>{formatActorName(e.createdByName||cfg.parents[e.createdBy]?.name||`P${(e.createdBy||0)+1}`, e.createdByUserId, removedUserIds)}</strong>{" "}
                       {t.expPendingConfirmMsg||"a ajouté une dépense de"}{" "}
                       <strong>{e.amount.toFixed(2)} {currency}</strong> ({e.label}).{" "}
                       {t.expPendingConfirmQ||"Pouvez-vous confirmer ?"}
