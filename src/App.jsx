@@ -3027,7 +3027,7 @@ export default function App() {
     window.addEventListener("duvia-invite-left", h);
     return ()=> window.removeEventListener("duvia-invite-left", h);
   },[]);
-  const [tab,setTab]   = useState(0);
+  const [tab,setTab]   = useLocalStorage("duvia_tab", 0);
   const tabDir = useRef("right");
   function switchTab(i){ tabDir.current = i > tab ? "right" : "left"; setTab(i); }
   const [showPasswordReset, setShowPasswordReset] = useState(false);
@@ -3928,6 +3928,11 @@ export default function App() {
         {icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},
       ]
     : [{icon:"📅",label:t.tabCal},{icon:"🎒",label:t.tabSchedule||"EDT"},{icon:"💰",label:t.tabExp,badge:expPendingDot?1:0},{icon:"📞",label:t.tabContacts||"Contacts",badge:contactsDot?1:0},{icon:"🗄️",label:t.tabVault||"Coffre",badge:vaultDot?1:0},{icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},{icon:"🎡",label:t.tabGame||"Jeu"}];
+
+  // 🔒 L'onglet mémorisé (duvia_tab) peut ne plus exister si ce même appareil
+  // change de rôle (parent → enfant/observateur, moins d'onglets) — on
+  // retombe sur le premier onglet plutôt que de rendre un écran vide.
+  useEffect(()=>{ if(tab>=TABS.length) setTab(0); },[TABS.length]);
 
   // ── Context value ─────────────────────────────────────────────────────────
   const onUpgrade = () => { setMenuTab("premium"); setShowMenu(false); };
