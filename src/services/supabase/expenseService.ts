@@ -20,6 +20,7 @@ export interface Expense {
   recurringId: string | null;
   recurringStart: string | null;
   status: string;
+  pendingDelete: boolean;
   createdBy: number;
   createdByUserId: string | null;
   createdByName: string | null;
@@ -38,6 +39,7 @@ export interface Reimbursement {
   date: string | null;
   note: string;
   status: string;
+  pendingDelete: boolean;
   createdAt: string;
 }
 
@@ -62,6 +64,7 @@ export function dbToExpense(row: Record<string, any>): Expense {
     recurringId:    row.recurring_id ?? null,
     recurringStart: row.recurring_start ?? null,
     status:         row.status ?? "confirmed",
+    pendingDelete:  row.pending_delete ?? false,
     createdBy:      row.created_by ?? 0,
     createdByUserId: row.created_by_user_id ?? null,
     createdByName:   row.created_by_name ?? null,
@@ -88,6 +91,7 @@ function expenseToDb(exp: Omit<Expense, "id" | "createdAt">, familyId: string) {
     recurring_id:    exp.recurringId ? String(exp.recurringId) : null,
     recurring_start: exp.recurringStart || null,
     status:          exp.status,
+    pending_delete:  exp.pendingDelete ?? false,
     created_by:      exp.createdBy ?? 0,
     created_by_user_id: exp.createdByUserId ?? null,
     created_by_name:    exp.createdByName ?? null,
@@ -107,6 +111,7 @@ export function dbToReimbursement(row: Record<string, any>): Reimbursement {
     date:        row.date ?? null,
     note:        row.note ?? "",
     status:      row.status ?? "pending",
+    pendingDelete: row.pending_delete ?? false,
     createdAt:   row.created_at ?? new Date().toISOString(),
   };
 }
@@ -124,6 +129,7 @@ function reimbursementToDb(reim: Omit<Reimbursement, "id" | "createdAt">, family
     date:          reim.date || null,
     note:          reim.note || "",
     status:        reim.status,
+    pending_delete: reim.pendingDelete ?? false,
   };
 }
 
@@ -185,6 +191,7 @@ export async function patchExpense(
   if (patch.recurringId   !== undefined) dbPatch.recurring_id    = patch.recurringId ? String(patch.recurringId) : null;
   if (patch.recurringStart!== undefined) dbPatch.recurring_start = patch.recurringStart || null;
   if (patch.status        !== undefined) dbPatch.status          = patch.status;
+  if (patch.pendingDelete !== undefined) dbPatch.pending_delete  = patch.pendingDelete;
   if (patch.createdBy     !== undefined) dbPatch.created_by      = patch.createdBy;
 
   const { data, error } = await supabase
@@ -250,6 +257,7 @@ export async function patchReimbursement(
   if (patch.date   !== undefined) dbPatch.date        = patch.date || null;
   if (patch.note   !== undefined) dbPatch.note        = patch.note;
   if (patch.status !== undefined) dbPatch.status      = patch.status;
+  if (patch.pendingDelete !== undefined) dbPatch.pending_delete = patch.pendingDelete;
 
   const { data, error } = await supabase
     .from("reimbursements")
