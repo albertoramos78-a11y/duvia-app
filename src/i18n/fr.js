@@ -530,6 +530,7 @@ const fr = {
     reinviteNumberTip:"💡 Supprime et réinvite avec un numéro pour pré-remplir SMS/WhatsApp.",
     creatorLabel:"Créateur",
     guestLabel:"Invité",
+    accountConnected:"Compte connecté",
     waitingSignup:"En attente d'inscription",
     leaveFamily:"🚪 Quitter la famille",
     bugReportMenu:"Signaler un problème",

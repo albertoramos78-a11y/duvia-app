@@ -7390,6 +7390,11 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
             <div style={{display:"flex",alignItems:"center",gap:6}}>
               <span style={{fontSize:11,fontWeight:800,color:p.color,textTransform:"uppercase",letterSpacing:".06em"}}>{i===effectiveCreatorIdx(cfg.parents)?t.creatorLabel:t.guestLabel}</span>
+              {i===user?.parentIdx && (
+                <span style={{fontSize:9,fontWeight:900,background:`${C.grn}22`,color:C.grn,border:`1px solid ${C.grn}44`,padding:"2px 7px",borderRadius:8,letterSpacing:".04em"}}>
+                  ✅ {t.accountConnected||"Compte connecté"}
+                </span>
+              )}
               {sub?.subscriberParentIdx===i && (
                 <span style={{fontSize:9,fontWeight:900,background:`linear-gradient(135deg,${C.yel},${C.ora})`,color:"#fff",padding:"2px 7px",borderRadius:8,letterSpacing:".04em"}}>
                   👑 Souscripteur Premium
