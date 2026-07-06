@@ -7,6 +7,8 @@ export interface Expense {
   label: string;
   amount: number;
   paidBy: number;
+  paidByUserId: string | null;
+  paidByName: string | null;
   split: number;
   category: string;
   date: string | null;
@@ -19,13 +21,19 @@ export interface Expense {
   recurringStart: string | null;
   status: string;
   createdBy: number;
+  createdByUserId: string | null;
+  createdByName: string | null;
   createdAt: string;
 }
 
 export interface Reimbursement {
   id: string;
   from: number;   // index parent émetteur
+  fromUserId: string | null;
+  fromName: string | null;
   to: number;     // index parent destinataire
+  toUserId: string | null;
+  toName: string | null;
   amount: number;
   date: string | null;
   note: string;
@@ -41,6 +49,8 @@ export function dbToExpense(row: Record<string, any>): Expense {
     label:          row.label ?? "",
     amount:         Number(row.amount ?? 0),
     paidBy:         row.paid_by ?? 0,
+    paidByUserId:   row.paid_by_user_id ?? null,
+    paidByName:     row.paid_by_name ?? null,
     split:          row.split_pct ?? 50,
     category:       row.category ?? "",
     date:           row.date ?? null,
@@ -53,6 +63,8 @@ export function dbToExpense(row: Record<string, any>): Expense {
     recurringStart: row.recurring_start ?? null,
     status:         row.status ?? "confirmed",
     createdBy:      row.created_by ?? 0,
+    createdByUserId: row.created_by_user_id ?? null,
+    createdByName:   row.created_by_name ?? null,
     createdAt:      row.created_at ?? new Date().toISOString(),
   };
 }
@@ -63,6 +75,8 @@ function expenseToDb(exp: Omit<Expense, "id" | "createdAt">, familyId: string) {
     label:           exp.label,
     amount:          exp.amount,
     paid_by:         exp.paidBy,
+    paid_by_user_id: exp.paidByUserId ?? null,
+    paid_by_name:    exp.paidByName ?? null,
     split_pct:       exp.split ?? 50,
     category:        exp.category,
     date:            exp.date || null,
@@ -75,31 +89,41 @@ function expenseToDb(exp: Omit<Expense, "id" | "createdAt">, familyId: string) {
     recurring_start: exp.recurringStart || null,
     status:          exp.status,
     created_by:      exp.createdBy ?? 0,
+    created_by_user_id: exp.createdByUserId ?? null,
+    created_by_name:    exp.createdByName ?? null,
   };
 }
 
 export function dbToReimbursement(row: Record<string, any>): Reimbursement {
   return {
-    id:        row.id,
-    from:      row.from_parent ?? 0,
-    to:        row.to_parent ?? 0,
-    amount:    Number(row.amount ?? 0),
-    date:      row.date ?? null,
-    note:      row.note ?? "",
-    status:    row.status ?? "pending",
-    createdAt: row.created_at ?? new Date().toISOString(),
+    id:          row.id,
+    from:        row.from_parent ?? 0,
+    fromUserId:  row.from_user_id ?? null,
+    fromName:    row.from_name ?? null,
+    to:          row.to_parent ?? 0,
+    toUserId:    row.to_user_id ?? null,
+    toName:      row.to_name ?? null,
+    amount:      Number(row.amount ?? 0),
+    date:        row.date ?? null,
+    note:        row.note ?? "",
+    status:      row.status ?? "pending",
+    createdAt:   row.created_at ?? new Date().toISOString(),
   };
 }
 
 function reimbursementToDb(reim: Omit<Reimbursement, "id" | "createdAt">, familyId: string) {
   return {
-    family_id:    familyId,
-    from_parent:  reim.from,
-    to_parent:    reim.to,
-    amount:       reim.amount,
-    date:         reim.date || null,
-    note:         reim.note || "",
-    status:       reim.status,
+    family_id:     familyId,
+    from_parent:   reim.from,
+    from_user_id:  reim.fromUserId ?? null,
+    from_name:     reim.fromName ?? null,
+    to_parent:     reim.to,
+    to_user_id:    reim.toUserId ?? null,
+    to_name:       reim.toName ?? null,
+    amount:        reim.amount,
+    date:          reim.date || null,
+    note:          reim.note || "",
+    status:        reim.status,
   };
 }
 
