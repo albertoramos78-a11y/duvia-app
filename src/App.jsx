@@ -980,12 +980,18 @@ function generateICS(cfg) {
   const today = new Date(); today.setHours(0,0,0,0);
   const endDate = new Date(today); endDate.setMonth(endDate.getMonth()+12);
   let cur = new Date(today), periodStart = null, periodPIdx = null;
+  // 🔧 DTSTAMP est un champ OBLIGATOIRE de la norme iCal (RFC 5545) pour tout
+  // VEVENT — sans lui, plusieurs applis calendrier (dont Android) refusent
+  // d'importer l'événement ("impossible de lancer l'événement").
+  const now = new Date();
+  const dtStamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth()+1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
   function pushEvent(start, end, pIdx) {
     const p = parents[pIdx]; if(!p) return;
     const name = p.name || `Parent ${pIdx+1}`;
     const title = childNames ? `${childNames} chez ${name}` : `Garde chez ${name}`;
     const endPlus = new Date(end); endPlus.setDate(endPlus.getDate()+1);
     lines.push("BEGIN:VEVENT",
+      `DTSTAMP:${dtStamp}`,
       `DTSTART;VALUE=DATE:${toICS(start)}`,
       `DTEND;VALUE=DATE:${toICS(endPlus)}`,
       `SUMMARY:${title}`,
