@@ -14986,7 +14986,7 @@ function ContactsTab({readOnly,addOnly,prem: premProp}) {
     if(ch.phone) autoContacts.push({id:`auto_child_${ch.id}`,name:ch.name,phone:ch.phone,note:t.contactsChild||"Enfant",cat:"other",auto:true,avatar:ch.avatar});
   });
   (cfg.observers||[]).forEach((o,i)=>{
-    autoContacts.push({id:`auto_obs_${i}`,name:o.name||o.email,phone:o.phone||"",note:o.relation||t.roleObs||"Observateur",cat:"observers",auto:true});
+    autoContacts.push({id:`auto_obs_${i}`,name:o.name||o.email,phone:o.phone||"",note:o.relation||t.roleObs||"Observateur",cat:"observers",auto:true,avatar:o.avatar});
   });
 
   // Emergency numbers from country config
