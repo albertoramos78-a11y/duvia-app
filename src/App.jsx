@@ -11160,16 +11160,16 @@ function ExpTab() {
             const occurrences=getOccurrences(form.date,form.recurringEnd,form.recurringFreq);
             const newExpenses=occurrences.map((d)=>({...payload,date:d,recurringId:rid,recurringFreq:form.recurringFreq,recurringStart:form.date,recurringEnd:form.recurringEnd,status:"pending",createdBy:user?.parentIdx??0}));
             await expMethods.updateExpensesBySeries(rid,newExpenses);
-            { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`🔄 ${cleanLabel} · série (${occurrences.length} occ.) — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
+            { const sA=payload.split??50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`🔄 ${cleanLabel} · série (${occurrences.length} occ.) — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sB}% ${p0} — ${sA}% ${p1}`,"exp"); }
             pushNotif(`✏️ ${form.label} — série modifiée, revalidation requise`,"exp");
           } else {
             await expMethods.updateExpense(editId,{...payload,status:"pending",createdBy:user?.parentIdx??0});
-            { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
+            { const sA=payload.split??50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sB}% ${p0} — ${sA}% ${p1}`,"exp"); }
             pushNotif(`✏️ ${form.label} (${amt.toFixed(2)} ${currency}) modifiée — revalidation requise`,"exp");
           }
         } else {
           await expMethods.updateExpense(editId,{...payload,status:"pending",createdBy:user?.parentIdx??0});
-          { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
+          { const sA=payload.split??50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.expModified||"Dépense modifiée",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sB}% ${p0} — ${sA}% ${p1}`,"exp"); }
           pushNotif(`✏️ ${form.label} (${amt.toFixed(2)} ${currency}) modifiée — revalidation requise`,"exp");
         }
       } else if(form.recurring) {
@@ -11177,14 +11177,14 @@ function ExpTab() {
         const recurringId = String(Date.now());
         const newExpenses = occurrences.map((d) => ({...payload,date:d,recurringId,recurringFreq:form.recurringFreq,recurringStart:form.date,recurringEnd:form.recurringEnd,status:"pending",createdBy:user?.parentIdx??0}));
         await expMethods.addExpenses(newExpenses);
-        { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.newExpense||"Nouvelle dépense",`🔄 ${cleanLabel} · ${occurrences.length} occ. — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
+        { const sA=payload.split??50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.newExpense||"Nouvelle dépense",`🔄 ${cleanLabel} · ${occurrences.length} occ. — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sB}% ${p0} — ${sA}% ${p1}`,"exp"); }
         pushNotif(`🔄 ${form.label} — ${occurrences.length} occurrence${occurrences.length>1?"s":""}` ,"exp");
         setActivity(a=>({...a,expenses:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
         setExpSubmittedPopup(true);
       } else {
         const e={...payload,status:"pending",createdBy:user?.parentIdx??0};
         await expMethods.addExpense(e);
-        { const sA=payload.split||50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.newExpense||"Nouvelle dépense",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sA}% ${p0} — ${sB}% ${p1}`,"exp"); }
+        { const sA=payload.split??50; const sB=100-sA; const payerN=cfg.parents[payload.paidBy]?.name||`P${payload.paidBy+1}`; const p0=cfg.parents[0]?.name||"P1"; const p1=cfg.parents[1]?.name||"P2"; addHist(t.newExpense||"Nouvelle dépense",`${cleanLabel} — ${amt.toFixed(2)} ${currency}\nPayé par ${payerN}\n${sB}% ${p0} — ${sA}% ${p1}`,"exp"); }
         pushNotif(`💰 ${form.label} (${form.amount}${currency})`,"exp");
         setActivity(a=>({...a,expenses:{ts:new Date().toISOString(),by:String(user?.id||"")}}));
         addRefAction("ADD_EXPENSE");
@@ -11211,11 +11211,11 @@ function ExpTab() {
       const seriesItems=(ctxExpenses||[]).filter(x=>x.recurringId===e.recurringId);
       const first=seriesItems.reduce((a,b)=>a.date<=b.date?a:b,seriesItems[0]);
       const last=seriesItems.reduce((a,b)=>a.date>=b.date?a:b,seriesItems[0]);
-      setForm({label:e.label,amount:String(e.amount),paidBy:e.paidBy,split:e.split||50,category:e.category,
+      setForm({label:e.label,amount:String(e.amount),paidBy:e.paidBy,split:e.split??50,category:e.category,
         date:first.date,note:e.note||"",attachments:e.attachments||[],
         recurring:true,recurringFreq:e.recurringFreq||"monthly",recurringEnd:last.date});
     } else {
-      setForm({label:e.label,amount:String(e.amount),paidBy:e.paidBy,split:e.split||50,category:e.category,
+      setForm({label:e.label,amount:String(e.amount),paidBy:e.paidBy,split:e.split??50,category:e.category,
         date:e.date||toStr(new Date()),note:e.note||"",attachments:e.attachments||[],
         recurring:false,recurringFreq:"monthly",recurringEnd:""});
     }
@@ -11259,9 +11259,12 @@ function ExpTab() {
   const confirmedExpenses=expenses.filter(e=>!e.status||e.status==="confirmed");
   const total=confirmedExpenses.reduce((s,e)=>s+e.amount,0);
   const totals=cfg.parents.map((_,i)=>confirmedExpenses.filter(e=>e.paidBy===i).reduce((s,e)=>s+e.amount,0));
+  // 🔧 split = TOUJOURS la part de cfg.parents[1] (position fixe), quel que
+  // soit le payeur (voir commentaire du formulaire ligne ~12078). La quote-part
+  // de chacun ne dépend donc que de sa position, jamais de qui a payé.
   const owed=cfg.parents.map((_,i)=>confirmedExpenses.reduce((s,e)=>{
-    const sp=e.split||50;
-    return s+e.amount*(i===e.paidBy?sp/100:(100-sp)/100);
+    const sp=e.split??50;
+    return s+e.amount*(i===1?sp:(100-sp))/100;
   },0));
   // Reimbursements adjust the net balance: only confirmed ones are counted
   const confirmedReims=reimbursements.filter(r=>r.status==="confirmed");
@@ -11311,12 +11314,12 @@ function ExpTab() {
   function confirmExp(id){
     const e=(ctxExpenses||[]).find(x=>x.id===id);
     expMethods.confirmExp(id);
-    if(e){ const sA=e.split||50; const sB=100-sA; pushNotif(`${t.expConfirmedNotif||"✅ Dépense confirmée"} : ${e.label} (${e.amount} ${currency})`,"exp"); addHist(t.expConfirmedNotif||"Dépense confirmée",`${e.label} — ${Number(e.amount).toFixed(2)} ${currency} · ${sA}/${sB}`,"exp"); }
+    if(e){ const sA=e.split??50; const sB=100-sA; pushNotif(`${t.expConfirmedNotif||"✅ Dépense confirmée"} : ${e.label} (${e.amount} ${currency})`,"exp"); addHist(t.expConfirmedNotif||"Dépense confirmée",`${e.label} — ${Number(e.amount).toFixed(2)} ${currency} · ${sA}/${sB}`,"exp"); }
   }
   function rejectExp(id){
     const e=(ctxExpenses||[]).find(x=>x.id===id);
     expMethods.rejectExp(id);
-    if(e){ const sA=e.split||50; const sB=100-sA; pushNotif(`${t.expRejectedNotif||"❌ Dépense refusée"} : ${e.label}`,"exp"); addHist(t.expRejectedNotif||"Dépense refusée",`${e.label} — ${Number(e.amount).toFixed(2)} ${currency} · ${sA}/${sB}`,"exp"); }
+    if(e){ const sA=e.split??50; const sB=100-sA; pushNotif(`${t.expRejectedNotif||"❌ Dépense refusée"} : ${e.label}`,"exp"); addHist(t.expRejectedNotif||"Dépense refusée",`${e.label} — ${Number(e.amount).toFixed(2)} ${currency} · ${sA}/${sB}`,"exp"); }
   }
 
   const filtered=catF==="all"?expenses:expenses.filter(e=>e.category===catF);
@@ -11345,7 +11348,7 @@ function ExpTab() {
       const confirmedReims=filteredReims.filter(r=>r.status==="confirmed");
       const totalReims=confirmedReims.reduce((s,r)=>s+r.amount,0);
       const totalsPerParent=cfg.parents.map((_,i)=>confirmedExp.filter(e=>e.paidBy===i).reduce((s,e)=>s+e.amount,0));
-      const owedPerParent=cfg.parents.map((_,i)=>confirmedExp.reduce((s,e)=>{const sp=e.split||50;return s+e.amount*(i===e.paidBy?sp/100:(100-sp)/100);},0));
+      const owedPerParent=cfg.parents.map((_,i)=>confirmedExp.reduce((s,e)=>{const sp=e.split??50;return s+e.amount*(i===1?sp:(100-sp))/100;},0));
       const reimSent2=cfg.parents.map((_,i)=>confirmedReims.filter(r=>r.from===i).reduce((s,r)=>s+r.amount,0));
       const reimReceived2=cfg.parents.map((_,i)=>confirmedReims.filter(r=>r.to===i).reduce((s,r)=>s+r.amount,0));
       const balances=cfg.parents.map((_,i)=>(totalsPerParent[i]||0)-(owedPerParent[i]||0)+(reimSent2[i]||0)-(reimReceived2[i]||0));
@@ -11390,7 +11393,7 @@ function ExpTab() {
         const idTs=e.id?new Date(e.id):null;
         const dateSaisie=idTs&&!isNaN(idTs)?idTs.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}):"—";
         const heureSaisie=idTs&&!isNaN(idTs)?idTs.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"—";
-        const sp=e.split||50;
+        const sp=e.split??50;
         const hasAtt=(e.attachments||[]).length>0;
         return `<tr><td>${fmtDate(e.date)}</td><td>${dateSaisie}<br><span style="font-size:8px;color:#888;">${heureSaisie}</span></td><td>${e.category||"—"}</td><td><strong>${(e.label||"—").replace(/</g,"&lt;")}</strong>${e.note?`<br><span style="font-size:8px;color:#888;">${e.note.replace(/</g,"&lt;")}</span>`:""}</td><td style="text-align:right;font-weight:700;">${(e.amount||0).toFixed(2)} ${currency}</td><td>${pName}</td><td style="text-align:center;font-size:9px;">${sp}%/${100-sp}%</td><td>${statusBadge(e.status)}</td><td style="font-size:9px;">${creatorName}${hasAtt?" 📎":""}</td></tr>`;
       }).join("");
@@ -11644,7 +11647,7 @@ window.addEventListener('message',function(e){
         const payerLabel=formatActorName(e.paidByName||payer?.name||`P${e.paidBy+1}`, e.paidByUserId, removedUserIds);
         const creator=cfg.parents[e.createdBy];
         const creatorLabel=formatActorName(e.createdByName||creator?.name||`P${(e.createdBy||0)+1}`, e.createdByUserId, removedUserIds);
-        const sA=e.split||50; const sB=100-sA;
+        const sA=e.split??50; const sB=100-sA;
         const iAmSender=user?.role==="parent"&&e.createdBy!==undefined&&user?.parentIdx===e.createdBy;
         const iAmReceiver=user?.role==="parent"&&e.createdBy!==undefined&&user?.parentIdx!==e.createdBy;
         const isPending=st==="pending";
@@ -11679,7 +11682,7 @@ window.addEventListener('message',function(e){
               {/* Part de chaque parent */}
               <div style={{display:"flex",gap:8,marginBottom:12}}>
                 {cfg.parents.map((p,i)=>{
-                  const pct = i===e.paidBy?sA:sB;
+                  const pct = i===1?sA:sB;
                   const amt = (Number(e.amount)*pct/100).toFixed(2);
                   return(
                     <div key={i} style={{flex:1,background:C.sur,borderRadius:10,padding:"8px 10px",textAlign:"center",border:`1.5px solid ${i===e.paidBy?p.color||C.grn:C.bor}`}}>
@@ -12268,7 +12271,7 @@ window.addEventListener('message',function(e){
                     <div style={{fontSize:12,color:C.mut,marginTop:2}}>
                       <span style={{color:cfg.parents[e.paidBy]?.color}}>{formatActorName(e.paidByName||cfg.parents[e.paidBy]?.name||`P${e.paidBy+1}`, e.paidByUserId, removedUserIds)}</span>
                       {" · "}{e.category}{" · "}{(e.date||"").split("-").reverse().join("/")}
-                      {e.split&&e.split!==50?<span style={{marginLeft:4,background:`${C.vio}18`,color:C.vio,borderRadius:4,padding:"1px 5px",fontSize:10,fontWeight:800}}>⚖️ {100-e.split}%/{e.split}%</span>:""}
+                      {e.split!=null&&e.split!==50?<span style={{marginLeft:4,background:`${C.vio}18`,color:C.vio,borderRadius:4,padding:"1px 5px",fontSize:10,fontWeight:800}}>⚖️ {100-e.split}%/{e.split}%</span>:""}
                     </div>
                     {e.note&&<div style={{fontSize:11,color:C.mut,marginTop:2}}>{e.note}</div>}
                     {/* Status badge — toujours visible */}
