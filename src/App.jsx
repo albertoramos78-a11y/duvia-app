@@ -10856,7 +10856,7 @@ function HistTab() {
 
 // ─── EXPENSES ─────────────────────────────────────────────────────────────────
 function ExpTab() {
-  const {C,t,cfg,setCfg,addHist,pushNotif,user,prem,perms,onUpgrade,isAdm,setActivity,sub,simDate,setExpSubmittedPopup,addRefAction,currency="€",expenses:ctxExpenses,reimbursements:ctxReimbursements,expMethods,history:ctxHistory,familySync,removedUserIds} = useApp();
+  const {C,t,cfg,setCfg,addHist,pushNotif,user,prem,perms,onUpgrade,isAdm,setActivity,sub,simDate,setExpSubmittedPopup,addRefAction,currency="€",expenses:ctxExpenses,reimbursements:ctxReimbursements,expMethods,history:ctxHistory,familySync,removedUserIds,myUid} = useApp();
   const premFull = isPremFull(sub); // PDF réservé full premium uniquement
   const now = simDate ? new Date(simDate) : new Date();
   const todayStr = toStr(now);
@@ -11145,7 +11145,7 @@ function ExpTab() {
     if(form.recurring && form.recurringEnd < form.date){setFormErr("⚠️ La date de fin doit être après la date de début.");return;}
     setFormErr("");
     if(!prem&&!editId&&expenses.length>=1){} // no limit
-    const creatorIdentity = { userId: user?.id || null, name: user?.name || null };
+    const creatorIdentity = { userId: myUid || null, name: user?.name || null };
     const payerIdentity = resolveActorIdentity(form.paidBy);
     const payload={...form,label:cleanLabel,amount:amt,split:form.split??50,attachments:form.attachments||[],
       createdByUserId: creatorIdentity.userId, createdByName: creatorIdentity.name,
