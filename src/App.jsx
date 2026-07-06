@@ -5794,8 +5794,21 @@ function NotifTab({prem: premProp}) {
   const storageKey = `duvia_deleted_notifs_${user?.id||"guest"}`;
   const [deletedIds,setDeletedIds] = useLocalStorage(storageKey,[]);
   const notifs = allNotifs.filter(n=>!deletedIds.includes(n.id));
-  function deleteNotif(id){ if(window.confirm(t.deleteNotifConfirm||"Supprimer cette notification ?")) setDeletedIds(ids=>[...ids,id]); }
-  function deleteAll(){ if(window.confirm((t.deleteAllNotifsConfirm||"Supprimer toutes les notifications ({count}) ?").replace("{count}",notifs.length))) setDeletedIds(ids=>[...ids,...allNotifs.map(n=>n.id)]); }
+  // 🔧 Supprimer (cacher localement via deletedIds) doit aussi marquer lu dans
+  // cfg.notifs (partagé) — sinon le badge du menu, qui compte les non-lues
+  // dans cfg.notifs sans connaître deletedIds, reste bloqué jusqu'à un
+  // "tout marquer lu" séparé alors que la notif a déjà disparu de la liste.
+  function deleteNotif(id){
+    if(!window.confirm(t.deleteNotifConfirm||"Supprimer cette notification ?")) return;
+    setDeletedIds(ids=>[...ids,id]);
+    setCfg(c=>({...c,notifs:c.notifs.map(n=>n.id===id?{...n,read:true}:n)}));
+  }
+  function deleteAll(){
+    if(!window.confirm((t.deleteAllNotifsConfirm||"Supprimer toutes les notifications ({count}) ?").replace("{count}",notifs.length))) return;
+    const ids=allNotifs.map(n=>n.id);
+    setDeletedIds(prev=>[...prev,...ids]);
+    setCfg(c=>({...c,notifs:c.notifs.map(n=>ids.includes(n.id)?{...n,read:true}:n)}));
+  }
   function markAll(){setCfg(c=>({...c,notifs:c.notifs.map(n=>({...n,read:true}))}));}
 
   // Map notif type → tab index (parent layout: 0=Cal, 1=Schedule, 2=Exp, 3=Contacts, 4=Vault, 5=Msg)
