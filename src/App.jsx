@@ -7196,9 +7196,14 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
   useEffect(()=>{
     if(!user||user.parentIdx===undefined) return;
     const idx = user.parentIdx;
-    if(cfg.parents[idx] && cfg.parents[idx].email !== user.email){
-      setCfg(c=>{const p=[...c.parents];p[idx]={...p[idx],email:user.email};return{...c,parents:p};});
-    }
+    const existing = cfg.parents[idx];
+    if(!existing || existing.email === user.email) return;
+    // 🔒 Ne jamais écraser le créneau d'un AUTRE parent : si ce créneau a déjà
+    // un email différent du mien, mon parentIdx est périmé (ex. juste après une
+    // connexion Google, parentIdx vaut 0 par défaut avant correction) → on ne
+    // touche à rien (même garde que l'effet de synchronisation ligne ~3216).
+    if(existing.email && existing.email.toLowerCase() !== (user.email||"").toLowerCase()) return;
+    setCfg(c=>{const p=[...c.parents];p[idx]={...p[idx],email:user.email};return{...c,parents:p};});
   },[user]);
   const markTouched = (key) => setTouched(v=>({...v,[key]:true}));
 
