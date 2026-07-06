@@ -3239,9 +3239,15 @@ export default function App() {
   useEffect(() => {
     if (!user || user.role !== "parent" || !familySync.familyId) return;
     const parents = cfg.parents || [];
-    if (!parents.length || !user.email) return;
-    const mail = user.email.toLowerCase();
-    const realIdx = parents.findIndex(p => p && p.email && p.email.toLowerCase() === mail);
+    if (!parents.length) return;
+    // 🔧 userId prioritaire sur l'email : si l'invité a rejoint avec une adresse
+    // différente de celle de l'invitation d'origine, le champ email du créneau
+    // reste celui invité (jamais mis à jour avec l'email réel utilisé) — la
+    // correspondance par email échoue alors et parentIdx ne se corrige jamais.
+    // Le userId, lui, est toujours le vrai compte Supabase de qui a rejoint.
+    const mail = (user.email || "").toLowerCase();
+    let realIdx = user.id ? parents.findIndex(p => p && p.userId === user.id) : -1;
+    if (realIdx < 0 && mail) realIdx = parents.findIndex(p => p && p.email && p.email.toLowerCase() === mail);
     if (realIdx >= 0 && realIdx !== user.parentIdx) {
       try {
         const list = JSON.parse(window.localStorage.getItem("duvia_users") || "[]");
