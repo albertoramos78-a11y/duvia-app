@@ -3155,6 +3155,23 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[users, sessionEmail]);
 
+  // Bulle d'onboarding première connexion — effet séparé de handleSetUser :
+  // la création de compte force un reload complet juste avant que
+  // handleSetUser puisse poser ce flag (voir early-return "compte différent"
+  // ci-dessous), et après reload `user` est restauré par l'effet de synchro
+  // ci-dessus sans jamais repasser par handleSetUser. En réagissant à `user`
+  // directement, ça se déclenche quel que soit le chemin qui l'a défini.
+  useEffect(() => {
+    if (!user || user.role !== "parent") return;
+    const seenKey = `duvia_onboarding_${user.id}`;
+    try {
+      if (!window.localStorage.getItem(seenKey)) {
+        setShowOnboardingTip(true);
+        window.localStorage.setItem(seenKey, "1");
+      }
+    } catch {}
+  }, [user]);
+
   // ── handleSetUser — défini ici pour avoir accès à tous les setters useState ──
   const handleSetUser = useCallback((u) => {
     // 🔒 Compte différent de celui actif dans cet onglet (ou 1re connexion) →
@@ -3191,16 +3208,6 @@ export default function App() {
       posthog.reset();
     }
 
-    // Première connexion parent → afficher la bulle d'onboarding
-    if (u && u.role === "parent") {
-      const seenKey = `duvia_onboarding_${u.id}`;
-      try {
-        if (!window.localStorage.getItem(seenKey)) {
-          setShowOnboardingTip(true);
-          window.localStorage.setItem(seenKey, "1");
-        }
-      } catch {}
-    }
     // Déconnexion → retour au thème par défaut
     if (!u) {
       setSummerActive(false);
@@ -3232,7 +3239,7 @@ export default function App() {
       supabase.auth.signOut().catch(()=>{}).finally(()=>{ duviaReload(); });
       return;
     }
-  }, [sessionEmail, setSessionEmail, setShowOnboardingTip, setSummerActive, setRgActive, setWcActive, setVideoActive, setThemeMode, setShowPrizesMenu]); // ✅ tous les setters existent à ce stade
+  }, [sessionEmail, setSessionEmail, setSummerActive, setRgActive, setWcActive, setVideoActive, setThemeMode, setShowPrizesMenu]); // ✅ tous les setters existent à ce stade
 
   // ── Google OAuth : détecte le retour de redirection et connecte l'utilisateur ──
   useEffect(() => {
