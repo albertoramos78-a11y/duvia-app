@@ -34,7 +34,7 @@ définir]**, immatriculée au Registre du Commerce et des Sociétés de
   sans préjudice des obligations légales de protection des données
   personnelles rappelées à l'article 8.
 
-Contact : **[adresse email de contact à définir]**.
+Contact : **duvia.services@gmail.com**.
 
 ## Article 1 — Objet
 
@@ -167,7 +167,7 @@ utilisateur (ou titulaire de l'autorité parentale pour un enfant mineur)
 dispose d'un droit d'accès, de rectification, d'effacement, de limitation
 et de portabilité de ses données, exerçable directement depuis
 l'Application (export/suppression de compte) ou par email à
-**[adresse de contact DPO/RGPD à définir]**.
+**duvia.services@gmail.com**.
 
 **Hébergement :** les données sont hébergées via le prestataire Supabase
 **[région d'hébergement à confirmer]**.
