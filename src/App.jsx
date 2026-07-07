@@ -10607,7 +10607,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
   const WEEKNUM_COL = 16;
 
   return (
-    <div className="card" style={{padding:14,overflow:"hidden",width:"100%",boxSizing:"border-box"}}>
+    <div className="card" style={{padding:10,overflow:"hidden",width:"100%",boxSizing:"border-box"}}>
       <div style={{display:"grid",gridTemplateColumns:`${WEEKNUM_COL}px repeat(7,1fr)`,gap:5,marginBottom:6,width:"100%",boxSizing:"border-box"}}>
         <div />
         {dayLetters.map((lbl,i)=>(
