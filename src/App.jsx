@@ -14,7 +14,7 @@ import { useExpenses } from "./hooks/useExpenses";
 import { useHistory } from "./hooks/useHistory";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, PRIVACY_URL, CGU_URL, RGPD_NOTICE_VERSION } from './config.js';
-import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked } from './utils/core.js';
+import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, BRAND, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 
 // ─── POSTHOG — Analytics (pays, logins, comportement) ───────────────────────
@@ -8840,18 +8840,33 @@ function StepDates() {
                   ))}
                 </div>
               </div>
-              {/* Which parent */}
+              {/* Garde chez — sélection multiple : parents + observateurs "peut être gardien" */}
               <div className="field">
                 <label className="lbl">👤 {t.cdCustodyAt||"Garde chez"}</label>
-                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                  {parents.map((p,pIdx)=>(
-                    <button key={p.id} onClick={()=>updCd("parentId",String(p.id))} style={{flex:1,minWidth:80,padding:"9px",background:cd.parentId===String(p.id)?p.color:C.sur,color:cd.parentId===String(p.id)?"#fff":C.mut,border:`2px solid ${cd.parentId===String(p.id)?p.color:C.bor}`,borderRadius:10,fontSize:13,fontWeight:800,display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>
-                      {p.avatar&&(typeof p.avatar==="string"&&p.avatar.startsWith("http")
-                        ? <img src={p.avatar} alt="" style={{width:22,height:22,borderRadius:"50%",objectFit:"cover",verticalAlign:"middle"}} />
-                        : <span style={{fontSize:18}}>{p.avatar}</span>)}{p.name||`${t.parentN||"Parent"} ${pIdx+1}`}
-                    </button>
-                  ))}
-                </div>
+                {(() => {
+                  const guardIds = Array.isArray(cd.guardIds) && cd.guardIds.length>0 ? cd.guardIds : (cd.parentId?[`p:${cd.parentId}`]:[]);
+                  const guardOptions = [
+                    ...parents.map((p,pIdx)=>({key:`p:${p.id}`, name:p.name||`${t.parentN||"Parent"} ${pIdx+1}`, color:p.color, avatar:p.avatar})),
+                    ...(cfg.observers||[]).filter(o=>o.canGuard).map(o=>({key:`obs:${o.id}`, name:o.name||"?", color:o.color||C.ora, avatar:o.avatar})),
+                  ];
+                  return (
+                    <>
+                      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                        {guardOptions.map(opt=>{
+                          const active = guardIds.includes(opt.key);
+                          return (
+                            <button key={opt.key} onClick={()=>updCd("guardIds", toggleGuardId(guardIds, opt.key))} style={{flex:1,minWidth:80,padding:"9px",background:active?opt.color:C.sur,color:active?"#fff":C.mut,border:`2px solid ${active?opt.color:C.bor}`,borderRadius:10,fontSize:13,fontWeight:800,display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>
+                              {opt.avatar&&(typeof opt.avatar==="string"&&opt.avatar.startsWith("http")
+                                ? <img src={opt.avatar} alt="" style={{width:22,height:22,borderRadius:"50%",objectFit:"cover",verticalAlign:"middle"}} />
+                                : <span style={{fontSize:18}}>{opt.avatar}</span>)}{opt.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {guardIds.length===0 && <div style={{fontSize:11,color:C.mut,fontStyle:"italic",marginTop:6}}>{t.cdDefaultCalendar||"📅 Calendrier par défaut"}</div>}
+                    </>
+                  );
+                })()}
               </div>
               {/* Yearly recurrence */}
               <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13}}>
