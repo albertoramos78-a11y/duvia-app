@@ -10663,7 +10663,6 @@ function GuardCell({guard,readOnly,isOpen,onClick,onFull}) {
             <div style={{fontSize:12,fontWeight:700,color:C.txt}}>{parents.map(p=>p.name).filter(Boolean).join(" & ")||"Tous"}</div>
             <div style={{fontSize:9,color:"#bc8cff",fontWeight:700}}>🎁 Ensemble</div>
           </div>
-          {!readOnly&&<span style={{fontSize:10,color:C.vio}}>✎</span>}
         </div>
       ) : gObs?(
         <div style={{display:"flex",alignItems:"center",gap:7,width:"100%"}}>
@@ -10672,7 +10671,6 @@ function GuardCell({guard,readOnly,isOpen,onClick,onFull}) {
             <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{gObs.name||guard.obsName||"Gardien"}</div>
             <div style={{fontSize:9,color:"#f59e0b",fontWeight:700}}>🏠 Gardien</div>
           </div>
-          {!readOnly&&<span style={{fontSize:10,color:C.vio}}>✎</span>}
         </div>
       ) : gP?(
         <div style={{display:"flex",alignItems:"center",gap:7,width:"100%"}}>
@@ -10697,7 +10695,6 @@ function GuardCell({guard,readOnly,isOpen,onClick,onFull}) {
               ):null;
             })()}
           </div>
-          {!readOnly&&<span style={{fontSize:10,color:C.vio}}>✎</span>}
         </div>
       ):(
         <span style={{fontSize:12,color:C.mut}}>{readOnly?"—":t.whichParent}</span>
