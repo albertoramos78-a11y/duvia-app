@@ -9780,8 +9780,10 @@ function getSpecialEvents(date, cfg) {
     const monthMatch = +cd.month === m;
     const yearMatch = cd.yearly || !cd.year || +cd.year === y;
     if (dayMatch && monthMatch && yearMatch) {
-      const p = cfg.parents.find(p=>String(p.id)===String(cd.parentId)) || cfg.parents[0];
-      events.push({ label: `📌 ${cd.label}${p?.name?" → "+p.name.split(" ")[0]:""}`, color: p?.color||"#f5c842" });
+      const eligibleObservers = (cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard);
+      const guardians = resolveCustomDateGuardians(cd, cfg.parents, eligibleObservers);
+      const suffix = guardians.length>0 ? " → "+guardianNamesLabel(guardians) : "";
+      events.push({ label: `📌 ${cd.label}${suffix}`, color: guardians[0]?.color||"#f5c842" });
     }
   });
   return events;
@@ -14518,7 +14520,7 @@ function MessagingTab(){
         {/* Messages */}
         {/* paddingTop : laisse la place au picker d'emoji (appui long) quand il
             s'ouvre au-dessus d'un message proche du haut, sinon il se fait couper. */}
-        <div style={{flex:1,overflowY:"auto",paddingBottom:8,paddingTop:50}}>
+        <div style={{flex:1,overflowY:"auto",paddingBottom:8,paddingTop:25}}>
           {currentMsgs.length===0&&(
             <div style={{textAlign:"center",padding:40,color:C.mut,fontSize:13}}>{t.msgStartConv||"Démarrez la conversation"}</div>
           )}
