@@ -14,7 +14,7 @@ import { useExpenses } from "./hooks/useExpenses";
 import { useHistory } from "./hooks/useHistory";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, PRIVACY_URL, CGU_URL, RGPD_NOTICE_VERSION } from './config.js';
-import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName } from './utils/core.js';
+import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, BRAND, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 
 // ─── POSTHOG — Analytics (pays, logins, comportement) ───────────────────────
@@ -2730,7 +2730,7 @@ export default function App() {
   },[]);
 
   const [sub,setSub]     = useLocalStorage("duvia_sub", makeSub);
-  const { msgs: cloudMsgs, send: _sendCloudMsg, markRead: markCloudMessageRead } = useMessages(familySync.familyId);
+  const { msgs: cloudMsgs, send: _sendCloudMsg, markRead: markCloudMessageRead, react: _reactCloudMsg } = useMessages(familySync.familyId);
   // Phase 3 migration custody : écriture en parallèle, ne lit/affiche rien — voir hooks/useCustody.ts
   const custodyShadow = useCustody(familySync.familyId);
 
@@ -2799,9 +2799,21 @@ export default function App() {
       id: cm.id, from: cm.sender_id, fromName: cm.sender_name || "?",
       to: cm.recipient_ids || [], content: cm.content, ts: cm.created_at,
       readBy: cm.read_by || [],
+      reactions: cm.reactions || {},
       hash: hashMsg(cm.sender_id, cm.recipient_ids||[], cm.content, cm.created_at),
     };
   });
+
+  // Applique toggleMessageReaction (retire/ajoute MA réaction) puis envoie le
+  // résultat complet — reactions n'est jamais fusionné côté serveur, la valeur
+  // envoyée remplace entièrement la colonne (cf. setMessageReaction).
+  function reactToCloudMessage(messageId, emoji){
+    if(!myUid) return;
+    const cm = (cloudMsgs||[]).find(m=>m.id===messageId);
+    if(!cm) return;
+    const next = toggleMessageReaction(cm.reactions||{}, myUid, emoji);
+    _reactCloudMsg(messageId, next);
+  }
   // emailToUid : email → supabase_uid (membres sans compte local sur cet appareil)
   const [emailToUid, setEmailToUid] = useState(new Map());
   useEffect(() => {
@@ -3971,7 +3983,7 @@ export default function App() {
     addHist, pushNotif, updateCal, onUpgrade, handleObsJoin,
     apiData, apiLoading,
     setMenuTab, setShowMenu,
-    msgs, sendCloudMessage, markCloudMessageRead, myUid,
+    msgs, sendCloudMessage, markCloudMessageRead, reactToCloudMessage, myUid,
     activity, setActivity, allSeen, setAllSeen, _setSeen,
     unreadVaultDocIds, setUnreadVaultDocIds, custodyShadow,
     summerActive, setSummerActive, rgActive, setRgActive, wcActive, setWcActive, videoActive, setVideoActive,
