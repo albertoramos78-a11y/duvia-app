@@ -10491,8 +10491,6 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
     const dotColor = !d.isBirthday && !d.fer && !d.sco && !specialIconChar
       ? d.specials[0]?.color
       : null;
-    // Encadrement vert si vacances scolaires (priorité sur bordure today/inline/grise)
-    const scoBorder = d.sco ? `3px solid ${C.grn}` : null;
     const activeBorder = d.isToday ? `3px solid ${C.vio}` : inlineDs===d.ds ? `1.5px solid ${C.vio}` : `1.5px solid ${C.bor}`;
     // Heure + lieu du rendez-vous de garde (ex: "12:00 → 14:00" / "📍 MANTES")
     const g = d.guard;
@@ -10515,7 +10513,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
           aspectRatio:"1",borderRadius:10,background:bg,padding:"6px 6px",
           display:"flex",flexDirection:"column",justifyContent:"space-between",
           cursor:readOnly?"default":"pointer",position:"relative",
-          border:scoBorder || activeBorder,
+          border:activeBorder,
           transition:"transform .12s, box-shadow .12s",
           animation:d.isToday?"todayPulse 1.1s ease-in-out infinite":undefined,
           minWidth:0,boxSizing:"border-box",overflow:"hidden",
@@ -10541,6 +10539,13 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
             position:"absolute",bottom:5,right:5,
             fontSize:11,lineHeight:1,opacity:0.75,
           }}>🔄</span>
+        )}
+        {d.sco && (
+          <span style={{
+            position:"absolute",bottom:0,right:0,width:0,height:0,
+            borderStyle:"solid",borderWidth:"0 0 16px 16px",
+            borderColor:`transparent transparent ${C.grn} transparent`,
+          }} />
         )}
       </div>
     );
