@@ -14410,7 +14410,15 @@ function MessagingTab(){
                   <div style={{display:"flex",flexDirection:"column",alignItems:isMe?"flex-end":"flex-start",minWidth:0,flex:1}}>
                     {!isMe&&isGroup&&<div style={{fontSize:10,color:col,marginBottom:3,fontWeight:700,paddingLeft:2}}>{m.fromName}</div>}
                     {/* Bulle */}
-                    <div onClick={()=>setShowProof(showProof===m.id?null:m.id)} style={{
+                    <div
+                      onClick={()=>{ if(longPressFired.current){ longPressFired.current=false; return; } setShowProof(showProof===m.id?null:m.id); }}
+                      onMouseDown={()=>{ longPressTimer.current=setTimeout(()=>{ longPressFired.current=true; setLongPressMsgId(m.id); },450); }}
+                      onMouseUp={()=>clearTimeout(longPressTimer.current)}
+                      onMouseLeave={()=>clearTimeout(longPressTimer.current)}
+                      onTouchStart={()=>{ longPressTimer.current=setTimeout(()=>{ longPressFired.current=true; setLongPressMsgId(m.id); },450); }}
+                      onTouchEnd={()=>clearTimeout(longPressTimer.current)}
+                      onTouchCancel={()=>clearTimeout(longPressTimer.current)}
+                      style={{
                       padding:att&&attIsImg?6:"10px 13px",
                       background:isMe?`linear-gradient(135deg,${col},${col}cc)`:C.sur,
                       color:isMe?"#fff":C.txt,
@@ -14420,6 +14428,23 @@ function MessagingTab(){
                       boxShadow:"0 1px 4px rgba(0,0,0,.08)",wordBreak:"break-word",
                       position:"relative"
                     }}>
+                      {longPressMsgId===m.id&&(
+                        <>
+                          <div onClick={ev=>{ev.stopPropagation();setLongPressMsgId(null);}} style={{position:"fixed",inset:0,zIndex:398}} />
+                          <div onClick={ev=>ev.stopPropagation()} style={{
+                            position:"absolute",bottom:"100%",[isMe?"right":"left"]:0,marginBottom:6,
+                            display:"flex",gap:2,background:"#fff",border:`1.5px solid ${C.bor}`,borderRadius:20,
+                            padding:"4px 6px",boxShadow:"0 8px 24px rgba(0,0,0,.25)",zIndex:399,
+                          }}>
+                            {MSG_REACTION_EMOJIS.map(em=>(
+                              <button key={em} onClick={ev=>{ev.stopPropagation();reactToCloudMessage(m.id,em);setLongPressMsgId(null);}}
+                                style={{width:32,height:32,borderRadius:"50%",background:"transparent",border:"none",fontSize:19,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                                {em}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
                       {/* Heure inline (float right) — messages texte uniquement */}
                       {!att&&<span style={{float:"right",marginLeft:10,marginTop:4,lineHeight:1,fontSize:10,opacity:.72,color:isMe?"rgba(255,255,255,.82)":C.mut,display:"inline-flex",alignItems:"center",gap:3}}>
                         {hhmm}{isMe&&<span style={{fontWeight:800,fontSize:10,color:readOk?"rgba(255,255,255,.92)":"rgba(255,255,255,.4)"}}>{readOk?"✓✓":"✓"}</span>}
