@@ -9823,6 +9823,49 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
   const [selChildId,setSelChildId]=useState(()=>cfg.children?.[0]?.id||null);
   const activeChildId = multiChild ? selChildId : (cfg.children?.[0]?.id||null);
 
+  // ── Légende : ne montrer que ce qui apparaît réellement ce mois-ci ──────────
+  // (au lieu de toujours tout lister, même les jours fériés/parents/observateurs
+  // qui n'ont rien à voir avec le mois affiché).
+  const legendPresence = useMemo(() => {
+    const activeCountry = (multiChild && activeChildId && cfg.childrenCountry?.[activeChildId]) || cfg.country || "FR";
+    const activeZoneData = (multiChild && activeChildId && cfg.childrenZones?.[activeChildId]) || {subdivisionCode:cfg.subdivisionCode||"",zone:cfg.zone||""};
+    const scoZone = activeZoneData.subdivisionCode || activeZoneData.zone;
+    const eligibleObservers = (cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard);
+    let hasHoliday=false, hasSchoolHoliday=false, hasMotherDay=false, hasFatherDay=false, hasGrandparents=false;
+    const parentIdxSeen = new Set(), observerIdSeen = new Set();
+    for (let day=1; day<=dc; day++) {
+      const date = new Date(y,m,day), ds = toStr(date);
+      if (getPublicHolName(ds,activeCountry,apiData)) hasHoliday = true;
+      if (getHolName(ds,scoZone,activeCountry,apiData)) hasSchoolHoliday = true;
+      (getSpecialEvents(date,cfg)||[]).forEach(ev=>{
+        if (ev.label?.includes("🌸")) hasMotherDay = true;
+        if (ev.label?.includes("🎩")) hasFatherDay = true;
+        if (ev.label?.includes("👴")||ev.label?.includes("👵")) hasGrandparents = true;
+      });
+      const cd = (cfg.specialDates?.custom||[]).reduce((f,c)=>{
+        if(!c.day||!c.month) return f;
+        const yr=c.yearly||!c.year||+c.year===y;
+        return (+c.day===day && +c.month===m+1 && yr) ? c : f;
+      },null);
+      const customGuardians = cd ? resolveCustomDateGuardians(cd, cfg.parents, eligibleObservers) : [];
+      if (customGuardians.length>0) {
+        customGuardians.forEach(g=>{
+          if (g.type==="parent") { const pi=cfg.parents.findIndex(p=>String(p.id)===String(g.id)); if(pi>=0) parentIdxSeen.add(pi); }
+          else observerIdSeen.add(String(g.id));
+        });
+      } else {
+        const guard = resolveGuard(ds,cfg,activeChildId);
+        if (guard?.allParents) cfg.parents.forEach((p,i)=>p.name&&parentIdxSeen.add(i));
+        else if (guard?.obsId) observerIdSeen.add(String(guard.obsId));
+        else if (guard?.parentIdx>=0) parentIdxSeen.add(guard.parentIdx);
+      }
+    }
+    return { hasHoliday, hasSchoolHoliday, hasMotherDay, hasFatherDay, hasGrandparents, parentIdxSeen, observerIdSeen };
+  }, [y, m, dc, cfg, apiData, multiChild, activeChildId]);
+  const legendHasAnything = legendPresence.hasHoliday || legendPresence.hasSchoolHoliday
+    || legendPresence.hasMotherDay || legendPresence.hasFatherDay || legendPresence.hasGrandparents
+    || legendPresence.parentIdxSeen.size>0 || legendPresence.observerIdSeen.size>0;
+
   // ── Export calendrier PDF ─────────────────────────────────────────────────
   const [calExportHtml, setCalExportHtml] = useState(null);
   const calIframeRef = useRef(null);
@@ -10234,13 +10277,14 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
           </button>
           {showLegend&&(
             <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap",padding:"8px 12px",background:C.sur,borderRadius:8,border:`1.5px solid ${C.bor}`}}>
-              <span className="chip" style={{fontSize:11}}><span style={{fontSize:11,fontWeight:900,color:C.red,marginRight:4}}>14</span>{t.holiday}</span>
-              <span className="chip" style={{fontSize:11}}><span style={{width:14,height:14,borderRadius:4,border:`2px solid ${C.grn}`,display:"inline-block",marginRight:4,verticalAlign:"middle"}} />{t.vacation}</span>
-              <span className="chip" style={{fontSize:11}}>🌸 {t.motherDay?.replace(/^🌸\s*/,"")||"Fête des Mères"}</span>
-              <span className="chip" style={{fontSize:11}}>🎩 {t.fatherDay?.replace(/^🎩\s*/,"")||"Fête des Pères"}</span>
-              <span className="chip" style={{fontSize:11}}>👴 {t.calGrandparents||"Grands-Parents"}</span>
-              {cfg.parents.map((p,i)=>p.name&&<span key={i} className="chip" style={{fontSize:11,borderColor:p.color,background:`${p.color}20`,color:p.color,fontWeight:700}}><span style={{width:8,height:8,borderRadius:"50%",background:p.color,display:"inline-block",marginRight:4,flexShrink:0}} />{p.name}</span>)}
-              {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=><span key={o.id} className="chip" style={{fontSize:11,borderColor:"#f59e0b"}}><span style={{width:8,height:8,borderRadius:"50%",background:"#f59e0b",display:"inline-block",marginRight:4}} />🏠 {obsLabel(o)}</span>)}
+              {!legendHasAnything && <span style={{fontSize:11,color:C.mut,fontStyle:"italic"}}>{t.calLegendEmpty||"Rien à signaler ce mois-ci"}</span>}
+              {legendPresence.hasHoliday && <span className="chip" style={{fontSize:11}}><span style={{fontSize:11,fontWeight:900,color:C.red,marginRight:4}}>14</span>{t.holiday}</span>}
+              {legendPresence.hasSchoolHoliday && <span className="chip" style={{fontSize:11}}><span style={{width:14,height:14,borderRadius:4,border:`2px solid ${C.grn}`,display:"inline-block",marginRight:4,verticalAlign:"middle"}} />{t.vacation}</span>}
+              {legendPresence.hasMotherDay && <span className="chip" style={{fontSize:11}}>🌸 {t.motherDay?.replace(/^🌸\s*/,"")||"Fête des Mères"}</span>}
+              {legendPresence.hasFatherDay && <span className="chip" style={{fontSize:11}}>🎩 {t.fatherDay?.replace(/^🎩\s*/,"")||"Fête des Pères"}</span>}
+              {legendPresence.hasGrandparents && <span className="chip" style={{fontSize:11}}>👴 {t.calGrandparents||"Grands-Parents"}</span>}
+              {cfg.parents.map((p,i)=>p.name&&legendPresence.parentIdxSeen.has(i)&&<span key={i} className="chip" style={{fontSize:11,borderColor:p.color,background:`${p.color}20`,color:p.color,fontWeight:700}}><span style={{width:8,height:8,borderRadius:"50%",background:p.color,display:"inline-block",marginRight:4,flexShrink:0}} />{p.name}</span>)}
+              {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard&&legendPresence.observerIdSeen.has(String(o.id))).map(o=><span key={o.id} className="chip" style={{fontSize:11,borderColor:"#f59e0b"}}><span style={{width:8,height:8,borderRadius:"50%",background:"#f59e0b",display:"inline-block",marginRight:4}} />🏠 {obsLabel(o)}</span>)}
             </div>
           )}
         </div>
