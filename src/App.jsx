@@ -14488,22 +14488,22 @@ function MessagingTab(){
                         <span style={{fontSize:10,opacity:.72,color:isMe?"rgba(255,255,255,.82)":C.mut}}>{hhmm}</span>
                         {isMe&&<span style={{color:readOk?"rgba(255,255,255,.92)":"rgba(255,255,255,.4)",fontWeight:800,fontSize:10}}>{readOk?"✓✓":"✓"}</span>}
                       </div>}
+                      {/* Réactions — chip qui chevauche le coin bas de la bulle */}
+                      {m.reactions && Object.entries(m.reactions).some(([,ids])=>ids.length>0) && (
+                        <div style={{position:"absolute",bottom:-10,[isMe?"right":"left"]:10,display:"flex",gap:3,zIndex:2}}>
+                          {Object.entries(m.reactions).filter(([,ids])=>ids.length>0).map(([emoji,ids])=>(
+                            <button key={emoji}
+                              onClick={ev=>{ev.stopPropagation();setReactionPopover(reactionPopover&&reactionPopover.msgId===m.id&&reactionPopover.emoji===emoji?null:{msgId:m.id,emoji});}}
+                              style={{display:"flex",alignItems:"center",gap:3,padding:"2px 6px",background:"#fff",border:`1.5px solid ${C.bor}`,borderRadius:12,fontSize:12,cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,.2)"}}>
+                              <span>{emoji}</span><span style={{fontSize:10,color:C.mut,fontWeight:700}}>{ids.length}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Réactions — badges par smiley + popover "qui a réagi" */}
-                    {m.reactions && Object.entries(m.reactions).some(([,ids])=>ids.length>0) && (
-                      <div style={{display:"flex",gap:4,marginTop:4,flexWrap:"wrap",justifyContent:isMe?"flex-end":"flex-start"}}>
-                        {Object.entries(m.reactions).filter(([,ids])=>ids.length>0).map(([emoji,ids])=>(
-                          <button key={emoji}
-                            onClick={()=>setReactionPopover(reactionPopover&&reactionPopover.msgId===m.id&&reactionPopover.emoji===emoji?null:{msgId:m.id,emoji})}
-                            style={{display:"flex",alignItems:"center",gap:3,padding:"2px 7px",background:C.sur,border:`1px solid ${C.bor}`,borderRadius:12,fontSize:12,cursor:"pointer"}}>
-                            <span>{emoji}</span><span style={{fontSize:10,color:C.mut,fontWeight:700}}>{ids.length}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
                     {reactionPopover&&reactionPopover.msgId===m.id&&(
-                      <div style={{marginTop:4,padding:"6px 10px",background:C.card,border:`1px solid ${C.bor}`,borderRadius:10,fontSize:11,color:C.txt,boxShadow:"0 4px 12px rgba(0,0,0,.15)",maxWidth:220}}>
+                      <div style={{marginTop:14,padding:"6px 10px",background:C.card,border:`1px solid ${C.bor}`,borderRadius:10,fontSize:11,color:C.txt,boxShadow:"0 4px 12px rgba(0,0,0,.15)",maxWidth:220}}>
                         {reactionPopover.emoji} {(m.reactions[reactionPopover.emoji]||[]).map(uid=>pMap[String(uid)]?.name||"?").join(", ")}
                       </div>
                     )}
