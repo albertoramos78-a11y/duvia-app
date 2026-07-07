@@ -1690,9 +1690,14 @@ function useFamilySync(cfg, setCfg) {
             const sessEmail  = JSON.parse(window.localStorage.getItem("duvia_session") || "null");
             const list = rawUsers ? JSON.parse(rawUsers) : [];
             const me = list.find(u2 => u2.email === sessEmail);
-            if (me && me.role === "parent" && typeof me.parentIdx === "number") {
+            // 🔧 On crée une famille NEUVE ici — on est donc toujours le créateur,
+            // à l'index 0. me.parentIdx est une valeur en cache locale qui reflète
+            // la position (souvent 1, "invité") occupée dans une AUTRE famille
+            // précédente sur cet appareil ; l'utiliser ici plaçait le créateur au
+            // mauvais index (fiche "invité" vide en position 0).
+            if (me && me.role === "parent") {
               const parents = [...(cfg.parents || [])];
-              const idx = me.parentIdx;
+              const idx = 0;
               const existing = parents[idx] || {};
               parents[idx] = {
                 ...existing,
