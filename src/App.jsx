@@ -10653,7 +10653,7 @@ function GuardCell({guard,readOnly,isOpen,onClick,onFull}) {
   const isAllParents = guard?.allParents === true;
   const borderColor = gObs?"#f59e0b":gP?.color||"#a855f7";
   return (
-    <div onClick={readOnly?undefined:onClick} style={{display:"flex",alignItems:"center",gap:7,cursor:readOnly?"default":"pointer",padding:"4px 7px",borderRadius:8,border:`1.5px solid ${isOpen&&(gP||isAllParents||gObs)?borderColor:isOpen?C.vio:"transparent"}`,background:isOpen?`${borderColor}11`:"transparent",transition:"all .15s"}}>
+    <div onClick={readOnly?undefined:onClick} style={{display:"flex",alignItems:"center",justifyContent:"flex-start",gap:7,cursor:readOnly?"default":"pointer",padding:"4px 7px",borderRadius:8,border:`1.5px solid ${isOpen&&(gP||isAllParents||gObs)?borderColor:isOpen?C.vio:"transparent"}`,background:isOpen?`${borderColor}11`:"transparent",transition:"all .15s"}}>
       {isAllParents?(
         <div style={{display:"flex",alignItems:"center",gap:7,width:"100%"}}>
           <div style={{display:"flex",gap:2,flexShrink:0}}>
