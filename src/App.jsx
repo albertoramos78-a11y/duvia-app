@@ -10291,7 +10291,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
           },null);
           // Même repli de couleur que la vue grille (Task 3) — voir ce commentaire là-bas.
           const customGuardians = _cdList
-            ? resolveCustomDateGuardians(_cdList, cfg.parents, cfg.observers)
+            ? resolveCustomDateGuardians(_cdList, cfg.parents, (cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard))
                 .map(g=>({...g, color:g.color||(g.type==="observer"?C.ora:C.vio)}))
             : [];
           const effectiveGuard = customGuardians.length===1
@@ -10386,7 +10386,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
     // renseigné aujourd'hui) doit quand même ressortir en orange, comme
     // partout ailleurs où un observateur est représenté dans l'app.
     const customGuardians = matchingCd
-      ? resolveCustomDateGuardians(matchingCd, cfg.parents, cfg.observers)
+      ? resolveCustomDateGuardians(matchingCd, cfg.parents, (cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard))
           .map(g=>({...g, color:g.color||(g.type==="observer"?C.ora:C.vio)}))
       : [];
     return {day,ds,dw,fer,ferName,sco,scoName,specials,isBirthday,guard,customGuardians,isToday:ds===todayStr,isWE:dw>=5};
