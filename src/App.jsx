@@ -13832,6 +13832,7 @@ function applyDuviaBackupToCfg(currentCfg, backup) {
   const b = backup || {};
   const fam = b.family || {};
   const cust = b.custody || {};
+  const cal = b.calendar || {};
   return {
     ...currentCfg,
     parents: Array.isArray(fam.parents) ? fam.parents : (currentCfg?.parents || []),
@@ -13839,7 +13840,7 @@ function applyDuviaBackupToCfg(currentCfg, backup) {
     custody: cust.main || currentCfg?.custody || {},
     custodyPerChild: cust.perChild || currentCfg?.custodyPerChild || {},
     sameGuardAll: typeof cust.sameGuardAll === "boolean" ? cust.sameGuardAll : (currentCfg?.sameGuardAll ?? true),
-    specialDates: b.schoolCalendar || currentCfg?.specialDates || {},
+    specialDates: cal.specialDates || currentCfg?.specialDates || {},
   };
 }
 
