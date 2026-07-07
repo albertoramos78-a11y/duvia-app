@@ -15271,7 +15271,7 @@ function ContactsTab({readOnly,addOnly,prem: premProp}) {
   });
   // Children with phone
   (cfg.children||[]).filter(ch=>ch.name).forEach(ch=>{
-    if(ch.phone) autoContacts.push({id:`auto_child_${ch.id}`,name:ch.name,phone:ch.phone,note:t.contactsChild||"Enfant",cat:"other",auto:true,avatar:ch.avatar});
+    if(ch.phone) autoContacts.push({id:`auto_child_${ch.id}`,name:ch.name,phone:ch.phone,note:t.contactsChild||"Enfant",cat:"children",auto:true,avatar:ch.avatar});
   });
   (cfg.observers||[]).forEach((o,i)=>{
     autoContacts.push({id:`auto_obs_${i}`,name:o.name||o.email,phone:o.phone||"",note:o.relation||t.roleObs||"Observateur",cat:"observers",auto:true,avatar:o.avatar});
@@ -15292,6 +15292,7 @@ function ContactsTab({readOnly,addOnly,prem: premProp}) {
     {key:"all",label:t.contactsCatAll||"🔍 Tous"},
     {key:"emergency",label:t.contactsCatEmergency||"🆘 Urgences"},
     {key:"parents",label:t.contactsCatParents||"👨‍👩‍👧 Parents"},
+    {key:"children",label:t.contactsCatChildren||"🧒 Enfants"},
     {key:"observers",label:t.contactsCatObservers||"👁️ Observateurs"},
     {key:"school",label:t.contactsCatSchool||"🏫 École"},
     {key:"health",label:t.contactsCatHealth||"🏥 Santé"},
@@ -15311,11 +15312,11 @@ function ContactsTab({readOnly,addOnly,prem: premProp}) {
   });
 
   function catColor(cat) {
-    const map = {emergency:C.red,parents:C.blu,observers:C.ora,school:C.grn,health:C.red,other:C.mut};
+    const map = {emergency:C.red,parents:C.blu,children:C.vio,observers:C.ora,school:C.grn,health:C.red,other:C.mut};
     return map[cat]||C.mut;
   }
   function catLabel(cat) {
-    const map = {emergency:t.contactsCatEmergency||"🆘 Urgences",parents:t.contactsCatParents,observers:t.contactsCatObservers,school:t.contactsCatSchool,health:t.contactsCatHealth,other:t.contactsCatOther};
+    const map = {emergency:t.contactsCatEmergency||"🆘 Urgences",parents:t.contactsCatParents,children:t.contactsCatChildren||"🧒 Enfants",observers:t.contactsCatObservers,school:t.contactsCatSchool,health:t.contactsCatHealth,other:t.contactsCatOther};
     return (map[cat]||cat).replace(/^[^\w🆘]+/,"");
   }
 
@@ -15341,7 +15342,7 @@ function ContactsTab({readOnly,addOnly,prem: premProp}) {
     setShowForm(false);setEditId(null);setForm({name:"",phone:"",note:"",cat:"other"});setErr("");
   }
 
-  const catOrder = ["emergency","parents","observers","school","health","other"];
+  const catOrder = ["emergency","parents","children","observers","school","health","other"];
   const sortedGroups = catOrder.filter(k=>groups[k]);
 
   return (
@@ -15452,7 +15453,7 @@ function ContactsTab({readOnly,addOnly,prem: premProp}) {
                     ? (typeof contact.avatar==="string" && contact.avatar.startsWith("http")
                         ? <img src={contact.avatar} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} />
                         : contact.avatar)
-                    : (contact.emergency?"🆘":contact.cat==="parents"?"👤":contact.cat==="observers"?"👁️":contact.cat==="school"?"🏫":contact.cat==="health"?"🏥":"📋")}
+                    : (contact.emergency?"🆘":contact.cat==="parents"?"👤":contact.cat==="children"?"🧒":contact.cat==="observers"?"👁️":contact.cat==="school"?"🏫":contact.cat==="health"?"🏥":"📋")}
                 </div>
                 {/* Info */}
                 <div style={{flex:1,minWidth:0}}>

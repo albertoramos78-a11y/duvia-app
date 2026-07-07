@@ -387,6 +387,7 @@ const fr = {
     contactsEditTitle:"Modifier le contact",
     contactsEmpty:"Aucun contact enregistré.",
     contactsCatParents:"👨‍👩‍👧 Parents",
+    contactsCatChildren:"🧒 Enfants",
     contactsCatObservers:"👁️ Observateurs",
     contactsCatSchool:"🏫 École",
     contactsCatHealth:"🏥 Santé",
