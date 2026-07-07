@@ -14518,7 +14518,7 @@ function MessagingTab(){
         {/* Messages */}
         {/* paddingTop : laisse la place au picker d'emoji (appui long) quand il
             s'ouvre au-dessus d'un message proche du haut, sinon il se fait couper. */}
-        <div style={{flex:1,overflowY:"auto",paddingBottom:8,paddingTop:64}}>
+        <div style={{flex:1,overflowY:"auto",paddingBottom:8,paddingTop:50}}>
           {currentMsgs.length===0&&(
             <div style={{textAlign:"center",padding:40,color:C.mut,fontSize:13}}>{t.msgStartConv||"Démarrez la conversation"}</div>
           )}
