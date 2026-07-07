@@ -200,6 +200,19 @@ test("containsBadWord : les mots déplacés en mot-entier restent détectés iso
   assert.equal(containsBadWord("ta gueule"), true);
 });
 
+// ── Filtre insultes DE/ES/PT (2026-07-08) ─────────────────────────────────────
+test("containsBadWord : détecte les insultes allemandes/espagnoles/portugaises", () => {
+  assert.equal(containsBadWord("du bist ein Arschloch"), true);
+  assert.equal(containsBadWord("eres un gilipollas"), true);
+  assert.equal(containsBadWord("seu idiota"), true);
+});
+test("isCleanText : mots du quotidien DE/ES/PT ne collisionnent pas", () => {
+  assert.equal(isCleanText("das ist idiotensicher"), true);      // 'idiot' en mot-entier only
+  assert.equal(isCleanText("das ist Blödsinn"), true);            // 'blöd' en mot-entier only
+  assert.equal(isCleanText("tuvimos una disputa sobre el calendario"), true); // 'puta' substring
+  assert.equal(isCleanText("tivemos uma disputa sobre o calendário"), true);
+});
+
 // ── B3 — dédup messagerie ─────────────────────────────────────────────────────
 test("upsertMessageById : n'ajoute pas deux fois le même id (doublon optimiste + realtime)", () => {
   const m = { id: "msg1", content: "salut" };

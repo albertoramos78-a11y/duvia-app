@@ -96,6 +96,14 @@ const LONG_BAD = [
   "nigger","niggers","nigga",
   "retarded","morons",
   "killurself","killyourself","godie","godieinfiredie",
+  // Allemand
+  "arschloch","arschlocher","wichser","hurensohn","schlampe","schlampen",
+  "missgeburt","fettsau","schwuchtel","kanake","kanaken","trottel",
+  // Espagnol
+  "cabron","cabrones","gilipollas","zorra","zorras","maricon","mierda",
+  // Portugais
+  "cabrao","cabroes","estupido","estupida","idiota","idiotas",
+  "corno","cornudo","filhoputa","merda","viado",
 ];
 
 const SHORT_BAD = [
@@ -103,6 +111,10 @@ const SHORT_BAD = [
   "con","conne","cul","culs","pd","pds","tg","fdp","ntm","kys",
   "nique","pute","putes","bite","bites","kike","mdr","lol",
   "fick","kak","scheiss",
+  // Allemand — mot entier uniquement (évite "idiotensicher", composés avec "blöd")
+  "idiot","idioten","blöd",
+  // Espagnol/Portugais — mot entier uniquement (évite "disputa")
+  "puta","puto","putas","putos",
   // 🔧 Déplacés depuis LONG_BAD (2026-07-08) : en sous-chaîne, ces mots
   // déclenchaient des faux positifs sur des mots courants du quotidien
   // ("salopette", "bordure", "s'engueuler"...).
