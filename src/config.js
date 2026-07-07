@@ -7,11 +7,9 @@ export const APP_URL = "https://app.duvia.fr";
 export const APP_VERSION = "0.1.0";
 
 // ── Liens légaux ─────────────────────────────────────────────────────────────
-// Les CGU/CGV sont affichées directement dans l'app (voir LegalDocModal dans
-// App.jsx, contenu source dans docs/legal/) — plus besoin d'URL externe pour
-// elles. La politique de confidentialité n'est pas encore rédigée : ce lien
-// reste provisoire (pointe vers le site principal) en attendant.
-export const PRIVACY_URL = "https://app.duvia.fr";
+// CGU/CGV/Politique de confidentialité sont affichées directement dans l'app
+// (voir LegalDocModal dans App.jsx, contenu source dans docs/legal/) — plus
+// besoin d'URL externe pour elles.
 
 // Version de la politique de confidentialité acceptée par l'utilisateur.
 // Incrémente cette valeur quand le texte change → le consentement sera

@@ -13,7 +13,7 @@ import { useIdLinks } from "./hooks/useIdLinks";
 import { useExpenses } from "./hooks/useExpenses";
 import { useHistory } from "./hooks/useHistory";
 import { TR } from './i18n/index.js';
-import { APP_URL, LIMITS, PRIVACY_URL, RGPD_NOTICE_VERSION } from './config.js';
+import { APP_URL, LIMITS, RGPD_NOTICE_VERSION } from './config.js';
 import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, BRAND, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 
@@ -4022,7 +4022,7 @@ export default function App() {
         </div>
       )}
       {!rgpdOk ? (
-        <RgpdConsentScreen C={C} t={t} lang={lang} setLang={setLang} onAccept={acceptRgpd} onOpenCgu={()=>setLegalDocOpen("cgu")} />
+        <RgpdConsentScreen C={C} t={t} lang={lang} setLang={setLang} onAccept={acceptRgpd} onOpenLegal={setLegalDocOpen} />
       ) : pendingUser ? (
         <ConsentScreen C={C} t={t} user={pendingUser}
           onAccept={()=>{ handleSetUser(pendingUser); setPendingUser(null); }}
@@ -4459,6 +4459,8 @@ export default function App() {
                 <button onClick={()=>{setLegalDocOpen("cgu");setShowMenu(false);}} style={{background:"none",border:"none",color:C.vio,textDecoration:"underline",fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit"}}>CGU</button>
                 {" · "}
                 <button onClick={()=>{setLegalDocOpen("cgv");setShowMenu(false);}} style={{background:"none",border:"none",color:C.vio,textDecoration:"underline",fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit"}}>CGV</button>
+                {" · "}
+                <button onClick={()=>{setLegalDocOpen("privacy");setShowMenu(false);}} style={{background:"none",border:"none",color:C.vio,textDecoration:"underline",fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit"}}>Confidentialité</button>
               </div>
             </div>
             </>
@@ -4543,7 +4545,7 @@ CONTACT
 Pour toute demande d'autorisation ou de licence :
 
 Alberto Ramos
-Email : DUVIA.services@gmx.com
+Email : duvia.services@gmail.com
 
 Date d'entrée en vigueur : 14 juin 2026
 
@@ -4903,12 +4905,12 @@ Date d'entrée en vigueur : 14 juin 2026
 // ⚠️ Brouillons de travail non validés par un juriste — cf. bandeau d'avertissement
 // affiché en haut de la modale. Contenu identique à docs/legal/cgu.md et cgv.md.
 function LegalDocModal({ C, doc, onClose }) {
-  const isCgu = doc === "cgu";
+  const title = doc==="cgu" ? "Conditions Générales d'Utilisation" : doc==="cgv" ? "Conditions Générales de Vente" : "Politique de Confidentialité";
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:18,maxWidth:600,width:"100%",padding:"22px 24px",boxShadow:"0 12px 40px rgba(0,0,0,.3)",maxHeight:"88vh",overflowY:"auto",color:C.txt,fontSize:13,lineHeight:1.6}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,gap:10}}>
-          <div style={{fontSize:17,fontWeight:900}}>{isCgu ? "Conditions Générales d'Utilisation" : "Conditions Générales de Vente"}</div>
+          <div style={{fontSize:17,fontWeight:900}}>{title}</div>
           <button onClick={onClose} style={{width:30,height:30,flexShrink:0,background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:16,cursor:"pointer"}}>✕</button>
         </div>
 
@@ -4920,7 +4922,7 @@ function LegalDocModal({ C, doc, onClose }) {
           proposée en <strong>version bêta gratuite</strong>.
         </div>
 
-        {isCgu ? (
+        {doc==="cgu" ? (
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
             <p>
               Duvia (« l'Application », « le Service ») est une application de
@@ -4969,7 +4971,7 @@ function LegalDocModal({ C, doc, onClose }) {
               <p>Les présentes CGU sont soumises au droit français, sous réserve des règles protectrices du consommateur applicables aux utilisateurs résidant dans l'Union Européenne.</p>
             </div>
           </div>
-        ) : (
+        ) : doc==="cgv" ? (
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
             <div style={{background:`${C.vio}10`,border:`1px solid ${C.bor}`,borderRadius:10,padding:"10px 12px",fontSize:12}}>
               <strong>Statut actuel : aucune vente n'est effectuée.</strong> Duvia est distribuée en version bêta gratuite, incluant l'ensemble des fonctionnalités Premium, sans contrepartie financière, jusqu'à la date annoncée dans l'application. Les présentes CGV décrivent par anticipation le modèle prévu à l'issue de la bêta et seront mises à jour avant toute activation réelle du paiement.
@@ -5003,6 +5005,38 @@ function LegalDocModal({ C, doc, onClose }) {
               <p>Les présentes CGV, une fois activées, seront soumises au droit français, sous réserve des règles protectrices du consommateur applicables dans l'Union Européenne.</p>
             </div>
           </div>
+        ) : (
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <p>
+              <strong>[Raison sociale à définir]</strong>, éditrice de Duvia,
+              est responsable du traitement de vos données. Contact :{" "}
+              <strong>duvia.services@gmail.com</strong>.
+            </p>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Quelles données sont collectées ?</div>
+              <p>Identité (nom, genre, date de naissance, email/téléphone, avatar), données des enfants (nom, date de naissance, allergies, groupe sanguin, école, médecin), planning de garde, dépenses partagées et justificatifs, messages entre membres, documents du coffre-fort, carnet de contacts, et données techniques minimales de connexion.</p>
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Qui a accès à vos données ?</div>
+              <p>Uniquement les membres actifs de votre famille Duvia — jamais les autres familles utilisatrices, jamais revendues à des tiers. Des sous-traitants techniques interviennent pour le fonctionnement du Service : Supabase (hébergement, base de données, authentification), un prestataire d'envoi d'emails transactionnels, et PostHog (mesure d'audience UE, sans capture automatique d'écran ni profilage publicitaire).</p>
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Consentement parental</div>
+              <p>La création d'un compte enfant en dessous du seuil légal de consentement numérique de son pays de résidence (13 à 16 ans selon les pays) requiert l'autorisation expresse d'un titulaire de l'autorité parentale.</p>
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Cookies et stockage local</div>
+              <p>Utilisation du stockage local du navigateur pour la session de connexion (persistante seulement si « Rester connecté » est coché). Aucun cookie publicitaire ou de suivi tiers.</p>
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Durée de conservation</div>
+              <p>Vos données sont conservées tant que votre compte et votre famille sont actifs. Vous pouvez supprimer votre compte à tout moment depuis l'application (suppression du compte, retrait de toutes vos familles, effacement de vos fichiers personnels) et exporter vos données avant suppression.</p>
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Vos droits</div>
+              <p>Droit d'accès, de rectification, d'effacement, de limitation, d'opposition et de portabilité, exerçables depuis l'application ou par email à <strong>duvia.services@gmail.com</strong>. Droit de réclamation auprès de la CNIL (cnil.fr) ou de l'autorité compétente de votre pays de résidence dans l'Union Européenne.</p>
+            </div>
+          </div>
         )}
 
         <button onClick={onClose} style={{width:"100%",height:44,marginTop:20,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13,cursor:"pointer"}}>Fermer</button>
@@ -5017,7 +5051,7 @@ function LegalDocModal({ C, doc, onClose }) {
 // par appareil (redemandé si RGPD_NOTICE_VERSION change). Informe sur les
 // données + renvoie à la politique de confidentialité / CGU, et enregistre
 // l'acceptation (version + date) via onAccept.
-function RgpdConsentScreen({C,t,onAccept,onOpenCgu}) {
+function RgpdConsentScreen({C,t,onAccept,onOpenLegal}) {
   const [checked,setChecked] = useState(false);
   const link = {color:C.vio,fontWeight:800,textDecoration:"underline",background:"none",border:"none",padding:0,fontSize:"inherit",fontFamily:"inherit",cursor:"pointer"};
   return (
@@ -5037,9 +5071,9 @@ function RgpdConsentScreen({C,t,onAccept,onOpenCgu}) {
 
           <div style={{fontSize:12.5,color:C.mut,marginBottom:18}}>
             {t.rgpdSeeMore||"Pour en savoir plus :"}{" "}
-            <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer" style={link}>{t.rgpdPrivacy||"Politique de confidentialité"}</a>
+            <button type="button" onClick={()=>onOpenLegal("privacy")} style={link}>{t.rgpdPrivacy||"Politique de confidentialité"}</button>
             {" · "}
-            <button type="button" onClick={onOpenCgu} style={link}>{t.rgpdCgu||"Conditions d'utilisation"}</button>
+            <button type="button" onClick={()=>onOpenLegal("cgu")} style={link}>{t.rgpdCgu||"Conditions d'utilisation"}</button>
           </div>
 
           <label style={{display:"flex",gap:10,alignItems:"flex-start",cursor:"pointer",marginBottom:18}}>
