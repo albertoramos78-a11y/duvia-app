@@ -35,6 +35,17 @@ serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+  // 🔒 Vérifie que l'appelant authentifié est bien le titulaire du compte visé.
+  // Sans ce check, n'importe quel utilisateur connecté pourrait supprimer le
+  // compte de n'importe qui d'autre en passant son userId dans le body.
+  const authHeader = req.headers.get("Authorization") || "";
+  const token = authHeader.replace(/^Bearer\s+/i, "");
+  if (!token) return new Response("Missing authorization", { status: 401 });
+  const { data: callerData, error: callerErr } = await admin.auth.getUser(token);
+  if (callerErr || callerData?.user?.id !== userId) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
   // ── 1. Quitter toutes les familles restantes (filet de sécurité) ──────────
   try {
     const { data: memberships } = await admin
