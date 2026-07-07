@@ -10677,7 +10677,7 @@ function GuardCell({guard,readOnly,isOpen,onClick,onFull}) {
           <span style={{width:10,height:10,borderRadius:"50%",background:gP.color,flexShrink:0}} />
           <div style={{flex:1}}>
             <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{gP.name||`P${guard.parentIdx+1}`}</div>
-            {guard.source==="schoolHol"&&<div style={{fontSize:9,color:C.grn,fontWeight:700}}>🌿 {t.calSchoolHol||"Vacances"}</div>}
+            {guard.source==="schoolHol"&&<div style={{fontSize:9,color:C.grn,fontWeight:700,textTransform:"uppercase"}}>🌿 {t.calSchoolHol||"Vacances"}</div>}
             {guard.source==="parentBirthday"&&<div style={{fontSize:9,color:"#f97316",fontWeight:700}}>🎂</div>}
             {guard.source==="childBirthday"&&<div style={{fontSize:9,color:"#bc8cff",fontWeight:700}}>🎁</div>}
             {guard.timeType&&guard.timeType!=="full"&&(()=>{
