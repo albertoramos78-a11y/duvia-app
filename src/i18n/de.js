@@ -26,6 +26,7 @@ const de = {
     parentBirthdays:"🎂 Geburtstage der Eltern",
     parentBirthdaysInfo:"Welches Elternteil hat am Geburtstag das Sorgerecht?",
     forced:"Erzwungene Obhut",alternate:"Abwechselnd (jedes 2. Jahr)",firstYear:"Erstes Jahr:",
+    birthdayRequiredForForced:"Geburtsdatum hinzufügen, um zu aktivieren",
     whichParent:"Welches Elternteil?",
     childBirthdays:"🎁 Kindergeburtstage",
     childBirthdaysInfo:"Wer hat in geraden/ungeraden Jahren das Sorgerecht?",

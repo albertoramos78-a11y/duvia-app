@@ -26,6 +26,7 @@ const es = {
     parentBirthdays:"🎂 Cumpleaños de los padres",
     parentBirthdaysInfo:"¿Quién tiene la custodia el día del cumpleaños?",
     forced:"Custodia forzada",alternate:"Alternancia (1 año de cada 2)",firstYear:"Primer año:",
+    birthdayRequiredForForced:"Añade una fecha de nacimiento para activar",
     whichParent:"¿Qué padre/madre?",
     childBirthdays:"🎁 Cumpleaños de los hijos",
     childBirthdaysInfo:"¿Quién tiene la custodia en años pares/impares?",

@@ -26,6 +26,7 @@ const en = {
     parentBirthdays:"🎂 Parents' birthdays",
     parentBirthdaysInfo:"Who has custody on each parent's birthday?",
     forced:"Forced custody (always this parent)",alternate:"Alternating (every other year)",firstYear:"First year:",
+    birthdayRequiredForForced:"Add a birth date to enable",
     whichParent:"Which parent?",
     childBirthdays:"🎁 Children's birthdays",
     childBirthdaysInfo:"Who has custody on even/odd years?",

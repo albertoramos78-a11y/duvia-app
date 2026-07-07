@@ -26,6 +26,7 @@ const fr = {
     parentBirthdays:"🎂 Anniversaires des parents",
     parentBirthdaysInfo:"Quel parent a la garde le jour d'anniversaire ?",
     forced:"Garde forcée (toujours ce parent)",alternate:"Alternance (1 an sur 2)",firstYear:"1ère année :",
+    birthdayRequiredForForced:"Ajoutez une date de naissance pour activer",
     whichParent:"Quel parent ?",
     childBirthdays:"🎁 Anniversaires des enfants",
     childBirthdaysInfo:"Qui a la garde selon l'année (paire/impaire) ?",

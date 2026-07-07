@@ -8172,10 +8172,10 @@ function ZoneDropdown({chCountry, chCurSub, chSubs, chSetZone, noZoneLabel, lock
   );
 }
 
-function Toggle({checked, onChange}) {
+function Toggle({checked, onChange, disabled}) {
   const {C} = useApp();
   return (
-    <div onClick={()=>onChange(!checked)} style={{width:44,height:24,borderRadius:12,background:checked?C.vio:`${C.mut}44`,cursor:"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
+    <div onClick={()=>{if(!disabled) onChange(!checked);}} style={{width:44,height:24,borderRadius:12,background:checked?C.vio:`${C.mut}44`,cursor:disabled?"not-allowed":"pointer",position:"relative",transition:"background .2s",flexShrink:0,opacity:disabled?0.5:1}}>
       <div style={{position:"absolute",top:3,left:checked?22:3,width:18,height:18,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.25)",transition:"left .2s"}} />
     </div>
   );
@@ -8499,19 +8499,21 @@ function StepDates() {
                 <div style={{marginBottom:12,border:`1px solid ${C.bor}`,borderRadius:10,overflow:"hidden"}}>
                   {cfg.parents.map((p,pi)=>{
                     const pb = chPB[pi] || {enabled:false,parentIdx:pi};
+                    const hasBirthday = !!(p.birthDay&&p.birthMonth);
                     return (
                       <div key={pi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",borderBottom:pi<cfg.parents.length-1?`1px solid ${C.bor}`:"none",background:C.card}}>
                         <div style={{flex:1}}>
                           <div style={{fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
                             <span style={{width:8,height:8,borderRadius:"50%",background:p.color,flexShrink:0}}/>
                             🎂 {p.name||`${t.parentN} ${pi+1}`}
-                            {p.birthDay&&p.birthMonth&&<span style={{fontSize:11,color:C.mut,fontFamily:"JetBrains Mono"}}>{p.birthDay}/{p.birthMonth}</span>}
+                            {hasBirthday&&<span style={{fontSize:11,color:C.mut,fontFamily:"JetBrains Mono"}}>{p.birthDay}/{p.birthMonth}</span>}
                             {!prem&&<span className="badge" style={{background:`${C.ora}10`,color:C.ora,border:`1px dashed ${C.ora}66`}}>🔒 Réservé Premium</span>}
                           </div>
                           <div style={{fontSize:11,color:C.mut}}>{t.forced||"Garde forcée"}</div>
+                          {prem&&!hasBirthday&&<div style={{fontSize:10,color:C.ora,fontWeight:600}}>{t.birthdayRequiredForForced||"Ajoutez une date de naissance pour activer"}</div>}
                         </div>
                         {prem ? (
-                          <Toggle checked={!!pb.enabled} onChange={v=>setPB(pi,"enabled",v)} />
+                          <Toggle checked={!!pb.enabled} disabled={!hasBirthday} onChange={v=>setPB(pi,"enabled",v)} />
                         ) : (
                           <button onClick={onUpgrade} style={{padding:"5px 10px",background:`${C.ora}10`,color:C.ora,border:`1.5px dashed ${C.ora}66`,borderRadius:8,fontSize:11,fontWeight:800}}>🔒 Réservé Premium</button>
                         )}
@@ -8720,19 +8722,21 @@ function StepDates() {
               <div style={{marginBottom:12,border:`1px solid ${C.bor}`,borderRadius:10,overflow:"hidden"}}>
                 {cfg.parents.map((p,pi)=>{
                   const pb = chPB[pi] || {enabled:false,parentIdx:pi};
+                  const hasBirthday = !!(p.birthDay&&p.birthMonth);
                   return (
                     <div key={pi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",borderBottom:pi<cfg.parents.length-1?`1px solid ${C.bor}`:"none",background:C.card}}>
                       <div style={{flex:1}}>
                         <div style={{fontSize:13,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
                           <span style={{width:8,height:8,borderRadius:"50%",background:p.color,flexShrink:0}}/>
                           🎂 {p.name||`${t.parentN} ${pi+1}`}
-                          {p.birthDay&&p.birthMonth&&<span style={{fontSize:11,color:C.mut,fontFamily:"JetBrains Mono"}}>{p.birthDay}/{p.birthMonth}</span>}
+                          {hasBirthday&&<span style={{fontSize:11,color:C.mut,fontFamily:"JetBrains Mono"}}>{p.birthDay}/{p.birthMonth}</span>}
                           {!prem&&<span className="badge" style={{background:`${C.ora}10`,color:C.ora,border:`1px dashed ${C.ora}66`}}>🔒 Réservé Premium</span>}
                         </div>
                         <div style={{fontSize:11,color:C.mut}}>{t.forced||"Garde forcée"}</div>
+                        {prem&&!hasBirthday&&<div style={{fontSize:10,color:C.ora,fontWeight:600}}>{t.birthdayRequiredForForced||"Ajoutez une date de naissance pour activer"}</div>}
                       </div>
                       {prem ? (
-                        <Toggle checked={!!pb.enabled} onChange={v=>setChildPB(chId,pi,"enabled",v)} />
+                        <Toggle checked={!!pb.enabled} disabled={!hasBirthday} onChange={v=>setChildPB(chId,pi,"enabled",v)} />
                       ) : (
                         <button onClick={onUpgrade} style={{padding:"5px 10px",background:`${C.ora}10`,color:C.ora,border:`1.5px dashed ${C.ora}66`,borderRadius:8,fontSize:11,fontWeight:800}}>🔒 Réservé Premium</button>
                       )}
