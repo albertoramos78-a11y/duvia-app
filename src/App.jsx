@@ -1821,6 +1821,36 @@ function useFamilySync(cfg, setCfg) {
               });
             }
           } catch {}
+
+          // 🔧 Réconciliation enfants : lier userId/email à la fiche cfg.children
+          // correspondante. L'enfant qui rejoint essaie déjà de le faire depuis
+          // SA propre session (handleObsJoin), mais elle peut être en concurrence
+          // avec une autre session qui sauvegarde une version plus ancienne du
+          // cfg juste après (perte du lien) — donc on le refait ici, de façon
+          // fiable, à chaque chargement, depuis n'importe quelle session.
+          try {
+            const { data: childRows } = await supabase
+              .from("family_members")
+              .select("user_id, display_name, role, status, email")
+              .eq("family_id", familyId)
+              .eq("role", "child")
+              .eq("status", "active");
+            if (childRows && childRows.length > 0 && !cancelled) {
+              setCfg(c => {
+                let changed = false;
+                const nextChildren = (c.children || []).map(ch => {
+                  if (ch.userId) return ch; // déjà lié
+                  const match = childRows.find(r =>
+                    r.display_name && ch.name && r.display_name.toLowerCase() === ch.name.toLowerCase()
+                  );
+                  if (!match) return ch;
+                  changed = true;
+                  return { ...ch, userId: match.user_id, email: match.email || ch.email };
+                });
+                return changed ? { ...c, children: nextChildren } : c;
+              });
+            }
+          } catch {}
         }
         if (!cancelled) refreshFamilies(uid);
         if (!cancelled) refreshPendingMembers();
