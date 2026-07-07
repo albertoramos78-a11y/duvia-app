@@ -7404,15 +7404,6 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
       <>
       <div className="sec">🏠 {t.myFamilies||"Mes familles"}</div>
       <div className="card" style={{marginBottom:16}}>
-        {familySync.families.length > 0 && (
-          <div style={{marginBottom:10}}>
-            {familySync.families.map(f => (
-              <div key={f.id} style={{fontSize:13,fontWeight:f.id===familySync.familyId?800:600,color:f.id===familySync.familyId?C.vio:C.txt,padding:"4px 0"}}>
-                {f.id===familySync.familyId ? "📍 " : "・"}{f.label}
-              </div>
-            ))}
-          </div>
-        )}
         <button
           disabled={creatingFamily}
           onClick={async ()=>{
@@ -8174,9 +8165,10 @@ function ZoneDropdown({chCountry, chCurSub, chSubs, chSetZone, noZoneLabel, lock
 
 function Toggle({checked, onChange, disabled}) {
   const {C} = useApp();
+  const on = checked && !disabled; // un enabled:true sans condition remplie n'a de toute façon aucun effet (voir resolveGuard) — l'afficher à OFF reflète l'état réel
   return (
-    <div onClick={()=>{if(!disabled) onChange(!checked);}} style={{width:44,height:24,borderRadius:12,background:checked?C.vio:`${C.mut}44`,cursor:disabled?"not-allowed":"pointer",position:"relative",transition:"background .2s",flexShrink:0,opacity:disabled?0.5:1}}>
-      <div style={{position:"absolute",top:3,left:checked?22:3,width:18,height:18,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.25)",transition:"left .2s"}} />
+    <div onClick={()=>{if(!disabled) onChange(!checked);}} style={{width:44,height:24,borderRadius:12,background:on?C.vio:`${C.mut}44`,cursor:disabled?"not-allowed":"pointer",position:"relative",transition:"background .2s",flexShrink:0,opacity:disabled?0.5:1}}>
+      <div style={{position:"absolute",top:3,left:on?22:3,width:18,height:18,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.25)",transition:"left .2s"}} />
     </div>
   );
 }
