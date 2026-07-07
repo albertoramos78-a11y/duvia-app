@@ -14571,7 +14571,9 @@ function MessagingTab(){
                               onClick={ev=>{ev.stopPropagation();setReactionPopover(reactionPopover&&reactionPopover.msgId===m.id&&reactionPopover.emoji===emoji?null:{msgId:m.id,emoji});}}
                               style={{position:"relative",width:22,height:22,padding:0,borderRadius:"50%",background:"#fff",border:`1.5px solid ${C.bor}`,fontSize:12,cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,.2)",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>
                               <span>{emoji}</span>
-                              <span style={{position:"absolute",bottom:-4,right:-4,minWidth:12,height:12,padding:"0 2px",borderRadius:"50%",background:C.vio,color:"#fff",fontSize:8,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1,boxShadow:"0 1px 2px rgba(0,0,0,.25)"}}>{ids.length}</span>
+                              {ids.length>1 &&
+                                <span style={{position:"absolute",bottom:-4,right:-4,minWidth:12,height:12,padding:"0 2px",borderRadius:"50%",background:C.vio,color:"#fff",fontSize:8,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1,boxShadow:"0 1px 2px rgba(0,0,0,.25)"}}>{ids.length}</span>
+                              }
                             </button>
                           ))}
                         </div>
