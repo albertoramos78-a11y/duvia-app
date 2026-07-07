@@ -413,3 +413,30 @@ test("formatActorName : removedUserIds absent (famille pas encore chargée) → 
 test("formatActorName : nom vide → chaîne vide", () => {
   assert.strictEqual(formatActorName("", "uid-toti", new Set(["uid-toti"])), "");
 });
+
+import { toggleMessageReaction } from "./core.js";
+
+test("toggleMessageReaction : ajoute une réaction quand il n'y en avait aucune", () => {
+  const result = toggleMessageReaction({}, "uid-a", "👍");
+  assert.deepEqual(result, { "👍": ["uid-a"] });
+});
+
+test("toggleMessageReaction : change de réaction (l'ancienne disparaît)", () => {
+  const result = toggleMessageReaction({ "👍": ["uid-a"] }, "uid-a", "❤️");
+  assert.deepEqual(result, { "❤️": ["uid-a"] });
+});
+
+test("toggleMessageReaction : retaper la même réaction la retire (bascule off)", () => {
+  const result = toggleMessageReaction({ "👍": ["uid-a"] }, "uid-a", "👍");
+  assert.deepEqual(result, {});
+});
+
+test("toggleMessageReaction : ne touche pas aux réactions des autres personnes", () => {
+  const result = toggleMessageReaction({ "👍": ["uid-a", "uid-b"] }, "uid-a", "❤️");
+  assert.deepEqual(result, { "👍": ["uid-b"], "❤️": ["uid-a"] });
+});
+
+test("toggleMessageReaction : reactions null/undefined traité comme vide", () => {
+  assert.deepEqual(toggleMessageReaction(null, "uid-a", "😂"), { "😂": ["uid-a"] });
+  assert.deepEqual(toggleMessageReaction(undefined, "uid-a", "😂"), { "😂": ["uid-a"] });
+});

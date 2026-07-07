@@ -426,3 +426,20 @@ export function formatActorName(name, userId, removedUserIds) {
   if (userId && removedUserIds && removedUserIds.has(userId)) return `${name} (parti)`;
   return name;
 }
+
+// ── Réactions emoji sur les messages ─────────────────────────────────────────
+// Une seule réaction par personne et par message : poser un nouveau smiley
+// remplace l'ancien ; retaper le smiley déjà posé le retire (bascule on/off).
+// Retourne un NOUVEL objet (jamais de mutation) prêt à être envoyé tel quel
+// comme valeur de la colonne JSONB `reactions`.
+export function toggleMessageReaction(reactions, userId, emoji) {
+  const source = reactions || {};
+  const hadThisEmoji = (source[emoji] || []).includes(userId);
+  const next = {};
+  for (const [key, ids] of Object.entries(source)) {
+    const filtered = ids.filter(id => id !== userId);
+    if (filtered.length) next[key] = filtered;
+  }
+  if (!hadThisEmoji) next[emoji] = [...(next[emoji] || []), userId];
+  return next;
+}
