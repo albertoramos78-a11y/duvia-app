@@ -10285,12 +10285,19 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
           const guard=resolveGuard(ds,cfg,activeChildId),wk=wkNum(date),isInl=inlineDs===ds;
           // Custom date → override garde dans la vue liste (même logique que vue grille)
           const _cdList=(cfg.specialDates?.custom||[]).reduce((f,cd)=>{
-            if(!cd.parentId||!cd.day||!cd.month) return f;
+            if(!cd.day||!cd.month) return f;
             const yr=cd.yearly||!cd.year||+cd.year===date.getFullYear();
             return (+cd.day===day && +cd.month===m+1 && yr) ? cd : f;
           },null);
-          const effectiveGuard = _cdList
-            ? (()=>{ const pi=cfg.parents.findIndex(p=>String(p.id)===String(_cdList.parentId)); return pi>=0?{...guard,parentIdx:pi,allParents:false,obsId:undefined}:guard; })()
+          // Même repli de couleur que la vue grille (Task 3) — voir ce commentaire là-bas.
+          const customGuardians = _cdList
+            ? resolveCustomDateGuardians(_cdList, cfg.parents, cfg.observers)
+                .map(g=>({...g, color:g.color||(g.type==="observer"?C.ora:C.vio)}))
+            : [];
+          const effectiveGuard = customGuardians.length===1
+            ? (()=>{ const cg=customGuardians[0]; return cg.type==="parent"
+                ? {...guard, parentIdx:cfg.parents.findIndex(p=>String(p.id)===String(cg.id)), obsId:undefined, allParents:false}
+                : {...guard, obsId:cg.id, parentIdx:undefined, allParents:false}; })()
             : guard;
           const todayStr=toStr(new Date()),isToday=ds===todayStr;
           return (
@@ -10311,9 +10318,18 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
                     <span key={ei} className="badge" style={{background:`${ev.color}22`,color:ev.color,maxWidth:110,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={ev.label}>{ev.label}</span>
                   ))}
                 </div>
-                <GuardCell guard={effectiveGuard} readOnly={readOnly} isOpen={isInl}
-                  onClick={()=>{if(!readOnly){setInlineDs(isInl?null:ds);setFullDs(null);}}}
-                  onFull={()=>{if(!editBlocked){setFullDs(ds);setInlineDs(null);}}} />
+                {customGuardians.length>=2 ? (
+                  <div style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",fontSize:11,fontWeight:700,color:C.txt,minWidth:0}}>
+                    {customGuardians.map(g=>(
+                      <span key={g.type+g.id} style={{width:8,height:8,borderRadius:"50%",background:g.color||C.mut,flexShrink:0}} />
+                    ))}
+                    <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{guardianNamesLabel(customGuardians)}</span>
+                  </div>
+                ) : (
+                  <GuardCell guard={effectiveGuard} readOnly={readOnly} isOpen={isInl}
+                    onClick={()=>{if(!readOnly){setInlineDs(isInl?null:ds);setFullDs(null);}}}
+                    onFull={()=>{if(!editBlocked){setFullDs(ds);setInlineDs(null);}}} />
+                )}
               </div>
               {isInl&&!readOnly&&<InlinePicker ds={ds} guard={guard} onClose={()=>setInlineDs(null)} onFull={!editBlocked?()=>{setFullDs(ds);setInlineDs(null);}:null} />}
             </div>
