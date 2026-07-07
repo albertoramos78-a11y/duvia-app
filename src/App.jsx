@@ -10604,7 +10604,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
   const weekRows = [];
   for(let i=0;i<flatCells.length;i+=7) weekRows.push(flatCells.slice(i,i+7));
 
-  const WEEKNUM_COL = 26;
+  const WEEKNUM_COL = 16;
 
   return (
     <div className="card" style={{padding:14,overflow:"hidden",width:"100%",boxSizing:"border-box"}}>
