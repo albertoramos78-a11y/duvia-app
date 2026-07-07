@@ -453,3 +453,61 @@ export function toggleMessageReaction(reactions, userId, emoji) {
   if (!hadThisEmoji) next[emoji] = [...(next[emoji] || []), userId];
   return next;
 }
+
+// ── Dates personnalisées : garde forcée sur 0, 1 ou plusieurs personnes ──────
+// Un id de gardien est une chaîne préfixée : "p:<id_parent>" ou "obs:<id_observateur>".
+export function parseGuardId(idStr) {
+  if (!idStr || typeof idStr !== "string") return null;
+  if (idStr.startsWith("p:")) return { type: "parent", id: idStr.slice(2) };
+  if (idStr.startsWith("obs:")) return { type: "observer", id: idStr.slice(4) };
+  return null;
+}
+
+// Résout cd.guardIds (ou cd.parentId en repli, ancien format à un seul parent)
+// en liste de gardiens {type, id, name, color, avatar}, dans l'ordre de
+// sélection. Les ids qui ne correspondent plus à personne sont ignorés.
+export function resolveCustomDateGuardians(cd, parents, observers) {
+  if (!cd) return [];
+  const ids = Array.isArray(cd.guardIds) && cd.guardIds.length > 0
+    ? cd.guardIds
+    : (cd.parentId ? [`p:${cd.parentId}`] : []);
+  const result = [];
+  for (const idStr of ids) {
+    const parsed = parseGuardId(idStr);
+    if (!parsed) continue;
+    if (parsed.type === "parent") {
+      const p = (parents || []).find(pp => String(pp.id) === String(parsed.id));
+      if (p) result.push({ type: "parent", id: String(p.id), name: p.name || "", color: p.color || null, avatar: p.avatar || null });
+    } else {
+      const o = (observers || []).find(oo => String(oo.id) === String(parsed.id));
+      if (o) result.push({ type: "observer", id: String(o.id), name: o.name || "", color: o.color || null, avatar: o.avatar || null });
+    }
+  }
+  return result;
+}
+
+// Bascule idStr dans/hors du tableau de sélection (ajoute si absent, retire si présent).
+export function toggleGuardId(guardIds, idStr) {
+  const arr = guardIds || [];
+  return arr.includes(idStr) ? arr.filter(x => x !== idStr) : [...arr, idStr];
+}
+
+// Dégradé CSS en bandes verticales égales, une par gardien — null si moins de 2
+// (dans ce cas l'appelant garde son traitement "couleur pleine" existant pour 0/1).
+export function guardianStripeBackground(guardians, opacityHex = "40") {
+  if (!guardians || guardians.length < 2) return null;
+  const n = guardians.length;
+  const stops = [];
+  guardians.forEach((g, i) => {
+    const color = (g.color || "#71717a") + opacityHex;
+    const from = (i / n) * 100;
+    const to = ((i + 1) / n) * 100;
+    stops.push(`${color} ${from}%`, `${color} ${to}%`);
+  });
+  return `linear-gradient(to right, ${stops.join(", ")})`;
+}
+
+// Joint les prénoms des gardiens avec " + " (ex: "Sissi + Alberto").
+export function guardianNamesLabel(guardians) {
+  return (guardians || []).map(g => g.name).filter(Boolean).join(" + ");
+}

@@ -455,3 +455,88 @@ test("isMemberIdentityLocked : entrée null/undefined traitée comme non verroui
   assert.equal(isMemberIdentityLocked(null), false);
   assert.equal(isMemberIdentityLocked(undefined), false);
 });
+
+import { parseGuardId, resolveCustomDateGuardians, toggleGuardId, guardianStripeBackground, guardianNamesLabel } from "./core.js";
+
+test("parseGuardId : parent préfixé p:", () => {
+  assert.deepEqual(parseGuardId("p:123"), { type: "parent", id: "123" });
+});
+
+test("parseGuardId : observateur préfixé obs:", () => {
+  assert.deepEqual(parseGuardId("obs:abc-def"), { type: "observer", id: "abc-def" });
+});
+
+test("parseGuardId : préfixe inconnu ou vide → null", () => {
+  assert.equal(parseGuardId("xyz:1"), null);
+  assert.equal(parseGuardId(""), null);
+  assert.equal(parseGuardId(null), null);
+  assert.equal(parseGuardId(undefined), null);
+});
+
+test("resolveCustomDateGuardians : lit guardIds (parent + observateur)", () => {
+  const parents = [{ id: 1, name: "Alberto", color: "#0000ff" }, { id: 2, name: "Sissi", color: "#ec4899" }];
+  const observers = [{ id: "obs-1", name: "Isa", color: null, canGuard: true }];
+  const cd = { guardIds: ["p:2", "obs:obs-1"] };
+  const result = resolveCustomDateGuardians(cd, parents, observers);
+  assert.deepEqual(result, [
+    { type: "parent", id: "2", name: "Sissi", color: "#ec4899", avatar: null },
+    { type: "observer", id: "obs-1", name: "Isa", color: null, avatar: null },
+  ]);
+});
+
+test("resolveCustomDateGuardians : fallback legacy parentId (une seule chaîne, pas de préfixe)", () => {
+  const parents = [{ id: 1, name: "Alberto", color: "#0000ff" }];
+  const cd = { parentId: "1" };
+  const result = resolveCustomDateGuardians(cd, parents, []);
+  assert.deepEqual(result, [{ type: "parent", id: "1", name: "Alberto", color: "#0000ff", avatar: null }]);
+});
+
+test("resolveCustomDateGuardians : guardIds vide ou absent → tableau vide (calendrier par défaut)", () => {
+  assert.deepEqual(resolveCustomDateGuardians({ guardIds: [] }, [], []), []);
+  assert.deepEqual(resolveCustomDateGuardians({}, [], []), []);
+  assert.deepEqual(resolveCustomDateGuardians(null, [], []), []);
+});
+
+test("resolveCustomDateGuardians : id qui ne correspond plus à personne est ignoré silencieusement", () => {
+  const parents = [{ id: 1, name: "Alberto", color: "#0000ff" }];
+  const cd = { guardIds: ["p:1", "p:999", "obs:ghost"] };
+  const result = resolveCustomDateGuardians(cd, parents, []);
+  assert.deepEqual(result, [{ type: "parent", id: "1", name: "Alberto", color: "#0000ff", avatar: null }]);
+});
+
+test("toggleGuardId : ajoute si absent", () => {
+  assert.deepEqual(toggleGuardId(["p:1"], "obs:2"), ["p:1", "obs:2"]);
+});
+
+test("toggleGuardId : retire si déjà présent", () => {
+  assert.deepEqual(toggleGuardId(["p:1", "obs:2"], "p:1"), ["obs:2"]);
+});
+
+test("toggleGuardId : tableau absent traité comme vide", () => {
+  assert.deepEqual(toggleGuardId(null, "p:1"), ["p:1"]);
+  assert.deepEqual(toggleGuardId(undefined, "p:1"), ["p:1"]);
+});
+
+test("guardianStripeBackground : null si moins de 2 gardiens", () => {
+  assert.equal(guardianStripeBackground([]), null);
+  assert.equal(guardianStripeBackground([{ color: "#ec4899" }]), null);
+});
+
+test("guardianStripeBackground : dégradé à bandes égales pour 2 gardiens", () => {
+  const result = guardianStripeBackground([{ color: "#ec4899" }, { color: "#0000ff" }]);
+  assert.equal(result, "linear-gradient(to right, #ec489940 0%, #ec489940 50%, #0000ff40 50%, #0000ff40 100%)");
+});
+
+test("guardianStripeBackground : couleur de repli si un gardien n'a pas de couleur", () => {
+  const result = guardianStripeBackground([{ color: null }, { color: "#0000ff" }]);
+  assert.equal(result, "linear-gradient(to right, #71717a40 0%, #71717a40 50%, #0000ff40 50%, #0000ff40 100%)");
+});
+
+test("guardianNamesLabel : joint les prénoms avec ' + '", () => {
+  assert.equal(guardianNamesLabel([{ name: "Sissi" }, { name: "Alberto" }]), "Sissi + Alberto");
+});
+
+test("guardianNamesLabel : ignore les entrées sans nom, tableau vide → chaîne vide", () => {
+  assert.equal(guardianNamesLabel([{ name: "" }, { name: "Isa" }]), "Isa");
+  assert.equal(guardianNamesLabel([]), "");
+});
