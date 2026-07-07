@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
-import { type DuviaMessage, listMessages, sendMessage, markMessageRead } from "../services/supabase/messageService";
+import { type DuviaMessage, listMessages, sendMessage, markMessageRead, setMessageReaction } from "../services/supabase/messageService";
 
 /**
  * Remplace `const [msgs, setMsgs] = useLocalStorage("duvia_msgs", [])`
@@ -78,5 +78,18 @@ export function useMessages(familyId: string | null) {
     [msgs]
   );
 
-  return { msgs, loading, error, send, markRead, refresh };
+  /** Remplace les réactions d'un message (valeur déjà calculée par toggleMessageReaction). */
+  const react = useCallback(
+    async (id: string, reactions: Record<string, string[]>) => {
+      setMsgs((prev) => prev.map((m) => (m.id === id ? { ...m, reactions } : m))); // optimiste
+      try {
+        await setMessageReaction(id, reactions);
+      } catch (e) {
+        await refresh(); // resynchronise en cas d'échec, comme les autres mutations de ce hook
+      }
+    },
+    [refresh]
+  );
+
+  return { msgs, loading, error, send, markRead, react, refresh };
 }
