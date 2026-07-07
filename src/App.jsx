@@ -14125,9 +14125,10 @@ function MessagingTab(){
       const cfgP2=(cfg.parents||[]).find(p=>(p.email&&u.email&&p.email===u.email)||(p.name&&u.name&&p.name===u.name));
       const col=cfgP2?.color||C.vio;
       const cfgAv = cfgP2?.avatar
-        || (cfg.observers||[]).find(o=>o.name===u.name)?.avatar;
+        || (cfg.observers||[]).find(o=>o.name===u.name)?.avatar
+        || (cfg.children||[]).find(c=>c.name===u.name)?.avatar;
       pMap[String(u.id)]={name:u.name,role:u.role||"parent",color:col,
-        avatar:u.role==="observer"?(cfgAv||"👁️"):u.role==="child"?"🧒":(cfgAv||"👤")};
+        avatar:u.role==="observer"?(cfgAv||"👁️"):u.role==="child"?(cfgAv||"🧒"):(cfgAv||"👤")};
     }
     // 🔧 Détecter si le destinataire a un compte Supabase :
     //   • par local_id (compte créé sur cet appareil)
