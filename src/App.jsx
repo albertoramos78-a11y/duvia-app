@@ -1264,6 +1264,7 @@ button.btn-icon{width:44px;height:44px;padding:0;border-radius:10px;}
 @keyframes slideIn{from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:translateX(0)}}
 @keyframes fadeInDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes pulseFade{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.8;transform:scale(1.03)}}
+@keyframes handShake{0%,100%{transform:rotate(0deg)}10%{transform:rotate(14deg)}20%{transform:rotate(-8deg)}30%{transform:rotate(14deg)}40%{transform:rotate(-4deg)}50%{transform:rotate(10deg)}60%{transform:rotate(0deg)}}
 
 /* ── Nav tabs ── */
 .nav-tab{
@@ -2397,30 +2398,33 @@ const AppContext = createContext(null);
 function useApp() { return useContext(AppContext); }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// INFO BUBBLE (générique) — icône 👋, ouverte automatiquement une seule fois
-// puis togglable manuellement. Persisté via localStorage par clé+utilisateur.
+// INFO BUBBLE (générique) — icône 👋 qui vibre pour attirer l'attention tant
+// que l'utilisateur n'a pas cliqué dessus (jamais d'ouverture automatique).
+// Persisté via localStorage par clé+utilisateur.
 // ═══════════════════════════════════════════════════════════════════════════════
-function InfoBubble({C,tipKey,title,children,autoOpen=true}) {
+function InfoBubble({C,tipKey,title,children}) {
   const {t} = useApp();
-  const [open, setOpen] = useState(() => {
-    if (!autoOpen) return false;
-    try { return !window.localStorage.getItem(tipKey); } catch { return true; }
+  const [seen, setSeen] = useState(() => {
+    try { return !!window.localStorage.getItem(tipKey); } catch { return false; }
   });
-  function close() {
-    setOpen(false);
+  const [open, setOpen] = useState(false);
+  function markSeen() {
+    if (seen) return;
+    setSeen(true);
     try { window.localStorage.setItem(tipKey, "1"); } catch {}
   }
+  function close() { setOpen(false); markSeen(); }
   function toggle() {
     setOpen(o => {
       const next = !o;
-      if (!next) { try { window.localStorage.setItem(tipKey, "1"); } catch {} }
+      if (next) markSeen();
       return next;
     });
   }
 
   return (
     <div style={{position:"relative"}}>
-      <button onClick={toggle} style={{width:28,height:28,borderRadius:"50%",background:open?C.vio:`${C.vio}18`,border:`1.5px solid ${C.vio}`,color:open?"#fff":C.vio,fontSize:13,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+      <button onClick={toggle} style={{background:"transparent",border:"none",color:C.vio,fontSize:20,padding:0,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",animation:!seen?"handShake 1.8s ease-in-out infinite":undefined}}>
         👋
       </button>
       {open && (
@@ -2449,9 +2453,10 @@ function InfoBubble({C,tipKey,title,children,autoOpen=true}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 function StepIdInfoButton({C,t,user}) {
   const tipKey = `duvia_stepid_info_seen_${user?.id||"x"}`;
-  const [open, setOpen] = useState(() => {
-    try { return !window.localStorage.getItem(tipKey); } catch { return true; }
+  const [seen, setSeen] = useState(() => {
+    try { return !!window.localStorage.getItem(tipKey); } catch { return false; }
   });
+  const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   const [pos, setPos] = useState({top:0, right:0, arrowRight:0});
 
@@ -2461,6 +2466,7 @@ function StepIdInfoButton({C,t,user}) {
       const vw = window.innerWidth;
       setPos({ top: r.bottom + 10, right: vw - r.right - 4, arrowRight: 10 });
       // Marquer comme vu
+      setSeen(true);
       try { window.localStorage.setItem(tipKey, "1"); } catch {}
     }
   }, [open]);
@@ -2468,7 +2474,7 @@ function StepIdInfoButton({C,t,user}) {
   return (
     <div style={{position:"relative",marginLeft:"auto"}}>
       <button ref={btnRef} onClick={()=>setOpen(o=>!o)}
-        style={{width:30,height:30,borderRadius:"50%",background:open?C.vio:`${C.vio}22`,border:`1.5px solid ${C.vio}55`,color:open?"#fff":C.vio,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",flexShrink:0}}>
+        style={{background:"transparent",border:"none",color:C.vio,fontSize:20,padding:0,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,animation:!seen?"handShake 1.8s ease-in-out infinite":undefined}}>
         👋
       </button>
       {open && (
@@ -2504,9 +2510,10 @@ function StepIdInfoButton({C,t,user}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 function StepDatesInfoButton({C,t,user}) {
   const tipKey = `duvia_stepdates_info_seen_${user?.id||"x"}`;
-  const [open, setOpen] = useState(() => {
-    try { return !window.localStorage.getItem(tipKey); } catch { return true; }
+  const [seen, setSeen] = useState(() => {
+    try { return !!window.localStorage.getItem(tipKey); } catch { return false; }
   });
+  const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   const [pos, setPos] = useState({top:0, right:0});
 
@@ -2515,6 +2522,7 @@ function StepDatesInfoButton({C,t,user}) {
       const r = btnRef.current.getBoundingClientRect();
       const vw = window.innerWidth;
       setPos({ top: r.bottom + 10, right: vw - r.right - 4 });
+      setSeen(true);
       try { window.localStorage.setItem(tipKey, "1"); } catch {}
     }
   }, [open]);
@@ -2522,7 +2530,7 @@ function StepDatesInfoButton({C,t,user}) {
   return (
     <div style={{position:"relative",marginLeft:"auto"}}>
       <button ref={btnRef} onClick={()=>setOpen(o=>!o)}
-        style={{width:30,height:30,borderRadius:"50%",background:open?C.vio:`${C.vio}22`,border:`1.5px solid ${C.vio}55`,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",flexShrink:0}}>
+        style={{background:"transparent",border:"none",color:C.vio,fontSize:20,padding:0,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,animation:!seen?"handShake 1.8s ease-in-out infinite":undefined}}>
         👋
       </button>
       {open && (
@@ -2562,9 +2570,10 @@ function StepDatesInfoButton({C,t,user}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 function StepGardeInfoButton({C,t,user}) {
   const tipKey = `duvia_stepgarde_info_seen_${user?.id||"x"}`;
-  const [open, setOpen] = useState(() => {
-    try { return !window.localStorage.getItem(tipKey); } catch { return true; }
+  const [seen, setSeen] = useState(() => {
+    try { return !!window.localStorage.getItem(tipKey); } catch { return false; }
   });
+  const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   const [pos, setPos] = useState({top:0, right:0});
 
@@ -2573,6 +2582,7 @@ function StepGardeInfoButton({C,t,user}) {
       const r = btnRef.current.getBoundingClientRect();
       const vw = window.innerWidth;
       setPos({ top: r.bottom + 10, right: vw - r.right - 4 });
+      setSeen(true);
       try { window.localStorage.setItem(tipKey, "1"); } catch {}
     }
   }, [open]);
@@ -2580,7 +2590,7 @@ function StepGardeInfoButton({C,t,user}) {
   return (
     <div style={{position:"relative",marginLeft:"auto"}}>
       <button ref={btnRef} onClick={()=>setOpen(o=>!o)}
-        style={{width:30,height:30,borderRadius:"50%",background:open?C.vio:`${C.vio}22`,border:`1.5px solid ${C.vio}55`,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",flexShrink:0}}>
+        style={{background:"transparent",border:"none",color:C.vio,fontSize:20,padding:0,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,animation:!seen?"handShake 1.8s ease-in-out infinite":undefined}}>
         👋
       </button>
       {open && (
@@ -2616,9 +2626,10 @@ function StepGardeInfoButton({C,t,user}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 function StepAccessInfoButton({C,t,user}) {
   const tipKey = `duvia_stepaccess_info_seen_${user?.id||"x"}`;
-  const [open, setOpen] = useState(() => {
-    try { return !window.localStorage.getItem(tipKey); } catch { return true; }
+  const [seen, setSeen] = useState(() => {
+    try { return !!window.localStorage.getItem(tipKey); } catch { return false; }
   });
+  const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   const [pos, setPos] = useState({top:0, right:0});
 
@@ -2627,6 +2638,7 @@ function StepAccessInfoButton({C,t,user}) {
       const r = btnRef.current.getBoundingClientRect();
       const vw = window.innerWidth;
       setPos({ top: r.bottom + 10, right: vw - r.right - 4 });
+      setSeen(true);
       try { window.localStorage.setItem(tipKey, "1"); } catch {}
     }
   }, [open]);
@@ -2634,7 +2646,7 @@ function StepAccessInfoButton({C,t,user}) {
   return (
     <div style={{position:"relative",marginLeft:"auto"}}>
       <button ref={btnRef} onClick={()=>setOpen(o=>!o)}
-        style={{width:30,height:30,borderRadius:"50%",background:open?C.vio:`${C.vio}22`,border:`1.5px solid ${C.vio}55`,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",flexShrink:0}}>
+        style={{background:"transparent",border:"none",color:C.vio,fontSize:20,padding:0,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,animation:!seen?"handShake 1.8s ease-in-out infinite":undefined}}>
         👋
       </button>
       {open && (
@@ -10159,7 +10171,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
               </button>
             </>
           )}
-          <InfoBubble C={C} tipKey={`duvia_caltip_${user?.id||"x"}`} title={t.tabCal||"Calendrier"} autoOpen={false}>
+          <InfoBubble C={C} tipKey={`duvia_caltip_${user?.id||"x"}`} title={t.tabCal||"Calendrier"}>
             {t.calTipBody||"Visualisez et gérez le planning de garde mensuel. Il est visible par tous les membres de la famille."}
             <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid rgba(255,255,255,.25)"}}>
               {t.calTipGuardians||"🏠 Gardiens : un proche invité avec l'option « Peut être gardien » (Configuration → Accès) apparaît ici en orange. Vous pouvez alors lui attribuer une journée de garde — par exemple quand les grands-parents gardent les enfants à la place d'un parent."}
