@@ -1261,10 +1261,6 @@ button.btn-icon{width:44px;height:44px;padding:0;border-radius:10px;}
 /* ── Animations ── */
 @keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .fi{animation:fi .22s ease;}
-@keyframes menuPulse{
-  0%,100%{opacity:1;box-shadow:0 0 0 0 ${C.vio}88}
-  50%{opacity:.7;box-shadow:0 0 0 7px ${C.vio}00}
-}
 @keyframes slideIn{from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:translateX(0)}}
 @keyframes fadeInDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes pulseFade{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.8;transform:scale(1.03)}}
@@ -4283,7 +4279,7 @@ export default function App() {
           })()}
           <div style={{position:"relative",flexShrink:0}}>
           {menuHighlight && (
-            <span style={{position:"absolute",inset:-4,borderRadius:10,border:`2.5px solid ${C.vio}`,animation:"menuPulse 1.2s ease-in-out infinite",pointerEvents:"none",zIndex:1}} />
+            <span style={{position:"absolute",inset:-4,borderRadius:10,border:`2.5px solid ${C.vio}`,animation:"todayPulse 2.2s ease-in-out infinite",pointerEvents:"none",zIndex:1}} />
           )}
           <button onClick={()=>{setShowMenu(v=>!v);setShowPrizesMenu(false);if(menuHighlight){setMenuHighlight(false);}if(showOnboardingTip){setShowOnboardingTip(false);}}} style={{height:36,padding:"0 14px",background:menuHighlight?`${C.vio}18`:showMenu?`${C.vio}18`:C.card,border:`1.5px solid ${menuHighlight||showMenu?C.vio:C.bor}`,color:menuHighlight||showMenu?C.vio:C.txt,fontSize:13,fontWeight:700,borderRadius:20,display:"flex",alignItems:"center",gap:6,position:"relative",transition:"all .2s",cursor:"pointer"}}>
             <span>☰</span>
