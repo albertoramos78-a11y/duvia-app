@@ -3545,13 +3545,15 @@ export default function App() {
     try{ const raw=window.localStorage.getItem("duvia_activity"); if(raw)return JSON.parse(raw); }catch{}
     return activity;
   }, [activity, activityTick]);
-  const vaultDot   = (cfg.vaultActivity?.by && cfg.vaultActivity.by!==_myId && cfg.vaultActivity.ts>(_seen.vault||"")) || vaultUnreadCount>0;
+  // Badge coffre = nombre de docs non lus ; à défaut, activité générique (suppression...) comptée pour 1
+  const vaultBadgeCount = vaultUnreadCount>0 ? vaultUnreadCount
+    : ((cfg.vaultActivity?.by && cfg.vaultActivity.by!==_myId && cfg.vaultActivity.ts>(_seen.vault||"")) ? 1 : 0);
   const contactsDot= liveActivity.contacts?.by && liveActivity.contacts.by!==_myId && liveActivity.contacts.ts>(_seen.contacts||"");
-  // Vibration dépenses = dépenses EN ATTENTE créées par l'autre parent (source DB)
-  const expPendingDot = (allExpenses||[]).some(e =>
+  // Badge dépenses = nombre de dépenses EN ATTENTE créées par l'autre parent (source DB)
+  const expPendingCount = (allExpenses||[]).filter(e =>
     e.status==="pending" && user?.role==="parent" &&
     e.createdBy!==undefined && e.createdBy!==(user?.parentIdx??-1)
-  );
+  ).length;
   // Sync current user's sub into the users list (so admin can see all subscribers)
   useEffect(()=>{
     if(!user || user.role==="admin") return;
@@ -4009,7 +4011,7 @@ export default function App() {
         {icon:"📞",label:t.tabContacts||"Contacts"},
         {icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},
       ]
-    : [{icon:"📅",label:t.tabCal},{icon:"🎒",label:t.tabSchedule||"EDT"},{icon:"💰",label:t.tabExp,badge:expPendingDot?1:0},{icon:"📞",label:t.tabContacts||"Contacts",badge:contactsDot?1:0},{icon:"🗄️",label:t.tabVault||"Coffre",badge:vaultDot?1:0},{icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},{icon:"🎡",label:t.tabGame||"Jeu"}];
+    : [{icon:"📅",label:t.tabCal},{icon:"🎒",label:t.tabSchedule||"EDT"},{icon:"💰",label:t.tabExp,badge:expPendingCount},{icon:"📞",label:t.tabContacts||"Contacts",badge:contactsDot?1:0},{icon:"🗄️",label:t.tabVault||"Coffre",badge:vaultBadgeCount},{icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},{icon:"🎡",label:t.tabGame||"Jeu"}];
 
   // 🔒 L'onglet mémorisé (duvia_tab) peut ne plus exister si ce même appareil
   // change de rôle (parent → enfant/observateur, moins d'onglets) — on
@@ -4574,7 +4576,7 @@ Date d'entrée en vigueur : 14 juin 2026
           {TABS.map((tb,i) => (
             <button key={i} onClick={()=>{ switchTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,padding:"10px 2px",background:tab===i&&!menuTab?C.sur:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,borderBottom:tab===i&&!menuTab?`2.5px solid ${C.vio}`:"2.5px solid transparent",borderRadius:0,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",transition:"all .15s"}}>
               <span style={{lineHeight:1,display:"inline-block",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}>{tb.icon}</span>
-              {tb.badge>0 && !tb.wobbleOnly && <span style={{position:"absolute",top:5,right:"10%",background:C.red,borderRadius:"50%",width:8,height:8,border:`2px solid ${C.card}`}}/>}
+              {tb.badge>0 && !tb.wobbleOnly && <span style={{position:"absolute",top:2,right:"8%",minWidth:15,height:15,padding:"0 3px",borderRadius:"50%",background:C.red,color:"#fff",fontSize:9,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",border:`2px solid ${C.card}`,boxSizing:"content-box"}}>{tb.badge}</span>}
             </button>
           ))}
         </div>
