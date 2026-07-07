@@ -10317,7 +10317,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
       {calView==="list" && (
         <div style={{animation:`calSlideIn${calViewDir.current==="left"?"Left":"Right"} 0.28s cubic-bezier(.22,.68,0,1.2) both`}}>
       <div className="card" style={{padding:0,overflow:"hidden"}}>
-        <div style={{display:"grid",gridTemplateColumns:"32px 96px 1fr 1fr",background:C.sur,padding:"8px 12px",fontSize:10,color:C.mut,fontWeight:800,letterSpacing:".1em",textTransform:"uppercase",borderBottom:`1.5px solid ${C.bor}`}}>
+        <div style={{display:"grid",gridTemplateColumns:"28px 82px 150px 1fr",background:C.sur,padding:"8px 12px",fontSize:10,color:C.mut,fontWeight:800,letterSpacing:".1em",textTransform:"uppercase",borderBottom:`1.5px solid ${C.bor}`}}>
           <span>{t.wk}</span><span>{t.day}</span><span>{t.info}</span>
           <span>{t.guard} {!readOnly&&<span style={{color:C.vio,fontSize:9,fontWeight:400,textTransform:"none"}}>{t.tapToEdit}</span>}</span>
         </div>
@@ -10346,7 +10346,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
           const todayStr=toStr(new Date()),isToday=ds===todayStr;
           return (
             <div key={i}>
-              <div style={{display:"grid",gridTemplateColumns:"32px 96px 1fr 1fr",padding:"8px 12px",borderBottom:`1px solid ${C.bor}`,background:isInl?C.sur:isToday?`${C.vio}18`:isWE?`${C.yel}11`:"transparent",transition:"background .15s",borderLeft:isToday?`3px solid ${C.vio}`:"3px solid transparent"}}>
+              <div style={{display:"grid",gridTemplateColumns:"28px 82px 150px 1fr",padding:"8px 12px",borderBottom:`1px solid ${C.bor}`,background:isInl?C.sur:isToday?`${C.vio}18`:isWE?`${C.yel}11`:"transparent",transition:"background .15s",borderLeft:isToday?`3px solid ${C.vio}`:"3px solid transparent"}}>
                 <span style={{fontFamily:"JetBrains Mono",fontSize:10,color:C.mut,alignSelf:"center"}}>{dw===0?wk:""}</span>
                 <div style={{alignSelf:"center"}}>
                   <div style={{fontFamily:"JetBrains Mono",fontSize:13,fontWeight:700,color:isToday?C.vio:isWE?C.yel:C.txt,display:"flex",alignItems:"center",gap:5}}>
