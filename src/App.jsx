@@ -1139,19 +1139,8 @@ body{background:${C.bg};color:${C.txt};font-family:'Nunito',sans-serif;min-heigh
 */
 .duvia-app-root{height:100vh;height:100dvh;}
 
-/* ── Jour actuel (vue mois) : vibration continue au lieu d'un battement lent ── */
-@keyframes todayPulse{
-  0%,100%{transform:translate(0,0)}
-  10%{transform:translate(-1px,-1px)}
-  20%{transform:translate(1px,0)}
-  30%{transform:translate(-1px,1px)}
-  40%{transform:translate(1px,-1px)}
-  50%{transform:translate(-1px,0)}
-  60%{transform:translate(1px,1px)}
-  70%{transform:translate(-1px,-1px)}
-  80%{transform:translate(1px,0)}
-  90%{transform:translate(-1px,1px)}
-}
+/* ── Jour actuel (vue mois) : clignotement doux au lieu d'une vibration ── */
+@keyframes todayPulse{0%,100%{opacity:1}50%{opacity:0.4}}
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar{width:4px;height:4px;}
@@ -10488,7 +10477,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
           cursor:readOnly?"default":"pointer",position:"relative",
           border:scoBorder || activeBorder,
           transition:"transform .12s, box-shadow .12s",
-          animation:d.isToday?"todayPulse 0.35s linear infinite":undefined,
+          animation:d.isToday?"todayPulse 1.1s ease-in-out infinite":undefined,
           minWidth:0,boxSizing:"border-box",overflow:"hidden",
         }}>
         <span style={{display:"flex",alignItems:"center",gap:3}}>
