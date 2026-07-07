@@ -159,7 +159,6 @@ const fr = {
     calResetBtnTitle:"Réinitialiser tous les échanges manuels du calendrier",
     calResetBtnLabel:"Réinit.",
     familySyncTitle:"Synchronisation famille",
-    familySyncDesc:"Donnez ce code à l'autre parent : il/elle pourra voir et modifier le même calendrier et les mêmes informations, depuis son propre téléphone.",
     familyCode:"Code famille",
     syncConnecting:"Connexion…",
     syncSynced:"Synchronisé",

@@ -133,7 +133,6 @@ const de = {
     calResetBtnTitle:"Alle manuellen Tauschtage im Kalender zurücksetzen",
     calResetBtnLabel:"Reset",
     familySyncTitle:"Familien-Synchronisierung",
-    familySyncDesc:"Gib diesen Code dem anderen Elternteil: Er/sie kann denselben Kalender und dieselben Informationen von seinem/ihrem eigenen Smartphone aus sehen und bearbeiten.",
     familyCode:"Familiencode",
     syncConnecting:"Verbinde…",
     syncSynced:"Synchronisiert",

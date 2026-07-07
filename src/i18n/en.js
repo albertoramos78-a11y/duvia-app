@@ -135,7 +135,6 @@ const en = {
     calResetBtnTitle:"Reset all manual exchanges on the calendar",
     calResetBtnLabel:"Reset",
     familySyncTitle:"Family sync",
-    familySyncDesc:"Give this code to the other parent: they'll be able to see and edit the same calendar and information from their own phone.",
     familyCode:"Family code",
     syncConnecting:"Connecting…",
     syncSynced:"Synced",

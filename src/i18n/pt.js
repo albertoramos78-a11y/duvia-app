@@ -133,7 +133,6 @@ const pt = {
     calResetBtnTitle:"Reiniciar todas as trocas manuais do calendário",
     calResetBtnLabel:"Reiniciar",
     familySyncTitle:"Sincronização da família",
-    familySyncDesc:"Dê este código ao outro progenitor: ele/ela poderá ver e editar o mesmo calendário e as mesmas informações a partir do seu próprio telemóvel.",
     familyCode:"Código da família",
     syncConnecting:"A ligar…",
     syncSynced:"Sincronizado",

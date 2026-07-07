@@ -7347,8 +7347,6 @@ function FamilySyncCard() {
 
       {showDetails && (
         <>
-          <div style={{fontSize:12,color:C.mut,marginBottom:12,lineHeight:1.5}}>{t.familySyncDesc}</div>
-
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,flexWrap:"wrap"}}>
             <span style={{fontSize:11,color:C.mut,fontWeight:700}}>{t.familyCode} :</span>
             <span style={{fontFamily:"JetBrains Mono",fontSize:15,fontWeight:800,letterSpacing:2,color:C.vio}}>{cfg.shareCode}</span>
@@ -10384,7 +10382,8 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
                   ))}
                 </div>
                 {customGuardians.length>=2 ? (
-                  <div style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",fontSize:11,fontWeight:700,color:C.txt,minWidth:0}}>
+                  <div onClick={()=>{if(!readOnly){setInlineDs(isInl?null:ds);setFullDs(null);}}}
+                    style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",fontSize:11,fontWeight:700,color:C.txt,minWidth:0,cursor:readOnly?"default":"pointer",borderRadius:8,border:`1.5px solid ${isInl?C.vio:"transparent"}`,background:isInl?`${C.vio}11`:"transparent"}}>
                     {customGuardians.map(g=>(
                       <span key={g.type+g.id} style={{width:8,height:8,borderRadius:"50%",background:g.color||C.mut,flexShrink:0}} />
                     ))}
