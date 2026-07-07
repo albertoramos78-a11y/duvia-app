@@ -8138,7 +8138,7 @@ function ZoneDropdown({chCountry, chCurSub, chSubs, chSetZone, noZoneLabel, lock
     <div style={{position:"relative"}}>
       {open && <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:199}} />}
       <button onClick={()=>setOpen(v=>!v)}
-        style={{width:"100%",height:44,padding:"0 16px",background:C.card,border:`1.5px solid ${open?C.vio:C.bor}`,borderRadius:12,display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,color:C.txt,cursor:"pointer",boxSizing:"border-box"}}>
+        style={{width:"100%",height:44,padding:"0 13px",background:C.card,border:`1.5px solid ${open?C.vio:C.bor}`,borderRadius:10,display:"flex",alignItems:"center",gap:10,fontSize:14,fontWeight:400,color:C.txt,cursor:"pointer",boxSizing:"border-box"}}>
         <span style={{flex:1,textAlign:"left",color:curValue?C.txt:C.mut,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{curLabel}</span>
         <span style={{fontSize:10,color:C.mut,transition:"transform .2s",display:"inline-block",transform:open?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>▼</span>
       </button>
@@ -8148,7 +8148,7 @@ function ZoneDropdown({chCountry, chCurSub, chSubs, chSetZone, noZoneLabel, lock
             const isActive = opt.value === curValue;
             return (
               <button key={i} onClick={()=>select(opt)}
-                style={{width:"100%",padding:"0 16px",minHeight:opt.sub?52:44,background:isActive?`${C.vio}10`:"transparent",color:isActive?C.vio:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:i<options.length-1?`1px solid ${C.bor}`:"none",fontSize:13,fontWeight:isActive?700:600,borderRadius:0,cursor:"pointer",textAlign:"left",boxSizing:"border-box"}}>
+                style={{width:"100%",padding:"0 16px",minHeight:opt.sub?52:44,background:isActive?`${C.vio}10`:"transparent",color:isActive?C.vio:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:i<options.length-1?`1px solid ${C.bor}`:"none",fontSize:14,fontWeight:isActive?700:400,borderRadius:0,cursor:"pointer",textAlign:"left",boxSizing:"border-box"}}>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{opt.label}</div>
                   {opt.sub && <div style={{fontSize:10,color:C.mut,fontWeight:400,marginTop:1,whiteSpace:"normal",lineHeight:1.3}}>{opt.sub}</div>}
@@ -8182,7 +8182,7 @@ function CustomSelect({value, onChange, options, style}) {
     <div style={{position:"relative",...style}}>
       {open && <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:199}} />}
       <button onClick={()=>setOpen(v=>!v)}
-        style={{width:"100%",height:44,padding:"0 16px",background:C.card,border:`1.5px solid ${open?C.vio:C.bor}`,borderRadius:12,display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,color:C.txt,cursor:"pointer",boxSizing:"border-box"}}>
+        style={{width:"100%",height:44,padding:"0 13px",background:C.card,border:`1.5px solid ${open?C.vio:C.bor}`,borderRadius:10,display:"flex",alignItems:"center",gap:10,fontSize:14,fontWeight:400,color:C.txt,cursor:"pointer",boxSizing:"border-box"}}>
         {cur?.icon && <span style={{fontSize:18,flexShrink:0}}>{cur.icon}</span>}
         <span style={{flex:1,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cur?.label||""}</span>
         <span style={{fontSize:10,color:C.mut,transition:"transform .2s",display:"inline-block",transform:open?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>▼</span>
@@ -8193,7 +8193,7 @@ function CustomSelect({value, onChange, options, style}) {
             const isActive = String(o.value)===String(value);
             return (
               <button key={o.value} onClick={()=>{onChange(o.value);setOpen(false);}}
-                style={{width:"100%",padding:"0 16px",height:44,background:isActive?`${C.vio}10`:"transparent",color:isActive?C.vio:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:i<options.length-1?`1px solid ${C.bor}`:"none",fontSize:13,fontWeight:isActive?700:600,borderRadius:0,cursor:"pointer",boxSizing:"border-box"}}>
+                style={{width:"100%",padding:"0 16px",height:44,background:isActive?`${C.vio}10`:"transparent",color:isActive?C.vio:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:i<options.length-1?`1px solid ${C.bor}`:"none",fontSize:14,fontWeight:isActive?700:400,borderRadius:0,cursor:"pointer",boxSizing:"border-box"}}>
                 {o.icon && <span style={{fontSize:18,flexShrink:0}}>{o.icon}</span>}
                 <span style={{flex:1,textAlign:"left"}}>{o.label}</span>
                 {isActive && <span style={{fontSize:14,color:C.vio,flexShrink:0}}>✓</span>}
@@ -8215,7 +8215,7 @@ function CountryDropdown({value, onChange}) {
     <div style={{position:"relative"}}>
       {open && <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:199}} />}
       <button onClick={()=>setOpen(v=>!v)}
-        style={{width:"100%",height:44,padding:"0 16px",background:C.card,border:`1.5px solid ${open?C.vio:C.bor}`,borderRadius:12,display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,color:C.txt,cursor:"pointer",boxSizing:"border-box"}}>
+        style={{width:"100%",height:44,padding:"0 13px",background:C.card,border:`1.5px solid ${open?C.vio:C.bor}`,borderRadius:10,display:"flex",alignItems:"center",gap:10,fontSize:14,fontWeight:400,color:C.txt,cursor:"pointer",boxSizing:"border-box"}}>
         <span style={{fontSize:18,flexShrink:0}}>{cur.flag}</span>
         <span style={{flex:1,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cur.name}</span>
         <span style={{fontSize:10,color:C.mut,transition:"transform .2s",display:"inline-block",transform:open?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>▼</span>
@@ -8226,7 +8226,7 @@ function CountryDropdown({value, onChange}) {
             const isActive = c.code===value;
             return (
               <button key={c.code} onClick={()=>{onChange(c.code);setOpen(false);}}
-                style={{width:"100%",padding:"0 16px",height:44,background:isActive?`${C.vio}10`:"transparent",color:isActive?C.vio:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:i<sorted.length-1?`1px solid ${C.bor}`:"none",fontSize:13,fontWeight:isActive?700:600,borderRadius:0,cursor:"pointer",boxSizing:"border-box"}}>
+                style={{width:"100%",padding:"0 16px",height:44,background:isActive?`${C.vio}10`:"transparent",color:isActive?C.vio:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:i<sorted.length-1?`1px solid ${C.bor}`:"none",fontSize:14,fontWeight:isActive?700:400,borderRadius:0,cursor:"pointer",boxSizing:"border-box"}}>
                 <span style={{fontSize:18,flexShrink:0}}>{c.flag}</span>
                 <span style={{flex:1,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span>
                 {isActive && <span style={{fontSize:14,color:C.vio,flexShrink:0}}>✓</span>}
