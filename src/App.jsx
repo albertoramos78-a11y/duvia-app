@@ -10359,13 +10359,21 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
     const specials=getSpecialEvents(date,cfg);
     const isBirthday=specials.some(ev=>ev.label?.includes("🎂")||ev.label?.includes("🎁"));
     const guard=resolveGuard(ds,cfg,activeChildId);
-    // Custom date avec parentId → override couleur de la case
-    const customParent = (cfg.specialDates?.custom||[]).reduce((found,cd)=>{
-      if(!cd.parentId||!cd.day||!cd.month) return found;
+    // Custom date avec guardIds → override garde/couleur de la case (0, 1 ou 2+ personnes)
+    const matchingCd = (cfg.specialDates?.custom||[]).reduce((found,cd)=>{
+      if(!cd.day||!cd.month) return found;
       const yearMatch = cd.yearly||!cd.year||+cd.year===y;
-      return (+cd.day===day && +cd.month===m+1 && yearMatch) ? (cfg.parents.find(p=>String(p.id)===String(cd.parentId))||null) : found;
+      return (+cd.day===day && +cd.month===m+1 && yearMatch) ? cd : found;
     },null);
-    return {day,ds,dw,fer,ferName,sco,scoName,specials,isBirthday,guard,customParent,isToday:ds===todayStr,isWE:dw>=5};
+    // Repli de couleur ici (pas dans core.js, qui n'a pas accès au thème C) :
+    // un observateur sans couleur propre (cfg.observers[].color n'est jamais
+    // renseigné aujourd'hui) doit quand même ressortir en orange, comme
+    // partout ailleurs où un observateur est représenté dans l'app.
+    const customGuardians = matchingCd
+      ? resolveCustomDateGuardians(matchingCd, cfg.parents, cfg.observers)
+          .map(g=>({...g, color:g.color||(g.type==="observer"?C.ora:C.vio)}))
+      : [];
+    return {day,ds,dw,fer,ferName,sco,scoName,specials,isBirthday,guard,customGuardians,isToday:ds===todayStr,isWE:dw>=5};
   });
 
   // Le badge rond résume "qui garde cette semaine" : on l'affiche le dimanche (fin de semaine,
@@ -10447,8 +10455,9 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
 
   function renderDayCell(d){
     const hasSplit = d.splitBefore && d.splitAfter;
-    // Custom date → couleur de fond du parent concerné (override garde normale)
-    const customBg = d.customParent?.color ? d.customParent.color+"40" : null;
+    // Custom date → override couleur de la case (1 personne = teinte pleine, 2+ = bandes)
+    const customStripes = guardianStripeBackground(d.customGuardians);
+    const customBg = customStripes || (d.customGuardians?.[0]?.color ? d.customGuardians[0].color+"40" : null);
     const bg = customBg || (hasSplit
       ? `linear-gradient(180deg, ${d.splitBefore}30 0%, ${d.splitBefore}30 calc(${d.splitPercent}% - 1px), ${d.splitAfter}30 calc(${d.splitPercent}% + 1px), ${d.splitAfter}30 100%)`
       : cellBg(d.guard));
@@ -10485,7 +10494,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
     const hasBadge = d.isRealChange && d.guard && !d.isBirthday && !cellTime;
     return (
       <div key={d.ds} onClick={()=>openDay(d.ds)}
-        title={d.ferName||d.scoName||d.specials[0]?.label||undefined}
+        title={(d.customGuardians?.length ? guardianNamesLabel(d.customGuardians) : null)||d.ferName||d.scoName||d.specials[0]?.label||undefined}
         style={{
           aspectRatio:"1",borderRadius:10,background:bg,padding:"6px 6px",
           display:"flex",flexDirection:"column",justifyContent:"space-between",
