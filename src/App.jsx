@@ -1836,7 +1836,6 @@ function useFamilySync(cfg, setCfg) {
               .eq("role", "child")
               .eq("status", "active");
             if (childErr) console.warn("[Duvia][sync] réconciliation enfants — erreur requête:", childErr);
-            console.log("[Duvia][sync] réconciliation enfants — lignes trouvées:", childRows);
             if (childRows && childRows.length > 0 && !cancelled) {
               setCfg(c => {
                 let changed = false;
@@ -1845,7 +1844,6 @@ function useFamilySync(cfg, setCfg) {
                   const match = childRows.find(r =>
                     r.display_name && ch.name && r.display_name.toLowerCase() === ch.name.toLowerCase()
                   );
-                  console.log("[Duvia][sync] réconciliation enfants — match pour", ch.name, ":", match);
                   if (!match) return ch;
                   changed = true;
                   return { ...ch, userId: match.user_id, email: match.email || ch.email };
@@ -14565,14 +14563,15 @@ function MessagingTab(){
                         <span style={{fontSize:10,opacity:.72,color:isMe?"rgba(255,255,255,.82)":C.mut}}>{hhmm}</span>
                         {isMe&&<span style={{color:readOk?"rgba(255,255,255,.92)":"rgba(255,255,255,.4)",fontWeight:800,fontSize:10}}>{readOk?"✓✓":"✓"}</span>}
                       </div>}
-                      {/* Réactions — chip qui chevauche le coin bas de la bulle */}
+                      {/* Réactions — petit rond qui chevauche le coin bas de la bulle */}
                       {m.reactions && Object.entries(m.reactions).some(([,ids])=>ids.length>0) && (
-                        <div style={{position:"absolute",bottom:-10,[isMe?"right":"left"]:10,display:"flex",gap:3,zIndex:2}}>
+                        <div style={{position:"absolute",bottom:-8,[isMe?"right":"left"]:6,display:"flex",gap:3,zIndex:2}}>
                           {Object.entries(m.reactions).filter(([,ids])=>ids.length>0).map(([emoji,ids])=>(
                             <button key={emoji}
                               onClick={ev=>{ev.stopPropagation();setReactionPopover(reactionPopover&&reactionPopover.msgId===m.id&&reactionPopover.emoji===emoji?null:{msgId:m.id,emoji});}}
-                              style={{display:"flex",alignItems:"center",gap:3,padding:"2px 6px",background:"#fff",border:`1.5px solid ${C.bor}`,borderRadius:12,fontSize:12,cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,.2)"}}>
-                              <span>{emoji}</span><span style={{fontSize:10,color:C.mut,fontWeight:700}}>{ids.length}</span>
+                              style={{position:"relative",width:22,height:22,padding:0,borderRadius:"50%",background:"#fff",border:`1.5px solid ${C.bor}`,fontSize:12,cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,.2)",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>
+                              <span>{emoji}</span>
+                              <span style={{position:"absolute",bottom:-4,right:-4,minWidth:12,height:12,padding:"0 2px",borderRadius:"50%",background:C.vio,color:"#fff",fontSize:8,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1,boxShadow:"0 1px 2px rgba(0,0,0,.25)"}}>{ids.length}</span>
                             </button>
                           ))}
                         </div>
