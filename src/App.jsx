@@ -8808,7 +8808,7 @@ function StepDates() {
                   </div>
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                  <button onClick={e=>{e.stopPropagation();toggleDate(i);}} style={{width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",color:C.txt,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12,lineHeight:1,transition:"transform .2s",transform:isCollapsed?"rotate(0deg)":"rotate(180deg)",flexShrink:0}}>▾</button>
+                  <span style={{color:C.vio,fontSize:10}}>{isCollapsed?"▼":"▲"}</span>
                   <button onClick={e=>{e.stopPropagation();if(!prem)return;setCfg(prev=>{const arr=[...(prev.specialDates?.custom||[])];arr.splice(i,1);return {...prev,specialDates:{...prev.specialDates,custom:arr}};});}} style={{width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",padding:0,background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:8,flexShrink:0}}>✕</button>
                 </div>
               </div>
