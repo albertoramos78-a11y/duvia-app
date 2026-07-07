@@ -10559,7 +10559,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
           cursor:readOnly?"default":"pointer",position:"relative",
           border:activeBorder,
           transition:"transform .12s, box-shadow .12s",
-          animation:d.isToday?"todayPulse 1.1s ease-in-out infinite":undefined,
+          animation:d.isToday?"todayPulse 2.2s ease-in-out infinite":undefined,
           minWidth:0,boxSizing:"border-box",overflow:"hidden",
         }}>
         <span style={{display:"flex",alignItems:"center",gap:3}}>
