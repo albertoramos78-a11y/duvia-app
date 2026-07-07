@@ -14490,6 +14490,24 @@ function MessagingTab(){
                       </div>}
                     </div>
 
+                    {/* Réactions — badges par smiley + popover "qui a réagi" */}
+                    {m.reactions && Object.entries(m.reactions).some(([,ids])=>ids.length>0) && (
+                      <div style={{display:"flex",gap:4,marginTop:4,flexWrap:"wrap",justifyContent:isMe?"flex-end":"flex-start"}}>
+                        {Object.entries(m.reactions).filter(([,ids])=>ids.length>0).map(([emoji,ids])=>(
+                          <button key={emoji}
+                            onClick={()=>setReactionPopover(reactionPopover&&reactionPopover.msgId===m.id&&reactionPopover.emoji===emoji?null:{msgId:m.id,emoji})}
+                            style={{display:"flex",alignItems:"center",gap:3,padding:"2px 7px",background:C.sur,border:`1px solid ${C.bor}`,borderRadius:12,fontSize:12,cursor:"pointer"}}>
+                            <span>{emoji}</span><span style={{fontSize:10,color:C.mut,fontWeight:700}}>{ids.length}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {reactionPopover&&reactionPopover.msgId===m.id&&(
+                      <div style={{marginTop:4,padding:"6px 10px",background:C.card,border:`1px solid ${C.bor}`,borderRadius:10,fontSize:11,color:C.txt,boxShadow:"0 4px 12px rgba(0,0,0,.15)",maxWidth:220}}>
+                        {reactionPopover.emoji} {(m.reactions[reactionPopover.emoji]||[]).map(uid=>pMap[String(uid)]?.name||"?").join(", ")}
+                      </div>
+                    )}
+
                     {/* Proof hash — compact, discret */}
                     {showProof===m.id&&(
                       <div style={{marginTop:4,padding:"6px 10px",background:verified?`${C.grn}12`:`${C.red}12`,borderRadius:10,border:`1px solid ${verified?C.grn+"40":C.red+"40"}`,fontSize:10,maxWidth:"100%"}}>
