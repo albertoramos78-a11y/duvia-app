@@ -14,7 +14,7 @@ import { useExpenses } from "./hooks/useExpenses";
 import { useHistory } from "./hooks/useHistory";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, PRIVACY_URL, CGU_URL, RGPD_NOTICE_VERSION } from './config.js';
-import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction } from './utils/core.js';
+import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, BRAND, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 
 // ─── POSTHOG — Analytics (pays, logins, comportement) ───────────────────────
@@ -7687,17 +7687,33 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             </div>
           </div>
 
-          {/* Row 3 : Téléphone + Email */}
+          {/* Row 3 : Téléphone + Email — verrouillés une fois le compte réel lié
+              (userId présent), pour ne plus pouvoir casser la résolution
+              cross-device par une simple faute de frappe. */}
+          {(() => {
+            const childLocked = isMemberIdentityLocked(ch);
+            return (
           <div style={{display:"flex",gap:10,marginBottom:0}}>
             <div style={{...fieldBox,flex:1}}>
               <span style={lbl}>📞 {t.contactsPhone||"Téléphone"}</span>
-              <input type="tel" value={ch.phone||""} onChange={e=>setChild(i,"phone",e.target.value)} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} style={inp} />
+              <input type="tel" value={ch.phone||""} onChange={e=>setChild(i,"phone",e.target.value)} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} readOnly={childLocked}
+                style={{...inp,...(childLocked?{background:C.sur,color:C.mut,cursor:"default"}:{})}} />
             </div>
             <div style={{...fieldBox,flex:1}}>
-              <span style={lbl}>✉️ Email</span>
-              <input type="email" value={ch.email||""} onChange={e=>setChild(i,"email",e.target.value)} placeholder="email@exemple.com" style={inp} />
+              <span style={lbl}>
+                ✉️ Email
+                {childLocked &&
+                  <span style={{marginLeft:5,fontSize:9,background:`${C.grn}22`,color:C.grn,border:`1px solid ${C.grn}44`,padding:"1px 6px",borderRadius:6,fontWeight:800,verticalAlign:"middle"}}>
+                    {t.linkedAccount||"🔗 Lié au compte"}
+                  </span>
+                }
+              </span>
+              <input type="email" value={ch.email||""} onChange={e=>setChild(i,"email",e.target.value)} placeholder="email@exemple.com" readOnly={childLocked}
+                style={{...inp,...(childLocked?{background:C.sur,color:C.mut,cursor:"default"}:{})}} />
             </div>
           </div>
+            );
+          })()}
 
           {/* Row 4 : Santé (champs communs) */}
           <div style={{marginTop:14,paddingTop:12,borderTop:`1px solid ${C.bor}`}}>
@@ -9406,6 +9422,10 @@ function StepAccess() {
         );
         // Invite link sent for this specific card
         const cardSentUrl = (sent && o.inviteToken && typeof sent==="string" && sent.includes(o.inviteToken)) ? sent : null;
+        // 🔒 Une fois le compte réel lié (userId présent), email/téléphone ne
+        // doivent plus être modifiables à la main (cf. incident réel : un
+        // caractère supprimé a cassé la résolution cross-device d'un observateur).
+        const obsLocked = isMemberIdentityLocked(o);
         return (
         <div key={o.id} className="card" style={{marginBottom:12,borderColor:matchingPending?`${C.grn}88`:o.status==="pending_invite"?`${C.yel}55`:`${C.ora}55`}}>
           {/* Header */}
@@ -9434,12 +9454,21 @@ function StepAccess() {
           {/* Contact */}
           <div style={{display:"flex",gap:10,marginBottom:10}}>
             <div style={{flex:1}}>
-              <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>✉️ Email</div>
-              <input value={o.email||""} onChange={e=>setObsField("email",e.target.value)} placeholder="email@exemple.com" style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt}} />
+              <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>
+                ✉️ Email
+                {obsLocked &&
+                  <span style={{marginLeft:5,fontSize:9,background:`${C.grn}22`,color:C.grn,border:`1px solid ${C.grn}44`,padding:"1px 6px",borderRadius:6,fontWeight:800,verticalAlign:"middle"}}>
+                    {t.linkedAccount||"🔗 Lié au compte"}
+                  </span>
+                }
+              </div>
+              <input value={o.email||""} onChange={e=>setObsField("email",e.target.value)} placeholder="email@exemple.com" readOnly={obsLocked}
+                style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:obsLocked?C.bg:C.sur,color:obsLocked?C.mut:C.txt,cursor:obsLocked?"default":undefined}} />
             </div>
             <div style={{flex:1}}>
               <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>📞 {t.contactsPhone||"Téléphone"}</div>
-              <input value={o.phone||""} onChange={e=>setObsField("phone",e.target.value)} placeholder="06 12 34 56 78" style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:C.sur,color:C.txt}} />
+              <input value={o.phone||""} onChange={e=>setObsField("phone",e.target.value)} placeholder="06 12 34 56 78" readOnly={obsLocked}
+                style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:obsLocked?C.bg:C.sur,color:obsLocked?C.mut:C.txt,cursor:obsLocked?"default":undefined}} />
             </div>
           </div>
           {/* Lien de parenté + Adresse */}

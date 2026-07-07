@@ -440,3 +440,18 @@ test("toggleMessageReaction : reactions null/undefined traité comme vide", () =
   assert.deepEqual(toggleMessageReaction(null, "uid-a", "😂"), { "😂": ["uid-a"] });
   assert.deepEqual(toggleMessageReaction(undefined, "uid-a", "😂"), { "😂": ["uid-a"] });
 });
+
+import { isMemberIdentityLocked } from "./core.js";
+
+test("isMemberIdentityLocked : verrouillé si userId présent (compte réel lié)", () => {
+  assert.equal(isMemberIdentityLocked({ userId: "abc-123", email: "x@y.z" }), true);
+});
+
+test("isMemberIdentityLocked : pas verrouillé sans userId (jamais rejoint)", () => {
+  assert.equal(isMemberIdentityLocked({ email: "x@y.z" }), false);
+});
+
+test("isMemberIdentityLocked : entrée null/undefined traitée comme non verrouillée", () => {
+  assert.equal(isMemberIdentityLocked(null), false);
+  assert.equal(isMemberIdentityLocked(undefined), false);
+});

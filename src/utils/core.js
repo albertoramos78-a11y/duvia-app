@@ -234,6 +234,16 @@ export function isParentEmailLocked(slot, slotIndex, userParentIdx) {
   return false;
 }
 
+// Même logique pour un enfant ou un observateur : une fois qu'un vrai compte
+// Supabase a réclamé la fiche (userId présent), l'email/téléphone qui servent
+// à la résolution cross-device (messagerie, id_links) ne doivent plus être
+// modifiables à la main — une simple faute de frappe casse silencieusement
+// la résolution du compte réel (incident réel : un caractère supprimé dans
+// l'email synthétique d'un observateur inscrit par téléphone).
+export function isMemberIdentityLocked(entry) {
+  return !!(entry && entry.userId);
+}
+
 // ── Consentement RGPD (écran de première utilisation) ────────────────────────
 // L'acceptation de la politique de confidentialité est enregistrée UNE fois,
 // avec sa version + horodatage (preuve en cas de contrôle CNIL). On la
