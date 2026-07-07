@@ -13,7 +13,7 @@ import { useIdLinks } from "./hooks/useIdLinks";
 import { useExpenses } from "./hooks/useExpenses";
 import { useHistory } from "./hooks/useHistory";
 import { TR } from './i18n/index.js';
-import { APP_URL, LIMITS, PRIVACY_URL, CGU_URL, RGPD_NOTICE_VERSION } from './config.js';
+import { APP_URL, LIMITS, PRIVACY_URL, RGPD_NOTICE_VERSION } from './config.js';
 import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, BRAND, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 
@@ -3143,6 +3143,8 @@ export default function App() {
     try { window.localStorage.setItem(RGPD_STORAGE_KEY, JSON.stringify(makeRgpdConsentRecord(RGPD_NOTICE_VERSION))); } catch {}
     setRgpdOk(true);
   }
+  // Affichage in-app des CGU/CGV (évite de dépendre d'une URL externe pas encore prête)
+  const [legalDocOpen, setLegalDocOpen] = useState(null); // null | "cgu" | "cgv"
   // Message après éjection (retiré de la famille par le créateur / dissolution).
   const [ejectedNotice,setEjectedNotice] = useState(()=>{ try{return window.localStorage.getItem("duvia_ejected")==="1";}catch{return false;} });
   const [accountJustDeleted,setAccountJustDeleted] = useState(()=>{ try{return window.localStorage.getItem("duvia_account_deleted")==="1";}catch{return false;} });
@@ -4020,7 +4022,7 @@ export default function App() {
         </div>
       )}
       {!rgpdOk ? (
-        <RgpdConsentScreen C={C} t={t} lang={lang} setLang={setLang} onAccept={acceptRgpd} />
+        <RgpdConsentScreen C={C} t={t} lang={lang} setLang={setLang} onAccept={acceptRgpd} onOpenCgu={()=>setLegalDocOpen("cgu")} />
       ) : pendingUser ? (
         <ConsentScreen C={C} t={t} user={pendingUser}
           onAccept={()=>{ handleSetUser(pendingUser); setPendingUser(null); }}
@@ -4028,6 +4030,7 @@ export default function App() {
       ) : (
         <LoginScreen C={BRAND} t={t} lang={lang} setLang={setLang} themeMode={themeMode} cycleTheme={cycleTheme} users={users} setUsers={setUsers} onLogin={handleLogin} onObsJoin={handleObsJoin} familySync={familySync} cfg={cfg} setCfg={setCfg} />
       )}
+      {legalDocOpen && <LegalDocModal C={C} doc={legalDocOpen} onClose={()=>setLegalDocOpen(null)} />}
     </div>
   );
 
@@ -4452,6 +4455,10 @@ export default function App() {
                 {t.licenseLine1||"DUVIA — Licence Propriétaire"}<br/>
                 {t.licenseLine2||"© 2026 Alberto Ramos — Tous droits réservés"}<br/>
                 <button onClick={()=>setShowLicenseModal(true)} style={{background:"none",border:"none",color:C.vio,textDecoration:"underline",fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit"}}>{t.viewLicense}</button>
+                {" · "}
+                <button onClick={()=>{setLegalDocOpen("cgu");setShowMenu(false);}} style={{background:"none",border:"none",color:C.vio,textDecoration:"underline",fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit"}}>CGU</button>
+                {" · "}
+                <button onClick={()=>{setLegalDocOpen("cgv");setShowMenu(false);}} style={{background:"none",border:"none",color:C.vio,textDecoration:"underline",fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit"}}>CGV</button>
               </div>
             </div>
             </>
@@ -4462,6 +4469,9 @@ export default function App() {
 
       {/* Modale "Installer l'application" */}
       {showInstallModal && <InstallAppModal C={C} t={t} onClose={()=>setShowInstallModal(false)} />}
+
+      {/* Modale CGU/CGV */}
+      {legalDocOpen && <LegalDocModal C={C} doc={legalDocOpen} onClose={()=>setLegalDocOpen(null)} />}
 
       {/* Modale "Signaler un problème" (diagnostic) */}
       <BugReportModal C={C} t={t} open={showBugModal} onClose={()=>setShowBugModal(false)}
@@ -4889,15 +4899,127 @@ Date d'entrée en vigueur : 14 juin 2026
   );
 }
 
+// ─── CGU / CGV — affichées directement dans l'app (brouillons, voir docs/legal/) ──
+// ⚠️ Brouillons de travail non validés par un juriste — cf. bandeau d'avertissement
+// affiché en haut de la modale. Contenu identique à docs/legal/cgu.md et cgv.md.
+function LegalDocModal({ C, doc, onClose }) {
+  const isCgu = doc === "cgu";
+  return (
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:18,maxWidth:600,width:"100%",padding:"22px 24px",boxShadow:"0 12px 40px rgba(0,0,0,.3)",maxHeight:"88vh",overflowY:"auto",color:C.txt,fontSize:13,lineHeight:1.6}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,gap:10}}>
+          <div style={{fontSize:17,fontWeight:900}}>{isCgu ? "Conditions Générales d'Utilisation" : "Conditions Générales de Vente"}</div>
+          <button onClick={onClose} style={{width:30,height:30,flexShrink:0,background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:16,cursor:"pointer"}}>✕</button>
+        </div>
+
+        <div style={{background:`${C.ora}12`,border:`1.5px solid ${C.ora}55`,borderRadius:10,padding:"10px 12px",fontSize:11.5,color:C.txt,marginBottom:18,lineHeight:1.5}}>
+          ⚠️ <strong>Brouillon de travail — version bêta.</strong> Ce document
+          est un projet en cours de finalisation, non encore validé par un
+          professionnel du droit. Certaines informations (raison sociale,
+          SIRET, adresse, tarifs) restent à compléter. Duvia est actuellement
+          proposée en <strong>version bêta gratuite</strong>.
+        </div>
+
+        {isCgu ? (
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <p>
+              Duvia (« l'Application », « le Service ») est une application de
+              coordination pour familles séparées ou en garde alternée. Éditeur :
+              société en cours d'immatriculation (SIRET à venir). Contact :{" "}
+              <strong>duvia.services@gmail.com</strong>.
+            </p>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Article 1 — Objet</div>
+              <p>Duvia permet à des parents séparés ou divorcés de partager, depuis leurs appareils respectifs, un calendrier de garde, des dépenses liées aux enfants, une messagerie interne, un coffre-fort documentaire et un carnet de contacts. L'utilisation du Service implique l'acceptation pleine et entière des présentes CGU.</p>
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Article 2 — Catégories d'utilisateurs</div>
+              <p><strong>Parent</strong> : titulaire (ou co-titulaire) de l'autorité parentale, peut administrer la configuration familiale. <strong>Enfant</strong> : accès limité (calendrier, messagerie avec ses parents) ; en dessous du seuil légal de consentement numérique de son pays, la création du compte requiert l'autorisation d'un titulaire de l'autorité parentale. <strong>Observateur</strong> : tiers de confiance invité par un Parent, accès en lecture et, le cas échéant, garde ponctuelle autorisée.</p>
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Article 3 — Compte utilisateur</div>
+              <p>L'utilisateur est seul responsable de la confidentialité de ses identifiants. Il peut à tout moment supprimer définitivement son compte depuis l'application, ce qui entraîne l'effacement de son compte, son retrait de toutes ses familles, et la suppression des fichiers qui lui sont personnellement associés.</p>
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Article 4 — Comportement et contenus</div>
+              <p>Chaque famille constitue un espace privé partagé. L'utilisateur s'engage à ne pas publier de contenu injurieux, diffamatoire, discriminatoire ou violent, à ne pas usurper l'identité d'un tiers, et à utiliser le Service conformément à sa finalité. Un filtre de modération automatique limite les contenus inappropriés, sans garantie d'exhaustivité.</p>
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Article 5 — Premium et parrainage</div>
+              <p>Certaines fonctionnalités relèveront à terme d'une offre payante (« Premium »). <strong>Aucun paiement n'est actuellement collecté.</strong> Un programme de parrainage existe ; ses modalités sont susceptibles d'évoluer.</p>
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Article 6 — Propriété intellectuelle</div>
+              <p>L'Application, son code et ses éléments graphiques sont la propriété exclusive de l'Éditeur. Les données saisies par l'utilisateur restent sa propriété ou celle des personnes concernées.</p>
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Article 7 — Responsabilité</div>
+              <p>L'Application est un outil d'organisation ; elle ne constitue ni un conseil juridique, ni une preuve légale opposable en cas de litige familial, ni un service d'urgence. Le calendrier de garde n'a pas de valeur juridique substitutive à une décision judiciaire ou une convention parentale homologuée.</p>
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Article 8 — Données personnelles et mineurs</div>
+              <p>La création d'un compte enfant en dessous du seuil d'âge de consentement numérique applicable (variable selon les pays, 13 à 16 ans) requiert l'autorisation expresse d'un titulaire de l'autorité parentale. Tout utilisateur dispose d'un droit d'accès, de rectification, d'effacement et de portabilité de ses données, exerçable depuis l'application ou par email à <strong>duvia.services@gmail.com</strong>.</p>
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Article 9 — Modification des CGU</div>
+              <p>L'Éditeur peut modifier les présentes CGU à tout moment ; les utilisateurs seront informés de toute modification substantielle.</p>
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Article 10 — Droit applicable</div>
+              <p>Les présentes CGU sont soumises au droit français, sous réserve des règles protectrices du consommateur applicables aux utilisateurs résidant dans l'Union Européenne.</p>
+            </div>
+          </div>
+        ) : (
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{background:`${C.vio}10`,border:`1px solid ${C.bor}`,borderRadius:10,padding:"10px 12px",fontSize:12}}>
+              <strong>Statut actuel : aucune vente n'est effectuée.</strong> Duvia est distribuée en version bêta gratuite, incluant l'ensemble des fonctionnalités Premium, sans contrepartie financière, jusqu'à la date annoncée dans l'application. Les présentes CGV décrivent par anticipation le modèle prévu à l'issue de la bêta et seront mises à jour avant toute activation réelle du paiement.
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Article 1 — Objet</div>
+              <p>Les présentes CGV ont vocation à régir, une fois activées, la vente d'un abonnement à l'offre « Premium » de Duvia, décrite dans les CGU.</p>
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Article 2 — Offre et tarifs</div>
+              <p>Deux cycles de facturation sont prévus (mensuel et annuel), dont les montants définitifs n'ont pas encore été arrêtés.</p>
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Article 3 — Paiement</div>
+              <p>Les paiements seront traités par un prestataire tiers (Stripe), non encore intégré à ce jour.</p>
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Article 4 — Droit de rétractation</div>
+              <p>Un délai de rétractation de 14 jours s'appliquera conformément au droit de la consommation, sauf renoncement exprès en cas d'exécution immédiate du service. Les modalités précises seront définies avant l'activation du paiement.</p>
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Article 5 — Résiliation</div>
+              <p>L'utilisateur pourra résilier son abonnement à tout moment ; la résiliation prendra effet à l'échéance de la période en cours.</p>
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Article 6 — Parrainage</div>
+              <p>Un programme de parrainage entre utilisateurs peut donner lieu à des avantages (extension d'essai, tours de roue). Ses conditions précises seront intégrées lorsque le dispositif sera stabilisé.</p>
+            </div>
+            <div>
+              <div style={{fontWeight:800,marginBottom:4}}>Article 7 — Droit applicable</div>
+              <p>Les présentes CGV, une fois activées, seront soumises au droit français, sous réserve des règles protectrices du consommateur applicables dans l'Union Européenne.</p>
+            </div>
+          </div>
+        )}
+
+        <button onClick={onClose} style={{width:"100%",height:44,marginTop:20,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13,cursor:"pointer"}}>Fermer</button>
+      </div>
+    </div>
+  );
+}
+
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 // ── Écran RGPD de PREMIÈRE UTILISATION ───────────────────────────────────────
 // Distinct de la charte d'engagement (ConsentScreen). Affiché une seule fois
 // par appareil (redemandé si RGPD_NOTICE_VERSION change). Informe sur les
 // données + renvoie à la politique de confidentialité / CGU, et enregistre
 // l'acceptation (version + date) via onAccept.
-function RgpdConsentScreen({C,t,onAccept}) {
+function RgpdConsentScreen({C,t,onAccept,onOpenCgu}) {
   const [checked,setChecked] = useState(false);
-  const link = {color:C.vio,fontWeight:800,textDecoration:"underline"};
+  const link = {color:C.vio,fontWeight:800,textDecoration:"underline",background:"none",border:"none",padding:0,fontSize:"inherit",fontFamily:"inherit",cursor:"pointer"};
   return (
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:C.bg}}>
       <div style={{width:"100%",maxWidth:460}} className="fi">
@@ -4917,7 +5039,7 @@ function RgpdConsentScreen({C,t,onAccept}) {
             {t.rgpdSeeMore||"Pour en savoir plus :"}{" "}
             <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer" style={link}>{t.rgpdPrivacy||"Politique de confidentialité"}</a>
             {" · "}
-            <a href={CGU_URL} target="_blank" rel="noopener noreferrer" style={link}>{t.rgpdCgu||"Conditions d'utilisation"}</a>
+            <button type="button" onClick={onOpenCgu} style={link}>{t.rgpdCgu||"Conditions d'utilisation"}</button>
           </div>
 
           <label style={{display:"flex",gap:10,alignItems:"flex-start",cursor:"pointer",marginBottom:18}}>
