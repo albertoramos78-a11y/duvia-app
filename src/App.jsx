@@ -2447,8 +2447,8 @@ function InfoBubble({C,tipKey,title,children,autoOpen=true}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // INFO BUBBLE — icône 👋 avec bulle style "Bienvenue sur Duvia"
 // ═══════════════════════════════════════════════════════════════════════════════
-function StepIdInfoButton({C,t}) {
-  const tipKey = "duvia_stepid_info_seen";
+function StepIdInfoButton({C,t,user}) {
+  const tipKey = `duvia_stepid_info_seen_${user?.id||"x"}`;
   const [open, setOpen] = useState(() => {
     try { return !window.localStorage.getItem(tipKey); } catch { return true; }
   });
@@ -2502,8 +2502,8 @@ function StepIdInfoButton({C,t}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // INFO BUBBLE — Dates spéciales
 // ═══════════════════════════════════════════════════════════════════════════════
-function StepDatesInfoButton({C,t}) {
-  const tipKey = "duvia_stepdates_info_seen";
+function StepDatesInfoButton({C,t,user}) {
+  const tipKey = `duvia_stepdates_info_seen_${user?.id||"x"}`;
   const [open, setOpen] = useState(() => {
     try { return !window.localStorage.getItem(tipKey); } catch { return true; }
   });
@@ -2560,8 +2560,8 @@ function StepDatesInfoButton({C,t}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // INFO BUBBLE — Modèle de garde
 // ═══════════════════════════════════════════════════════════════════════════════
-function StepGardeInfoButton({C,t}) {
-  const tipKey = "duvia_stepgarde_info_seen";
+function StepGardeInfoButton({C,t,user}) {
+  const tipKey = `duvia_stepgarde_info_seen_${user?.id||"x"}`;
   const [open, setOpen] = useState(() => {
     try { return !window.localStorage.getItem(tipKey); } catch { return true; }
   });
@@ -2614,8 +2614,8 @@ function StepGardeInfoButton({C,t}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // INFO BUBBLE — Accès
 // ═══════════════════════════════════════════════════════════════════════════════
-function StepAccessInfoButton({C,t}) {
-  const tipKey = "duvia_stepaccess_info_seen";
+function StepAccessInfoButton({C,t,user}) {
+  const tipKey = `duvia_stepaccess_info_seen_${user?.id||"x"}`;
   const [open, setOpen] = useState(() => {
     try { return !window.localStorage.getItem(tipKey); } catch { return true; }
   });
@@ -4565,10 +4565,10 @@ Date d'entrée en vigueur : 14 juin 2026
               <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px 6px"}}>
                 <button onClick={()=>{setMenuTab(null);setConfigStep(0);}} style={{width:34,height:34,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:18,borderRadius:8,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>🔙</button>
                 <div style={{fontSize:14,fontWeight:900,flex:1}}>🏠 {t.menuConfigFamily||"Configuration famille"}</div>
-                {configStep===0 && <StepIdInfoButton C={C} t={t} />}
-                {configStep===1 && <StepAccessInfoButton C={C} t={t} />}
-                {configStep===2 && <StepDatesInfoButton C={C} t={t} />}
-                {configStep===3 && <StepGardeInfoButton C={C} t={t} />}
+                {configStep===0 && <StepIdInfoButton C={C} t={t} user={user} />}
+                {configStep===1 && <StepAccessInfoButton C={C} t={t} user={user} />}
+                {configStep===2 && <StepDatesInfoButton C={C} t={t} user={user} />}
+                {configStep===3 && <StepGardeInfoButton C={C} t={t} user={user} />}
               </div>
               {/* Onglets étapes */}
               <div style={{display:"flex"}}>
