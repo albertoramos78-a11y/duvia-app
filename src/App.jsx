@@ -3113,7 +3113,7 @@ export default function App() {
   const [showInstallModal,setShowInstallModal] = useState(false);
   const [showLicenseModal,setShowLicenseModal] = useState(false);
   const [showPrizesMenu,setShowPrizesMenu] = useState(false);
-  const [menuHighlight,setMenuHighlight] = useState(true);
+  const [menuHighlightDismissed,setMenuHighlightDismissed] = useState(false);
   const [showOnboardingTip,setShowOnboardingTip] = useState(false);
   const [configStep,setConfigStep] = useState(0);
   const [showRefPrompt,setShowRefPrompt] = useState(false);
@@ -3660,6 +3660,9 @@ export default function App() {
     if(tab===4) _setSeen(s=>({...s,vault:new Date().toISOString()}));
   },[tab]);
   const unread = (cfg.notifs||[]).filter(n=>!n.read).length;
+  // Le bouton ☰ ne bat que lors de la toute première connexion (bulle d'onboarding)
+  // ou s'il y a une notification non lue — pas à chaque chargement de l'app.
+  const menuHighlight = !menuHighlightDismissed && (showOnboardingTip || unread>0);
   const pendingObsCount = (cfg.observers||[]).filter(o=>o.status==="pending").length;
 
   useEffect(()=>{ if(window.Notification&&Notification.permission==="default") Notification.requestPermission(); },[]);
@@ -4278,10 +4281,7 @@ export default function App() {
             );
           })()}
           <div style={{position:"relative",flexShrink:0}}>
-          {menuHighlight && (
-            <span style={{position:"absolute",inset:-4,borderRadius:10,border:`2.5px solid ${C.vio}`,animation:"todayPulse 2.2s ease-in-out infinite",pointerEvents:"none",zIndex:1}} />
-          )}
-          <button onClick={()=>{setShowMenu(v=>!v);setShowPrizesMenu(false);if(menuHighlight){setMenuHighlight(false);}if(showOnboardingTip){setShowOnboardingTip(false);}}} style={{height:36,padding:"0 14px",background:menuHighlight?`${C.vio}18`:showMenu?`${C.vio}18`:C.card,border:`1.5px solid ${menuHighlight||showMenu?C.vio:C.bor}`,color:menuHighlight||showMenu?C.vio:C.txt,fontSize:13,fontWeight:700,borderRadius:20,display:"flex",alignItems:"center",gap:6,position:"relative",transition:"all .2s",cursor:"pointer"}}>
+          <button onClick={()=>{setShowMenu(v=>!v);setShowPrizesMenu(false);if(menuHighlight){setMenuHighlightDismissed(true);}if(showOnboardingTip){setShowOnboardingTip(false);}}} style={{height:36,padding:"0 14px",background:menuHighlight?`${C.vio}18`:showMenu?`${C.vio}18`:C.card,border:`1.5px solid ${menuHighlight||showMenu?C.vio:C.bor}`,color:menuHighlight||showMenu?C.vio:C.txt,fontSize:13,fontWeight:700,borderRadius:20,display:"flex",alignItems:"center",gap:6,position:"relative",transition:"all .2s",cursor:"pointer",animation:menuHighlight?"pulseFade 2s ease-in-out infinite":undefined}}>
             <span>☰</span>
             {!isObs && !isChild && unread>0 && <span style={{position:"absolute",top:-4,right:-4,background:C.red,borderRadius:"50%",width:16,height:16,fontSize:9,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,color:"#fff",border:`2px solid ${C.card}`}}>{unread}</span>}
           </button>
