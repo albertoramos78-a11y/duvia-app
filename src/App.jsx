@@ -844,6 +844,16 @@ function duviaReload(){
   window.location.reload();
 }
 
+// Code famille : généré via le CSPRNG du navigateur (pas Math.random(), non
+// prévisible) sur un alphabet Crockford Base32 (32 symboles, sans 0/O/1/I/L
+// pour éviter les confusions à la lecture) — 32^6 combinaisons, sans biais
+// puisque 256 est un multiple exact de 32.
+const SHARE_CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+function makeShareCode() {
+  const bytes = crypto.getRandomValues(new Uint8Array(6));
+  return Array.from(bytes, b => SHARE_CODE_ALPHABET[b % SHARE_CODE_ALPHABET.length]).join("");
+}
+
 function makeCfg() {
   return {
     parents:[{id:1,name:"",gender:"F",birthDay:"",birthMonth:"",color:PCOLS[0]}],
@@ -858,7 +868,7 @@ function makeCfg() {
       type:"weekAlt",weekAlt:{evenIdx:0},exclusive:{mainIdx:0,weIdx:1,parity:"even"},
       pattern:[],confirmed:false},
     custodyPerChild:{},childrenZones:{},overrides:{},history:[],expenses:[],notifs:[],
-    shareCode:Math.random().toString(36).slice(2,8).toUpperCase(),
+    shareCode:makeShareCode(),
   };
 }
 
@@ -2080,7 +2090,7 @@ function useFamilySync(cfg, setCfg) {
       const blankCfg = {
         ...base,
         parents: [{ ...base.parents[0], ...(prefillParent || {}) }],
-        shareCode: Math.random().toString(36).slice(2, 8).toUpperCase(),
+        shareCode: makeShareCode(),
       };
       const { error: insFamErr } = await supabase
         .from("families").insert({ id: newId, share_code: blankCfg.shareCode, data: blankCfg });
