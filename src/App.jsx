@@ -4536,7 +4536,7 @@ Date d'entrée en vigueur : 14 juin 2026
             value={familySync.familyId || ""}
             onChange={e => familySync.switchFamily(e.target.value)}
             style={{
-              flex:1,height:34,fontSize:13,fontWeight:800,
+              flex:"0 1 auto",width:"auto",maxWidth:220,height:34,fontSize:13,fontWeight:800,
               color:C.vio,background:`${C.vio}12`,
               border:`2px solid ${C.vio}`,borderRadius:12,
               cursor:"pointer",padding:"0 10px",
