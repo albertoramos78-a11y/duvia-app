@@ -8460,13 +8460,13 @@ function StepDates() {
                   <div style={{marginBottom:14,padding:"10px 12px",background:C.card,border:`1px solid ${C.bor}`,borderRadius:10}}>
                     <div style={{fontSize:12,color:C.mut,marginBottom:10,lineHeight:1.5}}>{t.childBirthdaysInfo}</div>
                     <div style={{display:"flex",gap:10,alignItems:"flex-end"}}>
-                      <div style={{...fld,flex:1}}><span style={lbl}>{t.evenYears}</span>
+                      <div style={{...fld,flex:1,minWidth:0}}><span style={lbl}>{t.evenYears}</span>
                         <CustomSelect value={chEvenIdx} onChange={v=>updSD("evenParentIdx",+v)} options={[
                           {value:-1,label:t.allParents},
                           ...cfg.parents.map((p,pi)=>({value:pi,label:p.name||`P${pi+1}`}))
                         ]} />
                       </div>
-                      <div style={{...fld,flex:1}}><span style={lbl}>{t.oddYears}</span>
+                      <div style={{...fld,flex:1,minWidth:0}}><span style={lbl}>{t.oddYears}</span>
                         <CustomSelect value={chOddIdx} onChange={v=>updSD("oddParentIdx",+v)} options={[
                           {value:-1,label:t.allParents},
                           ...cfg.parents.map((p,pi)=>({value:pi,label:p.name||`P${pi+1}`}))
@@ -8680,14 +8680,14 @@ function StepDates() {
               <div style={{marginBottom:14,padding:"10px 12px",background:C.card,border:`1px solid ${C.bor}`,borderRadius:10}}>
                 <div style={{fontSize:12,color:C.mut,marginBottom:10,lineHeight:1.5}}>{t.childBirthdaysInfo}</div>
                 <div style={{display:"flex",gap:10,alignItems:"flex-end"}}>
-                  <div style={{...fld,flex:1}}>
+                  <div style={{...fld,flex:1,minWidth:0}}>
                     <span style={lbl}>{t.evenYears}</span>
                     <CustomSelect value={chEvenIdx} onChange={v=>setChildCB(chId,"evenParentIdx",+v)} options={[
                       {value:-1,label:t.allParents},
                       ...cfg.parents.map((p,pi)=>({value:pi,label:p.name||`P${pi+1}`}))
                     ]} />
                   </div>
-                  <div style={{...fld,flex:1}}>
+                  <div style={{...fld,flex:1,minWidth:0}}>
                     <span style={lbl}>{t.oddYears}</span>
                     <CustomSelect value={chOddIdx} onChange={v=>setChildCB(chId,"oddParentIdx",+v)} options={[
                       {value:-1,label:t.allParents},
