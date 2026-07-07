@@ -14438,7 +14438,7 @@ function MessagingTab(){
   if(view==="new") return(
     <div className="fi">
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-        <button onClick={()=>setView("list")} style={{padding:"6px 12px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:12,borderRadius:8}}>←</button>
+        <button onClick={()=>setView("list")} style={{width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:18,borderRadius:8,flexShrink:0}}>🔙</button>
         <div style={{fontSize:15,fontWeight:900}}>{t.msgNewTitle||"✏️ Nouveau message"}</div>
       </div>
       <div className="card" style={{marginBottom:12}}>
@@ -14515,7 +14515,7 @@ function MessagingTab(){
       <div className="fi" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 190px)"}}>
         {/* Header */}
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexShrink:0}}>
-          <button onClick={()=>setView("list")} style={{padding:"6px 12px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:12,borderRadius:8}}>←</button>
+          <button onClick={()=>setView("list")} style={{width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:18,borderRadius:8,flexShrink:0}}>🔙</button>
           <div style={{position:"relative",flexShrink:0}}>
             <div style={{width:38,height:38,borderRadius:isGroup?11:"50%",background:isGroup?`linear-gradient(135deg,${C.vio},${C.pin})`:`linear-gradient(135deg,${convColor(currentConv.ids)},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,border:isGroup?`2px solid ${C.vio}44`:"none",overflow:"hidden"}}>
               {isGroup?"👥":renderAvatar(pMap[otherIds[0]]?.avatar)}
