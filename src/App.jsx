@@ -7028,11 +7028,18 @@ function ConfigTab() {
       : (t.quitterFamilleConfirm||"Quitter cette famille ?\n\nVous repartirez sur une famille personnelle vierge. Une synthèse de vos données est conservée pour export.");
     if(!window.confirm(msg)) return;
 
-    // Supprimer l'avatar (toujours — fichier personnel)
+    // Supprimer l'avatar — uniquement si ce compte n'est actif dans AUCUNE autre
+    // famille : l'avatar est stocké par compte (uid), pas par famille, donc le
+    // supprimer alors qu'on reste actif ailleurs casserait la photo dans ces
+    // autres familles (fonctionnalité multi-familles).
     if(uid){
       try {
-        const { data: av } = await supabase.storage.from("avatars").list(uid, { limit:100 });
-        if(av?.length) await supabase.storage.from("avatars").remove(av.map(f=>`${uid}/${f.name}`));
+        const { data: otherActive } = await supabase.from("family_members")
+          .select("family_id").eq("user_id", uid).eq("status","active").neq("family_id", fid||"");
+        if(!otherActive?.length){
+          const { data: av } = await supabase.storage.from("avatars").list(uid, { limit:100 });
+          if(av?.length) await supabase.storage.from("avatars").remove(av.map(f=>`${uid}/${f.name}`));
+        }
       } catch(e){ console.warn("quitterFamille: avatar cleanup", e); }
     }
 
