@@ -328,7 +328,12 @@ export function reconcileOwnParentSlot(parents, me, uid) {
     // normalisé (ex : "06 12 34 56 78" ↔ "33612345678").
     (p.phone && me.phone && normalizePhoneDigits(p.phone) && normalizePhoneDigits(p.phone) === normalizePhoneDigits(me.phone))
   ));
-  if (slot < 0 && typeof me.parentIdx === "number") slot = me.parentIdx;
+  // 🔧 Pas de repli sur me.parentIdx ici : c'est une position mise en cache
+  // localement qui peut venir d'une AUTRE famille (ex: position "invité" d'une
+  // famille précédente) — l'utiliser comme créneau dans CETTE famille a déjà
+  // créé une fiche fantôme avec l'email du créateur dupliqué en position 1.
+  // Si aucune correspondance fiable (userId/email/téléphone) n'existe, il n'y a
+  // rien à réconcilier.
   if (slot < 0) return null;
   const existing = out[slot] || {};
   const placeholder = placeholderNameFromEmail(me.email);

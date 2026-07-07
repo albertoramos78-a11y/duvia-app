@@ -273,6 +273,12 @@ test("reconcileOwnParentSlot : un observateur ne modifie aucun parent", () => {
   assert.equal(reconcileOwnParentSlot(parents, { role: "observer", name: "Mamie" }, "uid-O"), null);
 });
 
+test("reconcileOwnParentSlot : sans correspondance fiable, ignore me.parentIdx (créneau d'une autre famille) — pas de fiche fantôme", () => {
+  const parents = [{ name: "Marie" }]; // une seule fiche, aucune ne correspond à "me"
+  const me = { role: "parent", name: "AR Cool", email: "moi@autrefamille.fr", parentIdx: 1 };
+  assert.equal(reconcileOwnParentSlot(parents, me, "uid-X"), null);
+});
+
 // ── Consentement RGPD première utilisation ───────────────────────────────────
 import { isRgpdConsentValid, makeRgpdConsentRecord } from "./core.js";
 
