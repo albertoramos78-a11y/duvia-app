@@ -7682,7 +7682,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
               <span style={{fontSize:11,fontWeight:800,color:C.vio,textTransform:"uppercase",letterSpacing:".06em"}}>{t.childN} {i+1}{ch.name.trim()?` — ${ch.name.trim()}`:""}</span>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:6}}>
-              <button onClick={e=>{e.stopPropagation();toggleChild(i);}} style={{width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",color:C.txt,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12,lineHeight:1,transition:"transform .2s",transform:expandedChildren.has(i)?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>▾</button>
+              <span style={{color:C.vio,fontSize:10}}>{expandedChildren.has(i)?"▲":"▼"}</span>
               {!isChild && <button onClick={e=>{e.stopPropagation();if(!window.confirm((t.removeFromFamilyConfirm||"Retirer {name} de la famille ?").replace("{name}",ch.name.trim()||`${t.childN||"l'enfant"} ${i+1}`))) return;removeChild(i);}} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:8}}>{t.remove}</button>}
             </div>
           </div>
@@ -9269,6 +9269,8 @@ function StepAccess() {
   const {C,t,cfg,setCfg,pushNotif,prem,perms,onUpgrade,user,familySync,isObs,isChild} = useApp();
   const [pendingActionId,setPendingActionId] = useState(null);
   useEffect(()=>{ familySync.refreshPendingMembers(); },[familySync.familyId]);
+  const [expandedObs,setExpandedObs] = useState(()=>new Set());
+  const toggleObs = id => setExpandedObs(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n;});
   const [email,setEmail]=useState("");
   const [phone,setPhone]=useState("");
   const [address,setAddress]=useState("");
@@ -9487,10 +9489,11 @@ function StepAccess() {
         // doivent plus être modifiables à la main (cf. incident réel : un
         // caractère supprimé a cassé la résolution cross-device d'un observateur).
         const obsLocked = isMemberIdentityLocked(o);
+        const isExpanded = expandedObs.has(o.id);
         return (
         <div key={o.id} className="card" style={{marginBottom:12,borderColor:matchingPending?`${C.grn}88`:o.status==="pending_invite"?`${C.yel}55`:`${C.ora}55`}}>
-          {/* Header */}
-          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+          {/* Header — cliquable pour plier/déplier */}
+          <div onClick={()=>toggleObs(o.id)} style={{display:"flex",alignItems:"center",gap:12,marginBottom:isExpanded?12:0,cursor:"pointer",userSelect:"none"}}>
             {o.status==="pending_invite"
               ? <div style={{width:40,height:40,borderRadius:"50%",background:`${C.mut}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,filter:"grayscale(1)"}}>📨</div>
               : <AvatarPicker current={o.avatar||(o.role==="grandparent"?"👴":"👥")} color={C.ora} pool={OBS_AVATARS} onSelect={av=>setObsField("avatar",av)} />
@@ -9504,14 +9507,19 @@ function StepAccess() {
                   : <span className="badge" style={{background:`${C.grn}22`,color:C.grn,display:"inline-block",marginTop:2}}>{rl[o.role]||o.role} · {t.obsStatusActive}</span>
               }
             </div>
-            <button onClick={async()=>{
-              if(!window.confirm((t.removeFromFamilyConfirm||"Retirer {name} de la famille ?").replace("{name}",o.name||o.email||"cet observateur"))) return;
-              // Supprimer de Supabase si l'observateur a un compte (userId)
-              if(o.userId){ await familySync.removeFamilyMember(o.userId); }
-              // Supprimer de cfg local
-              setCfg(c=>({...c,observers:c.observers.filter(x=>x.id!==o.id)}));
-            }} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.remove}</button>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+              <span style={{color:C.vio,fontSize:10}}>{isExpanded?"▲":"▼"}</span>
+              <button onClick={async e=>{
+                e.stopPropagation();
+                if(!window.confirm((t.removeFromFamilyConfirm||"Retirer {name} de la famille ?").replace("{name}",o.name||o.email||"cet observateur"))) return;
+                // Supprimer de Supabase si l'observateur a un compte (userId)
+                if(o.userId){ await familySync.removeFamilyMember(o.userId); }
+                // Supprimer de cfg local
+                setCfg(c=>({...c,observers:c.observers.filter(x=>x.id!==o.id)}));
+              }} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.remove}</button>
+            </div>
           </div>
+          {isExpanded && <>
           {/* Contact */}
           <div style={{display:"flex",gap:10,marginBottom:10}}>
             <div style={{flex:1}}>
@@ -9557,6 +9565,7 @@ function StepAccess() {
           {o.phone && !matchingPending && <div style={{display:"flex",gap:8,marginTop:10}}>
             <a href={`tel:${o.phone.replace(/\s/g,"")}`} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:8,background:`${C.grn}18`,border:`1.5px solid ${C.grn}44`,color:C.grn,textDecoration:"none",fontSize:12,fontWeight:700}}>📞 {t.contactsPhone||"Appeler"}</a>
           </div>}
+          </>}
           {/* Boutons envoi lien (déplacés depuis le bloc invite) */}
           {cardSentUrl && (
             <div style={{marginTop:12,padding:"10px 12px",borderRadius:10,background:`${C.yel}10`,border:`1.5px solid ${C.yel}44`}}>
