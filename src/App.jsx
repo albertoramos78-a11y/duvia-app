@@ -2838,9 +2838,9 @@ export default function App() {
       if(_uidSet.has(sid)) return sid;
       // local_id connu ?
       if(localToUid && localToUid.has(sid)) return localToUid.get(sid);
-      // ID synthétique cfgp_email / cfgo_email ?
-      if(sid.startsWith("cfgp_") || sid.startsWith("cfgo_")){
-        const email = sid.replace(/^cfg[po]_/,"");
+      // ID synthétique cfgp_email / cfgo_email / cfgc_email ?
+      if(sid.startsWith("cfgp_") || sid.startsWith("cfgo_") || sid.startsWith("cfgc_")){
+        const email = sid.replace(/^cfg[poc]_/,"");
         return (emailToUid && emailToUid.get(email)) || null;
       }
       // Format UUID ? (8-4-4-4-12 hex) → on suppose UID Supabase
@@ -3683,6 +3683,13 @@ export default function App() {
         ...c,
         pendingChildInvites:(c.pendingChildInvites||[]).map(inv=>
           inv.code===obsData.inviteCode ? {...inv, used:true} : inv
+        ),
+        // 🔧 Lie le compte réel de l'enfant à sa fiche cfg.children — sans ça,
+        // la messagerie ne peut jamais le résoudre en dehors de l'appareil d'inscription.
+        children:(c.children||[]).map(ch=>
+          ch.name && obsData.name && ch.name.toLowerCase()===obsData.name.toLowerCase()
+            ? {...ch, userId:obsData.id, email:obsData.email||ch.email}
+            : ch
         ),
       }));
       pushNotif(`🧒 ${obsData.name} (${obsData.childAge} ans) a rejoint la famille — messagerie activée`, "info");
@@ -5333,6 +5340,14 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
         setErr(msg.includes("expired")?t.childInvErrExpired:msg.includes("used")?t.childInvErrUsed:t.childInvErrInvalid);
       } else {
         try{ window.localStorage.setItem("duvia_family_id", childFamId); }catch{}
+        // 🔧 Même correctif que pour les observateurs : sans cet appel, family_members.display_name/email
+        // restent NULL côté serveur pour l’enfant.
+        try{
+          await supabase.rpc("set_member_identity", {
+            p_family_id: childFamId,
+            p_display_name: cleanName || null,
+          });
+        }catch(e){ console.warn("[Duvia] set_member_identity (child):", e); }
         const childUser = {...newUser, role:"child", status:"active", inviteCode:obsInviteCode.code, childAge:childAgeNum, childMessagingAllowed:true};
         onObsJoin(childUser);
         setErr(""); onLogin(childUser); // connexion directe, pas de retour à l’écran login
@@ -5449,6 +5464,12 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
         const msg=cErr.message||""; setErr(msg.includes("expired")?t.childInvErrExpired:msg.includes("used")?t.childInvErrUsed:t.childInvErrInvalid);
       } else {
         try{ window.localStorage.setItem("duvia_family_id", cFid); }catch{}
+        try{
+          await supabase.rpc("set_member_identity", {
+            p_family_id: cFid,
+            p_display_name: (u.name||updatedUser.name) || null,
+          });
+        }catch(e){ console.warn("[Duvia] set_member_identity (child login):", e); }
         onObsJoin({...updatedUser, role:"child", status:"active", inviteCode:obsInviteCode.code, childAge:childAgeNum, childMessagingAllowed:true});
         setShowExistingAccount(false); setErr(""); onLogin({...updatedUser,role:"child"});
       }
@@ -5911,6 +5932,9 @@ function NotifTab({prem: premProp}) {
 
 // ─── AVATARS ──────────────────────────────────────────────────────────────────
 const PARENT_AVATARS = ["👩","👨","👩‍🦱","👨‍🦱","👩‍🦰","👨‍🦰","👩‍🦳","👨‍🦳","👩‍🦲","👨‍🦲","🧔","👱‍♀️","👱","🧑","👮‍♀️","👮","👩‍⚕️","👨‍⚕️","👩‍🏫","👨‍🏫","🧕","🧑‍🦱","🧑‍🦰","🧑‍🦳"];
+// Réactions emoji sur les messages — jeu fixe volontairement limité (pas de
+// sélecteur libre), voir docs/superpowers/specs/2026-07-07-message-reactions-design.md
+const MSG_REACTION_EMOJIS = ["👍","❤️","😂","😮","😢","🙏"];
 const CHILD_AVATARS  = ["🧒","👧","👦","🧒‍♀️","🧒‍♂️","👧‍🦱","👦‍🦱","👧‍🦰","👦‍🦰","👧‍🦳","👦‍🦳","🧑‍🎨","🧑‍🎤","🧑‍🚀","🧑‍💻","👼","🧸","🦄","🐣","⭐"];
 const OBS_AVATARS    = ["👴","👵","🧓","👩‍👦","👨‍👦","👩‍👧","👨‍👧","🧑‍🤝‍🧑","👫","👬","👭","🤶","🎅","🧙‍♀️","🧙","🧝‍♀️","🦸‍♀️","🦸","🤴","👸"];
 
@@ -13916,12 +13940,16 @@ function formatFileSize(bytes){
 
 // ─── MESSAGING TAB ────────────────────────────────────────────────────────────
 function MessagingTab(){
-  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,myUid,uidToLocal,localToUid,emailToUid,familySync}=useApp();
+  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,reactToCloudMessage,myUid,uidToLocal,localToUid,emailToUid,familySync}=useApp();
   const [view,setView]=useState("list");
   const [convId,setConvId]=useState(null);
   const [draft,setDraft]=useState("");
   const [picked,setPicked]=useState([]);
   const [showProof,setShowProof]=useState(null);
+  const [longPressMsgId,setLongPressMsgId]=useState(null); // id du message dont le picker de réactions est ouvert
+  const [reactionPopover,setReactionPopover]=useState(null); // {msgId,emoji} — popover "qui a réagi" ouvert
+  const longPressTimer=useRef(null);
+  const longPressFired=useRef(false);
   const [shakeDraft,setShakeDraft]=useState(false);
   // Épinglage de messages — par compte (localStorage)
   const [pinnedMsgIds,setPinnedMsgIds]=useLocalStorage(`duvia_pinned_msgs_${user?.id||"x"}`,[]); 
@@ -14006,8 +14034,18 @@ function MessagingTab(){
         return u ? {...u, name: p.name || u.name} : {id:`cfgp_${p.email}`,name:p.name,email:p.email,phone:p.phone,role:"parent"};
       }),
     ...(cfg.children||[])
-      .filter(c=>c.name && _uByName[c.name])  // enfants seulement si compte local existant
-      .map(c=>_uByName[c.name]),
+      .filter(c=>c.name)
+      .map(c=>{
+        // Compte local sur cet appareil : par email (fiable) ou par nom (historique)
+        let u = (c.email && _uByEmail[c.email]) || _uByName[c.name];
+        // 🔧 Fallback serveur : email → uid (cross-device), même mécanisme que les parents —
+        // sans ça, un enfant inscrit sur un autre appareil ne peut jamais recevoir de message.
+        if (!u && emailToUid && c.email) {
+          const resolvedUid = emailToUid.get(String(c.email).toLowerCase()) || emailToUid.get(c.email);
+          if (resolvedUid) u = { id: resolvedUid, name: c.name, email: c.email, role: "child" };
+        }
+        return u ? {...u, name: c.name || u.name} : {id:`cfgc_${c.email||c.name}`,name:c.name,email:c.email,role:"child"};
+      }),
     ...(cfg.observers||[])
       .filter(o=>o.status==="active"&&o.name)
       .map(o=>{ const u=_uByEmail[o.email]; return u?{...u,name:o.name}:{id:`cfgo_${o.email||o.name}`,name:o.name,email:o.email,role:"observer"}; }),
@@ -14051,11 +14089,12 @@ function MessagingTab(){
       if(!pMap[uid]){
         const cfgP=(cfg.parents||[]).find(p=>p.email===email);
         const cfgO=(cfg.observers||[]).find(o=>o.email===email);
-        const member=cfgP||cfgO;
+        const cfgC=(cfg.children||[]).find(ch=>ch.email===email);
+        const member=cfgP||cfgO||cfgC;
         if(member){
           const col=cfgP?.color||C.vio;
-          pMap[uid]={name:member.name,role:cfgP?"parent":"observer",color:col,
-            avatar:member.avatar||(cfgO?"👁️":"👤")};
+          pMap[uid]={name:member.name,role:cfgP?"parent":cfgO?"observer":"child",color:col,
+            avatar:member.avatar||(cfgO?"👁️":cfgC?"🧒":"👤")};
         }
       }
     });
