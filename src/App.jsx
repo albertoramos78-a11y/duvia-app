@@ -8244,7 +8244,7 @@ function StepDates() {
   const {C,t,cfg,setCfg,prem,perms,onUpgrade,apiData,apiLoading} = useApp();
   const sd=cfg.specialDates;
   const [openHol,setOpenHol]=useState(null);
-  const [collapsedDates,setCollapsedDates]=useState(()=>new Set());
+  const [collapsedDates,setCollapsedDates]=useState(()=>new Set((cfg.specialDates?.custom||[]).map((_,i)=>i)));
   const toggleDate = i => setCollapsedDates(s=>{const n=new Set(s);n.has(i)?n.delete(i):n.add(i);return n;});
 
   // ── Mode multi-enfant ──────────────────────────────────────────────────────
