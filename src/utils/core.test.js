@@ -186,6 +186,19 @@ test("containsBadWord : 'con' bloqué uniquement en mot entier", () => {
   assert.equal(containsBadWord("quel con"), true);
   assert.equal(containsBadWord("concombre"), false);
 });
+test("isCleanText : mots du quotidien ne collisionnent plus avec la liste (regression 2026-07-08)", () => {
+  assert.equal(isCleanText("il faut acheter une salopette pour le ski"), true);
+  assert.equal(isCleanText("on a pris un pain bâtard à la boulangerie"), true);
+  assert.equal(isCleanText("attention à la bordure du trottoir"), true);
+  assert.equal(isCleanText("je suis crevé, dure journée"), true);
+  assert.equal(isCleanText("j'adore les crevettes"), true);
+  assert.equal(isCleanText("arrête de t'engueuler avec ta sœur"), true);
+});
+test("containsBadWord : les mots déplacés en mot-entier restent détectés isolément", () => {
+  assert.equal(containsBadWord("sale salope"), true);
+  assert.equal(containsBadWord("quelle ordure"), true);
+  assert.equal(containsBadWord("ta gueule"), true);
+});
 
 // ── B3 — dédup messagerie ─────────────────────────────────────────────────────
 test("upsertMessageById : n'ajoute pas deux fois le même id (doublon optimiste + realtime)", () => {

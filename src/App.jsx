@@ -75,16 +75,15 @@ const LONG_BAD = [
   // Français — insultes longues
   "connard","connarde","connards","connardes",
   "merde","merdique","merdeuse",
-  "putain","putains","salopard","salopards","saloperie","salope","salopes",
+  "putain","putains","salopard","salopards","saloperie",
   "enculer","encule","enculé","enculée","enculés","enculées",
   "filsdeput","filsdepute","fillesdepute",
-  "batard","bâtard","bastard","batards","bâtards","bastards",
-  "ordure","ordures","raclure","raclures","pourriture","pourritures",
+  "raclure","raclures","pourriture","pourritures",
   "abruti","abrutie","abrutis","cretin","cretins","cretine","imbecile","imbeciles","debile","debiles",
-  "gueule","gueules","fermetagueule","tafermerlague",
-  "pedale","pedales","tapette","tapettes","faggot","faggots",
+  "fermetagueule","tafermerlague",
+  "tapette","tapettes","faggot","faggots",
   "nazi","nazis","fasciste","fascistes","terroriste","terroristes",
-  "suicider","tuetoi","suicide","vadiecrever","vacrever","creve",
+  "suicider","tuetoi","suicide","vadiecrever","vacrever",
   "vatefoutre","vatefaire","niquer",
   "jevaistuer","jevaiskiller","jetuer","jevaistemasser",
   "jedeteste","jetedeteste","jetehais","vatefair",
@@ -104,7 +103,15 @@ const SHORT_BAD = [
   "con","conne","cul","culs","pd","pds","tg","fdp","ntm","kys",
   "nique","pute","putes","bite","bites","kike","mdr","lol",
   "fick","kak","scheiss",
+  // 🔧 Déplacés depuis LONG_BAD (2026-07-08) : en sous-chaîne, ces mots
+  // déclenchaient des faux positifs sur des mots courants du quotidien
+  // ("salopette", "bordure", "s'engueuler"...).
+  "salope","salopes","ordure","ordures","gueule","gueules",
 ];
+// "batard"/"bâtard" retirés du filtre (2026-07-08) : contrairement aux mots
+// ci-dessus, "bâtard" est LUI-MÊME le mot entier utilisé pour le pain
+// ("pain bâtard") ou un chien croisé ("chien bâtard") — aucune distinction
+// substring/mot-entier ne permet de garder la détection sans ce faux positif.
 
 // Prépare le texte pour le filtre : accents + leet speak + collapse f.u.c.k
 function _prepFilter(str) {
