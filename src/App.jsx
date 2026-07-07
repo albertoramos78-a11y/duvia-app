@@ -4537,7 +4537,7 @@ Date d'entrée en vigueur : 14 juin 2026
             onChange={e => familySync.switchFamily(e.target.value)}
             style={{
               flex:"0 1 auto",width:"auto",maxWidth:220,height:34,fontSize:13,fontWeight:800,
-              color:C.vio,background:`${C.vio}12`,
+              color:C.vio,background:C.card,
               border:`2px solid ${C.vio}`,borderRadius:12,
               cursor:"pointer",padding:"0 10px",
             }}
