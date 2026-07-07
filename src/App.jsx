@@ -1829,12 +1829,14 @@ function useFamilySync(cfg, setCfg) {
           // cfg juste après (perte du lien) — donc on le refait ici, de façon
           // fiable, à chaque chargement, depuis n'importe quelle session.
           try {
-            const { data: childRows } = await supabase
+            const { data: childRows, error: childErr } = await supabase
               .from("family_members")
               .select("user_id, display_name, role, status, email")
               .eq("family_id", familyId)
               .eq("role", "child")
               .eq("status", "active");
+            if (childErr) console.warn("[Duvia][sync] réconciliation enfants — erreur requête:", childErr);
+            console.log("[Duvia][sync] réconciliation enfants — lignes trouvées:", childRows);
             if (childRows && childRows.length > 0 && !cancelled) {
               setCfg(c => {
                 let changed = false;
@@ -1843,6 +1845,7 @@ function useFamilySync(cfg, setCfg) {
                   const match = childRows.find(r =>
                     r.display_name && ch.name && r.display_name.toLowerCase() === ch.name.toLowerCase()
                   );
+                  console.log("[Duvia][sync] réconciliation enfants — match pour", ch.name, ":", match);
                   if (!match) return ch;
                   changed = true;
                   return { ...ch, userId: match.user_id, email: match.email || ch.email };
