@@ -8,6 +8,7 @@ export interface DuviaMessage {
   recipient_ids: string[];
   content: string;
   read_by: string[];
+  reactions: Record<string, string[]>;
   created_at: string;
 }
 
@@ -51,5 +52,10 @@ export async function markMessageRead(id: string, userId: string, currentReadBy:
     .from("messages")
     .update({ read_by: [...currentReadBy, userId] })
     .eq("id", id);
+  if (error) throw error;
+}
+
+export async function setMessageReaction(id: string, reactions: Record<string, string[]>): Promise<void> {
+  const { error } = await supabase.from("messages").update({ reactions }).eq("id", id);
   if (error) throw error;
 }
