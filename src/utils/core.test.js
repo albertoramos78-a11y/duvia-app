@@ -497,6 +497,12 @@ test("resolveCustomDateGuardians : guardIds vide ou absent → tableau vide (cal
   assert.deepEqual(resolveCustomDateGuardians(null, [], []), []);
 });
 
+test("resolveCustomDateGuardians : guardIds explicitement vide prime sur parentId legacy (désélection)", () => {
+  const parents = [{ id: 1, name: "Alberto", color: "#0000ff" }];
+  const cd = { guardIds: [], parentId: "1" };
+  assert.deepEqual(resolveCustomDateGuardians(cd, parents, []), []);
+});
+
 test("resolveCustomDateGuardians : id qui ne correspond plus à personne est ignoré silencieusement", () => {
   const parents = [{ id: 1, name: "Alberto", color: "#0000ff" }];
   const cd = { guardIds: ["p:1", "p:999", "obs:ghost"] };

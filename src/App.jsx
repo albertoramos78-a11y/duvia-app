@@ -8844,10 +8844,10 @@ function StepDates() {
               <div className="field">
                 <label className="lbl">👤 {t.cdCustodyAt||"Garde chez"}</label>
                 {(() => {
-                  const guardIds = Array.isArray(cd.guardIds) && cd.guardIds.length>0 ? cd.guardIds : (cd.parentId?[`p:${cd.parentId}`]:[]);
+                  const guardIds = Array.isArray(cd.guardIds) ? cd.guardIds : (cd.parentId?[`p:${cd.parentId}`]:[]);
                   const guardOptions = [
                     ...parents.map((p,pIdx)=>({key:`p:${p.id}`, name:p.name||`${t.parentN||"Parent"} ${pIdx+1}`, color:p.color, avatar:p.avatar})),
-                    ...(cfg.observers||[]).filter(o=>o.canGuard).map(o=>({key:`obs:${o.id}`, name:o.name||"?", color:o.color||C.ora, avatar:o.avatar})),
+                    ...(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=>({key:`obs:${o.id}`, name:o.name||"?", color:o.color||C.ora, avatar:o.avatar})),
                   ];
                   return (
                     <>

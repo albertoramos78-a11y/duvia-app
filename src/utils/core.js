@@ -468,7 +468,7 @@ export function parseGuardId(idStr) {
 // sélection. Les ids qui ne correspondent plus à personne sont ignorés.
 export function resolveCustomDateGuardians(cd, parents, observers) {
   if (!cd) return [];
-  const ids = Array.isArray(cd.guardIds) && cd.guardIds.length > 0
+  const ids = Array.isArray(cd.guardIds)
     ? cd.guardIds
     : (cd.parentId ? [`p:${cd.parentId}`] : []);
   const result = [];
