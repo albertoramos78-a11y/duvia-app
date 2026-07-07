@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
-import { type DuviaMessage, listMessages, sendMessage, markMessageRead, setMessageReaction } from "../services/supabase/messageService";
+import { type DuviaMessage, listMessages, sendMessage, markMessageRead, setMessageReaction, deleteMessage } from "../services/supabase/messageService";
 
 /**
  * Remplace `const [msgs, setMsgs] = useLocalStorage("duvia_msgs", [])`
@@ -43,6 +43,8 @@ export function useMessages(familyId: string | null) {
             setMsgs((prev) => (prev.some((m) => m.id === incoming.id) ? prev : [...prev, incoming]));
           } else if (payload.eventType === "UPDATE") {
             setMsgs((prev) => prev.map((m) => (m.id === payload.new.id ? (payload.new as DuviaMessage) : m)));
+          } else if (payload.eventType === "DELETE") {
+            setMsgs((prev) => prev.filter((m) => m.id !== payload.old.id));
           }
         }
       )
@@ -91,5 +93,20 @@ export function useMessages(familyId: string | null) {
     [refresh]
   );
 
-  return { msgs, loading, error, send, markRead, react, refresh };
+  /** Supprime un message (autorisé côté serveur seulement si personne d'autre ne l'a encore lu). */
+  const remove = useCallback(
+    async (id: string) => {
+      const prevMsgs = msgs;
+      setMsgs((prev) => prev.filter((m) => m.id !== id)); // optimiste
+      try {
+        await deleteMessage(id);
+      } catch (e) {
+        setMsgs(prevMsgs); // annule l'optimisme si le serveur a refusé (ex: lu entre-temps)
+        throw e;
+      }
+    },
+    [msgs]
+  );
+
+  return { msgs, loading, error, send, markRead, react, remove, refresh };
 }

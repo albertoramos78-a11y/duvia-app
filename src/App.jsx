@@ -2730,7 +2730,7 @@ export default function App() {
   },[]);
 
   const [sub,setSub]     = useLocalStorage("duvia_sub", makeSub);
-  const { msgs: cloudMsgs, send: _sendCloudMsg, markRead: markCloudMessageRead, react: _reactCloudMsg } = useMessages(familySync.familyId);
+  const { msgs: cloudMsgs, send: _sendCloudMsg, markRead: markCloudMessageRead, react: _reactCloudMsg, remove: _removeCloudMsg } = useMessages(familySync.familyId);
   // Phase 3 migration custody : écriture en parallèle, ne lit/affiche rien — voir hooks/useCustody.ts
   const custodyShadow = useCustody(familySync.familyId);
 
@@ -2813,6 +2813,11 @@ export default function App() {
     if(!cm) return;
     const next = toggleMessageReaction(cm.reactions||{}, myUid, emoji);
     _reactCloudMsg(messageId, next);
+  }
+  // Suppression d'un message par son expéditeur — le serveur (RLS) refuse si
+  // quelqu'un d'autre que lui l'a déjà lu (voir migration 0026).
+  function deleteCloudMessage(messageId){
+    return _removeCloudMsg(messageId);
   }
   // emailToUid : email → supabase_uid (membres sans compte local sur cet appareil)
   const [emailToUid, setEmailToUid] = useState(new Map());
@@ -3990,7 +3995,7 @@ export default function App() {
     addHist, pushNotif, updateCal, onUpgrade, handleObsJoin,
     apiData, apiLoading,
     setMenuTab, setShowMenu,
-    msgs, sendCloudMessage, markCloudMessageRead, reactToCloudMessage, myUid,
+    msgs, sendCloudMessage, markCloudMessageRead, reactToCloudMessage, deleteCloudMessage, myUid,
     activity, setActivity, allSeen, setAllSeen, _setSeen,
     unreadVaultDocIds, setUnreadVaultDocIds, custodyShadow,
     summerActive, setSummerActive, rgActive, setRgActive, wcActive, setWcActive, videoActive, setVideoActive,
@@ -13940,7 +13945,7 @@ function formatFileSize(bytes){
 
 // ─── MESSAGING TAB ────────────────────────────────────────────────────────────
 function MessagingTab(){
-  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,reactToCloudMessage,myUid,uidToLocal,localToUid,emailToUid,familySync}=useApp();
+  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,reactToCloudMessage,deleteCloudMessage,myUid,uidToLocal,localToUid,emailToUid,familySync}=useApp();
   const [view,setView]=useState("list");
   const [convId,setConvId]=useState(null);
   const [draft,setDraft]=useState("");
@@ -14392,6 +14397,8 @@ function MessagingTab(){
             const hhmm=new Date(m.ts).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
             const col=pMap[String(m.from)]?.color||C.vio;
             const isPinned=pinnedMsgIds.includes(m.id);
+            const isMineMsg=String(m.from)===String(myUid);
+            const canDelete=isMineMsg&&!readOk;
             return(
               <div key={m.id}>
                 {showDate&&<div style={{textAlign:"center",fontSize:11,color:C.mut,margin:"12px 0 8px",fontWeight:600}}>{new Date(m.ts).toLocaleDateString()}</div>}
@@ -14442,6 +14449,13 @@ function MessagingTab(){
                                 {em}
                               </button>
                             ))}
+                            {canDelete&&(
+                              <button onClick={ev=>{ev.stopPropagation();setLongPressMsgId(null);deleteCloudMessage(m.id).catch(()=>{});}}
+                                title={t.msgDelete||"Supprimer (non lu)"}
+                                style={{width:32,height:32,borderRadius:"50%",background:"transparent",border:"none",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",borderLeft:`1px solid ${C.bor}`,marginLeft:2,paddingLeft:2}}>
+                                🗑️
+                              </button>
+                            )}
                           </div>
                         </>
                       )}
