@@ -3320,6 +3320,13 @@ export default function App() {
     setCfg(c => {
       const parents = [...(c.parents || [])];
       const idx      = user.parentIdx;
+      // 🔧 Ne jamais fabriquer un nouveau créneau : si idx dépasse les bornes du
+      // tableau actuel, mon parentIdx est périmé (hérité d'une AUTRE famille sur
+      // cet appareil, ex: j'y étais invité en position 1) — rien à synchroniser
+      // ici, l'effet d'auto-correction ci-dessous retrouvera le bon index par
+      // email. Sans ce garde-fou, ce bloc fabriquait une fiche "invité" fantôme
+      // avec mon propre email dans une famille où je suis pourtant seul créateur.
+      if (idx >= parents.length) return c;
       const existing = parents[idx] || {};
       // 🔒 Ne JAMAIS écraser le créneau d'un AUTRE parent : si ce créneau a déjà
       // un email différent du mien, mon parentIdx est périmé (cas multi-familles)
