@@ -323,10 +323,20 @@ function isAdmin(user) { return user?.role==="admin"; }
 
 // ─── BÊTA GRATUITE — Premium offert jusqu'au 30 septembre 2026 ────────────────
 const BETA_END = new Date("2026-10-01T00:00:00"); // 1er octobre = fin bêta
-// Âge du consentement numérique : 15 ans en France (RGPD art. 8, transposé par
-// la loi Informatique et Libertés). En dessous, le consentement d'un titulaire
-// de l'autorité parentale est requis.
-const RGPD_CONSENT_AGE = 15;
+// Âge du consentement numérique (RGPD art. 8) — le socle UE est 16 ans, sauf
+// dérogation nationale abaissant le seuil (minimum légal autorisé : 13 ans).
+// En dessous du seuil applicable, le consentement d'un titulaire de
+// l'autorité parentale est requis.
+// ⚠️ Valeurs issues de la documentation publique des transpositions RGPD par
+// pays — à faire valider par un juriste avant de s'y fier en production.
+const RGPD_CONSENT_AGE_BY_COUNTRY = {
+  FR:15, BE:13, CH:16, LU:16, DE:16, AT:14, NL:16,
+  ES:14, PT:13, IT:14, GB:13, PL:16, CZ:15, SK:16, HR:16, CA:13,
+};
+const RGPD_CONSENT_AGE_DEFAULT = 16; // socle RGPD par défaut si pays inconnu
+function rgpdConsentAge(country) {
+  return RGPD_CONSENT_AGE_BY_COUNTRY[country] ?? RGPD_CONSENT_AGE_DEFAULT;
+}
 function isBeta() { return Date.now() < BETA_END.getTime(); }
 const BETA_DAYS_LEFT = () => Math.max(0, Math.ceil((BETA_END - Date.now()) / 86400000));
 
@@ -5129,6 +5139,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
           childName: cn ? decodeURIComponent(cn) : "",
           childPhone: cp ? decodeURIComponent(cp) : "",
           cborn: p.get("cborn") ? decodeURIComponent(p.get("cborn")) : "",
+          childCountry: p.get("ccountry") || "",
           cconsent: p.get("cconsent")==="1",
           isNewChildInvite:true};
       }
@@ -5296,8 +5307,9 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
         setErr("⚠️ Veuillez saisir un âge valide (5 à 99 ans).");
         return;
       }
-      if (age < RGPD_CONSENT_AGE && !parentConsent) {
-        setErr("⚠️ Le consentement parental est obligatoire pour les enfants de moins de 15 ans (RGPD).");
+      const consentAge = rgpdConsentAge(obsInviteCode.childCountry || "FR");
+      if (age < consentAge && !parentConsent) {
+        setErr(`⚠️ Le consentement parental est obligatoire pour les enfants de moins de ${consentAge} ans (RGPD).`);
         return;
       }
     }
@@ -5312,7 +5324,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
         childMessagingAllowed: true,
         obsFamilyCode: obsInviteCode.family,
         obsInviteCode: obsInviteCode.code,
-        childParentConsentGiven: childAgeNum < RGPD_CONSENT_AGE ? true : undefined,
+        childParentConsentGiven: childAgeNum < rgpdConsentAge(obsInviteCode.childCountry || "FR") ? true : undefined,
       } : {}),
     };
     setUsers(u=>[...u,newUser]);
@@ -5494,7 +5506,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
         childMessagingAllowed: true,
         obsFamilyCode: obsInviteCode.family,
         obsInviteCode: obsInviteCode.code,
-        childParentConsentGiven: childAgeNum < RGPD_CONSENT_AGE ? true : undefined,
+        childParentConsentGiven: childAgeNum < rgpdConsentAge(obsInviteCode.childCountry || "FR") ? true : undefined,
       } : {}),
     };
     if (existing) setUsers(us => us.map(u2 => u2.id===u.id ? updatedUser : u2));
@@ -7931,7 +7943,7 @@ function calcChildAge(year, month, day) {
 }
 
 function ChildInviteBtn({ childIdx, childName, childPhone, childEmail, childBirthYear, childBirthMonth, childBirthDay, parentName }) {
-  const { C, t, familySync } = useApp();
+  const { C, t, cfg, familySync } = useApp();
   const [inviteUrl, setInviteUrl] = useState("");
   const [loading, setLoading]     = useState(false);
   const [copied, setCopied]       = useState(false);
@@ -7939,7 +7951,7 @@ function ChildInviteBtn({ childIdx, childName, childPhone, childEmail, childBirt
   const [showConsent, setShowConsent] = useState(false);
   const [consented, setConsented]     = useState(false);
   const childAge = calcChildAge(childBirthYear, childBirthMonth, childBirthDay);
-  const needsConsent = childAge !== null && childAge < 15;
+  const needsConsent = childAge !== null && childAge < rgpdConsentAge(cfg.country);
 
   function cleanPhoneWA(phone) {
     if (!phone) return null;
@@ -7968,6 +7980,7 @@ function ChildInviteBtn({ childIdx, childName, childPhone, childEmail, childBirt
       if (childName) qp.set("cname", encodeURIComponent(childName));
       if (childPhone) qp.set("cphone", encodeURIComponent(childPhone));
       if (childBirthYear) qp.set("cborn", encodeURIComponent(childBirthYear));
+      if (cfg.country) qp.set("ccountry", cfg.country);
       if (needsConsent && consented) qp.set("cconsent", "1");
       const url = `https://app.duvia.fr/?${qp.toString()}`;
       setInviteUrl(url);
