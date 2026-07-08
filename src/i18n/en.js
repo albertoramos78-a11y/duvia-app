@@ -186,6 +186,7 @@ const en = {
     expShareDue:"share owed",
     expPaid:"paid",
     expBalanced:"Balanced — no reimbursement needed",
+    expForecastLabel:"Forecast (if pending expenses were also confirmed)",
     expOwes:"owes",
     expTo:"to",
     expAttLabel:"📎 Attachments",

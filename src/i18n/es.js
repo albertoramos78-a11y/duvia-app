@@ -184,6 +184,7 @@ const es = {
     expShareDue:"parte debida",
     expPaid:"pagado",
     expBalanced:"Equilibrado — no se necesita reembolso",
+    expForecastLabel:"Previsión (si los gastos pendientes también se confirmaran)",
     expOwes:"debe",
     expTo:"a",
     expAttLabel:"📎 Adjuntos",

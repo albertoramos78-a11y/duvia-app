@@ -184,6 +184,7 @@ const de = {
     expShareDue:"geschuldeter Anteil",
     expPaid:"bezahlt",
     expBalanced:"Ausgeglichen — keine Erstattung nötig",
+    expForecastLabel:"Prognose (falls die ausstehenden Ausgaben ebenfalls bestätigt würden)",
     expOwes:"schuldet",
     expTo:"an",
     expAttLabel:"📎 Anhänge",

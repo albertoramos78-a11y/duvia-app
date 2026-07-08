@@ -11915,6 +11915,18 @@ function ExpTab() {
   const reimReceived=cfg.parents.map((_,i)=>confirmedReims.filter(r=>r.to===i).reduce((s,r)=>s+r.amount,0));
   const balance=cfg.parents.map((_,i)=>(totals[i]||0)-(owed[i]||0)+(reimSent[i]||0)-(reimReceived[i]||0));
 
+  // ── Prévisionnel : solde "si tout était validé", en ajoutant les dépenses
+  // encore en attente au solde confirmé ci-dessus. N'affecte que l'affichage
+  // (bandeau "qui doit quoi") — jamais engageant, pas de remboursement basé
+  // dessus tant que ces dépenses ne sont pas réellement confirmées.
+  const pendingExpenses=expenses.filter(e=>e.status==="pending");
+  const forecastTotals=cfg.parents.map((_,i)=>pendingExpenses.filter(e=>e.paidBy===i).reduce((s,e)=>s+e.amount,0));
+  const forecastOwed=cfg.parents.map((_,i)=>pendingExpenses.reduce((s,e)=>{
+    const sp=e.split??50;
+    return s+e.amount*(i===1?sp:(100-sp))/100;
+  },0));
+  const forecastBalance=cfg.parents.map((_,i)=>balance[i]+(forecastTotals[i]||0)-(forecastOwed[i]||0));
+
   // ── Reimbursement CRUD ────────────────────────────────────────────────────
   async function addReim(){
     if(!reimForm.amount||isNaN(parseFloat(reimForm.amount))||parseFloat(reimForm.amount)<=0){
@@ -12630,6 +12642,27 @@ window.addEventListener('message',function(e){
                   {balBlur && <span onClick={onUpgrade} style={{fontSize:10,color:C.ora,fontWeight:800,cursor:"pointer",marginLeft:4}}>🔒 Premium</span>}
                 </span>
             }
+            {pendingExpenses.length>0 && !balBlur && (()=>{
+              const fCreditor=forecastBalance.reduce((best,b,i)=>b>forecastBalance[best]?i:best,0);
+              const fDebtor=forecastBalance.reduce((best,b,i)=>b<forecastBalance[best]?i:best,0);
+              const fDiff=forecastBalance[fCreditor]-forecastBalance[fDebtor];
+              const fBalanced=fDiff<0.01;
+              return (
+                <div style={{width:"100%",marginTop:6,paddingTop:6,borderTop:`1px dashed ${isBalanced?C.grn:C.ora}55`,fontSize:11,color:C.mut,fontStyle:"italic"}}>
+                  🔮 {t.expForecastLabel||"Prévisionnel (si les dépenses en attente étaient aussi validées)"} :{" "}
+                  {fBalanced
+                    ? (t.expBalanced||"Comptes équilibrés — aucun remboursement nécessaire")
+                    : <>
+                        <strong style={{color:cfg.parents[fDebtor]?.color}}>{cfg.parents[fDebtor]?.name||`P${fDebtor+1}`}</strong>
+                        {" "}{t.expOwes||"doit"}{" "}
+                        <strong style={{fontFamily:"JetBrains Mono",color:C.mut}}>{(fDiff/2).toFixed(2)} {currency}</strong>
+                        {" "}{t.expTo||"à"}{" "}
+                        <strong style={{color:cfg.parents[fCreditor]?.color}}>{cfg.parents[fCreditor]?.name||`P${fCreditor+1}`}</strong>
+                      </>
+                  }
+                </div>
+              );
+            })()}
           </div>
         );
       })()}

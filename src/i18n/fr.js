@@ -210,6 +210,7 @@ const fr = {
     expShareDue:"part due",
     expPaid:"payé",
     expBalanced:"Comptes équilibrés — aucun remboursement nécessaire",
+    expForecastLabel:"Prévisionnel (si les dépenses en attente étaient aussi validées)",
     expOwes:"doit",
     expTo:"à",
     expAttLabel:"📎 Pièces jointes",
