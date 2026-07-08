@@ -14454,7 +14454,7 @@ function formatFileSize(bytes){
 
 // ─── MESSAGING TAB ────────────────────────────────────────────────────────────
 function MessagingTab(){
-  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,reactToCloudMessage,deleteCloudMessage,myUid,uidToLocal,localToUid,emailToUid,familySync}=useApp();
+  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,reactToCloudMessage,deleteCloudMessage,myUid,uidToLocal,localToUid,emailToUid,familySync,isChild,isObs}=useApp();
   const [view,setView]=useState("list");
   const [convId,setConvId]=useState(null);
   const [draft,setDraft]=useState("");
@@ -14497,8 +14497,14 @@ function MessagingTab(){
   }
 
   const myId=String(user?.id||"");
-  // Nom depuis cfg.parents (source de vérité famille) — fallback user.name
-  const myName=cfg.parents[user?.parentIdx??-1]?.name||user?.name||"?";
+  // Nom depuis cfg.parents (source de vérité famille) — fallback user.name.
+  // 🔧 Uniquement pour un parent : pour un enfant/observateur, user?.parentIdx
+  // ne le concerne pas et peut porter une valeur périmée (ex: appareil
+  // partagé ayant servi à un parent avant) — on utilise alors directement
+  // user?.name, sans jamais indexer cfg.parents.
+  const myName=(!isChild&&!isObs)
+    ? (cfg.parents[user?.parentIdx??-1]?.name||user?.name||"?")
+    : (user?.name||"?");
 
   // Helper: affiche un emoji ou une photo en rond
   function renderAvatar(av, size) {
