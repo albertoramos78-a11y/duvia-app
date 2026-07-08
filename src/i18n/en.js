@@ -481,6 +481,7 @@ const en = {
     reinviteNumberTip:"💡 Remove and re-invite with a phone number to pre-fill SMS/WhatsApp.",
     creatorLabel:"Creator",
     guestLabel:"Guest",
+    accountConnected:"Account connected",
     waitingSignup:"Awaiting sign-up",
     leaveFamily:"🚪 Leave family",
     bugReportMenu:"Report a problem",

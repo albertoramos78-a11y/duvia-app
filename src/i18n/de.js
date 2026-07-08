@@ -479,6 +479,7 @@ const de = {
     reinviteNumberTip:"💡 Entfernen und mit einer Telefonnummer erneut einladen, um SMS/WhatsApp vorzubefüllen.",
     creatorLabel:"Ersteller",
     guestLabel:"Gast",
+    accountConnected:"Konto verbunden",
     waitingSignup:"Wartet auf Registrierung",
     leaveFamily:"🚪 Familie verlassen",
     bugReportMenu:"Problem melden",

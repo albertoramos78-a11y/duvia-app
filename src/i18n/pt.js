@@ -479,6 +479,7 @@ const pt = {
     reinviteNumberTip:"💡 Remove e convida novamente com um número para preencher SMS/WhatsApp.",
     creatorLabel:"Criador",
     guestLabel:"Convidado",
+    accountConnected:"Conta ligada",
     waitingSignup:"A aguardar inscrição",
     leaveFamily:"🚪 Sair da família",
     bugReportMenu:"Reportar um problema",

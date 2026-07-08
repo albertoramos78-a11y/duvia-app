@@ -217,7 +217,7 @@ const fr = {
     expAttClick:"Cliquer ou glisser-déposer",
     expAttFormats:"JPG · PNG · WEBP · HEIC · PDF · max",
     expAttSimulate:"👑 Simuler une pièce jointe",
-    expAttSimulateNote:"(admin only)",
+    expAttSimulateNote:"(admin uniquement)",
     expAttErrMax:"pièces jointes par dépense.",
     expAttErrMaxShort:"pièces jointes.",
     expAttErrFormat:"Format non supporté",
