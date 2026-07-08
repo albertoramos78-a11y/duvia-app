@@ -340,8 +340,12 @@ function getPerms(sub) {
 }
 function isAdmin(user) { return user?.role==="admin"; }
 
-// ─── BÊTA GRATUITE — Premium offert jusqu'au 30 septembre 2026 ────────────────
-const BETA_END = new Date("2026-10-01T00:00:00"); // 1er octobre = fin bêta
+// ─── BÊTA GRATUITE — Premium offert, date de fin non arrêtée ──────────────────
+// ⚠️ Repoussée volontairement loin (pas de date de sortie de bêta connue —
+// dépend notamment de l'intégration Stripe, pas encore faite). Ne PAS
+// remettre une date proche tant que le passage au payant n'est pas prêt :
+// à cette échéance, isBeta() bascule à false pour tout le monde d'un coup.
+const BETA_END = new Date("2030-01-01T00:00:00");
 // Âge du consentement numérique (RGPD art. 8) — le socle UE est 16 ans, sauf
 // dérogation nationale abaissant le seuil (minimum légal autorisé : 13 ans).
 // En dessous du seuil applicable, le consentement d'un titulaire de
@@ -357,7 +361,6 @@ function rgpdConsentAge(country) {
   return RGPD_CONSENT_AGE_BY_COUNTRY[country] ?? RGPD_CONSENT_AGE_DEFAULT;
 }
 function isBeta() { return Date.now() < BETA_END.getTime(); }
-const BETA_DAYS_LEFT = () => Math.max(0, Math.ceil((BETA_END - Date.now()) / 86400000));
 
 // ─── DATA ─────────────────────────────────────────────────────────────────────
 // 🔧 L'admin n'est plus un compte local codé en dur (faille de sécurité :
@@ -4559,7 +4562,7 @@ Date d'entrée en vigueur : 14 juin 2026
         <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>
           <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`${C.vio}18`,border:`1.5px solid ${C.vio}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.vio,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s"}}>
             {isBeta()
-              ? <>🧪 Bêta · <span style={{opacity:.85}}>{(t.daysLeftSuffix||"{n}j restants").replace("{n}",BETA_DAYS_LEFT())}</span></>
+              ? <>🧪 {t.betaChip||"Bêta — Premium offert"}</>
               : <>⭐ {t.trialBanner} · <span style={{opacity:.85}}>{days}j restant{days>1?"s":""}</span></>
             }
           </div>
@@ -4670,7 +4673,7 @@ Date d'entrée en vigueur : 14 juin 2026
           flexShrink:0,
         }}>
           <div style={{fontSize:11,color:C.vio,fontWeight:700}}>
-            {t.betaBanner||"🎉 Bêta gratuite — Trial Premium jusqu'au 30 septembre 2026"}
+            {t.betaBanner||"🎉 Bêta gratuite — Toutes les fonctionnalités Premium offertes"}
           </div>
         </div>
       )}
@@ -5817,6 +5820,11 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
             <img src="/logo.png" alt="Duvia" style={{width:"100%",height:"100%",objectFit:"contain"}} />
           </div>
           <div style={{fontSize:13,color:C.mut,fontStyle:"italic"}}>{t.appSub}</div>
+          {isBeta() && (
+            <div style={{marginTop:8,display:"inline-flex",alignItems:"center",gap:6,background:`${C.vio}15`,border:`1px solid ${C.vio}44`,borderRadius:20,padding:"4px 12px",fontSize:11,fontWeight:800,color:C.vio}}>
+              🧪 {t.loginBetaNote||"Version bêta — Premium offert gratuitement"}
+            </div>
+          )}
         </div>
         <div className="card" style={C._brand?{background:`linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`}:undefined}>
           {isExpiredInvite && (
@@ -13926,20 +13934,12 @@ function PremiumTab() {
           <div style={{fontSize:12,color:C.txt,lineHeight:1.7,marginBottom:10}}>
             Duvia est en phase bêta non commerciale.<br/>
             Toutes les fonctionnalités <strong>Trial Premium</strong> sont gratuites<br/>
-            jusqu'au <strong>30 septembre 2026</strong>.<br/>
+            pendant toute la durée de la bêta.<br/>
             <span style={{color:C.mut,fontSize:11}}>L'export PDF est réservé aux abonnés Premium.</span>
           </div>
-          <div style={{
-            display:"inline-block",
-            background:C.vio,color:"#fff",
-            borderRadius:20,padding:"6px 18px",
-            fontSize:13,fontWeight:800,
-          }}>
-            ⏳ {BETA_DAYS_LEFT()} jours restants
-          </div>
           <div style={{fontSize:11,color:C.mut,marginTop:12,lineHeight:1.5}}>
-            À partir d'octobre 2026, un abonnement sera proposé.<br/>
-            Vous serez prévenus avant la fin de la bêta.
+            Un abonnement payant sera proposé à la fin de la bêta.<br/>
+            Vous serez prévenus à l'avance, aucune date n'est encore fixée.
           </div>
         </div>
       )}
