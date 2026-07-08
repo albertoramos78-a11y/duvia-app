@@ -6,6 +6,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendPushToUser } from "../_shared/push.ts";
 
 const RESEND_API_KEY      = Deno.env.get("RESEND_API_KEY")!;
 const WEBHOOK_SECRET      = Deno.env.get("WEBHOOK_SECRET")!;
@@ -72,6 +73,16 @@ serve(async (req) => {
     // Vérifie la préférence email_expenses
     const { data: userMeta } = await supabase.auth.admin.getUserById(member.user_id);
     const prefs = userMeta?.user?.user_metadata || {};
+
+    if (prefs.push_expenses !== false) {
+      await sendPushToUser(supabase, member.user_id, {
+        title: "Duvia",
+        body: `💰 Nouvelle dépense : ${expense.label}`,
+        tag: "expense",
+        url: "/",
+      });
+    }
+
     if (prefs.email_expenses === false) continue;
 
     const amount   = Number(expense.amount || 0).toFixed(2);
