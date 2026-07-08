@@ -12,6 +12,7 @@ import { useCustody } from "./hooks/useCustody";
 import { useIdLinks } from "./hooks/useIdLinks";
 import { useExpenses } from "./hooks/useExpenses";
 import { useHistory } from "./hooks/useHistory";
+import { usePush } from "./hooks/usePush";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION } from './config.js';
 import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel } from './utils/core.js';
@@ -2984,6 +2985,9 @@ export default function App() {
     } catch {}
     return DEMO_USERS.find(u => u.email === sessionEmail) || null;
   });
+  // ── Notifications push ──────────────────────────────────────────────────
+  const { status: pushStatus, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } =
+    usePush(user?.id || null, import.meta.env.VITE_VAPID_PUBLIC_KEY);
   // handleSetUser défini plus bas, après tous les useState
 
   // ── 🪪 Carte d'identité cloud ───────────────────────────────────────────
@@ -3728,8 +3732,6 @@ export default function App() {
   const menuHighlight = !menuHighlightDismissed && (showOnboardingTip || unread>0);
   const pendingObsCount = (cfg.observers||[]).filter(o=>o.status==="pending").length;
 
-  useEffect(()=>{ if(window.Notification&&Notification.permission==="default") Notification.requestPermission(); },[]);
-
   // IDs de notifs créées par MOI dans cet onglet — le useEffect les ignore
   const myOwnNotifIds = useRef(new Set());
 
@@ -4106,6 +4108,7 @@ export default function App() {
     msgs, sendCloudMessage, markCloudMessageRead, reactToCloudMessage, deleteCloudMessage, myUid,
     activity, setActivity, allSeen, setAllSeen, _setSeen,
     unreadVaultDocIds, setUnreadVaultDocIds, custodyShadow,
+    pushStatus, pushSubscribe, pushUnsubscribe,
     summerActive, setSummerActive, rgActive, setRgActive, wcActive, setWcActive, videoActive, setVideoActive,
     brandActive,
     handleSetUser,
