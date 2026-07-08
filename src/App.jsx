@@ -14223,9 +14223,12 @@ function applyDuviaBackupToCfg(currentCfg, backup) {
     ...currentCfg,
     parents: Array.isArray(fam.parents) ? fam.parents : (currentCfg?.parents || []),
     children: Array.isArray(fam.children) ? fam.children : (currentCfg?.children || []),
+    observers: Array.isArray(fam.observers) ? fam.observers : (currentCfg?.observers || []),
+    contacts: Array.isArray(fam.contacts) ? fam.contacts : (currentCfg?.contacts || []),
     custody: cust.main || currentCfg?.custody || {},
     custodyPerChild: cust.perChild || currentCfg?.custodyPerChild || {},
     sameGuardAll: typeof cust.sameGuardAll === "boolean" ? cust.sameGuardAll : (currentCfg?.sameGuardAll ?? true),
+    overrides: cal.overrides || currentCfg?.overrides || {},
     specialDates: cal.specialDates || currentCfg?.specialDates || {},
   };
 }
