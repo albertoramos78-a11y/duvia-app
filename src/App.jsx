@@ -4638,7 +4638,7 @@ Date d'entrée en vigueur : 14 juin 2026
             <div style={{flexShrink:0,background:C.card,borderBottom:`1.5px solid ${C.bor}`,boxShadow:"0 1px 6px rgba(0,0,0,.05)"}}>
               {/* Barre retour + titre */}
               <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px 6px"}}>
-                <button onClick={()=>{setMenuTab(null);setConfigStep(0);}} style={{width:34,height:34,background:`linear-gradient(135deg,${C.vio},${C.blu})`,border:"none",borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:`0 2px 8px ${C.vio}55`}}>
+                <button onClick={()=>{setMenuTab(null);setConfigStep(0);}} style={{width:34,height:34,background:"linear-gradient(160deg,#2f6fed,#38d9f5)",border:"none",borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:"0 2px 8px #2f6fed55"}}>
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
                 </button>
                 <div style={{fontSize:14,fontWeight:900,flex:1}}>🏠 {t.menuConfigFamily||"Configuration famille"}</div>
@@ -14732,7 +14732,7 @@ function MessagingTab(){
   if(view==="new") return(
     <div className="fi">
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-        <button onClick={()=>setView("list")} style={{width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",background:`linear-gradient(135deg,${C.vio},${C.blu})`,border:"none",borderRadius:"50%",flexShrink:0,cursor:"pointer",boxShadow:`0 2px 8px ${C.vio}55`}}>
+        <button onClick={()=>setView("list")} style={{width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(160deg,#2f6fed,#38d9f5)",border:"none",borderRadius:"50%",flexShrink:0,cursor:"pointer",boxShadow:"0 2px 8px #2f6fed55"}}>
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         </button>
         <div style={{fontSize:15,fontWeight:900}}>{t.msgNewTitle||"✏️ Nouveau message"}</div>
@@ -14813,7 +14813,7 @@ function MessagingTab(){
       <div className="fi" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 190px)"}}>
         {/* Header */}
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexShrink:0}}>
-          <button onClick={()=>setView("list")} style={{width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",background:`linear-gradient(135deg,${C.vio},${C.blu})`,border:"none",borderRadius:"50%",flexShrink:0,cursor:"pointer",boxShadow:`0 2px 8px ${C.vio}55`}}>
+          <button onClick={()=>setView("list")} style={{width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(160deg,#2f6fed,#38d9f5)",border:"none",borderRadius:"50%",flexShrink:0,cursor:"pointer",boxShadow:"0 2px 8px #2f6fed55"}}>
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           </button>
           <div style={{position:"relative",flexShrink:0}}>
