@@ -14,7 +14,7 @@ Duvia — French co-parenting app ("Two homes. One family."): shared custody cal
 - No lint script is configured in this repo.
 
 ### Environment variables (`.env`, not committed)
-`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (required — `src/supabaseClient.js` logs an error and the app can't reach the backend without them). `VITE_POSTHOG_KEY` is optional (PostHog EU analytics only initializes if set; `autocapture` is deliberately off).
+`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (required — `src/supabaseClient.js` logs an error and the app can't reach the backend without them). `VITE_POSTHOG_KEY` is optional (PostHog EU analytics only initializes if set; `autocapture` is deliberately off). `VITE_VAPID_PUBLIC_KEY` is required for push notification opt-in to work (`src/hooks/usePush.ts`) — the matching private key lives only as a Supabase Edge Function secret, never in client code.
 
 ## Architecture
 
