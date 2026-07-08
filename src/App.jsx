@@ -17,6 +17,7 @@ import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION } from './config.js';
 import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, BRAND, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
+import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
 
 // ─── POSTHOG — Analytics (pays, logins, comportement) ───────────────────────
 const PH_KEY = import.meta.env.VITE_POSTHOG_KEY;
@@ -4035,7 +4036,7 @@ export default function App() {
       ) : (
         <LoginScreen C={BRAND} t={t} lang={lang} setLang={setLang} themeMode={themeMode} cycleTheme={cycleTheme} users={users} setUsers={setUsers} onLogin={handleLogin} onObsJoin={handleObsJoin} familySync={familySync} cfg={cfg} setCfg={setCfg} />
       )}
-      {legalDocOpen && <LegalDocModal C={C} doc={legalDocOpen} onClose={()=>setLegalDocOpen(null)} />}
+      {legalDocOpen && <LegalDocModal C={C} doc={legalDocOpen} lang={lang} onClose={()=>setLegalDocOpen(null)} />}
     </div>
   );
 
@@ -4484,7 +4485,7 @@ export default function App() {
       {showInstallModal && <InstallAppModal C={C} t={t} onClose={()=>setShowInstallModal(false)} />}
 
       {/* Modale CGU/CGV */}
-      {legalDocOpen && <LegalDocModal C={C} doc={legalDocOpen} onClose={()=>setLegalDocOpen(null)} />}
+      {legalDocOpen && <LegalDocModal C={C} doc={legalDocOpen} lang={lang} onClose={()=>setLegalDocOpen(null)} />}
 
       {/* Modale "Signaler un problème" (diagnostic) */}
       <BugReportModal C={C} t={t} open={showBugModal} onClose={()=>setShowBugModal(false)}
@@ -4928,8 +4929,18 @@ Date d'entrée en vigueur : 14 juin 2026
 // ─── CGU / CGV — affichées directement dans l'app (brouillons, voir docs/legal/) ──
 // ⚠️ Brouillons de travail non validés par un juriste — cf. bandeau d'avertissement
 // affiché en haut de la modale. Contenu identique à docs/legal/cgu.md et cgv.md.
-function LegalDocModal({ C, doc, onClose }) {
-  const title = doc==="cgu" ? "Conditions Générales d'Utilisation" : doc==="cgv" ? "Conditions Générales de Vente" : "Politique de Confidentialité";
+function renderLegalInline(text) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => part.startsWith("**") && part.endsWith("**")
+    ? <strong key={i}>{part.slice(2, -2)}</strong>
+    : <Fragment key={i}>{part}</Fragment>);
+}
+
+function LegalDocModal({ C, doc, lang, onClose }) {
+  const docLang = LEGAL_DOCS[doc]?.[lang] ? lang : "fr";
+  const title = LEGAL_TITLES[doc]?.[docLang] || LEGAL_TITLES[doc]?.fr;
+  const blocks = LEGAL_DOCS[doc]?.[docLang] || [];
+  const warning = LEGAL_WARNING[docLang] || LEGAL_WARNING.fr;
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:18,maxWidth:600,width:"100%",padding:"22px 24px",boxShadow:"0 12px 40px rgba(0,0,0,.3)",maxHeight:"88vh",overflowY:"auto",color:C.txt,fontSize:13,lineHeight:1.6}}>
@@ -4939,129 +4950,20 @@ function LegalDocModal({ C, doc, onClose }) {
         </div>
 
         <div style={{background:`${C.ora}12`,border:`1.5px solid ${C.ora}55`,borderRadius:10,padding:"10px 12px",fontSize:11.5,color:C.txt,marginBottom:18,lineHeight:1.5}}>
-          ⚠️ <strong>Brouillon de travail — version bêta.</strong> Ce document
-          est un projet en cours de finalisation, non encore validé par un
-          professionnel du droit. Certaines informations (raison sociale,
-          SIRET, adresse, tarifs) restent à compléter. Duvia est actuellement
-          proposée en <strong>version bêta gratuite</strong>.
+          {renderLegalInline(warning)}
         </div>
 
-        {doc==="cgu" ? (
-          <div style={{display:"flex",flexDirection:"column",gap:14}}>
-            <p>
-              Duvia (« l'Application », « le Service ») est une application de
-              coordination pour familles séparées ou en garde alternée. Éditeur :
-              société en cours d'immatriculation (SIRET à venir). Contact :{" "}
-              <strong>duvia.services@gmail.com</strong>.
-            </p>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Article 1 — Objet</div>
-              <p>Duvia permet à des parents séparés ou divorcés de partager, depuis leurs appareils respectifs, un calendrier de garde, des dépenses liées aux enfants, une messagerie interne, un coffre-fort documentaire et un carnet de contacts. L'utilisation du Service implique l'acceptation pleine et entière des présentes CGU.</p>
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Article 2 — Catégories d'utilisateurs</div>
-              <p><strong>Parent</strong> : titulaire (ou co-titulaire) de l'autorité parentale, peut administrer la configuration familiale. <strong>Enfant</strong> : accès limité (calendrier, messagerie avec ses parents) ; en dessous du seuil légal de consentement numérique de son pays, la création du compte requiert l'autorisation d'un titulaire de l'autorité parentale. <strong>Observateur</strong> : tiers de confiance invité par un Parent, accès en lecture et, le cas échéant, garde ponctuelle autorisée.</p>
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Article 3 — Compte utilisateur</div>
-              <p>L'utilisateur est seul responsable de la confidentialité de ses identifiants. Il peut à tout moment supprimer définitivement son compte depuis l'application, ce qui entraîne l'effacement de son compte, son retrait de toutes ses familles, et la suppression des fichiers qui lui sont personnellement associés.</p>
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Article 4 — Comportement et contenus</div>
-              <p>Chaque famille constitue un espace privé partagé. L'utilisateur s'engage à ne pas publier de contenu injurieux, diffamatoire, discriminatoire ou violent, à ne pas usurper l'identité d'un tiers, et à utiliser le Service conformément à sa finalité. Un filtre de modération automatique limite les contenus inappropriés, sans garantie d'exhaustivité.</p>
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Article 5 — Premium et parrainage</div>
-              <p>Certaines fonctionnalités relèveront à terme d'une offre payante (« Premium »). <strong>Aucun paiement n'est actuellement collecté.</strong> Un programme de parrainage existe ; ses modalités sont susceptibles d'évoluer.</p>
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Article 6 — Propriété intellectuelle</div>
-              <p>L'Application, son code et ses éléments graphiques sont la propriété exclusive de l'Éditeur. Les données saisies par l'utilisateur restent sa propriété ou celle des personnes concernées.</p>
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Article 7 — Responsabilité</div>
-              <p>L'Application est un outil d'organisation ; elle ne constitue ni un conseil juridique, ni une preuve légale opposable en cas de litige familial, ni un service d'urgence. Le calendrier de garde n'a pas de valeur juridique substitutive à une décision judiciaire ou une convention parentale homologuée.</p>
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Article 8 — Données personnelles et mineurs</div>
-              <p>La création d'un compte enfant en dessous du seuil d'âge de consentement numérique applicable (variable selon les pays, 13 à 16 ans) requiert l'autorisation expresse d'un titulaire de l'autorité parentale. Tout utilisateur dispose d'un droit d'accès, de rectification, d'effacement et de portabilité de ses données, exerçable depuis l'application ou par email à <strong>duvia.services@gmail.com</strong>.</p>
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Article 9 — Modification des CGU</div>
-              <p>L'Éditeur peut modifier les présentes CGU à tout moment ; les utilisateurs seront informés de toute modification substantielle.</p>
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Article 10 — Droit applicable</div>
-              <p>Les présentes CGU sont soumises au droit français, sous réserve des règles protectrices du consommateur applicables aux utilisateurs résidant dans l'Union Européenne.</p>
-            </div>
-          </div>
-        ) : doc==="cgv" ? (
-          <div style={{display:"flex",flexDirection:"column",gap:14}}>
-            <div style={{background:`${C.vio}10`,border:`1px solid ${C.bor}`,borderRadius:10,padding:"10px 12px",fontSize:12}}>
-              <strong>Statut actuel : aucune vente n'est effectuée.</strong> Duvia est distribuée en version bêta gratuite, incluant l'ensemble des fonctionnalités Premium, sans contrepartie financière, jusqu'à la date annoncée dans l'application. Les présentes CGV décrivent par anticipation le modèle prévu à l'issue de la bêta et seront mises à jour avant toute activation réelle du paiement.
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Article 1 — Objet</div>
-              <p>Les présentes CGV ont vocation à régir, une fois activées, la vente d'un abonnement à l'offre « Premium » de Duvia, décrite dans les CGU.</p>
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Article 2 — Offre et tarifs</div>
-              <p>Deux cycles de facturation sont prévus (mensuel et annuel), dont les montants définitifs n'ont pas encore été arrêtés.</p>
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Article 3 — Paiement</div>
-              <p>Les paiements seront traités par un prestataire tiers (Stripe), non encore intégré à ce jour.</p>
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Article 4 — Droit de rétractation</div>
-              <p>Un délai de rétractation de 14 jours s'appliquera conformément au droit de la consommation, sauf renoncement exprès en cas d'exécution immédiate du service. Les modalités précises seront définies avant l'activation du paiement.</p>
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Article 5 — Résiliation</div>
-              <p>L'utilisateur pourra résilier son abonnement à tout moment ; la résiliation prendra effet à l'échéance de la période en cours.</p>
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Article 6 — Parrainage</div>
-              <p>Un programme de parrainage entre utilisateurs peut donner lieu à des avantages (extension d'essai, tours de roue). Ses conditions précises seront intégrées lorsque le dispositif sera stabilisé.</p>
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Article 7 — Droit applicable</div>
-              <p>Les présentes CGV, une fois activées, seront soumises au droit français, sous réserve des règles protectrices du consommateur applicables dans l'Union Européenne.</p>
-            </div>
-          </div>
-        ) : (
-          <div style={{display:"flex",flexDirection:"column",gap:14}}>
-            <p>
-              <strong>[Raison sociale à définir]</strong>, éditrice de Duvia,
-              est responsable du traitement de vos données. Contact :{" "}
-              <strong>duvia.services@gmail.com</strong>.
-            </p>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Quelles données sont collectées ?</div>
-              <p>Identité (nom, genre, date de naissance, email/téléphone, avatar), données des enfants (nom, date de naissance, allergies, groupe sanguin, école, médecin), planning de garde, dépenses partagées et justificatifs, messages entre membres, documents du coffre-fort, carnet de contacts, et données techniques minimales de connexion.</p>
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Qui a accès à vos données ?</div>
-              <p>Uniquement les membres actifs de votre famille Duvia — jamais les autres familles utilisatrices, jamais revendues à des tiers. Des sous-traitants techniques interviennent pour le fonctionnement du Service : Supabase (hébergement, base de données, authentification), un prestataire d'envoi d'emails transactionnels, et PostHog (mesure d'audience UE, sans capture automatique d'écran ni profilage publicitaire).</p>
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Consentement parental</div>
-              <p>La création d'un compte enfant en dessous du seuil légal de consentement numérique de son pays de résidence (13 à 16 ans selon les pays) requiert l'autorisation expresse d'un titulaire de l'autorité parentale.</p>
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Cookies et stockage local</div>
-              <p>Utilisation du stockage local du navigateur pour la session de connexion (persistante seulement si « Rester connecté » est coché). Aucun cookie publicitaire ou de suivi tiers.</p>
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Durée de conservation</div>
-              <p>Vos données sont conservées tant que votre compte et votre famille sont actifs. Vous pouvez supprimer votre compte à tout moment depuis l'application (suppression du compte, retrait de toutes vos familles, effacement de vos fichiers personnels) et exporter vos données avant suppression.</p>
-            </div>
-            <div>
-              <div style={{fontWeight:800,marginBottom:4}}>Vos droits</div>
-              <p>Droit d'accès, de rectification, d'effacement, de limitation, d'opposition et de portabilité, exerçables depuis l'application ou par email à <strong>duvia.services@gmail.com</strong>. Droit de réclamation auprès de la CNIL (cnil.fr) ou de l'autorité compétente de votre pays de résidence dans l'Union Européenne.</p>
-            </div>
-          </div>
-        )}
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          {blocks.map((b, i) => b.h ? (
+            <div key={i} style={{fontWeight:800,marginTop:i>0?2:0}}>{b.h}</div>
+          ) : b.ul ? (
+            <ul key={i} style={{margin:0,paddingLeft:20,display:"flex",flexDirection:"column",gap:6}}>
+              {b.ul.map((item, j) => <li key={j}>{renderLegalInline(item)}</li>)}
+            </ul>
+          ) : (
+            <p key={i} style={{margin:0}}>{renderLegalInline(b.p)}</p>
+          ))}
+        </div>
 
         <button onClick={onClose} style={{width:"100%",height:44,marginTop:20,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13,cursor:"pointer"}}>Fermer</button>
       </div>
