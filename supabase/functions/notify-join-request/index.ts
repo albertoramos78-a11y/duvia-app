@@ -14,7 +14,8 @@ import { sendPushToUser } from "../_shared/push.ts";
 const RESEND_API_KEY   = Deno.env.get("RESEND_API_KEY")!;
 const WEBHOOK_SECRET   = Deno.env.get("WEBHOOK_SECRET")!;
 const SUPABASE_URL     = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+                      || Deno.env.get("SUPABASE_SECRET_KEYS")!;
 const FROM_EMAIL       = "notifications@duvia.fr";
 const APP_URL          = "https://app.duvia.fr";
 
@@ -52,7 +53,7 @@ serve(async (req) => {
 
   const { data: parents } = await supabase
     .from("family_members")
-    .select("user_id, profiles(email, first_name)")
+    .select("user_id")
     .eq("family_id", joiner.family_id)
     .eq("role", "parent")
     .eq("status", "active");
@@ -66,8 +67,8 @@ serve(async (req) => {
     : `🧒 ${joinerName} a rejoint la famille`;
 
   for (const parent of parents) {
-    const { data: userMeta } = await supabase.auth.admin.getUserById(parent.user_id);
-    const prefs = userMeta?.user?.user_metadata || {};
+    const { data: userData } = await supabase.auth.admin.getUserById(parent.user_id);
+    const prefs = userData?.user?.user_metadata || {};
 
     if (prefs.push_join_requests !== false) {
       await sendPushToUser(supabase, parent.user_id, {
@@ -78,11 +79,10 @@ serve(async (req) => {
       });
     }
 
+    const email = userData?.user?.email;
+    if (!email || email.includes("@phone.duvia.app")) continue;
     if (prefs.email_join_requests === false) continue;
-    const profile = Array.isArray(parent.profiles) ? parent.profiles[0] : parent.profiles;
-    const email = profile?.email;
-    const name  = profile?.first_name || "Parent";
-    if (!email) continue;
+    const name = prefs.name || prefs.first_name || "Parent";
 
     const html = `
 <!DOCTYPE html>
