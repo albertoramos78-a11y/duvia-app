@@ -2,7 +2,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Envoi de notifications Web Push, partagé par toutes les fonctions
 // déclenchées par un Database Webhook (notify-expense, notify-message,
-// notify-vault-document, notify-join-request).
+// notify-vault, notify-join-request).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import webpush from "npm:web-push@3.6.7";
