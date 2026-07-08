@@ -4442,10 +4442,15 @@ export default function App() {
                 </>
               )}
               {isChild && !isAdm && (
-                <button onClick={()=>{setMenuTab("notifs");setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
-                  <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🔔</span><span style={{flex:1,textAlign:"left"}}>{t.tabNotifs}</span>
-                  {unread>0 && <span style={{background:C.red,color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:10,fontWeight:800}}>{unread}</span>}
-                </button>
+                <>
+                  <button onClick={()=>{setMenuTab("prefs");setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                    <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>⚙️</span><span style={{flex:1,textAlign:"left"}}>{t.menuPrefs||"Préférences"}</span>
+                  </button>
+                  <button onClick={()=>{setMenuTab("notifs");setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                    <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🔔</span><span style={{flex:1,textAlign:"left"}}>{t.tabNotifs}</span>
+                    {unread>0 && <span style={{background:C.red,color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:10,fontWeight:800}}>{unread}</span>}
+                  </button>
+                </>
               )}
 
               <button onClick={()=>{setShowBugModal(true);setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
@@ -4736,11 +4741,22 @@ Date d'entrée en vigueur : 14 juin 2026
           ) /* fin condition 0 parents */
         ) : (isChild && !isAdm) ? (
           <div>
-            {tab===0 && <CalTab readOnly updateCal={()=>{}} />}
-            {tab===1 && <ScheduleTab childReadOnly />}
-            {tab===2 && <ContactsTab addOnly />}
-            {tab===3 && <MessagingTab />}
-            {tab===4 && <GameTab />}
+            {menuTab==="prefs" ? (
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+                  <div style={{fontSize:15,fontWeight:900}}>⚙️ {t.menuPrefs||"Préférences"}</div>
+                </div>
+                <ObserverPrefsTab />
+              </div>
+            ) : (
+              <>
+                {tab===0 && <CalTab readOnly updateCal={()=>{}} />}
+                {tab===1 && <ScheduleTab childReadOnly />}
+                {tab===2 && <ContactsTab addOnly />}
+                {tab===3 && <MessagingTab />}
+                {tab===4 && <GameTab />}
+              </>
+            )}
           </div>
         ) : (
           <div>
@@ -4826,12 +4842,12 @@ Date d'entrée en vigueur : 14 juin 2026
               </div>
             )}
             {/* Export .duvia avant suppression — dernier chance de sauvegarder */}
-            {/* ⚠️ Un observateur ne doit JAMAIS pouvoir télécharger les données de la
-                famille (dépenses, messages, calendrier...) : uniquement sa fiche
-                d'identité, via buildDuviaIdentityBackup(). */}
+            {/* ⚠️ Un observateur ou un enfant ne doit JAMAIS pouvoir télécharger les
+                données de la famille (dépenses, messages, calendrier...) : uniquement
+                sa fiche d'identité, via buildDuviaIdentityBackup(). */}
             <button
               onClick={() => {
-                const payload = isObs && !isAdm
+                const payload = (isObs || isChild) && !isAdm
                   ? buildDuviaIdentityBackup({ user, cfg, lang })
                   : buildDuviaBackup({
                       cfg, history: historyData,
@@ -4841,10 +4857,10 @@ Date d'entrée en vigueur : 14 juin 2026
                 downloadDuviaBackup(payload, makeBackupFilename("duvia-backup-avant-suppression"));
               }}
               disabled={deletingAccount}
-              style={{width:"100%",padding:"10px 14px",background:"transparent",color:C.vio,border:`1.5px solid ${C.vio}`,borderRadius:10,fontSize:12,fontWeight:700,cursor:deletingAccount?"not-allowed":"pointer",marginBottom:isObs&&!isAdm?4:12,opacity:deletingAccount?.5:1}}>
+              style={{width:"100%",padding:"10px 14px",background:"transparent",color:C.vio,border:`1.5px solid ${C.vio}`,borderRadius:10,fontSize:12,fontWeight:700,cursor:deletingAccount?"not-allowed":"pointer",marginBottom:(isObs||isChild)&&!isAdm?4:12,opacity:deletingAccount?.5:1}}>
               💾 {t.backupDownloadBeforeDelete||"Télécharger mes données avant"}
             </button>
-            {isObs && !isAdm && (
+            {(isObs || isChild) && !isAdm && (
               <div style={{fontSize:10,color:C.mut,marginBottom:12,lineHeight:1.4}}>
                 {t.obsBackupBeforeDeleteHint||"Seule votre fiche d'identité (nom, email, téléphone) sera téléchargée — pas les données de la famille."}
               </div>
@@ -6918,7 +6934,7 @@ function PrefsTab() {
 // "message"). Pas de dépenses, pas de messages, pas de calendrier de garde
 // ou scolaire, pas de config famille — voir buildDuviaIdentityBackup().
 function ObserverPrefsTab() {
-  const {C,t,lang,setLang,setConfirmDeleteAccount,user,pushStatus,pushSubscribe,pushUnsubscribe} = useApp();
+  const {C,t,lang,setLang,setConfirmDeleteAccount,user,pushStatus,pushSubscribe,pushUnsubscribe,isChild,cfg} = useApp();
 
   const [emailMsg, setEmailMsg] = useState(true);
   const [pushMsg,  setPushMsg]  = useState(true);
@@ -7006,7 +7022,10 @@ function ObserverPrefsTab() {
   return (
     <div>
       <div style={{fontSize:12,color:C.mut,lineHeight:1.6,marginBottom:20,padding:"10px 12px",background:`${C.blu}0c`,border:`1px solid ${C.blu}33`,borderRadius:10}}>
-        👁️ {t.obsPrefsIntro||"En tant qu'observateur, vous ne pouvez modifier que votre propre fiche : langue, notifications, identifiant, email/mot de passe et compte."}
+        {isChild
+          ? <>🧒 {t.childPrefsIntro||"En tant qu'enfant, vous ne pouvez modifier que votre propre fiche : langue, notifications, identifiant et compte."}</>
+          : <>👁️ {t.obsPrefsIntro||"En tant qu'observateur, vous ne pouvez modifier que votre propre fiche : langue, notifications, identifiant, email/mot de passe et compte."}</>
+        }
       </div>
 
       {/* ── Langue ── */}
@@ -7079,6 +7098,20 @@ function ObserverPrefsTab() {
             {cidCopied ? `✅ ${t.copied||"Copié"}` : `📋 ${t.copy||"Copier"}`}
           </button>
         </div>
+      </div>
+
+      {/* ── Sauvegarde des données (fiche d'identité uniquement) ── */}
+      <div style={{marginBottom:28}}>
+        <div className="sec">💾 {t.backupTitle||"Sauvegarde de mes données"}</div>
+        <button
+          onClick={()=>{
+            const payload = buildDuviaIdentityBackup({ user, cfg, lang });
+            downloadDuviaBackup(payload, makeBackupFilename());
+          }}
+          style={{...row}}>
+          <span style={{fontSize:13,fontWeight:700,color:C.txt}}>⬇️ {t.obsBackupExportBtn||"Télécharger ma fiche d'identité"}</span>
+        </button>
+        <div style={{fontSize:11,color:C.mut,marginTop:6,paddingLeft:4}}>{t.obsBackupExportHint||"Seule votre fiche (nom, email, téléphone) est téléchargée — pas les données de la famille."}</div>
       </div>
 
       {/* ── Sécurité : email + mot de passe ── */}
@@ -14239,9 +14272,10 @@ function buildDuviaBackup({cfg, history, familyId, lang, userEmail, userId, msgs
 function buildDuviaIdentityBackup({user, cfg, lang}) {
   const uid = String(user?.id || "");
   const email = String(user?.email || "").toLowerCase();
-  const own = (cfg?.observers || []).find(o =>
-    String(o.id||"") === uid || String(o.email||"").toLowerCase() === email
-  ) || {};
+  const match = (o) => String(o.id||"") === uid || String(o.email||"").toLowerCase() === email;
+  const ownObs   = (cfg?.observers || []).find(match);
+  const ownChild = !ownObs ? (cfg?.children || []).find(match) : null;
+  const own = ownObs || ownChild || {};
   return {
     _duvia: true,
     _version: DUVIA_BACKUP_VERSION,
@@ -14252,7 +14286,7 @@ function buildDuviaIdentityBackup({user, cfg, lang}) {
       name: own.name || user?.displayName || "",
       email: own.email || user?.email || "",
       phone: own.phone || "",
-      role: "observer",
+      role: ownChild ? "child" : "observer",
       obsRole: own.obsRole || "",
       canGuard: !!own.canGuard,
     },
