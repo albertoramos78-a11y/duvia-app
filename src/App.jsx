@@ -6435,12 +6435,17 @@ function StepLang({lang,setLang}) {
 
 // ─── PRÉFÉRENCES ──────────────────────────────────────────────────────────────
 function PrefsTab() {
-  const {C,t,lang,setLang,sub,setConfirmDeleteAccount,user,currency,setCurrency,weekStart,setWeekStart,cfg,setCfg,history,familySync,addHist,msgs,expenses,reimbursements} = useApp();
+  const {C,t,lang,setLang,sub,setConfirmDeleteAccount,user,currency,setCurrency,weekStart,setWeekStart,cfg,setCfg,history,familySync,addHist,msgs,expenses,reimbursements,pushStatus,pushSubscribe,pushUnsubscribe} = useApp();
 
   // ── Prefs state (chargé depuis user_metadata) ─────────────────────────────
   const [emailMsg,    setEmailMsg]    = useState(true);
   const [emailExp,    setEmailExp]    = useState(true);
   const [emailVault,  setEmailVault]  = useState(true);
+  const [emailJoin,   setEmailJoin]   = useState(true);
+  const [pushMsg,     setPushMsg]     = useState(true);
+  const [pushExp,     setPushExp]     = useState(true);
+  const [pushVault,   setPushVault]   = useState(true);
+  const [pushJoin,    setPushJoin]    = useState(true);
   const [isGoogleUser, setIsGoogleUser] = useState(false);
   const [pwMode,      setPwMode]      = useState(false);
   const [pwOld,setPwOld] = useState("");
@@ -6471,6 +6476,11 @@ function PrefsTab() {
       setEmailMsg(m.email_notifs    !== false);
       setEmailExp(m.email_expenses  !== false);
       setEmailVault(m.email_vault   !== false);
+      setEmailJoin(m.email_join_requests !== false);
+      setPushMsg(m.push_notifs      !== false);
+      setPushExp(m.push_expenses    !== false);
+      setPushVault(m.push_vault     !== false);
+      setPushJoin(m.push_join_requests   !== false);
       if(m.week_start) setWeekStart(m.week_start);
       // Détecte les comptes Google (pas de mot de passe Supabase)
       const provider = data?.user?.app_metadata?.provider;
@@ -6569,15 +6579,24 @@ function PrefsTab() {
     );
   }
 
-  function NotifRow({label,desc,val,onToggle}){
-    const row={display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`,marginBottom:8};
+  function NotifRow({label,desc,val,onToggle,pushVal,onPushToggle}){
+    const row={display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`,marginBottom:8,gap:12};
     return (
       <div style={row}>
-        <div style={{flex:1,marginRight:12}}>
+        <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{label}</div>
           <div style={{fontSize:11,color:C.mut,marginTop:2}}>{desc}</div>
         </div>
-        <Toggle val={val} onToggle={onToggle} />
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+          <span style={{fontSize:10,color:C.mut}}>📧</span>
+          <Toggle val={val} onToggle={onToggle} />
+        </div>
+        {onPushToggle && (
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+            <span style={{fontSize:10,color:C.mut}}>🔔</span>
+            <Toggle val={pushVal} onToggle={onPushToggle} />
+          </div>
+        )}
       </div>
     );
   }
@@ -6632,15 +6651,48 @@ function PrefsTab() {
         <StepLang lang={lang} setLang={setLang} />
       </div>
 
-      {/* ── Notifications email ── */}
+      {/* ── Notifications push ── */}
+      <div style={{marginBottom:16}}>
+        <div className="sec">{t.pushSectionTitle||"🔔 Notifications push"}</div>
+        {pushStatus==="unsupported" && (
+          <div style={{fontSize:12,color:C.mut,padding:"10px 12px"}}>{t.pushUnsupported}</div>
+        )}
+        {pushStatus==="ios-needs-install" && (
+          <div style={{fontSize:12,color:C.mut,padding:"10px 12px"}}>{t.pushIosInstall}</div>
+        )}
+        {pushStatus==="denied" && (
+          <div style={{fontSize:12,color:C.red,padding:"10px 12px"}}>{t.pushDenied}</div>
+        )}
+        {pushStatus==="default" && (
+          <button onClick={pushSubscribe} style={{width:"100%",padding:"13px 16px",background:C.vio,color:"#fff",border:"none",borderRadius:12,fontSize:13,fontWeight:700,cursor:"pointer"}}>
+            {t.pushEnableBtn}
+          </button>
+        )}
+        {pushStatus==="subscribed" && (
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.grn}}>{t.pushEnabledStatus}</div>
+            <button onClick={pushUnsubscribe} style={{padding:"6px 12px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              {t.pushDisableBtn}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Notifications par type (email + push) ── */}
       <div style={{marginBottom:28}}>
-        <div className="sec">📧 {t.emailNotifs||"Notifications email"}</div>
+        <div className="sec">{t.emailNotifs||"Notifications"}</div>
         <NotifRow label={t.notifMsg||"Nouveau message reçu"} desc={t.notifMsgDesc||"Email quand l'autre parent vous écrit"}
-          val={emailMsg} onToggle={()=>{ const v=!emailMsg; setEmailMsg(v); savePref("email_notifs",v); }} />
+          val={emailMsg} onToggle={()=>{ const v=!emailMsg; setEmailMsg(v); savePref("email_notifs",v); }}
+          pushVal={pushMsg} onPushToggle={()=>{ const v=!pushMsg; setPushMsg(v); savePref("push_notifs",v); }} />
         <NotifRow label={t.notifExp||"Nouvelle dépense"} desc={t.notifExpDesc||"Email quand une dépense est ajoutée ou modifiée"}
-          val={emailExp} onToggle={()=>{ const v=!emailExp; setEmailExp(v); savePref("email_expenses",v); }} />
+          val={emailExp} onToggle={()=>{ const v=!emailExp; setEmailExp(v); savePref("email_expenses",v); }}
+          pushVal={pushExp} onPushToggle={()=>{ const v=!pushExp; setPushExp(v); savePref("push_expenses",v); }} />
         <NotifRow label={t.notifVault||"Nouveau document (coffre)"} desc={t.notifVaultDesc||"Email quand un document est ajouté au coffre-fort"}
-          val={emailVault} onToggle={()=>{ const v=!emailVault; setEmailVault(v); savePref("email_vault",v); }} />
+          val={emailVault} onToggle={()=>{ const v=!emailVault; setEmailVault(v); savePref("email_vault",v); }}
+          pushVal={pushVault} onPushToggle={()=>{ const v=!pushVault; setPushVault(v); savePref("push_vault",v); }} />
+        <NotifRow label={t.notifJoinRequest||"Demande à rejoindre"} desc={t.notifJoinRequestDesc||"Email quand un observateur ou un enfant rejoint la famille"}
+          val={emailJoin} onToggle={()=>{ const v=!emailJoin; setEmailJoin(v); savePref("email_join_requests",v); }}
+          pushVal={pushJoin} onPushToggle={()=>{ const v=!pushJoin; setPushJoin(v); savePref("push_join_requests",v); }} />
       </div>
 
       {/* ── Devise ── */}
@@ -6866,9 +6918,10 @@ function PrefsTab() {
 // "message"). Pas de dépenses, pas de messages, pas de calendrier de garde
 // ou scolaire, pas de config famille — voir buildDuviaIdentityBackup().
 function ObserverPrefsTab() {
-  const {C,t,lang,setLang,setConfirmDeleteAccount,user} = useApp();
+  const {C,t,lang,setLang,setConfirmDeleteAccount,user,pushStatus,pushSubscribe,pushUnsubscribe} = useApp();
 
   const [emailMsg, setEmailMsg] = useState(true);
+  const [pushMsg,  setPushMsg]  = useState(true);
   const [isGoogleUser, setIsGoogleUser] = useState(false);
   const [pwMode, setPwMode] = useState(false);
   const [pwOld,setPwOld] = useState("");
@@ -6897,6 +6950,7 @@ function ObserverPrefsTab() {
     supabase.auth.getUser().then(({data})=>{
       const m = data?.user?.user_metadata || {};
       setEmailMsg(m.email_notifs !== false);
+      setPushMsg(m.push_notifs !== false);
       const provider = data?.user?.app_metadata?.provider;
       setIsGoogleUser(provider === "google");
     });
@@ -6960,15 +7014,43 @@ function ObserverPrefsTab() {
         <StepLang lang={lang} setLang={setLang} />
       </div>
 
-      {/* ── Notifications email : messages uniquement ── */}
+      {/* ── Notifications push ── */}
+      <div style={{marginBottom:16}}>
+        <div className="sec">{t.pushSectionTitle||"🔔 Notifications push"}</div>
+        {pushStatus==="unsupported" && <div style={{fontSize:12,color:C.mut,padding:"10px 12px"}}>{t.pushUnsupported}</div>}
+        {pushStatus==="ios-needs-install" && <div style={{fontSize:12,color:C.mut,padding:"10px 12px"}}>{t.pushIosInstall}</div>}
+        {pushStatus==="denied" && <div style={{fontSize:12,color:C.red,padding:"10px 12px"}}>{t.pushDenied}</div>}
+        {pushStatus==="default" && (
+          <button onClick={pushSubscribe} style={{width:"100%",padding:"13px 16px",background:C.vio,color:"#fff",border:"none",borderRadius:12,fontSize:13,fontWeight:700,cursor:"pointer"}}>
+            {t.pushEnableBtn}
+          </button>
+        )}
+        {pushStatus==="subscribed" && (
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.grn}}>{t.pushEnabledStatus}</div>
+            <button onClick={pushUnsubscribe} style={{padding:"6px 12px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              {t.pushDisableBtn}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Notifications email + push : messages uniquement ── */}
       <div style={{marginBottom:28}}>
-        <div className="sec">📧 {t.emailNotifs||"Notifications email"}</div>
-        <div style={row}>
-          <div style={{flex:1,marginRight:12}}>
+        <div className="sec">{t.emailNotifs||"Notifications"}</div>
+        <div style={{...row,gap:12}}>
+          <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{t.notifMsg||"Nouveau message reçu"}</div>
             <div style={{fontSize:11,color:C.mut,marginTop:2}}>{t.obsNotifMsgDesc||t.notifMsgDesc||"Email quand vous recevez un nouveau message"}</div>
           </div>
-          <Toggle val={emailMsg} onToggle={()=>{ const v=!emailMsg; setEmailMsg(v); savePref("email_notifs",v); }} />
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+            <span style={{fontSize:10,color:C.mut}}>📧</span>
+            <Toggle val={emailMsg} onToggle={()=>{ const v=!emailMsg; setEmailMsg(v); savePref("email_notifs",v); }} />
+          </div>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+            <span style={{fontSize:10,color:C.mut}}>🔔</span>
+            <Toggle val={pushMsg} onToggle={()=>{ const v=!pushMsg; setPushMsg(v); savePref("push_notifs",v); }} />
+          </div>
         </div>
       </div>
 
