@@ -7775,7 +7775,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             if(!res.ok) alert("⚠️ Erreur lors de la création de la famille.");
           }}
           style={{width:"100%",height:44,background:C.sur,color:C.vio,border:`1.5px solid ${C.vio}`,borderRadius:10,fontWeight:800,fontSize:13,cursor:creatingFamily?"not-allowed":"pointer",opacity:creatingFamily?0.6:1}}>
-          {creatingFamily ? "⏳ Création…" : "➕ Créer une nouvelle famille"}
+          {creatingFamily ? (t.creatingFamilyLabel||"⏳ Création…") : (t.createNewFamilyBtn||"➕ Créer une nouvelle famille")}
         </button>
       </div>
       </>
