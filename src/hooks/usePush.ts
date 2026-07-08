@@ -22,6 +22,8 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 export function usePush(userId: string | null, vapidPublicKey: string) {
   const [status, setStatus] = useState<PushStatus>("default");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const refreshStatus = useCallback(async () => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
@@ -46,25 +48,42 @@ export function usePush(userId: string | null, vapidPublicKey: string) {
   }, [refreshStatus]);
 
   const subscribe = useCallback(async () => {
-    if (!userId || !vapidPublicKey) return;
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-    });
-    await saveSubscription(userId, sub);
-    await refreshStatus();
-  }, [userId, vapidPublicKey, refreshStatus]);
+    if (!userId || !vapidPublicKey || pending) return;
+    setPending(true);
+    setError(null);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+      });
+      await saveSubscription(userId, sub);
+      await refreshStatus();
+    } catch (e: any) {
+      setError(e?.message || "subscribe_failed");
+    } finally {
+      setPending(false);
+    }
+  }, [userId, vapidPublicKey, pending, refreshStatus]);
 
   const unsubscribe = useCallback(async () => {
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.getSubscription();
-    if (sub) {
-      await deleteSubscriptionByEndpoint(sub.endpoint);
-      await sub.unsubscribe();
+    if (pending) return;
+    setPending(true);
+    setError(null);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await deleteSubscriptionByEndpoint(sub.endpoint);
+        await sub.unsubscribe();
+      }
+      await refreshStatus();
+    } catch (e: any) {
+      setError(e?.message || "unsubscribe_failed");
+    } finally {
+      setPending(false);
     }
-    await refreshStatus();
-  }, [refreshStatus]);
+  }, [pending, refreshStatus]);
 
-  return { status, subscribe, unsubscribe };
+  return { status, subscribe, unsubscribe, pending, error };
 }

@@ -12,17 +12,23 @@ self.addEventListener("fetch", (event) => {
 });
 
 // ── Web Push ──────────────────────────────────────────────────────────────
-// Si l'app a déjà un onglet ouvert (peu importe le focus), le code JS
+// Si l'app est ouverte ET au premier plan (onglet visible/focus), le code JS
 // in-app (App.jsx) affiche déjà sa propre notification OS pour les mêmes
 // événements — on n'affiche donc la notification du push QUE si aucun
-// onglet n'est ouvert, pour ne jamais doubler.
+// onglet n'est actuellement au premier plan, pour ne jamais doubler.
+// 🔧 Un onglet simplement "ouvert" mais en arrière-plan (app minimisée,
+// écran éteint, autre onglet actif) ne suffit PAS à supprimer le push :
+// sur mobile, le JS d'un onglet en arrière-plan ne tourne souvent plus,
+// donc ni le SW ni le code in-app n'affichaient alors quoi que ce soit —
+// d'où des notifications qui semblaient arriver "au hasard".
 self.addEventListener("push", (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch { data = {}; }
 
   event.waitUntil((async () => {
-    const openClients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    if (openClients.length > 0) return;
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const isForeground = clients.some((c) => c.focused || c.visibilityState === "visible");
+    if (isForeground) return;
 
     await self.registration.showNotification(data.title || "Duvia", {
       body: data.body || "",

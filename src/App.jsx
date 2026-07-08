@@ -2986,7 +2986,7 @@ export default function App() {
     return DEMO_USERS.find(u => u.email === sessionEmail) || null;
   });
   // ── Notifications push ──────────────────────────────────────────────────
-  const { status: pushStatus, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } =
+  const { status: pushStatus, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe, pending: pushPending } =
     usePush(user?.id || null, import.meta.env.VITE_VAPID_PUBLIC_KEY);
   // handleSetUser défini plus bas, après tous les useState
 
@@ -4108,7 +4108,7 @@ export default function App() {
     msgs, sendCloudMessage, markCloudMessageRead, reactToCloudMessage, deleteCloudMessage, myUid,
     activity, setActivity, allSeen, setAllSeen, _setSeen,
     unreadVaultDocIds, setUnreadVaultDocIds, custodyShadow,
-    pushStatus, pushSubscribe, pushUnsubscribe,
+    pushStatus, pushSubscribe, pushUnsubscribe, pushPending,
     summerActive, setSummerActive, rgActive, setRgActive, wcActive, setWcActive, videoActive, setVideoActive,
     brandActive,
     handleSetUser,
@@ -6451,7 +6451,7 @@ function StepLang({lang,setLang}) {
 
 // ─── PRÉFÉRENCES ──────────────────────────────────────────────────────────────
 function PrefsTab() {
-  const {C,t,lang,setLang,sub,setConfirmDeleteAccount,user,currency,setCurrency,weekStart,setWeekStart,cfg,setCfg,history,familySync,addHist,msgs,expenses,reimbursements,pushStatus,pushSubscribe,pushUnsubscribe} = useApp();
+  const {C,t,lang,setLang,sub,setConfirmDeleteAccount,user,currency,setCurrency,weekStart,setWeekStart,cfg,setCfg,history,familySync,addHist,msgs,expenses,reimbursements,pushStatus,pushSubscribe,pushUnsubscribe,pushPending} = useApp();
 
   // ── Prefs state (chargé depuis user_metadata) ─────────────────────────────
   const [emailMsg,    setEmailMsg]    = useState(true);
@@ -6680,15 +6680,15 @@ function PrefsTab() {
           <div style={{fontSize:12,color:C.red,padding:"10px 12px"}}>{t.pushDenied}</div>
         )}
         {pushStatus==="default" && (
-          <button onClick={pushSubscribe} style={{width:"100%",padding:"13px 16px",background:C.vio,color:"#fff",border:"none",borderRadius:12,fontSize:13,fontWeight:700,cursor:"pointer"}}>
-            {t.pushEnableBtn}
+          <button onClick={pushSubscribe} disabled={pushPending} style={{width:"100%",padding:"13px 16px",background:C.vio,color:"#fff",border:"none",borderRadius:12,fontSize:13,fontWeight:700,cursor:pushPending?"default":"pointer",opacity:pushPending?.6:1}}>
+            {pushPending ? "…" : t.pushEnableBtn}
           </button>
         )}
         {pushStatus==="subscribed" && (
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`}}>
             <div style={{fontSize:13,fontWeight:700,color:C.grn}}>{t.pushEnabledStatus}</div>
-            <button onClick={pushUnsubscribe} style={{padding:"6px 12px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer"}}>
-              {t.pushDisableBtn}
+            <button onClick={pushUnsubscribe} disabled={pushPending} style={{padding:"6px 12px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12,fontWeight:700,cursor:pushPending?"default":"pointer",opacity:pushPending?.6:1}}>
+              {pushPending ? "…" : t.pushDisableBtn}
             </button>
           </div>
         )}
@@ -6934,7 +6934,7 @@ function PrefsTab() {
 // "message"). Pas de dépenses, pas de messages, pas de calendrier de garde
 // ou scolaire, pas de config famille — voir buildDuviaIdentityBackup().
 function ObserverPrefsTab() {
-  const {C,t,lang,setLang,setConfirmDeleteAccount,user,pushStatus,pushSubscribe,pushUnsubscribe,isChild,cfg} = useApp();
+  const {C,t,lang,setLang,setConfirmDeleteAccount,user,pushStatus,pushSubscribe,pushUnsubscribe,pushPending,isChild,cfg} = useApp();
 
   const [emailMsg, setEmailMsg] = useState(true);
   const [pushMsg,  setPushMsg]  = useState(true);
@@ -7040,15 +7040,15 @@ function ObserverPrefsTab() {
         {pushStatus==="ios-needs-install" && <div style={{fontSize:12,color:C.mut,padding:"10px 12px"}}>{t.pushIosInstall}</div>}
         {pushStatus==="denied" && <div style={{fontSize:12,color:C.red,padding:"10px 12px"}}>{t.pushDenied}</div>}
         {pushStatus==="default" && (
-          <button onClick={pushSubscribe} style={{width:"100%",padding:"13px 16px",background:C.vio,color:"#fff",border:"none",borderRadius:12,fontSize:13,fontWeight:700,cursor:"pointer"}}>
-            {t.pushEnableBtn}
+          <button onClick={pushSubscribe} disabled={pushPending} style={{width:"100%",padding:"13px 16px",background:C.vio,color:"#fff",border:"none",borderRadius:12,fontSize:13,fontWeight:700,cursor:pushPending?"default":"pointer",opacity:pushPending?.6:1}}>
+            {pushPending ? "…" : t.pushEnableBtn}
           </button>
         )}
         {pushStatus==="subscribed" && (
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`}}>
             <div style={{fontSize:13,fontWeight:700,color:C.grn}}>{t.pushEnabledStatus}</div>
-            <button onClick={pushUnsubscribe} style={{padding:"6px 12px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer"}}>
-              {t.pushDisableBtn}
+            <button onClick={pushUnsubscribe} disabled={pushPending} style={{padding:"6px 12px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12,fontWeight:700,cursor:pushPending?"default":"pointer",opacity:pushPending?.6:1}}>
+              {pushPending ? "…" : t.pushDisableBtn}
             </button>
           </div>
         )}
