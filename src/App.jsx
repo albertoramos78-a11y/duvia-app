@@ -4505,67 +4505,32 @@ export default function App() {
         })} />
 
       {/* Modale "Licence" */}
-      {showLicenseModal && (
+      {showLicenseModal && (() => {
+        const licLang = LEGAL_DOCS.license[lang] ? lang : "fr";
+        const licTitle = LEGAL_TITLES.license[licLang] || LEGAL_TITLES.license.fr;
+        const licBlocks = LEGAL_DOCS.license[licLang] || [];
+        return (
         <div onClick={()=>setShowLicenseModal(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:16,padding:20,maxWidth:480,width:"100%",maxHeight:"80vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexShrink:0}}>
-              <div style={{fontSize:16,fontWeight:900,color:C.txt}}>📄 Licence</div>
+              <div style={{fontSize:16,fontWeight:900,color:C.txt}}>📄 {licTitle}</div>
               <button onClick={()=>setShowLicenseModal(false)} style={{width:30,height:30,background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,color:C.mut,fontSize:14,cursor:"pointer"}}>✕</button>
             </div>
-            <div style={{fontSize:12,color:C.mut,lineHeight:1.6,whiteSpace:"pre-wrap",overflowY:"auto",flex:1,paddingRight:4}}>
-{`DUVIA - Licence Propriétaire
-
-Copyright (c) 2026 Alberto Ramos
-
-Tous droits réservés.
-
-Le logiciel DUVIA, y compris son code source, son architecture, son interface utilisateur, son design, sa documentation, ses bases de données, ses contenus et tous les éléments associés, est la propriété exclusive d'Alberto Ramos.
-
-AUTORISATIONS
-
-L'utilisation de DUVIA est autorisée uniquement dans le cadre prévu par son auteur et conformément aux conditions d'utilisation applicables.
-
-RESTRICTIONS
-
-Sauf autorisation écrite préalable d'Alberto Ramos, il est strictement interdit de :
-
-- Copier ou reproduire tout ou partie du logiciel ;
-- Modifier, adapter ou créer des œuvres dérivées du logiciel ;
-- Distribuer, publier, vendre, louer ou concéder sous licence le logiciel ;
-- Décompiler, désassembler ou tenter d'extraire le code source ;
-- Utiliser tout ou partie du logiciel à des fins commerciales ;
-- Reproduire ou exploiter les fonctionnalités, l'architecture ou les contenus du logiciel dans un produit concurrent.
-
-PROPRIÉTÉ INTELLECTUELLE
-
-Aucun droit de propriété intellectuelle n'est transféré à l'utilisateur. Tous les droits, titres et intérêts relatifs à DUVIA demeurent la propriété exclusive d'Alberto Ramos.
-
-ABSENCE DE GARANTIE
-
-DUVIA est fourni « en l'état » (« as is »), sans aucune garantie expresse ou implicite, notamment concernant sa disponibilité, sa fiabilité ou son adéquation à un usage particulier.
-
-LIMITATION DE RESPONSABILITÉ
-
-Dans les limites autorisées par la loi, Alberto Ramos ne pourra être tenu responsable des dommages directs, indirects, accessoires ou consécutifs résultant de l'utilisation ou de l'impossibilité d'utiliser DUVIA.
-
-VIOLATION DE LA LICENCE
-
-Toute utilisation non autorisée du logiciel constitue une violation des droits de propriété intellectuelle et pourra donner lieu à des poursuites civiles et/ou pénales conformément aux lois applicables.
-
-CONTACT
-
-Pour toute demande d'autorisation ou de licence :
-
-Alberto Ramos
-Email : duvia.services@gmail.com
-
-Date d'entrée en vigueur : 14 juin 2026
-
-© 2026 Alberto Ramos. Tous droits réservés.`}
+            <div style={{fontSize:12,color:C.mut,lineHeight:1.6,overflowY:"auto",flex:1,paddingRight:4,display:"flex",flexDirection:"column",gap:10}}>
+              {licBlocks.map((b, i) => b.h ? (
+                <div key={i} style={{fontWeight:800,color:C.txt,marginTop:i>0?2:0}}>{b.h}</div>
+              ) : b.ul ? (
+                <ul key={i} style={{margin:0,paddingLeft:18,display:"flex",flexDirection:"column",gap:4}}>
+                  {b.ul.map((item, j) => <li key={j}>{renderLegalInline(item)}</li>)}
+                </ul>
+              ) : (
+                <p key={i} style={{margin:0}}>{renderLegalInline(b.p)}</p>
+              ))}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
       {/* Trial / Premium / Earned bubble — second row */}
       {!isObs && !isChild && st==="trial_premium" && (
         <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>
