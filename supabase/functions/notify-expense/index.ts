@@ -1,6 +1,6 @@
 // notify-expense/index.ts — syntaxe Deno.serve (moderne)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendPushToUser } from "../_shared/push.ts";
+import { sendPushToUser } from "./_shared/push.ts";
 
 const RESEND_API_KEY   = Deno.env.get("RESEND_API_KEY")!;
 const WEBHOOK_SECRET   = Deno.env.get("WEBHOOK_SECRET")!;
