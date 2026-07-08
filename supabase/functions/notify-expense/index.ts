@@ -65,12 +65,7 @@ serve(async (req) => {
   const recipients = members.filter((m: any) => m.user_id !== createdByUserId);
 
   for (const member of recipients) {
-    const profile = Array.isArray(member.profiles) ? member.profiles[0] : member.profiles;
-    const email   = profile?.email;
-    const name    = profile?.first_name || "Parent";
-    if (!email) continue;
-
-    // Vérifie la préférence email_expenses
+    // Vérifie les préférences (push ne dépend pas d'avoir un email de profil)
     const { data: userMeta } = await supabase.auth.admin.getUserById(member.user_id);
     const prefs = userMeta?.user?.user_metadata || {};
 
@@ -82,6 +77,11 @@ serve(async (req) => {
         url: "/",
       });
     }
+
+    const profile = Array.isArray(member.profiles) ? member.profiles[0] : member.profiles;
+    const email   = profile?.email;
+    const name    = profile?.first_name || "Parent";
+    if (!email) continue;
 
     if (prefs.email_expenses === false) continue;
 
