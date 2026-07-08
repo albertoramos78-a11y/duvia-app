@@ -27,11 +27,15 @@ export interface PushPayload {
  * Un échec sur un appareil n'empêche jamais l'envoi aux autres.
  */
 export async function sendPushToUser(admin: any, userId: string, payload: PushPayload): Promise<void> {
-  const { data: subs } = await admin
+  const { data: subs, error } = await admin
     .from("push_subscriptions")
     .select("id, endpoint, p256dh, auth_key")
     .eq("user_id", userId);
 
+  if (error) {
+    console.warn(`push: échec lecture des abonnements de ${userId}`, error);
+    return;
+  }
   if (!subs?.length) return;
 
   await Promise.all(subs.map(async (sub: any) => {
@@ -42,7 +46,11 @@ export async function sendPushToUser(admin: any, userId: string, payload: PushPa
       );
     } catch (e: any) {
       if (e?.statusCode === 404 || e?.statusCode === 410) {
-        await admin.from("push_subscriptions").delete().eq("id", sub.id);
+        try {
+          await admin.from("push_subscriptions").delete().eq("id", sub.id);
+        } catch (deleteErr) {
+          console.warn(`push: échec suppression abonnement mort ${sub.id}`, deleteErr);
+        }
       } else {
         console.warn(`push: échec envoi vers ${userId} (sub ${sub.id})`, e?.statusCode ?? e);
       }
