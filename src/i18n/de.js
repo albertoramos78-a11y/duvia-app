@@ -580,6 +580,7 @@ const de = {
     pushIosInstall:"Füge Duvia zum Startbildschirm hinzu, um Push-Benachrichtigungen zu aktivieren (Teilen → Zum Home-Bildschirm).",
     pushDenied:"Benachrichtigungen sind in deinen Browsereinstellungen blockiert. Aktiviere sie erneut, um Push-Benachrichtigungen zu erhalten.",
     pushUnsupported:"Push-Benachrichtigungen sind in diesem Browser nicht verfügbar.",
+    pushOemWarning:"Dieses Telefon schränkt Benachrichtigungen im Hintergrund möglicherweise ein. Gehe zu Einstellungen → Akku/Apps → Chrome (oder dein Browser), deaktiviere Akku-Einschränkungen und aktiviere den Autostart, falls verfügbar.",
     defaultCurrency:"Standardwährung",
     weekStart:"Erster Tag der Woche",
     security:"Sicherheit",

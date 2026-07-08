@@ -580,6 +580,7 @@ const es = {
     pushIosInstall:"Añade Duvia a tu pantalla de inicio para activar las notificaciones push (Compartir → Añadir a pantalla de inicio).",
     pushDenied:"Las notificaciones están bloqueadas en la configuración de tu navegador. Reactívalas para recibir notificaciones push.",
     pushUnsupported:"Las notificaciones push no están disponibles en este navegador.",
+    pushOemWarning:"Este teléfono puede restringir las notificaciones en segundo plano. Ve a Ajustes → Batería/Aplicaciones → Chrome (o tu navegador), desactiva las restricciones de batería y activa el inicio automático si está disponible.",
     defaultCurrency:"Moneda por defecto",
     weekStart:"Primer día de la semana",
     security:"Seguridad",

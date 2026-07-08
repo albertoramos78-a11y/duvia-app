@@ -11,6 +11,16 @@ function isIosNeedingInstall(): boolean {
   return isIos && !isStandalone;
 }
 
+// Constructeurs Android connus pour tuer agressivement les process en
+// arrière-plan (MIUI, EMUI/Magic UI, ColorOS, FuntouchOS...), au point
+// d'empêcher le réveil du service worker pour un push — voir
+// dontkillmyapp.com. Détection approximative via l'UA (le modèle
+// d'appareil y apparaît généralement sur Android), affichée seulement à
+// titre indicatif pour guider l'utilisateur vers ses réglages batterie.
+function isRestrictiveAndroidOem(): boolean {
+  return /xiaomi|redmi|poco|miui|huawei|honor|oppo|cph\d|vivo/i.test(navigator.userAgent);
+}
+
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -85,5 +95,5 @@ export function usePush(userId: string | null, vapidPublicKey: string) {
     }
   }, [pending, refreshStatus]);
 
-  return { status, subscribe, unsubscribe, pending, error };
+  return { status, subscribe, unsubscribe, pending, error, restrictiveOem: isRestrictiveAndroidOem() };
 }

@@ -582,6 +582,7 @@ const en = {
     pushIosInstall:"Add Duvia to your home screen to enable push notifications (Share → Add to Home Screen).",
     pushDenied:"Notifications are blocked in your browser settings. Re-enable them to receive push notifications.",
     pushUnsupported:"Push notifications aren't available in this browser.",
+    pushOemWarning:"This phone may restrict background notifications. Go to Settings → Battery/Apps → Chrome (or your browser), turn off battery restrictions and enable autostart if available.",
     defaultCurrency:"Default currency",
     weekStart:"First day of the week",
     security:"Security",
