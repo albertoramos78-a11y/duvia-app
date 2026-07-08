@@ -4637,7 +4637,7 @@ Date d'entrée en vigueur : 14 juin 2026
             <div style={{flexShrink:0,background:C.card,borderBottom:`1.5px solid ${C.bor}`,boxShadow:"0 1px 6px rgba(0,0,0,.05)"}}>
               {/* Barre retour + titre */}
               <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px 6px"}}>
-                <button onClick={()=>{setMenuTab(null);setConfigStep(0);}} style={{width:34,height:34,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:18,borderRadius:8,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>🔙</button>
+                <button onClick={()=>{setMenuTab(null);setConfigStep(0);}} style={{width:34,height:34,background:`${C.vio}15`,color:C.vio,border:"none",fontSize:17,fontWeight:900,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>←</button>
                 <div style={{fontSize:14,fontWeight:900,flex:1}}>🏠 {t.menuConfigFamily||"Configuration famille"}</div>
                 {configStep===0 && <StepIdInfoButton C={C} t={t} user={user} />}
                 {configStep===1 && <StepAccessInfoButton C={C} t={t} user={user} />}
@@ -7960,7 +7960,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:12,...(isMine?{}:lockStyle)}}>
             <div style={{...fieldBox,flex:1}}>
               <span style={lbl}>{t.birthDay}</span>
-              <input type="number" min="1" max="31" value={p.birthDay} onChange={e=>setParent(i,"birthDay",e.target.value)} placeholder={t.dayPlaceholder||"JJ"} readOnly={!isMine} style={inp} />
+              <input type="number" min="1" max="31" value={p.birthDay} onChange={e=>setParent(i,"birthDay",e.target.value)} placeholder={t.dayPlaceholder||"JJ"} readOnly={!isMine} style={{...inp,...(isMine?{}:{background:C.sur,color:C.mut,cursor:"default"})}} />
             </div>
             <div style={{...fieldBox,flex:2}}>
               <span style={lbl}>{t.birthMonth}</span>
@@ -7975,7 +7975,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:0}}>
             <div style={{...fieldBox,flex:1,...(isMine?{}:lockStyle)}}>
               <span style={lbl}>📞 {t.contactsPhone||"Téléphone"}</span>
-              <input type="tel" value={p.phone||""} onChange={e=>setParent(i,"phone",e.target.value)} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} readOnly={!isMine} style={inp} />
+              <input type="tel" value={p.phone||""} onChange={e=>setParent(i,"phone",e.target.value)} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} readOnly={!isMine} style={{...inp,...(isMine?{}:{background:C.sur,color:C.mut,cursor:"default"})}} />
             </div>
             <div style={{...fieldBox,flex:2}}>
               <span style={lbl}>
@@ -9885,12 +9885,12 @@ function StepAccess() {
                 }
               </div>
               <input value={o.email||""} onChange={e=>setObsField("email",e.target.value)} placeholder="email@exemple.com" readOnly={obsLocked}
-                style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:obsLocked?C.bg:C.sur,color:obsLocked?C.mut:C.txt,cursor:obsLocked?"default":undefined}} />
+                style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:obsLocked?C.sur:C.inp,color:obsLocked?C.mut:C.txt,cursor:obsLocked?"default":undefined}} />
             </div>
             <div style={{flex:1}}>
               <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:4}}>📞 {t.contactsPhone||"Téléphone"}</div>
               <input value={o.phone||""} onChange={e=>setObsField("phone",e.target.value)} placeholder="06 12 34 56 78" readOnly={obsLocked}
-                style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:obsLocked?C.bg:C.sur,color:obsLocked?C.mut:C.txt,cursor:obsLocked?"default":undefined}} />
+                style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:12,background:obsLocked?C.sur:C.inp,color:obsLocked?C.mut:C.txt,cursor:obsLocked?"default":undefined}} />
             </div>
           </div>
           {/* Lien de parenté + Adresse */}
@@ -11458,7 +11458,9 @@ function HistTab() {
                     Saisi par <strong style={{color:C.txt}}>{h.who}</strong> · {d.toLocaleDateString("fr-FR")} {d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}
                   </div>
                 </div>
-                {isClickable && <span style={{fontSize:12,color:C.mut,alignSelf:"center",flexShrink:0}}>→</span>}
+                {isClickable && (
+                  <div style={{width:26,height:26,borderRadius:"50%",background:`${C.vio}15`,color:C.vio,fontSize:14,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",alignSelf:"center",flexShrink:0}}>›</div>
+                )}
               </div>
             );
           })
@@ -14793,7 +14795,7 @@ function MessagingTab(){
   if(view==="new") return(
     <div className="fi">
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-        <button onClick={()=>setView("list")} style={{width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:18,borderRadius:8,flexShrink:0}}>🔙</button>
+        <button onClick={()=>setView("list")} style={{width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",background:`${C.vio}15`,color:C.vio,border:"none",fontSize:17,fontWeight:900,borderRadius:"50%",flexShrink:0,cursor:"pointer"}}>←</button>
         <div style={{fontSize:15,fontWeight:900}}>{t.msgNewTitle||"✏️ Nouveau message"}</div>
       </div>
       <div className="card" style={{marginBottom:12}}>
@@ -14854,8 +14856,10 @@ function MessagingTab(){
             <button onClick={()=>sendMsg(picked)} disabled={(!draft.trim()&&!pendingFile)||uploadingFile} style={{
               width:36,height:36,borderRadius:"50%",border:"none",cursor:(draft.trim()||pendingFile)&&!uploadingFile?"pointer":"default",
               background:(draft.trim()||pendingFile)?`linear-gradient(135deg,${C.vio},${C.pin})`:`${C.vio}44`,
-              color:"#fff",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0
-            }}>{uploadingFile?"…":"→"}</button>
+              color:"#fff",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0
+            }}>{uploadingFile?"…":(
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            )}</button>
           </div>
         </>
       )}
@@ -14870,7 +14874,7 @@ function MessagingTab(){
       <div className="fi" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 190px)"}}>
         {/* Header */}
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexShrink:0}}>
-          <button onClick={()=>setView("list")} style={{width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:18,borderRadius:8,flexShrink:0}}>🔙</button>
+          <button onClick={()=>setView("list")} style={{width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",background:`${C.vio}15`,color:C.vio,border:"none",fontSize:17,fontWeight:900,borderRadius:"50%",flexShrink:0,cursor:"pointer"}}>←</button>
           <div style={{position:"relative",flexShrink:0}}>
             <div style={{width:38,height:38,borderRadius:isGroup?11:"50%",background:isGroup?`linear-gradient(135deg,${C.vio},${C.pin})`:`linear-gradient(135deg,${convColor(currentConv.ids)},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,border:isGroup?`2px solid ${C.vio}44`:"none",overflow:"hidden"}}>
               {isGroup?"👥":renderAvatar(pMap[otherIds[0]]?.avatar)}
@@ -15105,9 +15109,11 @@ function MessagingTab(){
           <button onClick={()=>sendMsg(otherIds)} disabled={(!draft.trim()&&!pendingFile)||uploadingFile} style={{
             width:42,height:42,borderRadius:"50%",border:"none",flexShrink:0,
             background:(draft.trim()||pendingFile)?`linear-gradient(135deg,${C.vio},${C.pin})`:`${C.vio}44`,
-            color:"#fff",fontSize:20,display:"flex",alignItems:"center",justifyContent:"center",
+            color:"#fff",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",
             cursor:(draft.trim()||pendingFile)&&!uploadingFile?"pointer":"default"
-          }}>{uploadingFile?"…":"→"}</button>
+          }}>{uploadingFile?"…":(
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          )}</button>
         </div>
       </div>
     );
@@ -15124,7 +15130,7 @@ function MessagingTab(){
         <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
           <button onClick={()=>{setPicked([]);setDraft("");setView("new");}} style={{
             padding:"8px 16px",background:`linear-gradient(135deg,${C.vio},${C.pin})`,
-            color:"#fff",fontSize:13,fontWeight:800,borderRadius:20
+            color:"#fff",fontSize:13,fontWeight:800,borderRadius:20,border:"none",cursor:"pointer"
           }}>{t.msgNewBtn||"✏️ Nouveau"}</button>
           <InfoBubble C={C} tipKey={`duvia_msgtip_${user?.id||"x"}`} title={t.tabMsg||"Messages"}>
             {t.msgTipBody||"Échangez des messages directement avec l'autre parent et les observateurs. Chaque message est horodaté et son intégrité peut être vérifiée à tout moment en appuyant dessus. Les conversations restent privées et sécurisées au sein de votre famille Duvia."}

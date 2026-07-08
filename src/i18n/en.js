@@ -387,7 +387,7 @@ const en = {
     tapToClose:"Tap to close",
     helpIdTitle:"How to set up?",
     helpIdParentTitle:"👨‍👩‍👧 Add a parent",
-    helpIdParentBody:"Tap \"+ Add a parent\". An invitation link will be sent — the other parent joins the family by clicking it.",
+    helpIdParentBody:"Tap \"+ Add a parent\". An invitation link will be generated — you need to send it yourself (SMS, email...) to the other parent, who joins the family by clicking it.",
     helpIdChildTitle:"🧒 Add a child",
     helpIdChildBody:"Tap \"+ Add a child\" and enter their first name and date of birth.",
     helpIdInviteTitle:"📨 Invite a child to the app",

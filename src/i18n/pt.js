@@ -385,7 +385,7 @@ const pt = {
     tapToClose:"Toque para fechar",
     helpIdTitle:"Como configurar?",
     helpIdParentTitle:"👨‍👩‍👧 Adicionar um responsável",
-    helpIdParentBody:"Toque em «+ Adicionar um responsável». Um link de convite será enviado — o outro responsável entra na família ao clicar nele.",
+    helpIdParentBody:"Toque em «+ Adicionar um responsável». Um link de convite será gerado — cabe a ti enviá-lo (SMS, email...) ao outro responsável, que entra na família ao clicar nele.",
     helpIdChildTitle:"🧒 Adicionar uma criança",
     helpIdChildBody:"Toque em «+ Adicionar uma criança» e indique o nome e a data de nascimento.",
     helpIdInviteTitle:"📨 Convidar uma criança para a app",

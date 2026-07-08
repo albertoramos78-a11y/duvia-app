@@ -385,7 +385,7 @@ const de = {
     tapToClose:"Tippen, um zu schließen",
     helpIdTitle:"Wie richte ich es ein?",
     helpIdParentTitle:"👨‍👩‍👧 Elternteil hinzufügen",
-    helpIdParentBody:"Tippen Sie auf „+ Elternteil hinzufügen“. Ein Einladungslink wird gesendet — der andere Elternteil tritt der Familie durch Anklicken bei.",
+    helpIdParentBody:"Tippen Sie auf „+ Elternteil hinzufügen“. Ein Einladungslink wird erstellt — Sie müssen ihn selbst (SMS, E-Mail...) an den anderen Elternteil senden, der der Familie durch Anklicken beitritt.",
     helpIdChildTitle:"🧒 Kind hinzufügen",
     helpIdChildBody:"Tippen Sie auf „+ Kind hinzufügen“ und geben Sie Vornamen und Geburtsdatum ein.",
     helpIdInviteTitle:"📨 Kind zur App einladen",

@@ -385,7 +385,7 @@ const es = {
     tapToClose:"Toca para cerrar",
     helpIdTitle:"¿Cómo configurar?",
     helpIdParentTitle:"👨‍👩‍👧 Añadir un progenitor",
-    helpIdParentBody:"Pulsa «+ Añadir un progenitor». Se enviará un enlace de invitación — el otro progenitor se une a la familia al hacer clic.",
+    helpIdParentBody:"Pulsa «+ Añadir un progenitor». Se generará un enlace de invitación — tienes que enviárselo tú mismo (SMS, email...) al otro progenitor, que se une a la familia al hacer clic.",
     helpIdChildTitle:"🧒 Añadir un hijo/a",
     helpIdChildBody:"Pulsa «+ Añadir un hijo/a» e introduce su nombre y fecha de nacimiento.",
     helpIdInviteTitle:"📨 Invitar a un hijo/a a la app",

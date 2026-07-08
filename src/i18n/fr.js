@@ -438,7 +438,7 @@ const fr = {
     tapToClose:"Appuyer pour fermer",
     helpIdTitle:"Comment configurer ?",
     helpIdParentTitle:"👨‍👩‍👧 Ajouter un parent",
-    helpIdParentBody:"Appuyez sur « + Ajouter un parent ». Un lien d'invitation sera envoyé — l'autre parent rejoint la famille en cliquant dessus.",
+    helpIdParentBody:"Appuyez sur « + Ajouter un parent ». Un lien d'invitation sera généré — c'est à vous de l'envoyer (SMS, email...) à l'autre parent, qui rejoint la famille en cliquant dessus.",
     helpIdChildTitle:"🧒 Ajouter un enfant",
     helpIdChildBody:"Appuyez sur « + Ajouter un enfant », renseignez son prénom et sa date de naissance.",
     helpIdInviteTitle:"📨 Inviter un enfant sur l'app",
