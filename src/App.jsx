@@ -1505,6 +1505,13 @@ function useFamilySync(cfg, setCfg) {
   const saveTimer = useRef(null);
   const cfgRef = useRef(cfg); cfgRef.current = cfg; // snapshot courant pour l'éjection
   const uidRef = useRef(null);
+  // 🔧 Horodatage de la dernière sauvegarde envoyée PAR CET APPAREIL. Supabase
+  // Realtime rediffuse une UPDATE à TOUS les abonnés du canal, y compris celui
+  // qui vient d'écrire — sans ce garde-fou, l'écho de notre propre sauvegarde
+  // revient ~1-2s plus tard et écrase cfg avec l'instantané d'il y a 1,5s+,
+  // effaçant toute frappe faite entre-temps (bug : "impossible d'écrire" sur
+  // les champs texte à saisie longue, où la fenêtre de frappe dépasse le délai).
+  const lastSavedUpdatedAtRef = useRef(null);
 
   function setFamilyIdBoth(id){ familyIdRef.current = id; setFamilyIdState(id); }
 
@@ -1934,9 +1941,11 @@ function useFamilySync(cfg, setCfg) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       try {
+        const updatedAt = new Date().toISOString();
+        lastSavedUpdatedAtRef.current = updatedAt;
         const { error } = await supabase
           .from("families")
-          .update({ data: cfg, updated_at: new Date().toISOString() })
+          .update({ data: cfg, updated_at: updatedAt })
           .eq("id", familyIdRef.current);
         if (error) throw error;
         setSyncStatus("synced");
@@ -1958,6 +1967,12 @@ function useFamilySync(cfg, setCfg) {
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "families", filter: `id=eq.${familyId}` },
         (payload) => {
+          // 🔧 Écho de notre propre sauvegarde (voir lastSavedUpdatedAtRef
+          // plus haut) : Realtime rediffuse à TOUS les abonnés, y compris
+          // l'appareil qui vient d'écrire. Sans ce filtre, cet écho écrase
+          // cfg avec l'instantané envoyé 1-2s plus tôt, effaçant toute
+          // frappe faite depuis (le champ semble "refuser" la saisie).
+          if (payload.new?.updated_at && payload.new.updated_at === lastSavedUpdatedAtRef.current) return;
           if (payload.new?.data && payload.new.data.parents) {
             // 🔧 Détecter une transition « actif → left » sur CETTE mise à jour
             // (départ volontaire via leaveFamily, ou suppression de compte via
@@ -7906,7 +7921,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
               <div style={{height:IH,display:"flex",alignItems:"center"}}>
                 <input type="color" className="color-circle" value={p.color} onChange={e=>setParent(i,"color",e.target.value)}
                   title={t.color}
-                  style={{width:44,height:44,padding:0,border:"none",borderRadius:"50%",cursor:"pointer",overflow:"hidden",background:p.color}} />
+                  style={{width:30,height:30,padding:0,border:"none",borderRadius:"50%",cursor:"pointer",overflow:"hidden",background:p.color}} />
               </div>
             </div>
           </div>
