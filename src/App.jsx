@@ -1250,6 +1250,14 @@ button.btn-sm{height:34px;padding:0 12px;font-size:12px;border-radius:8px;}
 /* Icon-only button */
 button.btn-icon{width:44px;height:44px;padding:0;border-radius:10px;}
 
+/* Sélecteur de couleur : masque le "swatch" natif carré du navigateur pour
+   qu'un input[type=color] rond via border-radius soit vraiment rond partout,
+   pas seulement sur son contour extérieur. */
+input.color-circle{padding:0;border:none;}
+input.color-circle::-webkit-color-swatch-wrapper{padding:0;border-radius:50%;overflow:hidden;}
+input.color-circle::-webkit-color-swatch{border:none;border-radius:50%;}
+input.color-circle::-moz-color-swatch{border:none;border-radius:50%;}
+
 /* ── Labels & Fields ── */
 .lbl{
   font-size:11px;
@@ -7619,8 +7627,8 @@ function FamilySyncCard() {
   const showDetails = !isSynced || expanded;
 
   return (
-    <div className="card" style={{marginBottom:16,borderColor:`${C.vio}55`}}>
-      <div onClick={()=>isSynced && setExpanded(v=>!v)} style={{cursor:isSynced?"pointer":"default",marginBottom:showDetails?8:0}}>
+    <div className="card" style={{position:"relative",height:"100%",boxSizing:"border-box",borderColor:`${C.vio}55`,overflow:"visible"}}>
+      <div onClick={()=>isSynced && setExpanded(v=>!v)} style={{cursor:isSynced?"pointer":"default"}}>
         <div style={{fontSize:10,fontWeight:800,letterSpacing:".13em",textTransform:"uppercase",color:C.mut,marginBottom:6}}>☁️ {t.familySyncTitle}</div>
         <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"4px 10px",background:`${SI.color}15`,border:`1px solid ${SI.color}44`,borderRadius:10,fontSize:11,fontWeight:700,color:SI.color}}>
           <span>{SI.icon}</span><span>{SI.label}</span>
@@ -7630,7 +7638,8 @@ function FamilySyncCard() {
 
       {showDetails && (
         <>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+          {expanded && <div onClick={()=>setExpanded(false)} style={{position:"fixed",inset:0,zIndex:299}} />}
+          <div style={{position:"absolute",bottom:"100%",left:0,right:0,marginBottom:6,background:C.card,border:`1.5px solid ${C.vio}55`,borderRadius:12,padding:"10px 14px",boxShadow:"0 8px 24px rgba(0,0,0,.18)",zIndex:300,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
             <span style={{fontSize:11,color:C.mut,fontWeight:700}}>{t.familyCode} :</span>
             <span style={{fontFamily:"JetBrains Mono",fontSize:15,fontWeight:800,letterSpacing:2,color:C.vio}}>{cfg.shareCode}</span>
           </div>
@@ -7687,7 +7696,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
       <>
       <div className="sec">{t.myFamilies||"Mes familles"}</div>
       <div style={{display:"flex",gap:12,height:80,marginBottom:16}}>
-        <div style={{flex:2,minWidth:0,height:80,overflow:"hidden"}}>
+        <div style={{flex:2,minWidth:0,height:80}}>
           <FamilySyncCard />
         </div>
         <div style={{flex:1,minWidth:0,height:80}}>
@@ -7895,7 +7904,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             <div style={{...fieldBox,flexShrink:0,...lockStyle}}>
               <span style={lbl}>&nbsp;</span>
               <div style={{height:IH,display:"flex",alignItems:"center"}}>
-                <input type="color" value={p.color} onChange={e=>setParent(i,"color",e.target.value)}
+                <input type="color" className="color-circle" value={p.color} onChange={e=>setParent(i,"color",e.target.value)}
                   title={t.color}
                   style={{width:44,height:44,padding:0,border:"none",borderRadius:"50%",cursor:"pointer",overflow:"hidden",background:p.color}} />
               </div>
