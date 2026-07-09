@@ -3597,11 +3597,27 @@ export default function App() {
   const unreadMsgs = useMemo(() => {
     const _uid = String(myUid || _myId || "");
     if(!_uid) return 0;
-    return msgs.filter(m =>
-      (m.to||[]).map(String).includes(_uid) &&
-      !(m.readBy||[]).map(String).includes(_uid)
-    ).length;
-  }, [msgs, myUid, _myId]); // ✅ recalculé si msgs, myUid ou user change
+    // Regroupe par conversation (même clé que MessagingTab, ck(ids)) pour exclure
+    // les messages non lus des conversations actuellement masquées — sinon le
+    // badge reste bloqué sur un fil que l'utilisateur ne peut plus rouvrir.
+    const byConv = {};
+    msgs.forEach(m => {
+      const ids = [String(m.from), ...(m.to||[]).map(String)];
+      if(!ids.includes(_uid)) return;
+      const key = [...new Set(ids)].map(String).sort().join('|');
+      (byConv[key] ||= []).push(m);
+    });
+    let count = 0;
+    Object.entries(byConv).forEach(([key, convMsgs]) => {
+      const lastTs = convMsgs.reduce((max,m)=> m.ts>max?m.ts:max, "");
+      if(isConversationHidden(hiddenConvs[key], lastTs)) return;
+      count += convMsgs.filter(m =>
+        (m.to||[]).map(String).includes(_uid) &&
+        !(m.readBy||[]).map(String).includes(_uid)
+      ).length;
+    });
+    return count;
+  }, [msgs, myUid, _myId, hiddenConvs]); // ✅ recalculé si msgs, myUid, user ou hiddenConvs change
   // seen: clé fixe, objet {[userId]: {vault,contacts,expenses}}
   const [allSeen,setAllSeen] = useLocalStorage("duvia_seen_all", {});
   const _seen = allSeen[_myId] || {vault:"",contacts:"",expenses:""};
