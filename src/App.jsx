@@ -7690,37 +7690,39 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
         <div style={{flex:2,minWidth:0}}>
           <FamilySyncCard />
         </div>
-        <button
-          disabled={creatingFamily}
-          onClick={async ()=>{
-            if(!window.confirm(t.createNewFamilyConfirm||"Créer une nouvelle famille distincte ? Tu pourras basculer entre tes familles depuis le menu en haut de l'app.")) return;
-            setCreatingFamily(true);
-            const myProfile = (typeof user?.parentIdx === "number" ? cfg.parents[user.parentIdx] : null) || {};
-            const prefillParent = {
-              name: myProfile.name || "",
-              gender: myProfile.gender || "F",
-              birthDay: myProfile.birthDay || "",
-              birthMonth: myProfile.birthMonth || "",
-              phone: myProfile.phone || "",
-              email: user?.email || myProfile.email || "", // verrouillé : lié au compte
-            };
-            const res = await familySync.createNewFamily(prefillParent);
-            setCreatingFamily(false);
-            if(!res.ok) alert("⚠️ Erreur lors de la création de la famille.");
-          }}
-          style={{flex:1,minWidth:0,height:"auto",alignSelf:"stretch",padding:"8px 10px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:14,fontWeight:800,fontSize:12,cursor:creatingFamily?"not-allowed":"pointer",opacity:creatingFamily?0.6:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:1,lineHeight:1.25,textAlign:"center"}}>
-          {creatingFamily ? (t.creatingFamilyLabel||"⏳ Création…") : (() => {
-            const label = t.createNewFamilyBtn||"Créer Famille";
-            const [firstWord, ...rest] = label.split(" ");
-            return (
-              <>
-                <span style={{fontSize:19,color:"#fff",lineHeight:1}}>+</span>
-                <span>{firstWord}</span>
-                {rest.length>0 && <span>{rest.join(" ")}</span>}
-              </>
-            );
-          })()}
-        </button>
+        <div style={{flex:1,minWidth:0}}>
+          <button
+            disabled={creatingFamily}
+            onClick={async ()=>{
+              if(!window.confirm(t.createNewFamilyConfirm||"Créer une nouvelle famille distincte ? Tu pourras basculer entre tes familles depuis le menu en haut de l'app.")) return;
+              setCreatingFamily(true);
+              const myProfile = (typeof user?.parentIdx === "number" ? cfg.parents[user.parentIdx] : null) || {};
+              const prefillParent = {
+                name: myProfile.name || "",
+                gender: myProfile.gender || "F",
+                birthDay: myProfile.birthDay || "",
+                birthMonth: myProfile.birthMonth || "",
+                phone: myProfile.phone || "",
+                email: user?.email || myProfile.email || "", // verrouillé : lié au compte
+              };
+              const res = await familySync.createNewFamily(prefillParent);
+              setCreatingFamily(false);
+              if(!res.ok) alert("⚠️ Erreur lors de la création de la famille.");
+            }}
+            style={{width:"100%",height:"100%",padding:"8px 10px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:14,fontWeight:800,fontSize:12,cursor:creatingFamily?"not-allowed":"pointer",opacity:creatingFamily?0.6:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:1,lineHeight:1.25,textAlign:"center",boxSizing:"border-box"}}>
+            {creatingFamily ? (t.creatingFamilyLabel||"⏳ Création…") : (() => {
+              const label = t.createNewFamilyBtn||"Créer Famille";
+              const [firstWord, ...rest] = label.split(" ");
+              return (
+                <>
+                  <span style={{fontSize:19,color:"#fff",lineHeight:1}}>+</span>
+                  <span>{firstWord}</span>
+                  {rest.length>0 && <span>{rest.join(" ")}</span>}
+                </>
+              );
+            })()}
+          </button>
+        </div>
       </div>
       </>
       )}
