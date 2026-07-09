@@ -446,6 +446,23 @@ test("formatActorName : nom vide → chaîne vide", () => {
   assert.strictEqual(formatActorName("", "uid-toti", new Set(["uid-toti"])), "");
 });
 
+import { makeSchoolHolIdentity } from "./core.js";
+
+test("makeSchoolHolIdentity : capture userId et name du parent à l'index donné", () => {
+  const parents = [{ name: "Sissi", userId: "uid-sissi" }, { name: "Toti", userId: "uid-toti" }];
+  assert.deepStrictEqual(makeSchoolHolIdentity(parents, 1), { u: "uid-toti", n: "Toti" });
+});
+
+test("makeSchoolHolIdentity : parent sans userId (pas encore lié à un compte) → u null", () => {
+  const parents = [{ name: "Sissi" }];
+  assert.deepStrictEqual(makeSchoolHolIdentity(parents, 0), { u: null, n: "Sissi" });
+});
+
+test("makeSchoolHolIdentity : index hors tableau → u et n null", () => {
+  const parents = [{ name: "Sissi", userId: "uid-sissi" }];
+  assert.deepStrictEqual(makeSchoolHolIdentity(parents, 5), { u: null, n: null });
+});
+
 import { toggleMessageReaction } from "./core.js";
 
 test("toggleMessageReaction : ajoute une réaction quand il n'y en avait aucune", () => {

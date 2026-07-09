@@ -461,6 +461,18 @@ export function formatActorName(name, userId, removedUserIds) {
   return name;
 }
 
+// ── Attribution garde vacances scolaires ─────────────────────────────────────
+// Même principe que ci-dessus : un parent assigné à une date de vacances
+// scolaires (cfg.specialDates.schoolHolDetails[holName][date] = parentIdx)
+// n'a historiquement aucune identité figée — juste un index de position,
+// recyclable si ce parent quitte puis qu'un nouveau rejoint au même créneau.
+// Cette fonction produit l'instantané à stocker à part (schoolHolIdentities),
+// au moment de l'assignation, sur le même principe que paidByUserId/paidByName.
+export function makeSchoolHolIdentity(parents, parentIdx) {
+  const p = parents?.[parentIdx];
+  return { u: p?.userId || null, n: p?.name || null };
+}
+
 // ── Réactions emoji sur les messages ─────────────────────────────────────────
 // Une seule réaction par personne et par message : poser un nouveau smiley
 // remplace l'ancien ; retaper le smiley déjà posé le retire (bascule on/off).

@@ -15,7 +15,7 @@ import { useHistory } from "./hooks/useHistory";
 import { usePush } from "./hooks/usePush";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION } from './config.js';
-import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel } from './utils/core.js';
+import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, BRAND, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
 
@@ -967,13 +967,18 @@ function resolveGuard(ds,cfg,childId) {
   // 5. Vacances scolaires — per-child si disponible, sinon global
   const holDetails = (childId && cfg.specialDates?.schoolHolDetailsPerChild?.[childId])
     || cfg.specialDates?.schoolHolDetails || {};
+  const holIdentities = (childId && cfg.specialDates?.schoolHolIdentitiesPerChild?.[childId])
+    || cfg.specialDates?.schoolHolIdentities || {};
   for(const holName of Object.keys(holDetails)) {
     const det = holDetails[holName];
     if(det[ds]!==undefined) {
       const v=det[ds];
       if(typeof v==="string"&&v.startsWith("obs:"))
         return {obsId:v.slice(4),timeType:"full",source:"schoolHol"};
-      return {parentIdx:v,timeType:"full",source:"schoolHol"};
+      // Instantané d'identité figé au moment de l'assignation (peut être
+      // absent sur des données antérieures à ce fix) — voir makeSchoolHolIdentity.
+      const idn = holIdentities[holName]?.[ds];
+      return {parentIdx:v,timeType:"full",source:"schoolHol",parentUserId:idn?.u||null,parentName:idn?.n||null};
     }
   }
 
@@ -8596,6 +8601,17 @@ function StepDates() {
           const chGetHolDetails=()=> { return sd.schoolHolDetails || {}; };
           const chSetHolDetails=(newDet)=> { setCfg(c=>({...c, specialDates:{...c.specialDates, schoolHolDetails:newDet}})); };
           const chSetHD=(hn,ds,pi)=> { const det={...chGetHolDetails()}; if(pi===undefined){const copy={...(det[hn]||{})};delete copy[ds];det[hn]=copy;}else{det[hn]={...(det[hn]||{}),[ds]:pi};} chSetHolDetails(det); };
+          // 🔧 Fixe l'identité (userId+nom) au moment de l'assignation, à part de schoolHolDetails
+          // (qui ne stocke qu'un index de position recyclable) — voir makeSchoolHolIdentity.
+          const chAssignParent=(hn,dsArr,pi)=> {
+            const identity = makeSchoolHolIdentity(cfg.parents, pi);
+            setCfg(c=>{
+              const det={...(c.specialDates.schoolHolDetails||{})}; det[hn]={...(det[hn]||{})};
+              const idn={...(c.specialDates.schoolHolIdentities||{})}; idn[hn]={...(idn[hn]||{})};
+              dsArr.forEach(d2=>{ det[hn][d2]=pi; idn[hn][d2]=identity; });
+              return {...c, specialDates:{...c.specialDates, schoolHolDetails:det, schoolHolIdentities:idn}};
+            });
+          };
           const chSetZone=(subdivisionCode, zone)=> { setCfg(c=>({...c, subdivisionCode, zone})); };
           const chMD = sd.motherDay || {enabled:false};
           const chFD = sd.fatherDay || {enabled:false};
@@ -8652,7 +8668,7 @@ function StepDates() {
                               {/* Boutons tout assigner */}
                               <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
                                 {cfg.parents.map((p,pi)=>(
-                                  <button key={pi} onClick={()=>{const base=chGetHolDetails();const newDet={...base,[hol.n]:{...(base[hol.n]||{})}};days.forEach(d2=>{newDet[hol.n][d2]=pi;});chSetHolDetails(newDet);}} style={{padding:"4px 10px",background:`${p.color}22`,color:p.color,border:`1.5px solid ${p.color}`,borderRadius:20,fontSize:11,fontWeight:700}}>{(t.assignAllTo||"Tout → {name}").replace("{name}", p.name||`P${pi+1}`)}</button>
+                                  <button key={pi} onClick={()=>chAssignParent(hol.n,days,pi)} style={{padding:"4px 10px",background:`${p.color}22`,color:p.color,border:`1.5px solid ${p.color}`,borderRadius:20,fontSize:11,fontWeight:700}}>{(t.assignAllTo||"Tout → {name}").replace("{name}", p.name||`P${pi+1}`)}</button>
                                 ))}
                                 <button onClick={()=>{const base=chGetHolDetails();chSetHolDetails({...base,[hol.n]:{}});}} style={{padding:"4px 8px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,borderRadius:20,fontSize:11}}>{t.clear||"Effacer"}</button>
                               </div>
@@ -8677,7 +8693,7 @@ function StepDates() {
                                   const wkColor=dominantPi!==undefined?cfg.parents[dominantPi]?.color:C.bor;
                                   return (
                                     <WeekRow key={wi} wk={wk} wkPiCounts={wkPiCounts} dominantPi={dominantPi} wkColor={wkColor} wkLabel={wkLabel}
-                                      hol={hol} det={det} chGetHolDetails={chGetHolDetails} chSetHolDetails={chSetHolDetails} chSetHD={chSetHD}
+                                      hol={hol} det={det} chGetHolDetails={chGetHolDetails} chSetHolDetails={chSetHolDetails} chSetHD={chSetHD} chAssignParent={chAssignParent}
                                       cfg={cfg} C={C} t={t} />
                                   );
                                 });
@@ -8799,6 +8815,27 @@ function StepDates() {
           else{det[hn]={...(det[hn]||{}),[ds]:pi};}
           chSetHolDetails(det);
         };
+        // 🔧 Fixe l'identité (userId+nom) au moment de l'assignation, à part de schoolHolDetails
+        // (qui ne stocke qu'un index de position recyclable) — voir makeSchoolHolIdentity.
+        const chAssignParent=(hn,dsArr,pi)=> {
+          const identity = makeSchoolHolIdentity(cfg.parents, pi);
+          setCfg(c=>{
+            if(multiChild) {
+              const perChild={...(c.specialDates.schoolHolDetailsPerChild||{})};
+              const det={...(perChild[chId]||{})}; det[hn]={...(det[hn]||{})};
+              const idnPerChild={...(c.specialDates.schoolHolIdentitiesPerChild||{})};
+              const idn={...(idnPerChild[chId]||{})}; idn[hn]={...(idn[hn]||{})};
+              dsArr.forEach(d2=>{ det[hn][d2]=pi; idn[hn][d2]=identity; });
+              return {...c, specialDates:{...c.specialDates,
+                schoolHolDetailsPerChild:{...perChild,[chId]:det},
+                schoolHolIdentitiesPerChild:{...idnPerChild,[chId]:idn}}};
+            }
+            const det={...(c.specialDates.schoolHolDetails||{})}; det[hn]={...(det[hn]||{})};
+            const idn={...(c.specialDates.schoolHolIdentities||{})}; idn[hn]={...(idn[hn]||{})};
+            dsArr.forEach(d2=>{ det[hn][d2]=pi; idn[hn][d2]=identity; });
+            return {...c, specialDates:{...c.specialDates, schoolHolDetails:det, schoolHolIdentities:idn}};
+          });
+        };
         const chSetZone=(subdivisionCode, zone)=> {
           if(multiChild) {
             setCfg(c=>({...c, childrenZones:{...c.childrenZones, [chId]:{subdivisionCode,zone}}}));
@@ -8877,7 +8914,7 @@ function StepDates() {
                           <div style={{padding:"10px 11px"}}>
                             <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
                               {cfg.parents.map((p,pi)=>(
-                                <button key={pi} onClick={()=>{const base=chGetHolDetails();const newDet={...base,[hol.n]:{...(base[hol.n]||{})}};days.forEach(d2=>{newDet[hol.n][d2]=pi;});chSetHolDetails(newDet);}} style={{padding:"4px 10px",background:`${p.color}22`,color:p.color,border:`1.5px solid ${p.color}`,borderRadius:20,fontSize:11,fontWeight:700}}>{(t.assignAllTo||"Tout → {name}").replace("{name}", p.name||`P${pi+1}`)}</button>
+                                <button key={pi} onClick={()=>chAssignParent(hol.n,days,pi)} style={{padding:"4px 10px",background:`${p.color}22`,color:p.color,border:`1.5px solid ${p.color}`,borderRadius:20,fontSize:11,fontWeight:700}}>{(t.assignAllTo||"Tout → {name}").replace("{name}", p.name||`P${pi+1}`)}</button>
                               ))}
                               <button onClick={()=>{const base=chGetHolDetails();chSetHolDetails({...base,[hol.n]:{}});}} style={{padding:"4px 8px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,borderRadius:20,fontSize:11}}>{t.clear||"Effacer"}</button>
                             </div>
@@ -8898,7 +8935,7 @@ function StepDates() {
                                 const wkColor=dominantPi!==undefined?cfg.parents[dominantPi]?.color:C.bor;
                                 return (
                                   <WeekRow key={wi} wk={wk} wkPiCounts={wkPiCounts} dominantPi={dominantPi} wkColor={wkColor} wkLabel={wkLabel}
-                                    hol={hol} det={det} chGetHolDetails={chGetHolDetails} chSetHolDetails={chSetHolDetails} chSetHD={chSetHD}
+                                    hol={hol} det={det} chGetHolDetails={chGetHolDetails} chSetHolDetails={chSetHolDetails} chSetHD={chSetHD} chAssignParent={chAssignParent}
                                     cfg={cfg} C={C} t={t} />
                                 );
                               });
@@ -9421,7 +9458,7 @@ function StepGarde() {
 }
 
 // ─── WEEK ROW (school holidays) ───────────────────────────────────────────────
-function WeekRow({wk, wkPiCounts, dominantPi, wkColor, wkLabel, hol, det, chGetHolDetails, chSetHolDetails, chSetHD, cfg, C, t}) {
+function WeekRow({wk, wkPiCounts, dominantPi, wkColor, wkLabel, hol, det, chGetHolDetails, chSetHolDetails, chSetHD, chAssignParent, cfg, C, t}) {
   const [open, setOpen] = useState(false);
   return (
     <div style={{marginBottom:6,border:`1.5px solid ${wkColor}`,borderRadius:10,overflow:"hidden"}}>
@@ -9433,7 +9470,7 @@ function WeekRow({wk, wkPiCounts, dominantPi, wkColor, wkLabel, hol, det, chGetH
         <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
           {cfg.parents.map((p,pi)=>(
             <button key={pi}
-              onClick={()=>{const base=chGetHolDetails();const nd={...base,[hol.n]:{...(base[hol.n]||{})}};wk.forEach(({ds})=>{nd[hol.n][ds]=pi;});chSetHolDetails(nd);setOpen(false);}}
+              onClick={()=>{chAssignParent(hol.n,wk.map(({ds})=>ds),pi);setOpen(false);}}
               style={{padding:"3px 9px",background:wkPiCounts[pi]===wk.length?p.color:`${p.color}22`,color:wkPiCounts[pi]===wk.length?"#fff":p.color,border:`1.5px solid ${p.color}`,borderRadius:20,fontSize:11,fontWeight:800}}>
               {(p.name?.trim().split(" ")[0]?.slice(0,6)) || `P${pi+1}`}
             </button>
@@ -9462,7 +9499,9 @@ function WeekRow({wk, wkPiCounts, dominantPi, wkColor, wkLabel, hol, det, chGetH
             const currentChoiceIdx=aPi===undefined?-1:typeof aPi==="string"&&aPi.startsWith("obs:")?allChoices.findIndex(c=>c.type==="obs"&&c.id===aPi.slice(4)):allChoices.findIndex(c=>c.type==="parent"&&c.pi===aPi);
             const cycleDay=()=>{
               const nextIdx=currentChoiceIdx>=allChoices.length-1?undefined:currentChoiceIdx+1;
-              chSetHD(hol.n,ds,nextIdx===undefined?undefined:allChoices[nextIdx].type==="parent"?allChoices[nextIdx].pi:`obs:${allChoices[nextIdx].id}`);
+              const next=nextIdx===undefined?undefined:allChoices[nextIdx];
+              if(next?.type==="parent") chAssignParent(hol.n,[ds],next.pi);
+              else chSetHD(hol.n,ds,next===undefined?undefined:`obs:${next.id}`);
             };
             const isObs=typeof aPi==="string"&&aPi?.startsWith("obs:");
             const obsGuard=isObs?guardians.find(o=>o.id===aPi.slice(4)):null;
@@ -10893,7 +10932,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
 }
 
 function GuardCell({guard,readOnly,isOpen,onClick,onFull}) {
-  const {C,t,cfg} = useApp();
+  const {C,t,cfg,removedUserIds} = useApp();
   const parents = cfg.parents;
   const gP=guard?.allParents ? null : (guard?.parentIdx!==undefined && guard.parentIdx>=0 ? parents[guard.parentIdx] : null);
   const gObs=guard?.obsId ? (cfg.observers||[]).find(o=>String(o.id)===String(guard.obsId)) : null;
@@ -10923,7 +10962,7 @@ function GuardCell({guard,readOnly,isOpen,onClick,onFull}) {
         <div style={{display:"flex",alignItems:"center",gap:7,width:"100%"}}>
           <span style={{width:10,height:10,borderRadius:"50%",background:gP.color,flexShrink:0}} />
           <div style={{flex:1}}>
-            <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{gP.name||`P${guard.parentIdx+1}`}</div>
+            <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{formatActorName(guard.parentName||gP.name||`P${guard.parentIdx+1}`, guard.parentUserId, removedUserIds)}</div>
             {guard.source==="schoolHol"&&<div style={{fontSize:9,color:C.grn,fontWeight:700,textTransform:"uppercase"}}>🌿 {t.calSchoolHol||"Vacances"}</div>}
             {guard.source==="parentBirthday"&&<div style={{fontSize:9,color:"#f97316",fontWeight:700}}>🎂</div>}
             {guard.source==="childBirthday"&&<div style={{fontSize:9,color:"#bc8cff",fontWeight:700}}>🎁</div>}
