@@ -7620,7 +7620,7 @@ function FamilySyncCard() {
 
   return (
     <div className="card" style={{marginBottom:16,borderColor:`${C.vio}55`}}>
-      <div onClick={()=>isSynced && setExpanded(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,cursor:isSynced?"pointer":"default",marginBottom:showDetails?8:0}}>
+      <div onClick={()=>isSynced && setExpanded(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap",cursor:isSynced?"pointer":"default",marginBottom:showDetails?8:0}}>
         <div className="sec" style={{marginBottom:0}}>☁️ {t.familySyncTitle}</div>
         <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"4px 10px",background:`${SI.color}15`,border:`1px solid ${SI.color}44`,borderRadius:10,fontSize:11,fontWeight:700,color:SI.color,flexShrink:0}}>
           <span>{SI.icon}</span><span>{SI.label}</span>
@@ -7685,9 +7685,9 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
       {/* ── Mes familles (multi-familles) — parents uniquement ── */}
       {!isObs && !isChild && (
       <>
-      <div className="sec">🏠 {t.myFamilies||"Mes familles"}</div>
-      <div style={{display:"flex",gap:12,alignItems:"stretch",marginBottom:16}}>
-        <div style={{flex:1,minWidth:0}}>
+      <div className="sec">{t.myFamilies||"Mes familles"}</div>
+      <div style={{display:"flex",gap:12,alignItems:"stretch",marginBottom:16,flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:220}}>
           <FamilySyncCard />
         </div>
         <button
