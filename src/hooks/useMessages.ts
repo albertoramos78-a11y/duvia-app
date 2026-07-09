@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { type DuviaMessage, listMessages, sendMessage, markMessageRead, setMessageReaction, deleteMessage } from "../services/supabase/messageService";
+import { listHiddenConversations, hideConversation as hideConversationInDb } from "../services/supabase/hiddenConversationsService";
 
 /**
  * Remplace `const [msgs, setMsgs] = useLocalStorage("duvia_msgs", [])`
@@ -8,10 +9,11 @@ import { type DuviaMessage, listMessages, sendMessage, markMessageRead, setMessa
  * (ck(ids), allConvs, currentMsgs...) peut rester identique côté composant :
  * elle ne fait que dériver `msgs`, qui garde la même forme de tableau.
  */
-export function useMessages(familyId: string | null) {
+export function useMessages(familyId: string | null, userId: string | null) {
   const [msgs, setMsgs] = useState<DuviaMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hiddenConvs, setHiddenConvs] = useState<Record<string, string>>({});
 
   const refresh = useCallback(async () => {
     if (!familyId) return;
@@ -108,5 +110,36 @@ export function useMessages(familyId: string | null) {
     [msgs]
   );
 
-  return { msgs, loading, error, send, markRead, react, remove, refresh };
+  const refreshHidden = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const rows = await listHiddenConversations(userId);
+      setHiddenConvs(Object.fromEntries(rows.map((r) => [r.convKey, r.hiddenAt])));
+    } catch (e) {
+      // Silencieux : une erreur ici ne doit pas bloquer l'affichage des messages.
+      // Au pire une conversation reste visible qui aurait dû être masquée.
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    refreshHidden();
+  }, [refreshHidden]);
+
+  /** Masque une conversation pour l'utilisateur courant (optimiste, comme react/remove ci-dessus). */
+  const hideConversation = useCallback(
+    async (convKey: string) => {
+      if (!familyId || !userId) return;
+      const prevHiddenConvs = hiddenConvs;
+      setHiddenConvs((prev) => ({ ...prev, [convKey]: new Date().toISOString() }));
+      try {
+        const hiddenAt = await hideConversationInDb(userId, familyId, convKey);
+        setHiddenConvs((prev) => ({ ...prev, [convKey]: hiddenAt }));
+      } catch (e) {
+        setHiddenConvs(prevHiddenConvs);
+      }
+    },
+    [familyId, userId, hiddenConvs]
+  );
+
+  return { msgs, loading, error, send, markRead, react, remove, refresh, hiddenConvs, hideConversation };
 }
