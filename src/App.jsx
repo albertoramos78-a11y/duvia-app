@@ -3208,6 +3208,7 @@ export default function App() {
             window.localStorage.removeItem("duvia_rg");
             window.localStorage.removeItem("duvia_wc");
             window.localStorage.removeItem("duvia_video");
+            window.localStorage.removeItem("duvia_licorne");
           } catch {}
         }
       } catch {
