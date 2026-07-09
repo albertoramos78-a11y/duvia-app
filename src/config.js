@@ -2,9 +2,15 @@
 
 export const APP_URL = "https://app.duvia.fr";
 
-// Version de l'application (incrémente à chaque release). Utilisée notamment
-// par le service de diagnostic pour horodater les rapports de bug.
-export const APP_VERSION = "0.1.0";
+// Version de l'application — à incrémenter à CHAQUE déploiement (1.00, 1.01, 1.02...),
+// même pour un simple correctif visuel. Utilisée par le service de diagnostic pour
+// horodater les rapports de bug, ET recopiée manuellement dans public/sw.js (le
+// service worker ne peut pas importer ce fichier) : c'est ce qui force les
+// navigateurs/PWA installées à détecter une nouvelle version et proposer le
+// rafraîchissement ("Nouvelle version disponible") — sans ce changement d'octets
+// dans sw.js, la mise à jour de l'app peut rester invisible indéfiniment pour un
+// utilisateur qui ne ferme jamais complètement l'appli.
+export const APP_VERSION = "1.00";
 
 // ── Liens légaux ─────────────────────────────────────────────────────────────
 // CGU/CGV/Politique de confidentialité sont affichées directement dans l'app

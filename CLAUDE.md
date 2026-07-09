@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Duvia — French co-parenting app ("Two homes. One family."): shared custody calendar, expenses, messaging, document vault, schedule, notifications, and a premium/referral system. React + Vite frontend, Supabase backend (Postgres, Auth, Realtime, Storage, Edge Functions), deployed on Vercel (auto-deploy from GitHub, build command `npm run build`, output `dist`).
 
+**Bump the version on every push that changes app code.** `src/config.js`'s `APP_VERSION` and `public/sw.js`'s `SW_VERSION` must both be incremented together (`"1.00"` → `"1.01"` → ...) on every commit meant to reach users — including small visual tweaks. The browser only re-installs the service worker (and only then fires the "Nouvelle version disponible" reload prompt, see `main.jsx`'s `duvia-update-ready` event and `sw.js`'s header comment) when `sw.js`'s *bytes* change. Since `sw.js` itself rarely needs real code changes, forgetting this version bump means a real deploy can go completely undetected by already-open tabs/installed PWAs — users see stale UI indefinitely with no prompt to refresh. `sw.js` can't import `config.js` (it's an independent service worker script), so the two constants are kept in sync manually, not via a shared import.
+
 ## Commands
 
 - `npm install` / `npm run dev` / `npm run build` / `npm run preview`

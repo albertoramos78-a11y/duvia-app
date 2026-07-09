@@ -1,5 +1,17 @@
 // Service worker minimal — ne met rien en cache, sert juste à rendre
 // l'application "installable" sur Android/Chrome.
+//
+// 🔧 SW_VERSION doit être incrémentée à CHAQUE déploiement (garder en phase
+// avec APP_VERSION dans src/config.js — ce fichier ne peut pas l'importer,
+// c'est un script de service worker indépendant, d'où la duplication
+// manuelle). Le navigateur ne réinstalle un service worker QUE si ses
+// octets ont changé ; sans ce marqueur qui bouge, un déploiement qui ne
+// touche pas sw.js lui-même passe totalement inaperçu du mécanisme de
+// mise à jour (voir main.jsx, "duvia-update-ready") — l'app peut alors
+// rester visuellement bloquée sur une ancienne version tant que
+// l'utilisateur ne ferme/rouvre pas complètement l'appli.
+const SW_VERSION = "1.00";
+
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 self.addEventListener("fetch", (event) => {
