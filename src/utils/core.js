@@ -573,3 +573,14 @@ export function isConversationHidden(hiddenAt, lastMessageTs) {
   if (!lastMessageTs) return true;
   return hiddenAt >= lastMessageTs;
 }
+
+// Formate la date de naissance d'un enfant en JJ/MM (+ /AAAA si connue), le
+// même format que celui déjà utilisé dans l'export PDF de la convention
+// (App.jsx, buildAgreementHtml) — extrait ici pour ne pas dupliquer une 3e
+// fois cette logique inline (voir ChildInfoModal, App.jsx).
+export function formatChildBirthdate(birthDay, birthMonth, birthYear) {
+  if (!birthDay || !birthMonth) return "";
+  const dd = String(birthDay).padStart(2, "0");
+  const mm = String(birthMonth).padStart(2, "0");
+  return birthYear ? `${dd}/${mm}/${birthYear}` : `${dd}/${mm}`;
+}

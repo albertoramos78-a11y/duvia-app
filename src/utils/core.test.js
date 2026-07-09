@@ -639,3 +639,33 @@ test("isConversationHidden : hiddenAt égal au dernier message → reste masqué
 test("isConversationHidden : hiddenAt présent mais aucun message connu → masquée par défaut", () => {
   assert.strictEqual(isConversationHidden("2026-07-09T10:00:00Z", undefined), true);
 });
+
+import { formatChildBirthdate } from "./core.js";
+
+test("formatChildBirthdate : jour et mois présents, pas d'année → JJ/MM", () => {
+  assert.strictEqual(formatChildBirthdate("5", "3", ""), "05/03");
+});
+
+test("formatChildBirthdate : jour, mois et année présents → JJ/MM/AAAA", () => {
+  assert.strictEqual(formatChildBirthdate("5", "3", "2018"), "05/03/2018");
+});
+
+test("formatChildBirthdate : déjà sur 2 chiffres, pas de padding en trop", () => {
+  assert.strictEqual(formatChildBirthdate("12", "11", "2015"), "12/11/2015");
+});
+
+test("formatChildBirthdate : jour manquant → chaîne vide", () => {
+  assert.strictEqual(formatChildBirthdate("", "3", "2018"), "");
+});
+
+test("formatChildBirthdate : mois manquant → chaîne vide", () => {
+  assert.strictEqual(formatChildBirthdate("5", "", "2018"), "");
+});
+
+test("formatChildBirthdate : jour et mois manquants → chaîne vide", () => {
+  assert.strictEqual(formatChildBirthdate("", "", ""), "");
+});
+
+test("formatChildBirthdate : birthDay/birthMonth undefined (enfant tout juste créé) → chaîne vide", () => {
+  assert.strictEqual(formatChildBirthdate(undefined, undefined, undefined), "");
+});
