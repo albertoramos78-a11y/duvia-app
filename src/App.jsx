@@ -4,6 +4,7 @@ import iconObservers     from "./assets/tab_observers.png";
 import iconSpecialDates  from "./assets/tab_special_dates.png";
 import iconCustody       from "./assets/tab_custody_pattern.png";
 import iconBackButton    from "./assets/back_button.png";
+import iconSendMessage   from "./assets/send_message.png";
 import posthog from "posthog-js";
 import { supabase } from "./supabaseClient";
 import { initDiagnostics, retryPendingReport, submitBugReport } from "./services/diagnostics";
@@ -14821,11 +14822,12 @@ function MessagingTab(){
               className={shakeDraft?"duvia-shake":""}
               style={{flex:1,background:"transparent",border:"none",outline:"none",fontSize:14,color:C.txt}} />
             <button onClick={()=>sendMsg(picked)} disabled={(!draft.trim()&&!pendingFile)||uploadingFile} style={{
-              width:36,height:36,borderRadius:"50%",border:"none",cursor:(draft.trim()||pendingFile)&&!uploadingFile?"pointer":"default",
-              background:(draft.trim()||pendingFile)?`linear-gradient(135deg,${C.vio},${C.pin})`:`${C.vio}44`,
-              color:"#fff",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0
+              width:36,height:36,borderRadius:"50%",border:"none",background:"transparent",padding:0,
+              cursor:(draft.trim()||pendingFile)&&!uploadingFile?"pointer":"default",
+              display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,
+              opacity:(draft.trim()||pendingFile)&&!uploadingFile?1:0.4
             }}>{uploadingFile?"…":(
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              <img src={iconSendMessage} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} />
             )}</button>
           </div>
         </>
@@ -15076,12 +15078,12 @@ function MessagingTab(){
             className={shakeDraft?"duvia-shake":""}
             style={{flex:1,padding:"10px 14px",background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:22,fontSize:14,color:C.txt,outline:"none"}} />
           <button onClick={()=>sendMsg(otherIds)} disabled={(!draft.trim()&&!pendingFile)||uploadingFile} style={{
-            width:42,height:42,borderRadius:"50%",border:"none",flexShrink:0,
-            background:(draft.trim()||pendingFile)?`linear-gradient(135deg,${C.vio},${C.pin})`:`${C.vio}44`,
-            color:"#fff",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",
+            width:42,height:42,borderRadius:"50%",border:"none",background:"transparent",padding:0,flexShrink:0,
+            display:"flex",alignItems:"center",justifyContent:"center",
+            opacity:(draft.trim()||pendingFile)&&!uploadingFile?1:0.4,
             cursor:(draft.trim()||pendingFile)&&!uploadingFile?"pointer":"default"
           }}>{uploadingFile?"…":(
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            <img src={iconSendMessage} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} />
           )}</button>
         </div>
       </div>
