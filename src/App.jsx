@@ -14,7 +14,7 @@ import { useExpenses } from "./hooks/useExpenses";
 import { useHistory } from "./hooks/useHistory";
 import { usePush } from "./hooks/usePush";
 import { TR } from './i18n/index.js';
-import { APP_URL, LIMITS, RGPD_NOTICE_VERSION } from './config.js';
+import { APP_URL, LIMITS, RGPD_NOTICE_VERSION, APP_VERSION } from './config.js';
 import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, BRAND, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
@@ -4495,6 +4495,7 @@ export default function App() {
                 <button onClick={()=>{setLegalDocOpen("cgv");setShowMenu(false);}} style={{background:"none",border:"none",color:C.vio,textDecoration:"underline",fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit"}}>CGV</button>
                 {" · "}
                 <button onClick={()=>{setLegalDocOpen("privacy");setShowMenu(false);}} style={{background:"none",border:"none",color:C.vio,textDecoration:"underline",fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit"}}>Confidentialité</button>
+                <div style={{marginTop:6,color:C.mut}}>{(t.appVersionLabel||"Version").replace("{v}",APP_VERSION)}</div>
               </div>
             </div>
             </>

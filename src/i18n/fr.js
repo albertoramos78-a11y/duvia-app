@@ -621,6 +621,7 @@ const fr = {
     menuPrefs:"Préférences",
     licenseLine1:"DUVIA — Licence Propriétaire",
     licenseLine2:"© 2026 Alberto Ramos — Tous droits réservés",
+    appVersionLabel:"Version {v}",
     emailNotifs:"Notifications email",
     notifMsg:"Nouveau message reçu",
     notifMsgDesc:"Email quand l'autre parent vous écrit",

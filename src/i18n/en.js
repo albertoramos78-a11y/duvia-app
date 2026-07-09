@@ -570,6 +570,7 @@ const en = {
     menuPrefs:"Preferences",
     licenseLine1:"DUVIA — Proprietary License",
     licenseLine2:"© 2026 Alberto Ramos — All rights reserved",
+    appVersionLabel:"Version {v}",
     emailNotifs:"Email notifications",
     notifMsg:"New message received",
     notifMsgDesc:"Email when the other parent writes to you",
