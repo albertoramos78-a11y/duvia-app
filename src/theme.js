@@ -13,6 +13,8 @@ export const SUMMER_START = new Date("2026-06-21"); export const SUMMER_END = ne
 export function isSummerPeriod() { const n=new Date(); return n>=SUMMER_START && n<=SUMMER_END; }
 // ─── THÈME JEU VIDÉO ──────────────────────────────────────────────────────────
 export const VIDEO = { bg:"#07071a",card:"#0f0f2a",sur:"#181835",bor:"#5b21b6",txt:"#ede9fe",mut:"#7c6fa0",inp:"#0b0b22",vio:"#8b5cf6",blu:"#06b6d4",grn:"#22c55e",yel:"#fbbf24",red:"#f43f5e",ora:"#fb923c",pin:"#ec4899",_video:true };
+// ─── THÈME LICORNE ────────────────────────────────────────────────────────────
+export const LICORNE = { bg:"#fdf2fb",card:"#ffffff",sur:"#fce7f8",bor:"#f0abfc",txt:"#581c62",mut:"#a855c7",inp:"#ffffff",vio:"#c026d3",blu:"#818cf8",grn:"#34d399",yel:"#fbbf24",red:"#fb7185",ora:"#fb923c",pin:"#f472b6",_licorne:true };
 // ─── BRAND THEME — Thème principal (palette extraite du gradient bleu→rose) ──
 export const BRAND = { bg:"#F2EDFF",card:"#FFFFFF",sur:"#EAE3FF",bor:"#C6B8EE",txt:"#17103A",mut:"#7269A8",inp:"#FFFFFF",vio:"#7B7CF5",blu:"#5B98F2",grn:"#2DD4A8",yel:"#F5B540",red:"#FF4692",ora:"#FF7B60",pin:"#FF6CB8",_brand:true };
 export const PCOLS = ["#f97316","#06b6d4","#10b981","#f59e0b","#ec4899","#ef4444"];

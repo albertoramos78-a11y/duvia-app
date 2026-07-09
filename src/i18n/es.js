@@ -329,6 +329,7 @@ const es = {
     wheelActive:"Activo ✓",
     wheelPendingStatus:"Pendiente",
     wheelVideoActiveInfo:"Tema activo · Desactívalo desde el menú ☰ o 🏆",
+    wheelLicorneActiveInfo:"Tema activo · Desactívalo desde el menú ☰ o 🏆",
     wheelActivateViaButton:"Actívalo desde el botón 🏆",
     wheelActiveCheck:"✓ Activo",
     wheelApply:"Aplicar",

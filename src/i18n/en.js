@@ -331,6 +331,7 @@ const en = {
     wheelActive:"Active ✓",
     wheelPendingStatus:"Pending",
     wheelVideoActiveInfo:"Theme active · Disable via the ☰ menu or 🏆",
+    wheelLicorneActiveInfo:"Theme active · Disable via the ☰ menu or 🏆",
     wheelActivateViaButton:"Activate it via the 🏆 button",
     wheelActiveCheck:"✓ Active",
     wheelApply:"Apply",

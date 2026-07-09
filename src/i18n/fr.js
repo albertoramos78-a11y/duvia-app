@@ -355,6 +355,7 @@ const fr = {
     wheelActive:"Actif ✓",
     wheelPendingStatus:"En attente",
     wheelVideoActiveInfo:"Thème actif · Désactivez via le menu ☰ ou 🏆",
+    wheelLicorneActiveInfo:"Thème actif · Désactivez via le menu ☰ ou 🏆",
     wheelActivateViaButton:"Activez-le via le bouton 🏆",
     wheelActiveCheck:"✓ Actif",
     wheelApply:"Appliquer",

@@ -21,7 +21,7 @@ import { usePush } from "./hooks/usePush";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION, APP_VERSION } from './config.js';
 import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate } from './utils/core.js';
-import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, BRAND, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
+import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, LICORNE, BRAND, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
 
 // ─── POSTHOG — Analytics (pays, logins, comportement) ───────────────────────
@@ -3062,6 +3062,7 @@ export default function App() {
   const [rgActive,setRgActive]         = useLocalStorage("duvia_rg", false);
   const [wcActive,setWcActive]         = useLocalStorage("duvia_wc", false);
   const [videoActive,setVideoActive]   = useLocalStorage("duvia_video", false);
+  const [licorneActive,setLicorneActive] = useLocalStorage("duvia_licorne", false);
   const brandActive = themeMode==="palette";
 
   // ── Session (email stored, user object restored from users list) ──────────
@@ -3379,6 +3380,7 @@ export default function App() {
       setRgActive(false);
       setWcActive(false);
       setVideoActive(false);
+      setLicorneActive(false);
       setThemeMode("palette");
       setShowPrizesMenu(false);
       // 🔧 Repartir de zéro pour le prochain compte qui se connecte sur cet
@@ -3404,7 +3406,7 @@ export default function App() {
       supabase.auth.signOut().catch(()=>{}).finally(()=>{ duviaReload(); });
       return;
     }
-  }, [sessionEmail, setSessionEmail, setSummerActive, setRgActive, setWcActive, setVideoActive, setThemeMode, setShowPrizesMenu]); // ✅ tous les setters existent à ce stade
+  }, [sessionEmail, setSessionEmail, setSummerActive, setRgActive, setWcActive, setVideoActive, setLicorneActive, setThemeMode, setShowPrizesMenu]); // ✅ tous les setters existent à ce stade
 
   // ── Google OAuth : détecte le retour de redirection et connecte l'utilisateur ──
   useEffect(() => {
@@ -3676,10 +3678,10 @@ export default function App() {
   // ─────────────────────────────────────────────────────────────────────────
 
   const C = useMemo(() =>
-    videoActive ? VIDEO : wcActive ? WC : rgActive ? RG :
+    licorneActive ? LICORNE : videoActive ? VIDEO : wcActive ? WC : rgActive ? RG :
     summerActive ? SUMMER : themeMode==="sombre" ? DARK :
     themeMode==="clair" ? LIGHT : BRAND,
-  [videoActive, wcActive, rgActive, summerActive, themeMode]); // ✅ recalculé uniquement si le thème change
+  [licorneActive, videoActive, wcActive, rgActive, summerActive, themeMode]); // ✅ recalculé uniquement si le thème change
   const cssString = useMemo(() => css(C), [C]); // ✅ ~300 lignes CSS générées une seule fois par thème
   const brandCssString = useMemo(() => css(BRAND), []); // ✅ toujours BRAND pour la page de login
   const headerBG = C._brand ? `linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)` : C.card;
@@ -4241,7 +4243,7 @@ export default function App() {
     activity, setActivity, allSeen, setAllSeen, _setSeen,
     unreadVaultDocIds, setUnreadVaultDocIds, custodyShadow,
     pushStatus, pushSubscribe, pushUnsubscribe, pushPending, pushRestrictiveOem,
-    summerActive, setSummerActive, rgActive, setRgActive, wcActive, setWcActive, videoActive, setVideoActive,
+    summerActive, setSummerActive, rgActive, setRgActive, wcActive, setWcActive, videoActive, setVideoActive, licorneActive, setLicorneActive,
     brandActive,
     handleSetUser,
     configStep, setConfigStep,
@@ -4406,7 +4408,7 @@ export default function App() {
             const hasActivatable =
               ((sub.earnedTheme||myG.theme||selfB.theme) && !summerActive) ||
               ((sub.earnedVideo||myG.video||selfB.video) && !videoActive) ||
-              ((sub.earnedLicorne||myG.licorne||selfB.licorne)) ||
+              ((sub.earnedLicorne||myG.licorne||selfB.licorne) && !licorneActive) ||
               ((sub.earnedWC||myG.wc||selfB.wc) && (isWCPeriod()||myG.wc||selfB.wc) && !wcActive) ||
               ((sub.earnedRG||myG.rg||selfB.rg) && (isRGPeriod()||myG.rg||selfB.rg) && !rgActive);
             return (
@@ -4435,7 +4437,7 @@ export default function App() {
                         </div>
                       )}
                       {(sub.earnedTheme||myG.theme||sub.earnedSelf_theme) && (
-                        <button onClick={()=>{setSummerActive(s=>!s);setRgActive(false);setWcActive(false);setVideoActive(false);setShowPrizesMenu(false);}}
+                        <button onClick={()=>{setSummerActive(s=>!s);setRgActive(false);setWcActive(false);setVideoActive(false);setLicorneActive(false);setShowPrizesMenu(false);}}
                           style={{width:"100%",padding:"0 14px",height:40,background:summerActive?"#3ecf8e15":"#3ecf8e08",color:"#3ecf8e",textAlign:"left",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:12,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
                           <span style={{fontSize:16}}>🌴</span>
                           <span style={{flex:1}}>{t.shopTheme}{sub.earnedSelf_theme&&!sub.earnedTheme?" 🛒":myG.theme&&!sub.earnedTheme?" 🎁":""}</span>
@@ -4443,7 +4445,7 @@ export default function App() {
                         </button>
                       )}
                       {(sub.earnedVideo||myG.video||sub.earnedSelf_video) && (
-                        <button onClick={()=>{setVideoActive(s=>!s);setSummerActive(false);setRgActive(false);setWcActive(false);setShowPrizesMenu(false);}}
+                        <button onClick={()=>{setVideoActive(s=>!s);setSummerActive(false);setRgActive(false);setWcActive(false);setLicorneActive(false);setShowPrizesMenu(false);}}
                           style={{width:"100%",padding:"0 14px",height:40,background:videoActive?"#8b5cf615":"#8b5cf608",color:"#8b5cf6",textAlign:"left",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:12,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
                           <span style={{fontSize:16}}>🎮</span>
                           <span style={{flex:1}}>{t.shopVideo}{sub.earnedSelf_video&&!sub.earnedVideo?" 🛒":myG.video&&!sub.earnedVideo?" 🎁":""}</span>
@@ -4451,14 +4453,15 @@ export default function App() {
                         </button>
                       )}
                       {(sub.earnedLicorne||myG.licorne||sub.earnedSelf_licorne) && (
-                        <div style={{padding:"0 14px",height:40,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:12,fontWeight:600,color:"#ec4899",background:"#ec489908"}}>
+                        <button onClick={()=>{setLicorneActive(s=>!s);setSummerActive(false);setRgActive(false);setWcActive(false);setVideoActive(false);setShowPrizesMenu(false);}}
+                          style={{width:"100%",padding:"0 14px",height:40,background:licorneActive?"#ec489915":"#ec489908",color:"#ec4899",textAlign:"left",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:12,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
                           <span style={{fontSize:16}}>🦄</span>
                           <span style={{flex:1}}>{t.shopLicorne}{sub.earnedSelf_licorne&&!sub.earnedLicorne?" 🛒":myG.licorne&&!sub.earnedLicorne?" 🎁":""}</span>
-                          <span style={{background:"#ec489922",color:"#ec4899",borderRadius:8,padding:"2px 7px",fontSize:10,fontWeight:800}}>{t.wheelSoon}</span>
-                        </div>
+                          <span style={{background:licorneActive?"#ec489933":"#ec489918",color:"#ec4899",borderRadius:8,padding:"2px 7px",fontSize:10,fontWeight:800}}>{licorneActive?t.wheelActiveCheck:t.wheelApply}</span>
+                        </button>
                       )}
                       {(sub.earnedWC||myG.wc||sub.earnedSelf_wc) && (isWCPeriod()||myG.wc||sub.earnedSelf_wc) && (
-                        <button onClick={()=>{setWcActive(s=>!s);setSummerActive(false);setRgActive(false);setVideoActive(false);setShowPrizesMenu(false);}}
+                        <button onClick={()=>{setWcActive(s=>!s);setSummerActive(false);setRgActive(false);setVideoActive(false);setLicorneActive(false);setShowPrizesMenu(false);}}
                           style={{width:"100%",padding:"0 14px",height:40,background:wcActive?"#2563eb15":"#2563eb08",color:"#2563eb",textAlign:"left",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:12,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
                           <span style={{fontSize:16}}>⚽</span>
                           <span style={{flex:1}}>{t.shopWC}{sub.earnedSelf_wc&&!sub.earnedWC?" 🛒":myG.wc&&!sub.earnedWC?" 🎁":""}</span>
@@ -4466,7 +4469,7 @@ export default function App() {
                         </button>
                       )}
                       {(sub.earnedRG||myG.rg||sub.earnedSelf_rg) && (isRGPeriod()||myG.rg||sub.earnedSelf_rg) && (
-                        <button onClick={()=>{setRgActive(s=>!s);setSummerActive(false);setWcActive(false);setVideoActive(false);setShowPrizesMenu(false);}}
+                        <button onClick={()=>{setRgActive(s=>!s);setSummerActive(false);setWcActive(false);setVideoActive(false);setLicorneActive(false);setShowPrizesMenu(false);}}
                           style={{width:"100%",padding:"0 14px",height:40,background:rgActive?"#c2745a15":"#c2745a08",color:"#c2745a",textAlign:"left",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:12,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
                           <span style={{fontSize:16}}>🎾</span>
                           <span style={{flex:1}}>{t.shopRG}{sub.earnedSelf_rg&&!sub.earnedRG?" 🛒":myG.rg&&!sub.earnedRG?" 🎁":""}</span>
@@ -16671,7 +16674,7 @@ function GiftShopSection() {
 
 // ─── GAME TAB ────────────────────────────────────────────────────────────────
 function GameTab() {
-  const {C,t,sub,setSub,prem,onUpgrade,st,isChild,isObs,isAdm,user,videoActive} = useApp();
+  const {C,t,sub,setSub,prem,onUpgrade,st,isChild,isObs,isAdm,user,videoActive,licorneActive} = useApp();
   const isPremium = prem; // trial_premium + premium peuvent jouer (freemium : non)
   // Rôle du joueur
   const isParent  = user?.role === "parent";
@@ -16754,7 +16757,7 @@ function GameTab() {
             {(sub.earnedLicorne||myGifted.licorne) && (() => {
               const g = !!myGifted.licorne;
               return <EarnedPrizeRow emoji="🦄" label={t.shopLicorne} color="#ec4899"
-                info={t.wheelActivateViaMenu} status={t.wheelActive} gift={g} />;
+                info={licorneActive?t.wheelLicorneActiveInfo:t.wheelActivateViaButton} status={licorneActive?t.wheelActiveCheck:t.wheelApply} gift={g} />;
             })()}
             {(sub.earnedRG||myGifted.rg) && (() => {
               const g = !!myGifted.rg;

@@ -329,6 +329,7 @@ const de = {
     wheelActive:"Aktiv ✓",
     wheelPendingStatus:"Ausstehend",
     wheelVideoActiveInfo:"Design aktiv · Über das ☰ Menü oder 🏆 deaktivieren",
+    wheelLicorneActiveInfo:"Design aktiv · Über das ☰ Menü oder 🏆 deaktivieren",
     wheelActivateViaButton:"Über den 🏆 Button aktivieren",
     wheelActiveCheck:"✓ Aktiv",
     wheelApply:"Anwenden",
