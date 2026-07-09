@@ -8038,7 +8038,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
               <input type="tel" value={ch.phone||""} onChange={e=>setChild(i,"phone",e.target.value)} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} readOnly={childLocked}
                 style={{...inp,...(childLocked?{background:C.sur,color:C.mut,cursor:"default"}:{})}} />
             </div>
-            <div style={{...fieldBox,flex:1}}>
+            <div style={{...fieldBox,flex:2}}>
               <span style={lbl}>
                 ✉️ Email
                 {childLocked &&
