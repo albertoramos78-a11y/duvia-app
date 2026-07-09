@@ -7686,11 +7686,11 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
       {!isObs && !isChild && (
       <>
       <div className="sec">{t.myFamilies||"Mes familles"}</div>
-      <div style={{display:"flex",gap:12,alignItems:"stretch",marginBottom:16}}>
-        <div style={{flex:2,minWidth:0}}>
+      <div style={{display:"flex",gap:12,height:80,marginBottom:16}}>
+        <div style={{flex:2,minWidth:0,height:80,overflow:"hidden"}}>
           <FamilySyncCard />
         </div>
-        <div style={{flex:1,minWidth:0}}>
+        <div style={{flex:1,minWidth:0,height:80}}>
           <button
             disabled={creatingFamily}
             onClick={async ()=>{
