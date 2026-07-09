@@ -458,7 +458,7 @@ const pt = {
     invErrInvalid:"⚠️ Link de convite inválido ou erro. Tente novamente.",
     invErrUsedObs:"⚠️ Este link de convite já foi utilizado. Peça um novo link aos pais.",
     invErrExpiredWait:"Este link de convite expirou (válido 24 h). Peça um novo link aos pais.",
-    rememberMe:"Manter sessão iniciada 24h neste dispositivo",
+    rememberMe:"Manter sessão iniciada 7 dias neste dispositivo",
     confirmPw:"Confirmar senha",
     confirmPwPlaceholder:"Repita a senha",
     pwMismatch:"⚠️ As senhas não coincidem.",

@@ -3083,7 +3083,7 @@ export default function App() {
   // (L'admin est maintenant un vrai compte Supabase, plus d'exemption nécessaire.)
   useEffect(() => {
     if (!sessionEmail) return;
-    // ⏱️ « Rester connecté » plafonné à 24h : passé l'échéance, déconnexion
+    // ⏱️ « Rester connecté » plafonné à 7 jours : passé l'échéance, déconnexion
     // forcée. Vérif LOCALE (basée sur l'horloge) → s'applique même hors-ligne.
     try {
       const until = parseInt(window.localStorage.getItem("duvia_remember_until") || "0", 10);
@@ -5914,9 +5914,9 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
           {(mode==="login"||mode==="register")&&(
             <label style={{display:"flex",alignItems:"center",gap:8,margin:"2px 0 12px",cursor:"pointer",fontSize:12.5,color:C.mut}}>
               <input type="checkbox" checked={remember}
-                onChange={e=>{ const v=e.target.checked; setRemember(v); try{ if(v){ window.localStorage.setItem("duvia_remember","1"); window.localStorage.setItem("duvia_remember_until", String(Date.now()+24*60*60*1000)); } else { window.localStorage.removeItem("duvia_remember"); window.localStorage.removeItem("duvia_remember_until"); } }catch{} }}
+                onChange={e=>{ const v=e.target.checked; setRemember(v); try{ if(v){ window.localStorage.setItem("duvia_remember","1"); window.localStorage.setItem("duvia_remember_until", String(Date.now()+7*24*60*60*1000)); } else { window.localStorage.removeItem("duvia_remember"); window.localStorage.removeItem("duvia_remember_until"); } }catch{} }}
                 style={{width:17,height:17,accentColor:C.vio,cursor:"pointer"}} />
-              {t.rememberMe||"Rester connecté 24h sur cet appareil"}
+              {t.rememberMe||"Rester connecté 7 jours sur cet appareil"}
             </label>
           )}
           <button onClick={mode==="login"?doLogin:mode==="register"?doReg:doForgot} style={{width:"100%",height:48,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:15,fontWeight:800,marginBottom:10,borderRadius:12,boxShadow:`0 4px 14px ${C.vio}44`}}>

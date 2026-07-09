@@ -458,7 +458,7 @@ const de = {
     invErrInvalid:"⚠️ Ungültiger Einladungslink oder Fehler. Bitte erneut versuchen.",
     invErrUsedObs:"⚠️ Dieser Einladungslink wurde bereits verwendet. Bitte die Eltern um einen neuen Link.",
     invErrExpiredWait:"Dieser Einladungslink ist abgelaufen (24 Std. gültig). Bitte die Eltern um einen neuen Link.",
-    rememberMe:"24 Std. auf diesem Gerät angemeldet bleiben",
+    rememberMe:"7 Tage auf diesem Gerät angemeldet bleiben",
     confirmPw:"Passwort bestätigen",
     confirmPwPlaceholder:"Passwort wiederholen",
     pwMismatch:"⚠️ Die Passwörter stimmen nicht überein.",

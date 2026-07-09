@@ -458,7 +458,7 @@ const es = {
     invErrInvalid:"⚠️ Enlace de invitación no válido o error. Inténtalo de nuevo.",
     invErrUsedObs:"⚠️ Este enlace de invitación ya se ha utilizado. Pide un nuevo enlace a los padres.",
     invErrExpiredWait:"Este enlace de invitación ha caducado (válido 24 h). Pide un nuevo enlace a los padres.",
-    rememberMe:"Permanecer conectado 24 h en este dispositivo",
+    rememberMe:"Permanecer conectado 7 días en este dispositivo",
     confirmPw:"Confirmar contraseña",
     confirmPwPlaceholder:"Repite la contraseña",
     pwMismatch:"⚠️ Las contraseñas no coinciden.",

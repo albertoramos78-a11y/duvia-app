@@ -511,7 +511,7 @@ const fr = {
     invErrInvalid:"⚠️ Lien d'invitation invalide ou erreur. Réessaie.",
     invErrUsedObs:"⚠️ Ce lien d'invitation a déjà été utilisé. Demandez un nouveau lien aux parents.",
     invErrExpiredWait:"Ce lien d'invitation a expiré (validité 24h). Demandez un nouveau lien aux parents.",
-    rememberMe:"Rester connecté 24h sur cet appareil",
+    rememberMe:"Rester connecté 7 jours sur cet appareil",
     confirmPw:"Confirmer le mot de passe",
     confirmPwPlaceholder:"Répéter le mot de passe",
     pwMismatch:"⚠️ Les mots de passe ne correspondent pas.",
