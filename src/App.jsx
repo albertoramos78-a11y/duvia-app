@@ -3,6 +3,7 @@ import iconFamily        from "./assets/tab_family.png";
 import iconObservers     from "./assets/tab_observers.png";
 import iconSpecialDates  from "./assets/tab_special_dates.png";
 import iconCustody       from "./assets/tab_custody_pattern.png";
+import iconBackButton    from "./assets/back_button.png";
 import posthog from "posthog-js";
 import { supabase } from "./supabaseClient";
 import { initDiagnostics, retryPendingReport, submitBugReport } from "./services/diagnostics";
@@ -4626,7 +4627,9 @@ export default function App() {
             <div style={{flexShrink:0,background:C.card,borderBottom:`1.5px solid ${C.bor}`,boxShadow:"0 1px 6px rgba(0,0,0,.05)"}}>
               {/* Barre retour + titre */}
               <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px 6px"}}>
-                <button onClick={()=>{setMenuTab(null);setConfigStep(0);}} style={{width:34,height:34,background:"transparent",color:C.txt,border:`1.5px solid ${C.bor}`,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,fontWeight:900,lineHeight:1,padding:0}}>←</button>
+                <button onClick={()=>{setMenuTab(null);setConfigStep(0);}} style={{width:36,height:36,background:"transparent",border:"none",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0}}>
+                  <img src={iconBackButton} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} />
+                </button>
                 <div style={{fontSize:14,fontWeight:900,flex:1}}>🏠 {t.menuConfigFamily||"Configuration famille"}</div>
                 {configStep===0 && <StepIdInfoButton C={C} t={t} user={user} />}
                 {configStep===1 && <StepAccessInfoButton C={C} t={t} user={user} />}
@@ -14757,7 +14760,9 @@ function MessagingTab(){
   if(view==="new") return(
     <div className="fi">
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-        <button onClick={()=>setView("list")} style={{width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",color:C.txt,border:`1.5px solid ${C.bor}`,borderRadius:"50%",flexShrink:0,cursor:"pointer",fontSize:18,fontWeight:900,lineHeight:1,padding:0}}>←</button>
+        <button onClick={()=>setView("list")} style={{width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",border:"none",flexShrink:0,cursor:"pointer",padding:0}}>
+          <img src={iconBackButton} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} />
+        </button>
         <div style={{fontSize:15,fontWeight:900}}>{t.msgNewTitle||"✏️ Nouveau message"}</div>
       </div>
       <div className="card" style={{marginBottom:12}}>
@@ -14836,7 +14841,9 @@ function MessagingTab(){
       <div className="fi" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 190px)"}}>
         {/* Header */}
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexShrink:0}}>
-          <button onClick={()=>setView("list")} style={{width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",color:C.txt,border:`1.5px solid ${C.bor}`,borderRadius:"50%",flexShrink:0,cursor:"pointer",fontSize:18,fontWeight:900,lineHeight:1,padding:0}}>←</button>
+          <button onClick={()=>setView("list")} style={{width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",border:"none",flexShrink:0,cursor:"pointer",padding:0}}>
+          <img src={iconBackButton} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} />
+        </button>
           <div style={{position:"relative",flexShrink:0}}>
             <div style={{width:38,height:38,borderRadius:isGroup?11:"50%",background:isGroup?`linear-gradient(135deg,${C.vio},${C.pin})`:`linear-gradient(135deg,${convColor(currentConv.ids)},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,border:isGroup?`2px solid ${C.vio}44`:"none",overflow:"hidden"}}>
               {isGroup?"👥":renderAvatar(pMap[otherIds[0]]?.avatar)}
