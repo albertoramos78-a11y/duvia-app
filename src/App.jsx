@@ -15,7 +15,7 @@ import { useHistory } from "./hooks/useHistory";
 import { usePush } from "./hooks/usePush";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION } from './config.js';
-import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity } from './utils/core.js';
+import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, BRAND, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
 
@@ -14412,7 +14412,7 @@ function formatFileSize(bytes){
 
 // ─── MESSAGING TAB ────────────────────────────────────────────────────────────
 function MessagingTab(){
-  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,reactToCloudMessage,deleteCloudMessage,myUid,uidToLocal,localToUid,emailToUid,familySync,isChild,isObs}=useApp();
+  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,reactToCloudMessage,deleteCloudMessage,myUid,uidToLocal,localToUid,emailToUid,familySync,isChild,isObs,hiddenConvs,hideConversation}=useApp();
   const [view,setView]=useState("list");
   const [convId,setConvId]=useState(null);
   const [draft,setDraft]=useState("");
@@ -14422,6 +14422,9 @@ function MessagingTab(){
   const [reactionPopover,setReactionPopover]=useState(null); // {msgId,emoji} — popover "qui a réagi" ouvert
   const longPressTimer=useRef(null);
   const longPressFired=useRef(false);
+  const [deleteConvKey,setDeleteConvKey]=useState(null); // clé de la conversation en attente de confirmation de suppression
+  const convLongPressTimer=useRef(null);
+  const convLongPressFired=useRef(false);
   const [shakeDraft,setShakeDraft]=useState(false);
   // Épinglage de messages — par compte (localStorage)
   const [pinnedMsgIds,setPinnedMsgIds]=useLocalStorage(`duvia_pinned_msgs_${user?.id||"x"}`,[]); 
@@ -14590,10 +14593,12 @@ function MessagingTab(){
     if(!allConvs[key])allConvs[key]={key,ids,msgs:[]};
     allConvs[key].msgs.push(m);
   });
-  const convList=Object.values(allConvs).sort((a,b)=>{
-    const la=a.msgs.at(-1)?.ts||'',lb=b.msgs.at(-1)?.ts||'';
-    return lb.localeCompare(la);
-  });
+  const convList=Object.values(allConvs)
+    .filter(conv=>!isConversationHidden(hiddenConvs[conv.key], conv.msgs.at(-1)?.ts))
+    .sort((a,b)=>{
+      const la=a.msgs.at(-1)?.ts||'',lb=b.msgs.at(-1)?.ts||'';
+      return lb.localeCompare(la);
+    });
 
   const currentConv=convId?allConvs[convId]:null;
   const currentMsgs=(currentConv?.msgs||[]).slice().sort((a,b)=>a.ts.localeCompare(b.ts));
@@ -15110,7 +15115,15 @@ function MessagingTab(){
         const otherIds=conv.ids.filter(id=>id!==_myUidStr);
         const memberCount=conv.ids.length; // total including me
         return(
-          <div key={conv.key} onClick={()=>{setConvId(conv.key);setView("chat");}} className="card" style={{
+          <div key={conv.key}
+            onClick={()=>{ if(convLongPressFired.current){ convLongPressFired.current=false; return; } setConvId(conv.key);setView("chat"); }}
+            onMouseDown={()=>{ convLongPressTimer.current=setTimeout(()=>{ convLongPressFired.current=true; setDeleteConvKey(conv.key); },450); }}
+            onMouseUp={()=>clearTimeout(convLongPressTimer.current)}
+            onMouseLeave={()=>clearTimeout(convLongPressTimer.current)}
+            onTouchStart={()=>{ convLongPressTimer.current=setTimeout(()=>{ convLongPressFired.current=true; setDeleteConvKey(conv.key); },450); }}
+            onTouchEnd={()=>clearTimeout(convLongPressTimer.current)}
+            onTouchCancel={()=>clearTimeout(convLongPressTimer.current)}
+            className="card" style={{
             marginBottom:10,cursor:"pointer",
             borderColor:unread>0?col:isGroup?C.vio+"55":C.bor,
             background:unread>0?`${col}08`:isGroup?`${C.vio}05`:C.card,transition:"all .15s"
@@ -15169,6 +15182,20 @@ function MessagingTab(){
           {t.msgIntegrityFooter||"Chaque message est signé par un hash cryptographique unique (FNV-1a). Appuyez sur n'importe quel message pour vérifier son intégrité."}
         </div>
       </div>
+
+      {/* Modale confirmation suppression conversation (locale à l'utilisateur) */}
+      {deleteConvKey && (
+        <div onClick={()=>setDeleteConvKey(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:16,padding:20,maxWidth:340,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
+            <div style={{fontSize:15,fontWeight:900,color:C.txt,marginBottom:8}}>{t.msgDeleteConvConfirmTitle||"Supprimer cette conversation ?"}</div>
+            <div style={{fontSize:13,color:C.mut,lineHeight:1.5,marginBottom:18}}>{t.msgDeleteConvConfirmBody||"Cette conversation sera supprimée uniquement de ta liste. Elle restera visible pour les autres participants."}</div>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setDeleteConvKey(null)} style={{flex:1,height:44,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13,cursor:"pointer"}}>{t.cancel||"Annuler"}</button>
+              <button onClick={()=>{hideConversation(deleteConvKey);setDeleteConvKey(null);}} style={{flex:1,height:44,background:C.red,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13,cursor:"pointer"}}>{t.msgDeleteConvConfirmBtn||"Supprimer"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
