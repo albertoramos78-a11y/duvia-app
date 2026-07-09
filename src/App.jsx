@@ -7708,7 +7708,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             setCreatingFamily(false);
             if(!res.ok) alert("⚠️ Erreur lors de la création de la famille.");
           }}
-          style={{flex:1,minWidth:0,height:"100%",padding:"8px 10px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:14,fontWeight:800,fontSize:12,cursor:creatingFamily?"not-allowed":"pointer",opacity:creatingFamily?0.6:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:1,lineHeight:1.25,textAlign:"center"}}>
+          style={{flex:1,minWidth:0,height:"auto",alignSelf:"stretch",padding:"8px 10px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:14,fontWeight:800,fontSize:12,cursor:creatingFamily?"not-allowed":"pointer",opacity:creatingFamily?0.6:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:1,lineHeight:1.25,textAlign:"center"}}>
           {creatingFamily ? (t.creatingFamilyLabel||"⏳ Création…") : (() => {
             const label = t.createNewFamilyBtn||"Créer Famille";
             const [firstWord, ...rest] = label.split(" ");
