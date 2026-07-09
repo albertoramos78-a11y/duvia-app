@@ -349,7 +349,7 @@ const es = {
     shopWC:"Tema Mundial 26",
     rateAppMenu:"Dar mi opinión",
     betaBanner:"🧪 Versión beta — Premium gratis por ahora",
-    betaChip:"Beta — Premium incluido",
+    betaChip:"Beta",
     loginBetaNote:"Versión beta — Premium gratis por ahora",
     ratingHeading:"Su opinión importa",
     ratingSubheading:"¿Cómo calificarías tu experiencia?",

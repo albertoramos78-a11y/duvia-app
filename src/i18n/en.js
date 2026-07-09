@@ -351,7 +351,7 @@ const en = {
     shopWC:"World Cup Theme 26",
     rateAppMenu:"Give feedback",
     betaBanner:"🧪 Beta version — Premium free for now",
-    betaChip:"Beta — Premium included",
+    betaChip:"Beta",
     loginBetaNote:"Beta version — Premium free for now",
     ratingHeading:"Your opinion matters",
     ratingSubheading:"How would you rate your experience?",

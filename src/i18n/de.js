@@ -349,7 +349,7 @@ const de = {
     shopWC:"WM-Design 26",
     rateAppMenu:"Bewertung abgeben",
     betaBanner:"🧪 Beta-Version — Premium derzeit kostenlos",
-    betaChip:"Beta — Premium inklusive",
+    betaChip:"Beta",
     loginBetaNote:"Beta-Version — Premium derzeit kostenlos",
     ratingHeading:"Ihre Meinung zählt",
     ratingSubheading:"Wie bewerten Sie Ihre Erfahrung?",

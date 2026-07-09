@@ -402,7 +402,7 @@ const fr = {
     contactsCall:"Appeler",
     rateAppMenu:"Donner mon avis",
     betaBanner:"🧪 Version Beta Test : Trial Premium offert",
-    betaChip:"Bêta — Premium offert",
+    betaChip:"Bêta",
     loginBetaNote:"Version Beta Test : Trial Premium offert",
     ratingHeading:"Votre avis compte",
     ratingSubheading:"Comment évaluez-vous votre expérience ?",
