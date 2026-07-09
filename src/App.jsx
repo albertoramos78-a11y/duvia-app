@@ -4627,7 +4627,7 @@ export default function App() {
             <div style={{flexShrink:0,background:C.card,borderBottom:`1.5px solid ${C.bor}`,boxShadow:"0 1px 6px rgba(0,0,0,.05)"}}>
               {/* Barre retour + titre */}
               <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px 6px"}}>
-                <button onClick={()=>{setMenuTab(null);setConfigStep(0);}} style={{width:36,height:36,background:"transparent",border:"none",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0}}>
+                <button onClick={()=>{setMenuTab(null);setConfigStep(0);}} style={{width:90,height:90,background:"transparent",border:"none",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0}}>
                   <img src={iconBackButton} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} />
                 </button>
                 <div style={{fontSize:14,fontWeight:900,flex:1}}>🏠 {t.menuConfigFamily||"Configuration famille"}</div>
@@ -14760,7 +14760,7 @@ function MessagingTab(){
   if(view==="new") return(
     <div className="fi">
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-        <button onClick={()=>setView("list")} style={{width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",border:"none",flexShrink:0,cursor:"pointer",padding:0}}>
+        <button onClick={()=>setView("list")} style={{width:90,height:90,display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",border:"none",flexShrink:0,cursor:"pointer",padding:0}}>
           <img src={iconBackButton} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} />
         </button>
         <div style={{fontSize:15,fontWeight:900}}>{t.msgNewTitle||"✏️ Nouveau message"}</div>
@@ -14841,7 +14841,7 @@ function MessagingTab(){
       <div className="fi" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 190px)"}}>
         {/* Header */}
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexShrink:0}}>
-          <button onClick={()=>setView("list")} style={{width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",border:"none",flexShrink:0,cursor:"pointer",padding:0}}>
+          <button onClick={()=>setView("list")} style={{width:90,height:90,display:"flex",alignItems:"center",justifyContent:"center",background:"transparent",border:"none",flexShrink:0,cursor:"pointer",padding:0}}>
           <img src={iconBackButton} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} />
         </button>
           <div style={{position:"relative",flexShrink:0}}>
