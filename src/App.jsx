@@ -10576,12 +10576,10 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
             const isCurrentMonth = now.getFullYear()===y && now.getMonth()===m;
             return !isCurrentMonth ? (
               <button onClick={()=>setCur(new Date(now.getFullYear(),now.getMonth(),1))}
-                style={{padding:"3px 12px",background:C.vio,color:"#fff",fontSize:11,fontWeight:800,borderRadius:20,border:"none"}}>
+                style={{height:18,padding:"0 10px",background:C.vio,color:"#fff",fontSize:10,fontWeight:800,borderRadius:20,border:"none",lineHeight:"18px"}}>
                 📍 {t.calToday||"Aujourd'hui"}
               </button>
-            ) : (
-              <div style={{fontSize:10,color:C.vio,fontWeight:700}}>📍 {t.calCurrentMonth||"Mois actuel"}</div>
-            );
+            ) : null;
           })()}
           {readOnly&&<div style={{fontSize:10,color:C.ora,fontWeight:700}}>{t.readOnly}</div>}
         </div>
