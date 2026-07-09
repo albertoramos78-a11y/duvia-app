@@ -8,6 +8,7 @@ import iconSendMessage   from "./assets/send_message.png";
 import iconNavLeft       from "./assets/bouton_gauche.png";
 import iconNavRight      from "./assets/bouton_droite.png";
 import coeurHeartMask    from "./assets/coeur_mask.png";
+import licorneHeaderImg  from "./assets/themes/theme_licorne_header.png";
 import posthog from "posthog-js";
 import { supabase } from "./supabaseClient";
 import { initDiagnostics, retryPendingReport, submitBugReport } from "./services/diagnostics";
@@ -4388,7 +4389,7 @@ export default function App() {
       {/* HEADER */}
       <div style={{flexShrink:0,background:headerBG,borderBottom:`1.5px solid ${C.bor}`,boxShadow:"0 1px 6px rgba(0,0,0,.06)"}}>
       <div style={{padding:"0 14px",display:"flex",alignItems:"center",gap:12,height:58}}>
-        <img src="/logo-nav.png" alt="Duvia" style={{width:126,height:126,objectFit:"contain",flexShrink:0,animation:(sub?.pendingSpins||0)>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}} />
+        <img src={licorneActive ? licorneHeaderImg : "/logo-nav.png"} alt="Duvia" style={{width:126,height:126,objectFit:"contain",flexShrink:0,animation:(sub?.pendingSpins||0)>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}} />
         <div style={{display:"flex",flexDirection:"column",justifyContent:"center",minWidth:0,flex:1}}>
           {C._wc && <span style={{fontSize:14,display:"inline-block",animation:"wcBall 3s ease-in-out infinite",transformOrigin:"center"}}>⚽</span>}
         </div>
