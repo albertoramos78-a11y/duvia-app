@@ -7,6 +7,7 @@ import iconBackButton    from "./assets/back_button.png";
 import iconSendMessage   from "./assets/send_message.png";
 import iconNavLeft       from "./assets/bouton_gauche.png";
 import iconNavRight      from "./assets/bouton_droite.png";
+import coeurHeartMask    from "./assets/coeur_mask.png";
 import posthog from "posthog-js";
 import { supabase } from "./supabaseClient";
 import { initDiagnostics, retryPendingReport, submitBugReport } from "./services/diagnostics";
@@ -7914,22 +7915,20 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
                 {value:"O",label:t.other||"Autre",icon:"🧑"},
               ]} />
             </div>
-            {/* Couleur — pastille en forme de cœur (silhouette du logo Duvia),
-                découpée via clip-path SVG en objectBoundingBox (0..1) pour
-                rester nette quelle que soit la taille de l'input. */}
+            {/* Couleur — pastille en forme de cœur, découpée via CSS mask à
+                partir de coeur.png (silhouette réelle du logo Duvia, remplie
+                par flood-fill hors-ligne — voir coeur_mask.png) plutôt qu'une
+                forme de cœur générique redessinée à la main. */}
             <div style={{...fieldBox,flexShrink:0,...lockStyle}}>
               <span style={lbl}>&nbsp;</span>
               <div style={{height:IH,display:"flex",alignItems:"center"}}>
-                <svg width="0" height="0" style={{position:"absolute"}} aria-hidden="true">
-                  <defs>
-                    <clipPath id={`duviaHeartClip-${p.id||i}`} clipPathUnits="objectBoundingBox">
-                      <path d="M0.5,0.8896 l-0.0604,-0.055 C0.225,0.64,0.0833,0.5117,0.0833,0.3542 C0.0833,0.2258,0.1842,0.125,0.3125,0.125 c0.0725,0,0.1421,0.0338,0.1875,0.0871 C0.5454,0.1588,0.615,0.125,0.6875,0.125 C0.8158,0.125,0.9167,0.2258,0.9167,0.3542 c0,0.1575,-0.1417,0.2858,-0.3563,0.4808 L0.5,0.8896 Z" />
-                    </clipPath>
-                  </defs>
-                </svg>
                 <input type="color" className="color-heart" value={p.color} onChange={e=>setParent(i,"color",e.target.value)}
                   title={t.color}
-                  style={{width:30,height:30,padding:0,border:"none",cursor:"pointer",overflow:"hidden",background:p.color,clipPath:`url(#duviaHeartClip-${p.id||i})`}} />
+                  style={{width:30,height:30,padding:0,border:"none",cursor:"pointer",overflow:"hidden",background:p.color,
+                    WebkitMaskImage:`url(${coeurHeartMask})`,maskImage:`url(${coeurHeartMask})`,
+                    WebkitMaskSize:"contain",maskSize:"contain",
+                    WebkitMaskRepeat:"no-repeat",maskRepeat:"no-repeat",
+                    WebkitMaskPosition:"center",maskPosition:"center"}} />
               </div>
             </div>
           </div>
