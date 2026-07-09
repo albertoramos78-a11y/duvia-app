@@ -2823,7 +2823,8 @@ export default function App() {
   },[]);
 
   const [sub,setSub]     = useLocalStorage("duvia_sub", makeSub);
-  const { msgs: cloudMsgs, send: _sendCloudMsg, markRead: markCloudMessageRead, react: _reactCloudMsg, remove: _removeCloudMsg } = useMessages(familySync.familyId);
+  const [myUid, setMyUid] = useState(null);
+  const { msgs: cloudMsgs, send: _sendCloudMsg, markRead: markCloudMessageRead, react: _reactCloudMsg, remove: _removeCloudMsg, hiddenConvs, hideConversation } = useMessages(familySync.familyId, myUid);
   // Phase 3 migration custody : écriture en parallèle, ne lit/affiche rien — voir hooks/useCustody.ts
   const custodyShadow = useCustody(familySync.familyId);
 
@@ -2875,7 +2876,6 @@ export default function App() {
     confirmReim: dbConfirmReim, rejectReim: dbRejectReim,
   } = useExpenses(familySync.familyId);
   const { history: historyData, addHistEntry } = useHistory(familySync.familyId);
-  const [myUid, setMyUid] = useState(null);
   // Vérification admin côté serveur — résiste à la manipulation du localStorage
   const [adminVerified, setAdminVerified] = useState(false);
   const [pendingUser,setPendingUser] = useState(null); // parent en attente d'accepter la charte d'engagement
@@ -4112,6 +4112,7 @@ export default function App() {
     apiData, apiLoading,
     setMenuTab, setShowMenu,
     msgs, sendCloudMessage, markCloudMessageRead, reactToCloudMessage, deleteCloudMessage, myUid,
+    hiddenConvs, hideConversation,
     activity, setActivity, allSeen, setAllSeen, _setSeen,
     unreadVaultDocIds, setUnreadVaultDocIds, custodyShadow,
     pushStatus, pushSubscribe, pushUnsubscribe, pushPending, pushRestrictiveOem,
