@@ -20,7 +20,7 @@ import { useHistory } from "./hooks/useHistory";
 import { usePush } from "./hooks/usePush";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION, APP_VERSION } from './config.js';
-import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid } from './utils/core.js';
+import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, BRAND, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
 
@@ -2526,6 +2526,76 @@ function InfoBubble({C,tipKey,title,children}) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// CARTE INFO ENFANT (lecture seule) — pour observateurs/enfants, qui n'ont
+// pas accès à l'écran Config famille où ces champs vivent normalement.
+// Voir docs/superpowers/specs/2026-07-09-child-info-card-readonly-design.md
+// ═══════════════════════════════════════════════════════════════════════════════
+function ChildInfoModal({onClose}) {
+  const {C, t, cfg} = useApp();
+  const [selectedChildIdx, setSelectedChildIdx] = useState(0);
+  const children = cfg.children || [];
+  const ch = children[selectedChildIdx] || children[0] || null;
+  const lbl = {fontSize:10,fontWeight:700,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:4};
+  const val = {fontSize:14,color:C.txt,lineHeight:1.4};
+  const fields = ch ? [
+    [t.childAllergy, ch.allergy],
+    [t.childBloodType, ch.bloodType],
+    [t.childSchool, ch.school ?? ch.home?.school],
+    [t.childDoctor, ch.doctor ?? ch.home?.doctor],
+    [t.childEmergency, ch.emergencyContacts ?? ch.home?.emergencyContacts],
+    [t.childNotes, ch.notes ?? ch.home?.notes],
+  ].filter(([, v]) => v && String(v).trim()) : [];
+  const birthdate = ch ? formatChildBirthdate(ch.birthDay, ch.birthMonth, ch.birthYear) : "";
+
+  return (
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:16,padding:20,maxWidth:420,width:"100%",maxHeight:"80vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexShrink:0}}>
+          <div style={{fontSize:16,fontWeight:900,color:C.txt}}>{t.childInfoCardTitle||"🧒 Infos enfant"}</div>
+          <button onClick={onClose} style={{width:30,height:30,background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,color:C.mut,fontSize:14,cursor:"pointer"}}>✕</button>
+        </div>
+        {children.length === 0 ? (
+          <div style={{fontSize:13,color:C.mut,textAlign:"center",padding:"20px 0"}}>{t.childInfoCardEmpty||"Aucun enfant enregistré pour le moment."}</div>
+        ) : (
+          <div style={{overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:14}}>
+            {children.length > 1 && (
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {children.map((c,i) => (
+                  <button key={i} onClick={()=>setSelectedChildIdx(i)}
+                    style={{padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",
+                      background:i===selectedChildIdx?C.vio:C.sur,
+                      color:i===selectedChildIdx?"#fff":C.txt,
+                      border:`1.5px solid ${i===selectedChildIdx?C.vio:C.bor}`}}>
+                    {c.name.trim() || `${t.childN} ${i+1}`}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{fontSize:32,width:48,height:48,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:"50%",background:C.sur,flexShrink:0,overflow:"hidden"}}>
+                {typeof ch.avatar==="string" && ch.avatar.startsWith("http")
+                  ? <img src={ch.avatar} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} />
+                  : (ch.avatar || "🧒")}
+              </div>
+              <div>
+                <div style={{fontSize:16,fontWeight:800,color:C.txt}}>{ch.name.trim() || `${t.childN} ${selectedChildIdx+1}`}</div>
+                {birthdate && <div style={{fontSize:12,color:C.mut}}>{birthdate}</div>}
+              </div>
+            </div>
+            {fields.map(([label,value],i) => (
+              <div key={i}>
+                <div style={lbl}>{label}</div>
+                <div style={val}>{value}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // INFO BUBBLE — icône 👋 avec bulle style "Bienvenue sur Duvia"
 // ═══════════════════════════════════════════════════════════════════════════════
 function StepIdInfoButton({C,t,user}) {
@@ -3206,6 +3276,7 @@ export default function App() {
   const [showBugModal,setShowBugModal] = useState(false);
   const [showInstallModal,setShowInstallModal] = useState(false);
   const [showLicenseModal,setShowLicenseModal] = useState(false);
+  const [showChildInfoModal,setShowChildInfoModal] = useState(false);
   const [showPrizesMenu,setShowPrizesMenu] = useState(false);
   const [menuHighlightDismissed,setMenuHighlightDismissed] = useState(false);
   const [showOnboardingTip,setShowOnboardingTip] = useState(false);
@@ -4408,6 +4479,12 @@ export default function App() {
               </div>
             );
           })()}
+          {(isObs||isChild) && !isAdm && (
+            <button onClick={()=>setShowChildInfoModal(true)} title={t.childInfoCardTitle||"Infos enfant"}
+              style={{height:36,padding:"0 14px",background:C.card,border:`1.5px solid ${C.bor}`,color:C.txt,fontSize:16,fontWeight:700,borderRadius:20,display:"flex",alignItems:"center",cursor:"pointer",flexShrink:0}}>
+              🧒
+            </button>
+          )}
           <div style={{position:"relative",flexShrink:0}}>
           <button onClick={()=>{setShowMenu(v=>!v);setShowPrizesMenu(false);if(menuHighlight){setMenuHighlightDismissed(true);}if(showOnboardingTip){setShowOnboardingTip(false);}}} style={{height:36,padding:"0 14px",background:menuHighlight?`${C.vio}18`:showMenu?`${C.vio}18`:C.card,border:`1.5px solid ${menuHighlight||showMenu?C.vio:C.bor}`,color:menuHighlight||showMenu?C.vio:C.txt,fontSize:13,fontWeight:700,borderRadius:20,display:"flex",alignItems:"center",gap:6,position:"relative",transition:"all .2s",cursor:"pointer",animation:menuHighlight?"pulseFade 2s ease-in-out infinite":undefined}}>
             <span>☰</span>
@@ -4592,6 +4669,7 @@ export default function App() {
         </div>
         );
       })()}
+      {showChildInfoModal && <ChildInfoModal onClose={()=>setShowChildInfoModal(false)} />}
       {/* Trial / Premium / Earned bubble — second row */}
       {!isObs && !isChild && st==="trial_premium" && (
         <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>

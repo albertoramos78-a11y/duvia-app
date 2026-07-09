@@ -675,6 +675,8 @@ const fr = {
     childEmergency:"🚨 Contacts urgence",
     childEmergencyPh:"Nom, lien de parenté, téléphone",
     childReadOnly:"(géré par {parent})",
+    childInfoCardTitle:"🧒 Infos enfant",
+    childInfoCardEmpty:"Aucun enfant enregistré pour le moment.",
     childInviteTitle:"📨 Inviter {name} à rejoindre l'app",
     childInviteGenerate:"🔗 Générer le lien pour {name}",
     childInviteGenerating:"⏳ Génération…",

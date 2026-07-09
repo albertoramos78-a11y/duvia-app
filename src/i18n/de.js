@@ -622,6 +622,8 @@ const de = {
     childEmergency:"🚨 Notfallkontakte",
     childEmergencyPh:"Name, Verhältnis, Telefon",
     childReadOnly:"(von {parent} verwaltet)",
+    childInfoCardTitle:"🧒 Kindinfos",
+    childInfoCardEmpty:"Noch kein Kind eingetragen.",
     childInviteTitle:"📨 {name} zur App einladen",
     childInviteGenerate:"🔗 Link für {name} erstellen",
     childInviteGenerating:"⏳ Wird erstellt…",
