@@ -7620,9 +7620,9 @@ function FamilySyncCard() {
 
   return (
     <div className="card" style={{marginBottom:16,borderColor:`${C.vio}55`}}>
-      <div onClick={()=>isSynced && setExpanded(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap",cursor:isSynced?"pointer":"default",marginBottom:showDetails?8:0}}>
-        <div className="sec" style={{marginBottom:0}}>☁️ {t.familySyncTitle}</div>
-        <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"4px 10px",background:`${SI.color}15`,border:`1px solid ${SI.color}44`,borderRadius:10,fontSize:11,fontWeight:700,color:SI.color,flexShrink:0}}>
+      <div onClick={()=>isSynced && setExpanded(v=>!v)} style={{cursor:isSynced?"pointer":"default",marginBottom:showDetails?8:0}}>
+        <div style={{fontSize:10,fontWeight:800,letterSpacing:".13em",textTransform:"uppercase",color:C.mut,marginBottom:6}}>☁️ {t.familySyncTitle}</div>
+        <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"4px 10px",background:`${SI.color}15`,border:`1px solid ${SI.color}44`,borderRadius:10,fontSize:11,fontWeight:700,color:SI.color}}>
           <span>{SI.icon}</span><span>{SI.label}</span>
           {isSynced && <span style={{marginLeft:2,opacity:.6,fontSize:9}}>{expanded?"▲":"▼"}</span>}
         </div>
@@ -7686,8 +7686,8 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
       {!isObs && !isChild && (
       <>
       <div className="sec">{t.myFamilies||"Mes familles"}</div>
-      <div style={{display:"flex",gap:12,alignItems:"stretch",marginBottom:16,flexWrap:"wrap"}}>
-        <div style={{flex:1,minWidth:220}}>
+      <div style={{display:"flex",gap:12,alignItems:"stretch",marginBottom:16}}>
+        <div style={{flex:1,minWidth:0}}>
           <FamilySyncCard />
         </div>
         <button
@@ -7708,8 +7708,8 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             setCreatingFamily(false);
             if(!res.ok) alert("⚠️ Erreur lors de la création de la famille.");
           }}
-          style={{flexShrink:0,padding:"0 18px",background:C.sur,color:C.vio,border:`1.5px solid ${C.vio}`,borderRadius:10,fontWeight:800,fontSize:13,cursor:creatingFamily?"not-allowed":"pointer",opacity:creatingFamily?0.6:1,whiteSpace:"nowrap"}}>
-          {creatingFamily ? (t.creatingFamilyLabel||"⏳ Création…") : (t.createNewFamilyBtn||"➕ Créer une nouvelle famille")}
+          style={{flex:1,minWidth:0,padding:"0 14px",background:C.vio,color:"#fff",border:"none",borderRadius:20,fontWeight:800,fontSize:13,cursor:creatingFamily?"not-allowed":"pointer",opacity:creatingFamily?0.6:1,whiteSpace:"normal",lineHeight:1.3}}>
+          {creatingFamily ? (t.creatingFamilyLabel||"⏳ Création…") : (t.createNewFamilyBtn||"➕ Créer Famille")}
         </button>
       </div>
       </>
