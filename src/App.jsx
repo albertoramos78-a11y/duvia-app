@@ -4967,13 +4967,40 @@ function LegalDocModal({ C, doc, lang, onClose }) {
 // par appareil (redemandé si RGPD_NOTICE_VERSION change). Informe sur les
 // données + renvoie à la politique de confidentialité / CGU, et enregistre
 // l'acceptation (version + date) via onAccept.
-function RgpdConsentScreen({C,t,onAccept,onOpenLegal}) {
+function RgpdConsentScreen({C,t,lang,setLang,onAccept,onOpenLegal}) {
   const [checked,setChecked] = useState(false);
+  const [showLangMenu,setShowLangMenu] = useState(false);
+  const foundLang = LANGS[lang]||LANGS["fr"];
   const link = {color:C.vio,fontWeight:800,textDecoration:"underline",background:"none",border:"none",padding:0,fontSize:"inherit",fontFamily:"inherit",cursor:"pointer"};
   return (
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:C.bg}}>
       <div style={{width:"100%",maxWidth:460}} className="fi">
         <div style={{background:C.card,borderRadius:20,padding:"26px 24px",boxShadow:"0 10px 40px rgba(0,0,0,.12)"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:18}}>
+            <img src="/logo-nav.png" alt="Duvia" style={{height:28,objectFit:"contain"}} />
+            <div style={{position:"relative"}}>
+              <button onClick={()=>setShowLangMenu(v=>!v)} style={{height:32,padding:"0 10px",background:showLangMenu?`${C.vio}18`:C.card,border:`1.5px solid ${showLangMenu?C.vio:C.bor}`,color:showLangMenu?C.vio:C.txt,fontSize:12,fontWeight:700,borderRadius:8,display:"flex",alignItems:"center",gap:5,cursor:"pointer"}}>
+                <span>{foundLang.flag}</span>
+                <span style={{fontSize:11}}>{foundLang.name}</span>
+                <span style={{fontSize:8,opacity:.6}}>{showLangMenu?"▲":"▼"}</span>
+              </button>
+              {showLangMenu && (
+                <>
+                <div onClick={()=>setShowLangMenu(false)} style={{position:"fixed",inset:0,zIndex:299}} />
+                <div style={{position:"absolute",top:"100%",right:0,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:16,minWidth:170,zIndex:300,boxShadow:"0 12px 40px rgba(0,0,0,.2)",overflow:"hidden",marginTop:4}}>
+                  {Object.entries(LANGS).map(([k,v])=>(
+                    <button key={k} onClick={()=>{setLang(k);setShowLangMenu(false);}} style={{width:"100%",padding:"0 14px",height:40,background:lang===k?`${C.vio}12`:"transparent",color:lang===k?C.vio:C.txt,textAlign:"left",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:12,fontWeight:lang===k?800:600,borderRadius:0,cursor:"pointer"}}>
+                      <span style={{fontSize:17,flexShrink:0}}>{v.flag}</span>
+                      <span style={{flex:1}}>{v.name}</span>
+                      {lang===k && <span style={{color:C.vio,fontSize:13,fontWeight:900}}>✓</span>}
+                    </button>
+                  ))}
+                </div>
+                </>
+              )}
+            </div>
+          </div>
+
           <div style={{fontSize:20,fontWeight:900,color:C.txt,marginBottom:6}}>
             {t.rgpdTitle||"🔒 Vos données et votre vie privée"}
           </div>
@@ -4985,11 +5012,9 @@ function RgpdConsentScreen({C,t,onAccept,onOpenLegal}) {
             {t.rgpdRights||"Vous disposez d'un droit d'accès, de rectification, de suppression et de portabilité de vos données, ainsi que du droit de saisir la CNIL. Vous pouvez supprimer votre compte et vos données à tout moment depuis les réglages."}
           </div>
 
-          <div style={{fontSize:12.5,color:C.mut,marginBottom:18}}>
-            {t.rgpdSeeMore||"Pour en savoir plus :"}{" "}
-            <button type="button" onClick={()=>onOpenLegal("privacy")} style={link}>{t.rgpdPrivacy||"Politique de confidentialité"}</button>
-            {" · "}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:12.5,color:C.mut,marginBottom:18}}>
             <button type="button" onClick={()=>onOpenLegal("cgu")} style={link}>{t.rgpdCgu||"Conditions d'utilisation"}</button>
+            <button type="button" onClick={()=>onOpenLegal("privacy")} style={link}>{t.rgpdPrivacy||"Politique de confidentialité"}</button>
           </div>
 
           <label style={{display:"flex",gap:10,alignItems:"flex-start",cursor:"pointer",marginBottom:18}}>

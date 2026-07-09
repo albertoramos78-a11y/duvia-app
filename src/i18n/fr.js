@@ -403,7 +403,7 @@ const fr = {
     rateAppMenu:"Donner mon avis",
     betaBanner:"🎉 Bêta gratuite — Toutes les fonctionnalités Premium offertes",
     betaChip:"Bêta — Premium offert",
-    loginBetaNote:"Version bêta — Premium offert gratuitement",
+    loginBetaNote:"Version Beta Test : Trial Premium offert",
     ratingHeading:"Votre avis compte",
     ratingSubheading:"Comment évaluez-vous votre expérience ?",
     ratingMsgHigh:"Merci beaucoup ! 😍",
