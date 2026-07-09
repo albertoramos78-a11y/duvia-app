@@ -401,7 +401,7 @@ const fr = {
     contactsReadOnly:"Visible par tous",
     contactsCall:"Appeler",
     rateAppMenu:"Donner mon avis",
-    betaBanner:"🎉 Bêta gratuite — Toutes les fonctionnalités Premium offertes",
+    betaBanner:"🧪 Version Beta Test : Trial Premium offert",
     betaChip:"Bêta — Premium offert",
     loginBetaNote:"Version Beta Test : Trial Premium offert",
     ratingHeading:"Votre avis compte",

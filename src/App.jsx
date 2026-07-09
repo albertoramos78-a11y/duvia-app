@@ -7686,7 +7686,10 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
       {!isObs && !isChild && (
       <>
       <div className="sec">🏠 {t.myFamilies||"Mes familles"}</div>
-      <div className="card" style={{marginBottom:16}}>
+      <div style={{display:"flex",gap:12,alignItems:"stretch",marginBottom:16}}>
+        <div style={{flex:1,minWidth:0}}>
+          <FamilySyncCard />
+        </div>
         <button
           disabled={creatingFamily}
           onClick={async ()=>{
@@ -7705,14 +7708,13 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             setCreatingFamily(false);
             if(!res.ok) alert("⚠️ Erreur lors de la création de la famille.");
           }}
-          style={{width:"100%",height:44,background:C.sur,color:C.vio,border:`1.5px solid ${C.vio}`,borderRadius:10,fontWeight:800,fontSize:13,cursor:creatingFamily?"not-allowed":"pointer",opacity:creatingFamily?0.6:1}}>
+          style={{flexShrink:0,padding:"0 18px",background:C.sur,color:C.vio,border:`1.5px solid ${C.vio}`,borderRadius:10,fontWeight:800,fontSize:13,cursor:creatingFamily?"not-allowed":"pointer",opacity:creatingFamily?0.6:1,whiteSpace:"nowrap"}}>
           {creatingFamily ? (t.creatingFamilyLabel||"⏳ Création…") : (t.createNewFamilyBtn||"➕ Créer une nouvelle famille")}
         </button>
       </div>
       </>
       )}
-
-      <FamilySyncCard />
+      {(isObs || isChild) && <FamilySyncCard />}
 
       <div className="sec">{t.parents}</div>
       {cfg.parents.map((p,i)=>{

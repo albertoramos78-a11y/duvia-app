@@ -348,7 +348,7 @@ const pt = {
     shopRG:"Tema Ténis França 26",
     shopWC:"Tema Mundial 26",
     rateAppMenu:"Dar a minha opinião",
-    betaBanner:"🎉 Beta gratuito — Todas as funcionalidades Premium incluídas",
+    betaBanner:"🧪 Versão beta — Premium gratuito por agora",
     betaChip:"Beta — Premium incluído",
     loginBetaNote:"Versão beta — Premium gratuito por agora",
     ratingHeading:"A sua opinião importa",

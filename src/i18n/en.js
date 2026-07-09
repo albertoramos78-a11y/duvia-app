@@ -350,7 +350,7 @@ const en = {
     shopRG:"France Tennis Theme 26",
     shopWC:"World Cup Theme 26",
     rateAppMenu:"Give feedback",
-    betaBanner:"🎉 Free Beta — All Premium features included",
+    betaBanner:"🧪 Beta version — Premium free for now",
     betaChip:"Beta — Premium included",
     loginBetaNote:"Beta version — Premium free for now",
     ratingHeading:"Your opinion matters",

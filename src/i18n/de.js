@@ -348,7 +348,7 @@ const de = {
     shopRG:"Tennis-Frankreich-Design 26",
     shopWC:"WM-Design 26",
     rateAppMenu:"Bewertung abgeben",
-    betaBanner:"🎉 Kostenlose Beta — Alle Premium-Funktionen inklusive",
+    betaBanner:"🧪 Beta-Version — Premium derzeit kostenlos",
     betaChip:"Beta — Premium inklusive",
     loginBetaNote:"Beta-Version — Premium derzeit kostenlos",
     ratingHeading:"Ihre Meinung zählt",
