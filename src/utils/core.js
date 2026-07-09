@@ -547,3 +547,15 @@ export function guardianStripeBackground(guardians, opacityHex = "40") {
 export function guardianNamesLabel(guardians) {
   return (guardians || []).map(g => g.name).filter(Boolean).join(" + ");
 }
+
+// ── Conversations masquées (côté utilisateur) ────────────────────────────────
+// Une conversation est masquée pour un utilisateur si son hidden_at (figé
+// côté serveur au moment du clic sur Supprimer, voir hiddenConversationsService.ts)
+// est postérieur ou égal à l'horodatage de son dernier message. Dès qu'un
+// nouveau message arrive après hidden_at, cette comparaison suffit à faire
+// réapparaître le fil — aucune ligne n'est jamais supprimée pour le "révéler".
+export function isConversationHidden(hiddenAt, lastMessageTs) {
+  if (!hiddenAt) return false;
+  if (!lastMessageTs) return true;
+  return hiddenAt >= lastMessageTs;
+}

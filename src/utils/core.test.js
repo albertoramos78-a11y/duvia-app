@@ -595,3 +595,25 @@ test("guardianNamesLabel : ignore les entrées sans nom, tableau vide → chaîn
   assert.equal(guardianNamesLabel([{ name: "" }, { name: "Isa" }]), "Isa");
   assert.equal(guardianNamesLabel([]), "");
 });
+
+import { isConversationHidden } from "./core.js";
+
+test("isConversationHidden : pas de hiddenAt → jamais masquée", () => {
+  assert.strictEqual(isConversationHidden(undefined, "2026-07-09T10:00:00Z"), false);
+});
+
+test("isConversationHidden : hiddenAt après le dernier message → masquée", () => {
+  assert.strictEqual(isConversationHidden("2026-07-09T12:00:00Z", "2026-07-09T10:00:00Z"), true);
+});
+
+test("isConversationHidden : nouveau message après hiddenAt → réapparaît", () => {
+  assert.strictEqual(isConversationHidden("2026-07-09T10:00:00Z", "2026-07-09T12:00:00Z"), false);
+});
+
+test("isConversationHidden : hiddenAt égal au dernier message → reste masquée (cas limite)", () => {
+  assert.strictEqual(isConversationHidden("2026-07-09T10:00:00Z", "2026-07-09T10:00:00Z"), true);
+});
+
+test("isConversationHidden : hiddenAt présent mais aucun message connu → masquée par défaut", () => {
+  assert.strictEqual(isConversationHidden("2026-07-09T10:00:00Z", undefined), true);
+});
