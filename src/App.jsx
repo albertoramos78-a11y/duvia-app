@@ -17,7 +17,7 @@ import { useHistory } from "./hooks/useHistory";
 import { usePush } from "./hooks/usePush";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION, APP_VERSION } from './config.js';
-import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden } from './utils/core.js';
+import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, BRAND, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
 
@@ -4011,8 +4011,15 @@ export default function App() {
   }
 
   // Called by LoginScreen — intercept parent role for consent
+  // 🔧 La charte n'est redemandée qu'une fois par mois (isConsentCharterValid),
+  // pas à chaque connexion — trop intrusif pour un usage quotidien.
   function handleLogin(u) {
-    if(u.role==="parent") { setPendingUser(u); }
+    if(u.role==="parent") {
+      let acceptedAt = null;
+      try { acceptedAt = window.localStorage.getItem(`duvia_consent_charter_${u.id||u.email||""}`); } catch {}
+      if (isConsentCharterValid(acceptedAt)) { handleSetUser(u); return; }
+      setPendingUser(u);
+    }
     else { handleSetUser(u); }
   }
 
@@ -4054,7 +4061,10 @@ export default function App() {
         <RgpdConsentScreen C={C} t={t} lang={lang} setLang={setLang} onAccept={acceptRgpd} onOpenLegal={setLegalDocOpen} />
       ) : pendingUser ? (
         <ConsentScreen C={C} t={t} user={pendingUser}
-          onAccept={()=>{ handleSetUser(pendingUser); setPendingUser(null); }}
+          onAccept={()=>{
+            try { window.localStorage.setItem(`duvia_consent_charter_${pendingUser.id||pendingUser.email||""}`, new Date().toISOString()); } catch {}
+            handleSetUser(pendingUser); setPendingUser(null);
+          }}
           onDecline={()=>setPendingUser(null)} />
       ) : (
         <LoginScreen C={BRAND} t={t} lang={lang} setLang={setLang} themeMode={themeMode} cycleTheme={cycleTheme} users={users} setUsers={setUsers} onLogin={handleLogin} onObsJoin={handleObsJoin} familySync={familySync} cfg={cfg} setCfg={setCfg} />

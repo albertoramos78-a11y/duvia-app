@@ -323,6 +323,28 @@ test("isRgpdConsentValid : accepte la bonne version, refuse le reste", () => {
   assert.equal(isRgpdConsentValid(JSON.stringify({version:"2026-06-01"}), "2026-06-01"), false); // acceptedAt manquant
 });
 
+// ── Charte d'engagement (ConsentScreen) ───────────────────────────────────────
+import { isConsentCharterValid } from "./core.js";
+
+test("isConsentCharterValid : accepté il y a 10 jours (< 30j) => toujours valide", () => {
+  const now = new Date("2026-07-11T00:00:00.000Z");
+  assert.equal(isConsentCharterValid("2026-07-01T00:00:00.000Z", now), true);
+});
+
+test("isConsentCharterValid : accepté il y a 31 jours (> 30j) => à redemander", () => {
+  const now = new Date("2026-07-11T00:00:00.000Z");
+  assert.equal(isConsentCharterValid("2026-06-10T00:00:00.000Z", now), false);
+});
+
+test("isConsentCharterValid : jamais accepté (null/undefined) => à demander", () => {
+  assert.equal(isConsentCharterValid(null), false);
+  assert.equal(isConsentCharterValid(undefined), false);
+});
+
+test("isConsentCharterValid : valeur stockée corrompue (pas une date) => à redemander", () => {
+  assert.equal(isConsentCharterValid("pas une date"), false);
+});
+
 // ── Verrouillage email parent (l'invité ne doit pas éditer l'autre parent) ────
 import { isParentEmailLocked } from "./core.js";
 

@@ -285,6 +285,20 @@ export function isRgpdConsentValid(rawStored, currentVersion) {
   }
 }
 
+// ── Charte d'engagement (ConsentScreen, écran "Bienvenue [Prénom]") ──────────
+// Redemandée périodiquement plutôt qu'à chaque connexion (trop intrusif pour
+// un usage quotidien) — voir consentFooter. acceptedAtIso vient d'un
+// localStorage scopé par utilisateur (duvia_consent_charter_<id>).
+export const CONSENT_CHARTER_VALIDITY_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours
+
+export function isConsentCharterValid(acceptedAtIso, now) {
+  if (!acceptedAtIso) return false;
+  const acceptedAtMs = new Date(acceptedAtIso).getTime();
+  if (Number.isNaN(acceptedAtMs)) return false;
+  const nowMs = now instanceof Date ? now.getTime() : (typeof now === "number" ? now : Date.now());
+  return nowMs - acceptedAtMs < CONSENT_CHARTER_VALIDITY_MS;
+}
+
 // ── Réconciliation des parents (correctif validation d'invité) ───────────────
 // Contexte du bug : dans le flux d'invitation par lien/token, l'invité rejoint
 // en `pending` sans pouvoir écrire la donnée famille (RLS). La RPC de validation
