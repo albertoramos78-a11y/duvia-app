@@ -678,7 +678,7 @@ const en = {
     quitterFamilleConfirm:"Leave this family?\n\nYou will start over with a blank personal family. A summary of your data is kept for export.",
     retirerInviteConfirm:"Remove {name} from the family?\n\nThey will start over with a blank personal family. You keep the family and its code.",
     createNewFamilyConfirm:"Create a new, separate family? You'll be able to switch between your families from the menu at the top of the app.",
-    createNewFamilyBtn:"➕ Create Family",
+    createNewFamilyBtn:"Create Family",
     creatingFamilyLabel:"⏳ Creating…",
     cdDefaultCalendar:"📅 Default calendar",
     rejectRequestConfirm:"Reject this request?",

@@ -676,7 +676,7 @@ const pt = {
     quitterFamilleConfirm:"Sair desta família?\n\nVoltará a uma família pessoal em branco. É guardado um resumo dos seus dados para exportação.",
     retirerInviteConfirm:"Remover {name} da família?\n\nVoltará a uma família pessoal em branco. Mantém a família e o respetivo código.",
     createNewFamilyConfirm:"Criar uma nova família separada? Poderá alternar entre as suas famílias a partir do menu no topo da app.",
-    createNewFamilyBtn:"➕ Criar Família",
+    createNewFamilyBtn:"Criar Família",
     creatingFamilyLabel:"⏳ A criar…",
     cdDefaultCalendar:"📅 Calendário padrão",
     rejectRequestConfirm:"Recusar este pedido?",

@@ -6155,7 +6155,7 @@ const PARENT_AVATARS = ["👩","👨","👩‍🦱","👨‍🦱","👩‍🦰",
 // Réactions emoji sur les messages — jeu fixe volontairement limité (pas de
 // sélecteur libre), voir docs/superpowers/specs/2026-07-07-message-reactions-design.md
 const MSG_REACTION_EMOJIS = ["👍","❤️","😂","😮","😢","🙏"];
-const CHILD_AVATARS  = ["🧒","👧","👦","🧒‍♀️","🧒‍♂️","👧‍🦱","👦‍🦱","👧‍🦰","👦‍🦰","👧‍🦳","👦‍🦳","🧑‍🎨","🧑‍🎤","🧑‍🚀","🧑‍💻","👼","🧸","🦄","🐣","⭐"];
+const CHILD_AVATARS  = ["🧒","👧","👦","👧‍🦱","👦‍🦱","👧‍🦰","👦‍🦰","👧‍🦳","👦‍🦳","🧑‍🎨","🧑‍🎤","🧑‍🚀","🧑‍💻","👼","🧸","🦄","🐣","⭐"];
 const OBS_AVATARS    = ["👴","👵","🧓","👩‍👦","👨‍👦","👩‍👧","👨‍👧","🧑‍🤝‍🧑","👫","👬","👭","🤶","🎅","🧙‍♀️","🧙","🧝‍♀️","🦸‍♀️","🦸","🤴","👸"];
 
 function Avatar({emoji, color, size=40, onClick, selected=false}) {
@@ -7687,7 +7687,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
       <>
       <div className="sec">{t.myFamilies||"Mes familles"}</div>
       <div style={{display:"flex",gap:12,alignItems:"stretch",marginBottom:16}}>
-        <div style={{flex:1,minWidth:0}}>
+        <div style={{flex:2,minWidth:0}}>
           <FamilySyncCard />
         </div>
         <button
@@ -7708,8 +7708,18 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             setCreatingFamily(false);
             if(!res.ok) alert("⚠️ Erreur lors de la création de la famille.");
           }}
-          style={{flex:1,minWidth:0,padding:"0 14px",background:C.vio,color:"#fff",border:"none",borderRadius:20,fontWeight:800,fontSize:13,cursor:creatingFamily?"not-allowed":"pointer",opacity:creatingFamily?0.6:1,whiteSpace:"normal",lineHeight:1.3}}>
-          {creatingFamily ? (t.creatingFamilyLabel||"⏳ Création…") : (t.createNewFamilyBtn||"➕ Créer Famille")}
+          style={{flex:1,minWidth:0,padding:"8px 10px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:14,fontWeight:800,fontSize:12,cursor:creatingFamily?"not-allowed":"pointer",opacity:creatingFamily?0.6:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:1,lineHeight:1.25,textAlign:"center"}}>
+          {creatingFamily ? (t.creatingFamilyLabel||"⏳ Création…") : (() => {
+            const label = t.createNewFamilyBtn||"Créer Famille";
+            const [firstWord, ...rest] = label.split(" ");
+            return (
+              <>
+                <span style={{fontSize:19,color:"#fff",lineHeight:1}}>+</span>
+                <span>{firstWord}</span>
+                {rest.length>0 && <span>{rest.join(" ")}</span>}
+              </>
+            );
+          })()}
         </button>
       </div>
       </>
@@ -7828,7 +7838,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
         <div key={i} className="card" style={{marginBottom:12,borderColor:pErr?C.red:p.color}}>
           {/* Header */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-            <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-start",gap:4}}>
               <span style={{fontSize:11,fontWeight:800,color:p.color,textTransform:"uppercase",letterSpacing:".06em"}}>{i===effectiveCreatorIdx(cfg.parents)?t.creatorLabel:t.guestLabel}</span>
               {i===user?.parentIdx && (
                 <span style={{fontSize:9,fontWeight:900,background:`${C.grn}22`,color:C.grn,border:`1px solid ${C.grn}44`,padding:"2px 7px",borderRadius:8,letterSpacing:".04em"}}>
@@ -7859,7 +7869,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:12}}>
             {/* Avatar */}
             <div style={{...fieldBox,flexShrink:0,...lockStyle}}>
-              <span style={lbl}>Avatar</span>
+              <span style={lbl}>&nbsp;</span>
               <div style={{height:IH,display:"flex",alignItems:"center"}}>
                 <AvatarPicker current={p.avatar} color={p.color} pool={PARENT_AVATARS} onSelect={em=>setParent(i,"avatar",em)} />
               </div>
@@ -7872,7 +7882,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             </div>
             {/* Genre */}
             <div style={{...fieldBox,flex:1,...lockStyle}}>
-              <span style={lbl}>{t.gender}</span>
+              <span style={lbl}>&nbsp;</span>
               <CustomSelect value={p.gender} onChange={v=>setParent(i,"gender",v)} options={[
                 {value:"F",label:t.female||"Mère",icon:"🌸"},
                 {value:"M",label:t.male||"Père",icon:"🎩"},
@@ -7881,9 +7891,12 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             </div>
             {/* Couleur */}
             <div style={{...fieldBox,flexShrink:0,...lockStyle}}>
-              <span style={lbl}>{t.color}</span>
-              <input type="color" value={p.color} onChange={e=>setParent(i,"color",e.target.value)}
-                style={{...inp,width:IH,padding:2,cursor:"pointer"}} />
+              <span style={lbl}>&nbsp;</span>
+              <div style={{height:IH,display:"flex",alignItems:"center"}}>
+                <input type="color" value={p.color} onChange={e=>setParent(i,"color",e.target.value)}
+                  title={t.color}
+                  style={{width:44,height:44,padding:0,border:"none",borderRadius:"50%",cursor:"pointer",overflow:"hidden",background:p.color}} />
+              </div>
             </div>
           </div>
 
@@ -7897,7 +7910,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             </div>
             <div style={{...fieldBox,flex:2}}>
               <span style={lbl}>{t.birthMonth}</span>
-              <CustomSelect value={p.birthMonth} onChange={v=>setParent(i,"birthMonth",v)} options={[
+              <CustomSelect value={p.birthMonth} onChange={v=>setParent(i,"birthMonth",v)} locked={!isMine} options={[
                 {value:"",label:"--"},
                 ...(t.months||[]).map((m,j)=>({value:pad(j+1),label:m}))
               ]} />
@@ -7908,7 +7921,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:0}}>
             <div style={{...fieldBox,flex:1,...(isMine?{}:lockStyle)}}>
               <span style={lbl}>📞 {t.contactsPhone||"Téléphone"}</span>
-              <input type="tel" value={p.phone||""} onChange={e=>setParent(i,"phone",e.target.value)} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} readOnly={!isMine} style={{...inp,...(isMine?{}:{background:C.sur,color:C.mut,cursor:"default"})}} />
+              <input type="tel" value={p.phone||""} onChange={e=>setParent(i,"phone",e.target.value.replace(/\s+/g,""))} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} readOnly={!isMine} style={{...inp,...(isMine?{}:{background:C.sur,color:C.mut,cursor:"default"})}} />
             </div>
             <div style={{...fieldBox,flex:2}}>
               <span style={lbl}>
@@ -7964,7 +7977,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           {/* Header — cliquable pour plier/déplier */}
           <div onClick={()=>toggleChild(i)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:expandedChildren.has(i)?12:0,cursor:"pointer",userSelect:"none"}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:11,fontWeight:800,color:C.vio,textTransform:"uppercase",letterSpacing:".06em"}}>{t.childN} {i+1}{ch.name.trim()?` — ${ch.name.trim()}`:""}</span>
+              <span style={{fontSize:11,fontWeight:800,color:C.vio,textTransform:"uppercase",letterSpacing:".06em"}}>{ch.name.trim() || `${t.childN} ${i+1}`}</span>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:6}}>
               <span style={{color:C.vio,fontSize:10}}>{expandedChildren.has(i)?"▲":"▼"}</span>
@@ -8061,29 +8074,28 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           {/* Row 5 : Infos communes (école, médecin, urgences, notes) */}
           {(() => {
             const home = (typeof ch.home === 'object' && !Array.isArray(ch.home)) ? ch.home : {school:"",doctor:"",notes:"",emergencyContacts:""};
-            const canEdit = !isChild;
             return (
               <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.bor}`}}>
                 <div style={{display:"flex",gap:10,marginBottom:10}}>
                   <div style={{...fieldBox,flex:1}}>
                     <span style={lbl}>{t.childSchool}</span>
-                    <input disabled={!canEdit} value={home.school||""} onChange={e=>setChildHome(i,"school",e.target.value)}
+                    <input value={home.school||""} onChange={e=>setChildHome(i,"school",e.target.value)}
                       placeholder={t.childSchoolPh} style={inp} />
                   </div>
                 </div>
                 <div style={{...fieldBox,marginBottom:10}}>
                   <span style={lbl}>{t.childDoctor}</span>
-                  <input disabled={!canEdit} value={home.doctor||""} onChange={e=>setChildHome(i,"doctor",e.target.value)}
+                  <input value={home.doctor||""} onChange={e=>setChildHome(i,"doctor",e.target.value)}
                     placeholder={t.childDoctorPh} style={inp} />
                 </div>
                 <div style={{...fieldBox,marginBottom:10}}>
                   <span style={lbl}>{t.childEmergency}</span>
-                  <textarea disabled={!canEdit} rows={2} value={home.emergencyContacts||""} onChange={e=>setChildHome(i,"emergencyContacts",e.target.value)}
+                  <textarea rows={2} value={home.emergencyContacts||""} onChange={e=>setChildHome(i,"emergencyContacts",e.target.value)}
                     placeholder={t.childEmergencyPh} style={{...inp,height:"auto",resize:"vertical",padding:10}} />
                 </div>
                 <div style={fieldBox}>
                   <span style={lbl}>{t.childNotes}</span>
-                  <textarea disabled={!canEdit} rows={2} value={home.notes||""} onChange={e=>setChildHome(i,"notes",e.target.value)}
+                  <textarea rows={2} value={home.notes||""} onChange={e=>setChildHome(i,"notes",e.target.value)}
                     placeholder={t.childNotesPh} style={{...inp,height:"auto",resize:"vertical",padding:10}} />
                 </div>
               </div>
@@ -8113,7 +8125,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
       );})}
       {(cfg.children.length>=(perms?.maxChildren??1))
         ? <button onClick={onUpgrade} style={{width:"100%",height:44,padding:"0 16px",background:`${C.vio}11`,color:C.vio,border:`1.5px dashed ${C.vio}`,marginBottom:12}}>{t.lockChildren}</button>
-        : <button onClick={addChild} style={{width:"100%",height:44,padding:"0 16px",background:"transparent",color:C.vio,border:`1.5px dashed ${C.vio}`,marginBottom:12}}>{t.addChild}</button>}
+        : <button onClick={addChild} style={{width:"100%",height:44,padding:"0 16px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:20,fontWeight:800,marginBottom:12}}>{t.addChild}</button>}
     </div>
   );
 }
@@ -8302,7 +8314,7 @@ function ChildInviteBtn({ childIdx, childName, childPhone, childEmail, childBirt
       {errMsg && <div style={{fontSize:11,color:C.red,marginBottom:8,lineHeight:1.4}}>⚠️ {errMsg}</div>}
       {!inviteUrl ? (
         <button onClick={handleCopy} disabled={loading}
-          style={{width:"100%",height:38,background:loading?C.bor:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:10,fontWeight:800,fontSize:12,cursor:loading?"wait":"pointer",marginBottom:6}}>
+          style={{width:"100%",height:38,background:loading?C.bor:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:20,fontWeight:800,fontSize:12,cursor:loading?"wait":"pointer",marginBottom:6}}>
           {genLabel}
         </button>
       ) : (
@@ -8459,7 +8471,7 @@ function Toggle({checked, onChange, disabled}) {
   );
 }
 
-function CustomSelect({value, onChange, options, style}) {
+function CustomSelect({value, onChange, options, style, locked}) {
   const {C} = useApp();
   const [open, setOpen] = useState(false);
   const cur = options.find(o=>String(o.value)===String(value)) || options[0];
@@ -8468,7 +8480,7 @@ function CustomSelect({value, onChange, options, style}) {
     <div style={{position:"relative",...style}}>
       {open && <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:199}} />}
       <button onClick={()=>setOpen(v=>!v)}
-        style={{width:"100%",height:44,padding:"0 13px",background:C.card,border:`1.5px solid ${open?C.vio:C.bor}`,borderRadius:10,display:"flex",alignItems:"center",gap:10,fontSize:14,fontWeight:400,color:C.txt,cursor:"pointer",boxSizing:"border-box"}}>
+        style={{width:"100%",height:44,padding:"0 13px",background:locked?C.sur:C.card,border:`1.5px solid ${open?C.vio:C.bor}`,borderRadius:10,display:"flex",alignItems:"center",gap:10,fontSize:14,fontWeight:400,color:locked?C.mut:C.txt,cursor:locked?"default":"pointer",boxSizing:"border-box"}}>
         {cur?.icon && <span style={{fontSize:18,flexShrink:0}}>{cur.icon}</span>}
         <span style={{flex:1,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cur?.label||""}</span>
         <span style={{fontSize:10,color:C.mut,transition:"transform .2s",display:"inline-block",transform:open?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>▼</span>

@@ -676,7 +676,7 @@ const de = {
     quitterFamilleConfirm:"Diese Familie verlassen?\n\nSie beginnen wieder mit einer leeren persönlichen Familie. Eine Zusammenfassung Ihrer Daten wird für den Export aufbewahrt.",
     retirerInviteConfirm:"{name} aus der Familie entfernen?\n\nDiese Person beginnt wieder mit einer leeren persönlichen Familie. Sie behalten die Familie und ihren Code.",
     createNewFamilyConfirm:"Eine neue, separate Familie erstellen? Sie können über das Menü oben in der App zwischen Ihren Familien wechseln.",
-    createNewFamilyBtn:"➕ Familie erstellen",
+    createNewFamilyBtn:"Familie erstellen",
     creatingFamilyLabel:"⏳ Wird erstellt…",
     cdDefaultCalendar:"📅 Standardkalender",
     rejectRequestConfirm:"Diese Anfrage ablehnen?",
