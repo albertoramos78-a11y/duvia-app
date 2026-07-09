@@ -896,7 +896,7 @@ function makeCfg() {
   return {
     parents:[{id:1,name:"",gender:"F",birthDay:"",birthMonth:"",color:PCOLS[0]}],
     children:[{id:1,name:"",email:"",birthDay:"",birthMonth:"",birthYear:"",allergy:"",bloodType:"",
-      home:{school:"",doctor:"",notes:"",emergencyContacts:""}}],
+      school:"",doctor:"",notes:"",emergencyContacts:""}],
     observers:[],sameGuardAll:true,zone:"",subdivisionCode:"",country:"FR",activeNatHols:null,
     specialDates:{
       motherDay:{enabled:false},fatherDay:{enabled:false},
@@ -7212,7 +7212,6 @@ function ConfigTab() {
 
   function setParent(i,f,v){setCfg(c=>{const p=[...c.parents];p[i]={...p[i],[f]:v};return{...c,parents:p};});}
   function setChild(i,f,v){setCfg(c=>{const ch=[...c.children];ch[i]={...ch[i],[f]:v};return{...c,children:ch};});}
-  function setChildHome(ci,f,v){setCfg(c=>{const ch=[...c.children];ch[ci]={...ch[ci],home:{...(ch[ci].home||{}),[ f]:v}};return{...c,children:ch};});}
 
   function addParent(){
     if(cfg.parents.filter(p=>!p?.left).length >= 2) return; // limite absolue de 2 parents actifs
@@ -7454,7 +7453,7 @@ function ConfigTab() {
     setEmailSimIdx(null);
     pushNotif(`🗑️ ${parentName} a été supprimé de la famille.`);
   }
-  function addChild(){if(cfg.children.length>=(perms?.maxChildren??1))return onUpgrade();setCfg(c=>({...c,children:[...c.children,{id:Date.now(),name:"",email:"",birthDay:"",birthMonth:"",birthYear:"",allergy:"",bloodType:"",home:{school:"",doctor:"",notes:"",emergencyContacts:""}}]}));}
+  function addChild(){if(cfg.children.length>=(perms?.maxChildren??1))return onUpgrade();setCfg(c=>({...c,children:[...c.children,{id:Date.now(),name:"",email:"",birthDay:"",birthMonth:"",birthYear:"",allergy:"",bloodType:"",school:"",doctor:"",notes:"",emergencyContacts:""}]}));}
   function removeChild(i){setCfg(c=>{const children=c.children.filter((_,j)=>j!==i);return{...c,children,sameGuardAll:children.length<=1?true:c.sameGuardAll};});}
   return (
     <div>
@@ -8097,36 +8096,37 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             </div>
           </div>
 
-          {/* Row 5 : Infos communes (école, médecin, urgences, notes) */}
-          {(() => {
-            const home = (typeof ch.home === 'object' && !Array.isArray(ch.home)) ? ch.home : {school:"",doctor:"",notes:"",emergencyContacts:""};
-            return (
-              <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.bor}`}}>
-                <div style={{display:"flex",gap:10,marginBottom:10}}>
-                  <div style={{...fieldBox,flex:1}}>
-                    <span style={lbl}>{t.childSchool}</span>
-                    <input value={home.school||""} onChange={e=>setChildHome(i,"school",e.target.value)}
-                      placeholder={t.childSchoolPh} style={inp} />
-                  </div>
-                </div>
-                <div style={{...fieldBox,marginBottom:10}}>
-                  <span style={lbl}>{t.childDoctor}</span>
-                  <input value={home.doctor||""} onChange={e=>setChildHome(i,"doctor",e.target.value)}
-                    placeholder={t.childDoctorPh} style={inp} />
-                </div>
-                <div style={{...fieldBox,marginBottom:10}}>
-                  <span style={lbl}>{t.childEmergency}</span>
-                  <textarea rows={2} value={home.emergencyContacts||""} onChange={e=>setChildHome(i,"emergencyContacts",e.target.value)}
-                    placeholder={t.childEmergencyPh} style={{...inp,height:"auto",resize:"vertical",padding:10}} />
-                </div>
-                <div style={fieldBox}>
-                  <span style={lbl}>{t.childNotes}</span>
-                  <textarea rows={2} value={home.notes||""} onChange={e=>setChildHome(i,"notes",e.target.value)}
-                    placeholder={t.childNotesPh} style={{...inp,height:"auto",resize:"vertical",padding:10}} />
-                </div>
+          {/* Row 5 : Infos communes (école, médecin, urgences, notes)
+              🔧 Champs à plat directement sur `ch` (comme allergy/bloodType),
+              plus l'ancien sous-objet `ch.home.*` n'existe pour aucun
+              consommateur restant. Les valeurs `ch.home?.x` ne sont lues
+              qu'en repli, pour ne pas perdre les données déjà saisies par des
+              familles existantes (imports/exports .duvia inclus, qui portent
+              l'objet enfant tel quel). */}
+          <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.bor}`}}>
+            <div style={{display:"flex",gap:10,marginBottom:10}}>
+              <div style={{...fieldBox,flex:1}}>
+                <span style={lbl}>{t.childSchool}</span>
+                <input value={ch.school??ch.home?.school??""} onChange={e=>setChild(i,"school",e.target.value)}
+                  placeholder={t.childSchoolPh} style={inp} />
               </div>
-            );
-          })()}
+            </div>
+            <div style={{...fieldBox,marginBottom:10}}>
+              <span style={lbl}>{t.childDoctor}</span>
+              <input value={ch.doctor??ch.home?.doctor??""} onChange={e=>setChild(i,"doctor",e.target.value)}
+                placeholder={t.childDoctorPh} style={inp} />
+            </div>
+            <div style={{...fieldBox,marginBottom:10}}>
+              <span style={lbl}>{t.childEmergency}</span>
+              <textarea rows={2} value={ch.emergencyContacts??ch.home?.emergencyContacts??""} onChange={e=>setChild(i,"emergencyContacts",e.target.value)}
+                placeholder={t.childEmergencyPh} style={{...inp,height:"auto",resize:"vertical",padding:10}} />
+            </div>
+            <div style={fieldBox}>
+              <span style={lbl}>{t.childNotes}</span>
+              <textarea rows={2} value={ch.notes??ch.home?.notes??""} onChange={e=>setChild(i,"notes",e.target.value)}
+                placeholder={t.childNotesPh} style={{...inp,height:"auto",resize:"vertical",padding:10}} />
+            </div>
+          </div>
 
           {/* Row 7 : Lien d'invitation enfant */}
           {ch.name.trim() && (
