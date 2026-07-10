@@ -3179,6 +3179,41 @@ export default function App() {
     const { data } = await supabase.rpc("is_parent_email_verified");
     setEmailVerified(!!data);
   }
+  // 🔧 Alerte "nouvel appareil" : device_id persistant en localStorage
+  // (jamais effacé à la déconnexion — il identifie l'appareil physique, pas
+  // le compte). Appelée après CHAQUE connexion réussie (pas l'inscription,
+  // voir les 3 sites d'appel plus bas) : la RPC record_device_login fait
+  // l'upsert atomique côté serveur et renvoie true seulement la première
+  // fois pour ce (compte, appareil). Ne bloque jamais la connexion en cas
+  // d'échec réseau/RPC — même esprit que notify-password-change existant.
+  function getOrCreateDeviceId() {
+    try {
+      let id = window.localStorage.getItem("duvia_device_id");
+      if (!id) {
+        id = crypto.randomUUID();
+        window.localStorage.setItem("duvia_device_id", id);
+      }
+      return id;
+    } catch {
+      return crypto.randomUUID();
+    }
+  }
+  async function notifyIfNewDevice(userId, userEmail) {
+    if (!userId || !userEmail || userEmail.includes("@phone.duvia.app")) return;
+    try {
+      const deviceId = getOrCreateDeviceId();
+      const { data: isNew } = await supabase.rpc("record_device_login", { p_device_id: deviceId });
+      if (!isNew) return;
+      const ua = navigator.userAgent || "";
+      const browser = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "un navigateur";
+      const os = /Windows/.test(ua) ? "Windows" : /Mac OS/.test(ua) ? "Mac" : /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iOS" : "un appareil";
+      await supabase.functions.invoke("notify-new-device-login", {
+        body: { user_id: userId, email: userEmail, device_info: `${browser} sur ${os}` },
+      });
+    } catch (e) {
+      console.warn("[Duvia][sync] notifyIfNewDevice failed:", e);
+    }
+  }
   // ── Notifications push ──────────────────────────────────────────────────
   const { status: pushStatus, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe, pending: pushPending, restrictiveOem: pushRestrictiveOem } =
     usePush(user?.id || null, import.meta.env.VITE_VAPID_PUBLIC_KEY);
@@ -3511,6 +3546,7 @@ export default function App() {
           const u = session.user;
           const currentSession = JSON.parse(window.localStorage.getItem("duvia_session") || "null");
           if (currentSession === u.email || sessionEmail === u.email) return; // déjà connecté
+          notifyIfNewDevice(u.id, u.email);
           const googleUser = {
             id: u.id,
             email: u.email,
@@ -5447,6 +5483,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     if(error){
       setOk(""); setErr(t.wrongPw); return;
     }
+    notifyIfNewDevice(data.user.id, cleanEmail);
 
     // Admin vérifié côté serveur (table app_admins) — personne ne peut se
     // donner ce rôle soi-même, et il n'y a plus de mot de passe admin dans le code.
@@ -5842,6 +5879,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     // propre téléphone (le cas le plus fréquent en réalité).
     const { data, error: signErr } = await supabase.auth.signInWithPassword({ email: cleanEmail, password: pw });
     if(signErr){ setErr(t.wrongPw); return; }
+    notifyIfNewDevice(data.user.id, cleanEmail);
     const meta = data.user?.user_metadata || {};
     const existing = users.find(u2 => u2.email===cleanEmail);
     const u = existing || {
