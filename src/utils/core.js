@@ -584,3 +584,36 @@ export function formatChildBirthdate(birthDay, birthMonth, birthYear) {
   const mm = String(birthMonth).padStart(2, "0");
   return birthYear ? `${dd}/${mm}/${birthYear}` : `${dd}/${mm}`;
 }
+
+// ── Import de backup : validation email + protection contact ────────────────
+// Compare les emails de parents du fichier importé à ceux de la famille
+// actuelle. Retourne true (laisse passer) dès qu'une correspondance existe
+// OU que la comparaison est impossible (aucun email exploitable d'un côté ou
+// de l'autre) — ne bloque que quand on peut prouver qu'aucun email ne
+// correspond, jamais sur une absence de preuve.
+export function hasMatchingParentEmail(currentParents, backupParents) {
+  const norm = (list) => (list || [])
+    .map(p => String(p?.email || "").trim().toLowerCase())
+    .filter(Boolean);
+  const currentEmails = norm(currentParents);
+  const backupEmails = norm(backupParents);
+  if (currentEmails.length === 0 || backupEmails.length === 0) return true;
+  return backupEmails.some(e => currentEmails.includes(e));
+}
+
+// Fusionne un tableau importé (parents/children/observers) avec le tableau
+// actuel, position par position : l'email et le téléphone déjà renseignés
+// dans l'app ne sont jamais écrasés par le fichier — tout le reste (nom,
+// avatar, couleur, etc.) vient du fichier. Un élément du backup sans
+// correspondant actuel à la même position n'a rien à protéger.
+export function mergeBackupArrayPreservingContact(currentArr, backupArr) {
+  if (!Array.isArray(backupArr)) return currentArr || [];
+  return backupArr.map((backupItem, i) => {
+    const cur = (currentArr || [])[i];
+    if (!cur) return backupItem;
+    const merged = { ...backupItem };
+    if (cur.email && String(cur.email).trim()) merged.email = cur.email;
+    if (cur.phone && String(cur.phone).trim()) merged.phone = cur.phone;
+    return merged;
+  });
+}

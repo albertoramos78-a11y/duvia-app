@@ -669,3 +669,78 @@ test("formatChildBirthdate : jour et mois manquants → chaîne vide", () => {
 test("formatChildBirthdate : birthDay/birthMonth undefined (enfant tout juste créé) → chaîne vide", () => {
   assert.strictEqual(formatChildBirthdate(undefined, undefined, undefined), "");
 });
+
+import { hasMatchingParentEmail, mergeBackupArrayPreservingContact } from "./core.js";
+
+test("hasMatchingParentEmail : au moins un email correspond → true", () => {
+  const current = [{ email: "alice@example.com" }, { email: "bob@example.com" }];
+  const backup  = [{ email: "someone-else@example.com" }, { email: "bob@example.com" }];
+  assert.strictEqual(hasMatchingParentEmail(current, backup), true);
+});
+
+test("hasMatchingParentEmail : correspondance insensible à la casse et aux espaces", () => {
+  const current = [{ email: "Alice@Example.com" }];
+  const backup  = [{ email: "  alice@example.com  " }];
+  assert.strictEqual(hasMatchingParentEmail(current, backup), true);
+});
+
+test("hasMatchingParentEmail : aucun email ne correspond → false", () => {
+  const current = [{ email: "alice@example.com" }];
+  const backup  = [{ email: "mallory@example.com" }];
+  assert.strictEqual(hasMatchingParentEmail(current, backup), false);
+});
+
+test("hasMatchingParentEmail : famille actuelle sans aucun email → true (rien à comparer)", () => {
+  const current = [{ email: "" }, {}];
+  const backup  = [{ email: "mallory@example.com" }];
+  assert.strictEqual(hasMatchingParentEmail(current, backup), true);
+});
+
+test("hasMatchingParentEmail : fichier sans aucun email de parent → true (rien à comparer)", () => {
+  const current = [{ email: "alice@example.com" }];
+  const backup  = [{ email: "" }, {}];
+  assert.strictEqual(hasMatchingParentEmail(current, backup), true);
+});
+
+test("hasMatchingParentEmail : tableaux vides ou absents des deux côtés → true", () => {
+  assert.strictEqual(hasMatchingParentEmail([], []), true);
+  assert.strictEqual(hasMatchingParentEmail(undefined, undefined), true);
+});
+
+test("mergeBackupArrayPreservingContact : email+téléphone actuels conservés, reste du backup", () => {
+  const current = [{ name: "Ancien nom", email: "actuel@example.com", phone: "0600000000", color: "#111" }];
+  const backup  = [{ name: "Nouveau nom", email: "fichier@example.com", phone: "0699999999", color: "#fff" }];
+  const result = mergeBackupArrayPreservingContact(current, backup);
+  assert.deepStrictEqual(result, [{ name: "Nouveau nom", email: "actuel@example.com", phone: "0600000000", color: "#fff" }]);
+});
+
+test("mergeBackupArrayPreservingContact : champ actuel vide → valeur du backup utilisée", () => {
+  const current = [{ name: "X", email: "", phone: "" }];
+  const backup  = [{ name: "X", email: "fichier@example.com", phone: "0699999999" }];
+  const result = mergeBackupArrayPreservingContact(current, backup);
+  assert.deepStrictEqual(result, [{ name: "X", email: "fichier@example.com", phone: "0699999999" }]);
+});
+
+test("mergeBackupArrayPreservingContact : élément du backup sans correspondant actuel → inchangé", () => {
+  const current = [{ name: "Parent 1", email: "actuel@example.com" }];
+  const backup  = [
+    { name: "Parent 1", email: "fichier@example.com" },
+    { name: "Parent 2 (nouveau)", email: "nouveau@example.com" },
+  ];
+  const result = mergeBackupArrayPreservingContact(current, backup);
+  assert.deepStrictEqual(result, [
+    { name: "Parent 1", email: "actuel@example.com" },
+    { name: "Parent 2 (nouveau)", email: "nouveau@example.com" },
+  ]);
+});
+
+test("mergeBackupArrayPreservingContact : backupArr pas un tableau → renvoie currentArr tel quel", () => {
+  const current = [{ name: "Parent 1", email: "actuel@example.com" }];
+  assert.deepStrictEqual(mergeBackupArrayPreservingContact(current, undefined), current);
+  assert.deepStrictEqual(mergeBackupArrayPreservingContact(current, null), current);
+});
+
+test("mergeBackupArrayPreservingContact : currentArr absent, backupArr avec des éléments → tous passent tels quels", () => {
+  const backup = [{ name: "Parent 1", email: "fichier@example.com" }];
+  assert.deepStrictEqual(mergeBackupArrayPreservingContact(undefined, backup), backup);
+});
