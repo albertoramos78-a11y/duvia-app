@@ -4238,6 +4238,31 @@ export default function App() {
     </div>
   );
 
+  const TABS = (isObs && !isAdm)
+    ? [{icon:"📅",label:t.tabCal},{icon:"📞",label:t.tabContacts||"Contacts"},{icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},{icon:"🎡",label:t.tabGame||"Jeu"}]
+    : (isChild && !isAdm)
+    ? [
+        {icon:"📅",label:t.tabCal},
+        {icon:"🎒",label:t.tabSchedule||"EDT"},
+        {icon:"📞",label:t.tabContacts||"Contacts"},
+        {icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},
+      ]
+    : [{icon:"📅",label:t.tabCal},{icon:"🎒",label:t.tabSchedule||"EDT"},{icon:"💰",label:t.tabExp,badge:expPendingCount},{icon:"📞",label:t.tabContacts||"Contacts",badge:contactsDot?1:0},{icon:"🗄️",label:t.tabVault||"Coffre",badge:vaultBadgeCount},{icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},{icon:"🎡",label:t.tabGame||"Jeu"}];
+
+  // 🔒 L'onglet mémorisé (duvia_tab) peut ne plus exister si ce même appareil
+  // change de rôle (parent → enfant/observateur, moins d'onglets) — on
+  // retombe sur le premier onglet plutôt que de rendre un écran vide.
+  useEffect(()=>{ if(tab>=TABS.length) setTab(0); },[TABS.length]);
+
+  // 🔧 Les 4 écrans de blocage ci-dessous sont volontairement placés APRÈS
+  // tous les hooks du composant (dont le useEffect juste au-dessus) : leurs
+  // conditions peuvent devenir vraies APRÈS le premier rendu (ex: emailVerified
+  // passe de undefined à false une fois la vérification async résolue), et un
+  // `return` précoce placé AVANT un hook plus bas ferait sauter ce hook sur ce
+  // rendu-là — nombre de hooks différent d'un rendu à l'autre → crash React
+  // "Rendered fewer hooks than expected" (page blanche, constaté en prod
+  // 2026-07-10 avec l'écran de vérification email, cause du déplacement).
+
   // Page "no access" pour observateur retiré de la famille
   if(familySync.removedObserver) return (
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
@@ -4311,22 +4336,6 @@ export default function App() {
       </div>
     </div>
   );
-
-  const TABS = (isObs && !isAdm)
-    ? [{icon:"📅",label:t.tabCal},{icon:"📞",label:t.tabContacts||"Contacts"},{icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},{icon:"🎡",label:t.tabGame||"Jeu"}]
-    : (isChild && !isAdm)
-    ? [
-        {icon:"📅",label:t.tabCal},
-        {icon:"🎒",label:t.tabSchedule||"EDT"},
-        {icon:"📞",label:t.tabContacts||"Contacts"},
-        {icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},
-      ]
-    : [{icon:"📅",label:t.tabCal},{icon:"🎒",label:t.tabSchedule||"EDT"},{icon:"💰",label:t.tabExp,badge:expPendingCount},{icon:"📞",label:t.tabContacts||"Contacts",badge:contactsDot?1:0},{icon:"🗄️",label:t.tabVault||"Coffre",badge:vaultBadgeCount},{icon:"💬",label:t.tabMsg||"Messages",badge:unreadMsgs},{icon:"🎡",label:t.tabGame||"Jeu"}];
-
-  // 🔒 L'onglet mémorisé (duvia_tab) peut ne plus exister si ce même appareil
-  // change de rôle (parent → enfant/observateur, moins d'onglets) — on
-  // retombe sur le premier onglet plutôt que de rendre un écran vide.
-  useEffect(()=>{ if(tab>=TABS.length) setTab(0); },[TABS.length]);
 
   // ── Context value ─────────────────────────────────────────────────────────
   const onUpgrade = () => { setMenuTab("premium"); setShowMenu(false); };
