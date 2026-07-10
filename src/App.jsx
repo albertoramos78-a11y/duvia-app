@@ -3117,13 +3117,16 @@ export default function App() {
   const [resendMsg, setResendMsg] = useState("");
   const [resendCooldown, setResendCooldown] = useState(false);
   useEffect(() => {
-    if (!user || user.role !== "parent") return;
+    // 🔧 pendingUser aussi : on veut bloquer AVANT l'écran de consentement,
+    // pas seulement après (voir la branche !user plus bas dans App()).
+    const activeParent = user || pendingUser;
+    if (!activeParent || activeParent.role !== "parent") return;
     let cancelled = false;
     supabase.rpc("is_parent_email_verified").then(({ data }) => {
       if (!cancelled) setEmailVerified(!!data);
     });
     return () => { cancelled = true; };
-  }, [user?.id, user?.role]);
+  }, [user?.id, user?.role, pendingUser?.id, pendingUser?.role]);
   // 🔧 Détection du clic sur le lien de vérification : si l'URL contient
   // ?verify_email=<token> au chargement, valide le jeton côté serveur (RPC
   // verify_parent_email) puis nettoie l'URL. Fonctionne que l'utilisateur
@@ -3144,12 +3147,38 @@ export default function App() {
       params.delete("verify_email");
       const newSearch = params.toString();
       window.history.replaceState({}, "", window.location.pathname + (newSearch ? `?${newSearch}` : ""));
-      if (user?.role === "parent") {
+      if ((user || pendingUser)?.role === "parent") {
         const { data } = await supabase.rpc("is_parent_email_verified");
         setEmailVerified(!!data);
       }
     })();
   }, []);
+  // 🔧 Handlers partagés entre les deux endroits où EmailVerifyGate s'affiche
+  // (avant et après l'écran de consentement). On récupère l'UUID Supabase réel
+  // via getUser() plutôt que d'utiliser user.id/pendingUser.id : cet id local
+  // est un Date.now() côté app (voir doReg), pas l'UUID Supabase attendu par
+  // l'Edge Function — l'utiliser faisait échouer le renvoi silencieusement
+  // (l'erreur de functions.invoke() n'était jamais vérifiée, donc le message
+  // "Email renvoyé" s'affichait même en cas d'échec réel — constaté en prod
+  // 2026-07-10 : premier email reçu, "Renvoyer" ne renvoyait rien).
+  async function handleResendVerification() {
+    setResendCooldown(true);
+    try {
+      const { data } = await supabase.auth.getUser();
+      const { error } = await supabase.functions.invoke("send-parent-verification-email", {
+        body: { user_id: data?.user?.id, email: data?.user?.email },
+      });
+      if (error) throw error;
+      setResendMsg(t.parentEmailVerifyResendOk || "Email renvoyé.");
+    } catch (e) {
+      setResendMsg(e.message || "Erreur.");
+    }
+    setTimeout(() => setResendCooldown(false), 30000);
+  }
+  async function handleRefreshVerification() {
+    const { data } = await supabase.rpc("is_parent_email_verified");
+    setEmailVerified(!!data);
+  }
   // ── Notifications push ──────────────────────────────────────────────────
   const { status: pushStatus, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe, pending: pushPending, restrictiveOem: pushRestrictiveOem } =
     usePush(user?.id || null, import.meta.env.VITE_VAPID_PUBLIC_KEY);
@@ -4224,6 +4253,14 @@ export default function App() {
       )}
       {!rgpdOk ? (
         <RgpdConsentScreen C={C} t={t} lang={lang} setLang={setLang} onAccept={acceptRgpd} onOpenLegal={setLegalDocOpen} />
+      ) : pendingUser?.role === "parent" && emailVerified === false ? (
+        // 🔧 Vérification email AVANT la charte d'engagement (demande utilisateur
+        // 2026-07-10) : pas la peine de faire accepter les conditions à quelqu'un
+        // dont on n'est même pas sûr que l'email est le sien.
+        <EmailVerifyGate C={C} t={t} email={pendingUser.email} resendMsg={resendMsg} resendCooldown={resendCooldown}
+          onResend={handleResendVerification}
+          onRefresh={handleRefreshVerification}
+          onLogout={()=>{ setPendingUser(null); handleSetUser(null); }} />
       ) : pendingUser ? (
         <ConsentScreen C={C} t={t} user={pendingUser}
           onAccept={()=>{
@@ -4281,36 +4318,11 @@ export default function App() {
   );
 
   if(user?.role === "parent" && emailVerified === false) {
-    async function handleResendVerification() {
-      setResendCooldown(true);
-      try {
-        await supabase.functions.invoke("send-parent-verification-email", {
-          body: { user_id: user.id, email: user.email },
-        });
-        setResendMsg(t.parentEmailVerifyResendOk || "Email renvoyé.");
-      } catch (e) {
-        setResendMsg(e.message || "Erreur.");
-      }
-      setTimeout(() => setResendCooldown(false), 30000);
-    }
-    async function handleRefreshVerification() {
-      const { data } = await supabase.rpc("is_parent_email_verified");
-      setEmailVerified(!!data);
-    }
     return (
-      <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
-        <div style={{textAlign:"center",maxWidth:340}}>
-          <div style={{fontSize:40,marginBottom:10}}>✉️</div>
-          <div style={{fontWeight:900,fontSize:17,marginBottom:8,color:C.txt}}>{t.parentEmailVerifyTitle||"Vérifie ton email"}</div>
-          <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:20}}>{(t.parentEmailVerifyBody||"Un email de confirmation a été envoyé à {email}. Clique sur le lien qu'il contient pour accéder à l'application.").replace("{email}", user.email||"")}</div>
-          {resendMsg && <div style={{fontSize:12,color:C.grn,marginBottom:14}}>{resendMsg}</div>}
-          <button onClick={handleRefreshVerification} style={{height:44,padding:"0 20px",background:C.vio,color:"#fff",border:"none",fontSize:13,fontWeight:700,borderRadius:10,marginRight:10,marginBottom:10}}>{t.parentEmailVerifyRefresh||"J'ai vérifié, actualiser"}</button>
-          <button onClick={handleResendVerification} disabled={resendCooldown} style={{height:44,padding:"0 20px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13,borderRadius:10,marginBottom:10,opacity:resendCooldown?0.5:1,cursor:resendCooldown?"default":"pointer"}}>{t.parentEmailVerifyResend||"Renvoyer l'email"}</button>
-          <div>
-            <button onClick={()=>handleSetUser(null)} style={{height:36,padding:"0 16px",background:"transparent",color:C.mut,border:"none",fontSize:12,textDecoration:"underline"}}>{t.logout||"Se déconnecter"}</button>
-          </div>
-        </div>
-      </div>
+      <EmailVerifyGate C={C} t={t} email={user.email} resendMsg={resendMsg} resendCooldown={resendCooldown}
+        onResend={handleResendVerification}
+        onRefresh={handleRefreshVerification}
+        onLogout={()=>handleSetUser(null)} />
     );
   }
 
@@ -5256,6 +5268,29 @@ function RgpdConsentScreen({C,t,lang,setLang,onAccept,onOpenLegal}) {
             cursor:checked?"pointer":"not-allowed",opacity:checked?1:.7,transition:"all .2s"}}>
             {t.rgpdAcceptBtn||"✓ Continuer"}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 🔧 Écran de blocage "Vérifie ton email" — utilisé à DEUX endroits dans
+// App() : avant l'écran de consentement (pendingUser, cas normal pour une
+// inscription) et après (garde-fou, cas où user est déjà défini sans être
+// passé par pendingUser). D'où l'extraction en composant, pour ne pas
+// dupliquer JSX + handlers.
+function EmailVerifyGate({C, t, email, resendMsg, resendCooldown, onResend, onRefresh, onLogout}) {
+  return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
+      <div style={{textAlign:"center",maxWidth:340}}>
+        <div style={{fontSize:40,marginBottom:10}}>✉️</div>
+        <div style={{fontWeight:900,fontSize:17,marginBottom:8,color:C.txt}}>{t.parentEmailVerifyTitle||"Vérifie ton email"}</div>
+        <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:20}}>{(t.parentEmailVerifyBody||"Un email de confirmation a été envoyé à {email}. Clique sur le lien qu'il contient pour accéder à l'application.").replace("{email}", email||"")}</div>
+        {resendMsg && <div style={{fontSize:12,color:C.grn,marginBottom:14}}>{resendMsg}</div>}
+        <button onClick={onRefresh} style={{height:44,padding:"0 20px",background:C.vio,color:"#fff",border:"none",fontSize:13,fontWeight:700,borderRadius:10,marginRight:10,marginBottom:10}}>{t.parentEmailVerifyRefresh||"J'ai vérifié, actualiser"}</button>
+        <button onClick={onResend} disabled={resendCooldown} style={{height:44,padding:"0 20px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13,borderRadius:10,marginBottom:10,opacity:resendCooldown?0.5:1,cursor:resendCooldown?"default":"pointer"}}>{t.parentEmailVerifyResend||"Renvoyer l'email"}</button>
+        <div>
+          <button onClick={onLogout} style={{height:36,padding:"0 16px",background:"transparent",color:C.mut,border:"none",fontSize:12,textDecoration:"underline"}}>{t.logout||"Se déconnecter"}</button>
         </div>
       </div>
     </div>
