@@ -657,7 +657,7 @@ const fr = {
     newEmailPh:"Nouvelle adresse email",
     emailChangeInfo:"Un email de confirmation sera envoyé à la nouvelle adresse. L'ancienne reste active jusqu'à validation.",
     sendConfirm:"Envoyer la confirmation",
-    shopBetaLocked:"Les achats sont désactivés pendant la bêta. Tournez la roue chaque jour pour tenter de gagner les thèmes gratuitement !",
+    shopBetaLocked:"Les achats sont désactivés pendant la bêta. Tournez la roue chaque semaine pour tenter de gagner les thèmes gratuitement !",
     shopBetaBadge:"Bêta",
     vaultDocNamePh:"ex : Jugement du 12/03/2023",
     vaultNotesPh:"ex : Version signée par les deux parties…",

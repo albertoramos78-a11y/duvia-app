@@ -604,7 +604,7 @@ const pt = {
     newEmailPh:"Novo endereço de email",
     emailChangeInfo:"Um email de confirmação será enviado para o novo endereço. O antigo permanece ativo até validação.",
     sendConfirm:"Enviar confirmação",
-    shopBetaLocked:"As compras estão desativadas durante a beta. Rode a roleta todos os dias para tentar ganhar os temas gratuitamente!",
+    shopBetaLocked:"As compras estão desativadas durante a beta. Rode a roleta todas as semanas para tentar ganhar os temas gratuitamente!",
     shopBetaBadge:"Beta",
     vaultDocNamePh:"ex: Sentença de 12/03/2023",
     vaultNotesPh:"ex: Versão assinada por ambas as partes…",

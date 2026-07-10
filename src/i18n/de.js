@@ -604,7 +604,7 @@ const de = {
     newEmailPh:"Neue E-Mail-Adresse",
     emailChangeInfo:"Eine Bestätigungs-E-Mail wird an die neue Adresse gesendet. Die alte bleibt bis zur Bestätigung aktiv.",
     sendConfirm:"Bestätigung senden",
-    shopBetaLocked:"Käufe sind während der Beta deaktiviert. Drehen Sie täglich das Rad, um Themes gratis zu gewinnen!",
+    shopBetaLocked:"Käufe sind während der Beta deaktiviert. Drehen Sie jede Woche das Rad, um Themes gratis zu gewinnen!",
     shopBetaBadge:"Beta",
     vaultDocNamePh:"z. B. Urteil vom 12.03.2023",
     vaultNotesPh:"z. B. Von beiden Parteien unterzeichnete Version…",

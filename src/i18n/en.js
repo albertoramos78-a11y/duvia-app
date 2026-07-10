@@ -606,7 +606,7 @@ const en = {
     newEmailPh:"New email address",
     emailChangeInfo:"A confirmation email will be sent to the new address. The old one stays active until confirmed.",
     sendConfirm:"Send confirmation",
-    shopBetaLocked:"Purchases are disabled during the beta. Spin the wheel every day to try to win themes for free!",
+    shopBetaLocked:"Purchases are disabled during the beta. Spin the wheel every week to try to win themes for free!",
     shopBetaBadge:"Beta",
     vaultDocNamePh:"e.g. Court ruling of 12/03/2023",
     vaultNotesPh:"e.g. Version signed by both parties…",

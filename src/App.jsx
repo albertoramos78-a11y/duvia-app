@@ -16686,7 +16686,7 @@ function GameTab() {
   const isSubscriber = isParent && (user?.parentIdx === 0); // Parent souscripteur (parentIdx 0)
   const isAdult   = (isParent || isObs) && !isAdm; // adulte non-admin
   const restrictedRole = (isChild || isObs) && !isAdm; // roue sans gains d'abonnement
-  const cooldownLabel = (isChild||isObs) ? t.cooldown2days : t.cooldown7days;
+  const cooldownLabel = isChild ? t.cooldown2days : t.cooldown7days;
   const userId = String(user?.id || "");
 
   // Lots cadeaux reçus par cet enfant (si le joueur est un enfant)
@@ -16724,7 +16724,8 @@ function GameTab() {
           restrictedRole={restrictedRole}
           userId={userId}
           isSubscriber={isSubscriber}
-          isParent={isParent || isAdm}
+          /* 🔧 Observateurs alignés sur le cooldown 7j des parents, pas 2j comme les enfants */
+          isParent={isParent || isObs || isAdm}
         />
       </div>
 
