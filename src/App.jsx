@@ -10943,8 +10943,8 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
                   ))}
                 </div>
                 {customGuardians.length>=2 ? (
-                  <div onClick={()=>{if(!readOnly){setInlineDs(isInl?null:ds);setFullDs(null);}}}
-                    style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",fontSize:11,fontWeight:700,color:C.txt,minWidth:0,cursor:readOnly?"default":"pointer",borderRadius:8,border:`1.5px solid ${isInl?C.vio:"transparent"}`,background:isInl?`${C.vio}11`:"transparent"}}>
+                  <div onClick={()=>{setInlineDs(isInl?null:ds);setFullDs(null);}}
+                    style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",fontSize:11,fontWeight:700,color:C.txt,minWidth:0,cursor:"pointer",borderRadius:8,border:`1.5px solid ${isInl?C.vio:"transparent"}`,background:isInl?`${C.vio}11`:"transparent"}}>
                     {customGuardians.map(g=>(
                       <span key={g.type+g.id} style={{width:8,height:8,borderRadius:"50%",background:g.color||C.mut,flexShrink:0}} />
                     ))}
@@ -10952,11 +10952,11 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
                   </div>
                 ) : (
                   <GuardCell guard={effectiveGuard} readOnly={readOnly} isOpen={isInl}
-                    onClick={()=>{if(!readOnly){setInlineDs(isInl?null:ds);setFullDs(null);}}}
+                    onClick={()=>{setInlineDs(isInl?null:ds);setFullDs(null);}}
                     onFull={()=>{if(!editBlocked){setFullDs(ds);setInlineDs(null);}}} />
                 )}
               </div>
-              {isInl&&!readOnly&&<InlinePicker ds={ds} guard={guard} onClose={()=>setInlineDs(null)} onFull={!editBlocked?()=>{setFullDs(ds);setInlineDs(null);}:null} />}
+              {isInl&&<InlinePicker ds={ds} guard={guard} onClose={()=>setInlineDs(null)} onFull={!editBlocked&&!readOnly?()=>{setFullDs(ds);setInlineDs(null);}:null} readOnly={readOnly} />}
             </div>
           );
         })}
@@ -11090,7 +11090,6 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
     : dayLettersBase;
 
   function openDay(ds){
-    if(readOnly) return;
     setInlineDs(inlineDs===ds?null:ds);
   }
 
@@ -11137,7 +11136,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
         style={{
           aspectRatio:"1",borderRadius:10,background:bg,padding:"6px 6px",
           display:"flex",flexDirection:"column",justifyContent:"space-between",
-          cursor:readOnly?"default":"pointer",position:"relative",
+          cursor:"pointer",position:"relative",
           border:activeBorder,
           transition:"transform .12s, box-shadow .12s",
           animation:d.isToday?"todayPulse 2.2s ease-in-out infinite":undefined,
@@ -11208,7 +11207,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
           </Fragment>
         ))}
       </div>
-      {inlineDs && !readOnly && (() => {
+      {inlineDs && (() => {
         const d = days.find(d=>d.ds===inlineDs);
         if(!d) return null;
         const dayInfo = [];
@@ -11218,7 +11217,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
         return (
           <div style={{marginTop:10}}>
             <InlinePicker ds={inlineDs} guard={d.guard} onClose={()=>setInlineDs(null)} dayInfo={dayInfo}
-              onFull={!editBlocked?()=>{setFullDs(inlineDs);setInlineDs(null);}:null} />
+              onFull={!editBlocked&&!readOnly?()=>{setFullDs(inlineDs);setInlineDs(null);}:null} readOnly={readOnly} />
           </div>
         );
       })()}
@@ -11234,7 +11233,7 @@ function GuardCell({guard,readOnly,isOpen,onClick,onFull}) {
   const isAllParents = guard?.allParents === true;
   const borderColor = gObs?"#f59e0b":gP?.color||"#a855f7";
   return (
-    <div onClick={readOnly?undefined:onClick} style={{display:"flex",alignItems:"center",justifyContent:"flex-start",gap:7,cursor:readOnly?"default":"pointer",padding:"4px 7px",borderRadius:8,border:`1.5px solid ${isOpen&&(gP||isAllParents||gObs)?borderColor:isOpen?C.vio:"transparent"}`,background:isOpen?`${borderColor}11`:"transparent",transition:"all .15s"}}>
+    <div onClick={onClick} style={{display:"flex",alignItems:"center",justifyContent:"flex-start",gap:7,cursor:"pointer",padding:"4px 7px",borderRadius:8,border:`1.5px solid ${isOpen&&(gP||isAllParents||gObs)?borderColor:isOpen?C.vio:"transparent"}`,background:isOpen?`${borderColor}11`:"transparent",transition:"all .15s"}}>
       {isAllParents?(
         <div style={{display:"flex",alignItems:"center",gap:7,width:"100%"}}>
           <div style={{display:"flex",gap:2,flexShrink:0}}>
@@ -11284,9 +11283,24 @@ function GuardCell({guard,readOnly,isOpen,onClick,onFull}) {
   );
 }
 
-function InlinePicker({ds,guard,onClose,onFull,dayInfo}) {
+function InlinePicker({ds,guard,onClose,onFull,dayInfo,readOnly=false}) {
   const {C,t,cfg,updateCal} = useApp();
   const guardianObs=(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard);
+  // 🔧 Résumé texte utilisé uniquement en mode lecture seule (enfants/observateurs) :
+  // dérivé du même objet `guard` que la ligne de boutons ci-dessous utilise pour
+  // savoir quel bouton est actif — mais ici on affiche juste le nom, sans action.
+  const readOnlyGuardLabel = (() => {
+    if (guard?.allParents) return cfg.parents.map(p=>p.name).filter(Boolean).join(" & ") || "Non défini";
+    if (guard?.obsId) {
+      const o = guardianObs.find(o=>String(o.id)===String(guard.obsId));
+      return o ? `🏠 ${obsLabel(o)}` : "Non défini";
+    }
+    if (guard?.parentIdx !== undefined && guard.parentIdx >= 0) {
+      const p = cfg.parents[guard.parentIdx];
+      return p?.name || `P${guard.parentIdx+1}`;
+    }
+    return "Non défini";
+  })();
   // Résumé heure/lieu du rendez-vous (même logique que GuardCell), affiché dans le panneau rapide
   const timeStr = (()=>{
     if(!guard || !guard.timeType || guard.timeType==="full") return "";
@@ -11323,6 +11337,11 @@ function InlinePicker({ds,guard,onClose,onFull,dayInfo}) {
           )}
         </div>
       )}
+      {readOnly ? (
+        <div style={{display:"flex",alignItems:"center",gap:6,padding:"5px 2px",fontSize:13,fontWeight:700,color:C.txt}}>
+          {t.calWhoHasChild||"Aujourd'hui :"} <span style={{fontWeight:800}}>{readOnlyGuardLabel}</span>
+        </div>
+      ) : (
       <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
         {cfg.parents.map((p,pi)=>(
           <button key={pi} onClick={()=>{updateCal(ds,{parentIdx:pi,obsId:undefined,timeType:"full",startTime:"",endTime:"",location:"",note:""});onClose();}}
@@ -11342,6 +11361,7 @@ function InlinePicker({ds,guard,onClose,onFull,dayInfo}) {
           : <button disabled style={{padding:"5px 10px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:20,fontSize:12,marginLeft:"auto",opacity:.6,cursor:"not-allowed",display:"flex",alignItems:"center",gap:5}}>🔒 {t.fullEdit}</button>
         }
       </div>
+      )}
     </div>
   );
 }
