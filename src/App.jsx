@@ -6596,7 +6596,7 @@ function PrefsTab() {
       const parsed = await readDuviaBackupFile(file);
       const currentFid = familySync?.familyId || null;
       const backupFid  = parsed._familyId || null;
-      if (backupFid && currentFid && backupFid !== currentFid) {
+      if (currentFid && backupFid !== currentFid) {
         if (!hasMatchingParentEmail(cfg?.parents, parsed?.family?.parents)) {
           throw new Error("parent_email_mismatch");
         }
