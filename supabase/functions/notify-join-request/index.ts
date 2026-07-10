@@ -1,4 +1,4 @@
-// supabase/functions/notify-join-request/index.ts
+// supabase/functions/notify-join-request/index.ts — syntaxe Deno.serve (moderne)
 // ─────────────────────────────────────────────────────────────────────────────
 // Déclenchée par le webhook Supabase sur family_members INSERT.
 // Prévient les parents actifs qu'un observateur ou un enfant a rejoint (ou
@@ -7,7 +7,6 @@
 // avant ce chantier — les deux sont nouvelles.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendPushToUser } from "./_shared/push.ts";
 
@@ -19,7 +18,7 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
 const FROM_EMAIL       = "notifications@duvia.fr";
 const APP_URL          = "https://app.duvia.fr";
 
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", {
       headers: {
@@ -67,24 +66,28 @@ serve(async (req) => {
     : `🧒 ${joinerName} a rejoint la famille`;
 
   for (const parent of parents) {
-    const { data: userData } = await supabase.auth.admin.getUserById(parent.user_id);
-    const prefs = userData?.user?.user_metadata || {};
+    // 🔧 Isolation par destinataire : une erreur sur ce parent (getUserById,
+    // envoi push/email) ne doit jamais empêcher de notifier les suivants —
+    // même pattern que notify-vault, qui fait déjà ça correctement.
+    try {
+      const { data: userData } = await supabase.auth.admin.getUserById(parent.user_id);
+      const prefs = userData?.user?.user_metadata || {};
 
-    if (prefs.push_join_requests !== false) {
-      await sendPushToUser(supabase, parent.user_id, {
-        title: "Duvia",
-        body,
-        tag: "join-request",
-        url: "/",
-      });
-    }
+      if (prefs.push_join_requests !== false) {
+        await sendPushToUser(supabase, parent.user_id, {
+          title: "Duvia",
+          body,
+          tag: "join-request",
+          url: "/",
+        });
+      }
 
-    const email = userData?.user?.email;
-    if (!email || email.includes("@phone.duvia.app")) continue;
-    if (prefs.email_join_requests === false) continue;
-    const name = prefs.name || prefs.first_name || "Parent";
+      const email = userData?.user?.email;
+      if (!email || email.includes("@phone.duvia.app")) continue;
+      if (prefs.email_join_requests === false) continue;
+      const name = prefs.name || prefs.first_name || "Parent";
 
-    const html = `
+      const html = `
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -108,16 +111,19 @@ serve(async (req) => {
 </body>
 </html>`;
 
-    await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: `Duvia <${FROM_EMAIL}>`,
-        to: [email],
-        subject: `👥 ${joinerName} — ${isPending ? "demande à rejoindre" : "a rejoint"} Duvia`,
-        html,
-      }),
-    });
+      await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: `Duvia <${FROM_EMAIL}>`,
+          to: [email],
+          subject: `👥 ${joinerName} — ${isPending ? "demande à rejoindre" : "a rejoint"} Duvia`,
+          html,
+        }),
+      });
+    } catch (e) {
+      console.warn("notify-join-request parent failed:", parent.user_id, e);
+    }
   }
 
   return new Response("ok", { status: 200 });
