@@ -27,37 +27,41 @@ serve(async (req) => {
     for (const uid of recipientIds) {
       if (uid === record.sender_id) continue
 
-      const { data: { user } } = await supabase.auth.admin.getUserById(uid)
+      // 🔧 Isolation par destinataire : une erreur sur ce destinataire ne
+      // doit jamais empêcher de notifier les suivants — même pattern que
+      // notify-vault (qui fait déjà ça correctement).
+      try {
+        const { data: { user } } = await supabase.auth.admin.getUserById(uid)
 
-      // Push : ne dépend pas d'avoir un email, seulement de la préférence
-      // et d'un abonnement push_subscriptions existant.
-      if (user?.user_metadata?.push_notifs !== false) {
-        await sendPushToUser(supabase, uid, {
-          title: "Duvia",
-          body: `💬 ${senderName} vous a envoyé un message`,
-          tag: "message",
-          url: "/",
-        })
-      }
+        // Push : ne dépend pas d'avoir un email, seulement de la préférence
+        // et d'un abonnement push_subscriptions existant.
+        if (user?.user_metadata?.push_notifs !== false) {
+          await sendPushToUser(supabase, uid, {
+            title: "Duvia",
+            body: `💬 ${senderName} vous a envoyé un message`,
+            tag: "message",
+            url: "/",
+          })
+        }
 
-      const email = user?.email
-      if (!email || email.includes("@phone.duvia.app")) continue
+        const email = user?.email
+        if (!email || email.includes("@phone.duvia.app")) continue
 
-      // 🔧 Respect de la préférence email_notifs (défaut : activé)
-      const emailNotifs = user?.user_metadata?.email_notifs
-      if (emailNotifs === false) continue
+        // 🔧 Respect de la préférence email_notifs (défaut : activé)
+        const emailNotifs = user?.user_metadata?.email_notifs
+        if (emailNotifs === false) continue
 
-      await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${RESEND_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: FROM,
-          to: [email],
-          subject: `💬 ${senderName} vous a envoyé un message`,
-          html: `<!DOCTYPE html><html><body style="font-family:sans-serif;background:#F8F2FF;margin:0;padding:20px;">
+        await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${RESEND_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: FROM,
+            to: [email],
+            subject: `💬 ${senderName} vous a envoyé un message`,
+            html: `<!DOCTYPE html><html><body style="font-family:sans-serif;background:#F8F2FF;margin:0;padding:20px;">
 <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:32px;box-shadow:0 4px 24px rgba(123,124,245,.1);">
   <div style="text-align:center;margin-bottom:24px;">
     <div style="font-size:40px">💬</div>
@@ -77,8 +81,11 @@ serve(async (req) => {
   </p>
 </div>
 </body></html>`,
-        }),
-      })
+          }),
+        })
+      } catch (e) {
+        console.warn("notify-message recipient failed:", uid, e)
+      }
     }
 
     return new Response(JSON.stringify({ ok: true }), {
