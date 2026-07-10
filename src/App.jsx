@@ -3546,7 +3546,7 @@ export default function App() {
           const u = session.user;
           const currentSession = JSON.parse(window.localStorage.getItem("duvia_session") || "null");
           if (currentSession === u.email || sessionEmail === u.email) return; // déjà connecté
-          notifyIfNewDevice(u.id, u.email);
+          await notifyIfNewDevice(u.id, u.email);
           const googleUser = {
             id: u.id,
             email: u.email,
