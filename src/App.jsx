@@ -2048,8 +2048,7 @@ function useFamilySync(cfg, setCfg) {
   async function linkAccount(email, password, metadata) {
     try {
       const { data, error } = await supabase.auth.signUp({
-        email, password,
-        options: { data: metadata || {}, emailRedirectTo: `${APP_URL}/?email_verified=1` },
+        email, password, options: { data: metadata || {} },
       });
       if (error) {
         if (error.message?.includes("already registered"))
@@ -2062,23 +2061,23 @@ function useFamilySync(cfg, setCfg) {
         const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
         if (signInErr) throw signInErr;
       }
-      // 🔧 Vérification email obligatoire pour les parents (créateur ou 2e
-      // parent) : on déclenche explicitement l'email de confirmation natif
-      // Supabase, indépendamment du réglage global "Confirm email" (laissé
-      // désactivé pour ne pas casser les comptes enfants/observateurs par
-      // téléphone) — voir le garde-fou plein-écran plus bas dans App().
-      if (metadata?.role === "parent") {
-        try {
-          await supabase.auth.resend({
-            type: "signup", email,
-            options: { emailRedirectTo: `${APP_URL}/?email_verified=1` },
-          });
-        } catch (resendErr) {
-          console.warn("[Duvia][sync] confirmation email resend failed:", resendErr);
-        }
-      }
       const getUserRes = await supabase.auth.getUser();
       const newUserId = getUserRes.data?.user?.id;
+      // 🔧 Vérification email obligatoire pour les parents (créateur ou 2e
+      // parent) : mécanisme maison (jeton + Edge Function + RPC), PAS le
+      // champ natif Supabase email_confirmed_at — voir
+      // docs/superpowers/specs/2026-07-10-parent-email-verification-design.md
+      // ("Révision") pour le pourquoi. Voir le garde-fou plein-écran plus
+      // bas dans App().
+      if (metadata?.role === "parent" && newUserId) {
+        try {
+          await supabase.functions.invoke("send-parent-verification-email", {
+            body: { user_id: newUserId, email },
+          });
+        } catch (sendErr) {
+          console.warn("[Duvia][sync] verification email send failed:", sendErr);
+        }
+      }
       // ── PostHog : tracking inscription ──
       if (newUserId) posthog.capture("signup", { role: metadata?.role || "unknown" });
       return { ok: true, userId: newUserId };
@@ -3106,24 +3105,48 @@ export default function App() {
     } catch {}
     return DEMO_USERS.find(u => u.email === sessionEmail) || null;
   });
-  // 🔧 Vérification email parent : null = confirmé non fait (bloque), une
-  // date = confirmé, undefined = pas encore su (ne bloque jamais, évite un
-  // flash de l'écran de blocage pendant le chargement initial).
-  const [emailConfirmedAt, setEmailConfirmedAt] = useState(undefined);
+  // 🔧 Vérification email parent : false = pas encore vérifié (bloque),
+  // true = vérifié, undefined = pas encore su (ne bloque jamais, évite un
+  // flash de l'écran de blocage pendant le chargement initial). Source :
+  // user_metadata.email_verified (mécanisme maison, PAS email_confirmed_at
+  // — voir linkAccount plus haut pour le pourquoi).
+  const [emailVerified, setEmailVerified] = useState(undefined);
   const [resendMsg, setResendMsg] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(false);
   useEffect(() => {
     if (!user || user.role !== "parent") return;
     let cancelled = false;
     supabase.auth.getUser().then(({ data }) => {
-      if (!cancelled) setEmailConfirmedAt(data?.user?.email_confirmed_at ?? null);
+      if (!cancelled) setEmailVerified(!!data?.user?.user_metadata?.email_verified);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "USER_UPDATED" && session?.user) {
-        setEmailConfirmedAt(session.user.email_confirmed_at ?? null);
-      }
-    });
-    return () => { cancelled = true; sub?.subscription?.unsubscribe(); };
+    return () => { cancelled = true; };
   }, [user?.id, user?.role]);
+  // 🔧 Détection du clic sur le lien de vérification : si l'URL contient
+  // ?verify_email=<token> au chargement, valide le jeton côté serveur (RPC
+  // verify_parent_email) puis nettoie l'URL. Fonctionne que l'utilisateur
+  // soit connecté sur CET appareil ou non (le jeton est la preuve, pas la
+  // session) — s'il est connecté ici, emailVerified se met à jour tout de
+  // suite ; sinon il devra se connecter normalement ensuite, le champ sera
+  // déjà à true à ce moment-là.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const verifyToken = params.get("verify_email");
+    if (!verifyToken) return;
+    (async () => {
+      try {
+        await supabase.rpc("verify_parent_email", { p_token: verifyToken });
+      } catch (e) {
+        console.warn("[Duvia][sync] verify_parent_email failed:", e);
+      }
+      params.delete("verify_email");
+      const newSearch = params.toString();
+      window.history.replaceState({}, "", window.location.pathname + (newSearch ? `?${newSearch}` : ""));
+      if (user?.role === "parent") {
+        const { data } = await supabase.auth.getUser();
+        setEmailVerified(!!data?.user?.user_metadata?.email_verified);
+      }
+    })();
+  }, []);
   // ── Notifications push ──────────────────────────────────────────────────
   const { status: pushStatus, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe, pending: pushPending, restrictiveOem: pushRestrictiveOem } =
     usePush(user?.id || null, import.meta.env.VITE_VAPID_PUBLIC_KEY);
@@ -4229,21 +4252,22 @@ export default function App() {
     </div>
   );
 
-  if(user?.role === "parent" && emailConfirmedAt === null) {
+  if(user?.role === "parent" && emailVerified === false) {
     async function handleResendVerification() {
+      setResendCooldown(true);
       try {
-        await supabase.auth.resend({
-          type: "signup", email: user.email,
-          options: { emailRedirectTo: `${APP_URL}/?email_verified=1` },
+        await supabase.functions.invoke("send-parent-verification-email", {
+          body: { user_id: user.id, email: user.email },
         });
         setResendMsg(t.parentEmailVerifyResendOk || "Email renvoyé.");
       } catch (e) {
         setResendMsg(e.message || "Erreur.");
       }
+      setTimeout(() => setResendCooldown(false), 30000);
     }
     async function handleRefreshVerification() {
       const { data } = await supabase.auth.getUser();
-      setEmailConfirmedAt(data?.user?.email_confirmed_at ?? null);
+      setEmailVerified(!!data?.user?.user_metadata?.email_verified);
     }
     return (
       <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
@@ -4253,7 +4277,7 @@ export default function App() {
           <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:20}}>{(t.parentEmailVerifyBody||"Un email de confirmation a été envoyé à {email}. Clique sur le lien qu'il contient pour accéder à l'application.").replace("{email}", user.email||"")}</div>
           {resendMsg && <div style={{fontSize:12,color:C.grn,marginBottom:14}}>{resendMsg}</div>}
           <button onClick={handleRefreshVerification} style={{height:44,padding:"0 20px",background:C.vio,color:"#fff",border:"none",fontSize:13,fontWeight:700,borderRadius:10,marginRight:10,marginBottom:10}}>{t.parentEmailVerifyRefresh||"J'ai vérifié, actualiser"}</button>
-          <button onClick={handleResendVerification} style={{height:44,padding:"0 20px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13,borderRadius:10,marginBottom:10}}>{t.parentEmailVerifyResend||"Renvoyer l'email"}</button>
+          <button onClick={handleResendVerification} disabled={resendCooldown} style={{height:44,padding:"0 20px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13,borderRadius:10,marginBottom:10,opacity:resendCooldown?0.5:1,cursor:resendCooldown?"default":"pointer"}}>{t.parentEmailVerifyResend||"Renvoyer l'email"}</button>
           <div>
             <button onClick={()=>handleSetUser(null)} style={{height:36,padding:"0 16px",background:"transparent",color:C.mut,border:"none",fontSize:12,textDecoration:"underline"}}>{t.logout||"Se déconnecter"}</button>
           </div>
