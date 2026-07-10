@@ -62,8 +62,12 @@ Deno.serve(async (req: Request) => {
   const emailsSent: string[] = [];
 
   for (const member of members) {
-    // Skip le créateur (indice paidBy ou createdBy)
-    // On notifie TOUS les membres sauf le créateur
+    // Skip le créateur : il vient de créer la dépense, inutile de lui dire
+    // qu'une dépense "attend sa validation" pour sa propre action.
+    if (expense.created_by_user_id && member.user_id === expense.created_by_user_id) {
+      console.log("Skip creator:", member.user_id);
+      continue;
+    }
     const { data: userData, error: userErr } = await supabase.auth.admin.getUserById(member.user_id);
     if (userErr) {
       console.error("getUserById error:", userErr);
@@ -93,11 +97,6 @@ Deno.serve(async (req: Request) => {
       console.log("Email disabled for:", email);
       continue;
     }
-
-    // Ne pas envoyer à celui qui a créé (user_id match via auth)
-    // On compare l'user_id avec l'auteur de la dépense via profiles
-    // Pour simplifier : on envoie à tous et on laisse le JS filtrer côté client
-    // (la notification en double ne nuit pas)
 
     const amount   = Number(expense.amount || 0).toFixed(2);
     const label    = expense.label || "Dépense";
