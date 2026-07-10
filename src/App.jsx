@@ -3878,13 +3878,17 @@ export default function App() {
     lastNotifIdRef.current = latestId;
     // Filtrer les notifs que j'ai moi-même créées (pas de popup pour le créateur)
     const toShow = newOnes.filter(n => !myOwnNotifIds.current.has(n.id));
-    if (toShow.length === 0 || !window.Notification || Notification.permission !== "granted") return;
+    // 🔧 Anti-doublon : si le push est actif, le service worker est la seule
+    // source de notification OS pour cet appareil — sans ce garde-fou, un
+    // onglet desktop en arrière-plan (pas fermé, donc son JS tourne encore)
+    // affiche SA propre notification en plus de celle du SW, doublant tout.
+    if (toShow.length === 0 || !window.Notification || Notification.permission !== "granted" || pushStatus === "subscribed") return;
     toShow.forEach(n => {
       if(navigator.serviceWorker?.controller){
         navigator.serviceWorker.ready.then(reg=>reg.showNotification(t.appName,{body:n.msg})).catch(()=>{});
       } else { try{ new Notification(t.appName,{body:n.msg}); }catch(e){} }
     });
-  }, [cfg.notifs, t]);
+  }, [cfg.notifs, t, pushStatus]);
 
   // ── Notifications OS pour les messages reçus (Realtime useMessages) ──
   const seenMsgIdsRef = useRef(null);
@@ -3897,7 +3901,8 @@ export default function App() {
     }
     const unseen = msgs.filter(m => !seenMsgIdsRef.current.has(m.id));
     msgs.forEach(m => seenMsgIdsRef.current.add(m.id));
-    if (!_myUidStr || !window.Notification || Notification.permission !== "granted") return;
+    // 🔧 Anti-doublon : voir commentaire équivalent sur l'effet cfg.notifs plus haut.
+    if (!_myUidStr || !window.Notification || Notification.permission !== "granted" || pushStatus === "subscribed") return;
     const toNotify = unseen.filter(m =>
       String(m.from) !== _myUidStr &&
       (m.to || []).map(String).includes(_myUidStr)
@@ -3911,7 +3916,7 @@ export default function App() {
         navigator.serviceWorker.ready.then(reg => reg.showNotification(t.appName, {body: preview})).catch(()=>{});
       } else { try{ new Notification(t.appName, {body: preview}); }catch(e){} }
     });
-  }, [msgs, myUid, _myId, t]);
+  }, [msgs, myUid, _myId, t, pushStatus]);
 
   // Called when an observer registers via invite link — adds them as pending + notifies parents
   function handleObsJoin(obsData){
@@ -16791,7 +16796,7 @@ function GameTab() {
 // VAULT TAB — Coffre-fort de documents
 // ═══════════════════════════════════════════════════════════════════════════════
 function VaultTab() {
-  const { C, t, cfg, setCfg, user, users, prem, perms, onUpgrade, isObs, setActivity, addRefAction, sub, familySync, pushNotif, addHist, myUid, unreadVaultDocIds, setUnreadVaultDocIds } = useApp();
+  const { C, t, cfg, setCfg, user, users, prem, perms, onUpgrade, isObs, setActivity, addRefAction, sub, familySync, pushNotif, addHist, myUid, unreadVaultDocIds, setUnreadVaultDocIds, pushStatus } = useApp();
   const premFull = isPremFull(sub);
 
   // Identité cloud de la personne connectée (nécessaire pour savoir qui a uploadé quoi)
@@ -17056,17 +17061,18 @@ function VaultTab() {
       const toAdd = fromOthers.map(d => d.id).filter(id => !ids.includes(id));
       return toAdd.length ? [...ids, ...toAdd] : ids;
     });
-    // Popup OS
+    // Popup OS — anti-doublon : voir commentaire équivalent sur les effets
+    // cfg.notifs/msgs dans le composant App (même garde-fou, même raison).
     fromOthers.forEach(d => {
       const who = resolveAddedBy(d.added_by_name||"").label;
       const body = `🗄️ ${who} a ajouté "${d.name}"`;
-      if(window.Notification && Notification.permission === "granted"){
+      if(window.Notification && Notification.permission === "granted" && pushStatus !== "subscribed"){
         if(navigator.serviceWorker?.controller){
           navigator.serviceWorker.ready.then(reg=>reg.showNotification(t.appName,{body})).catch(()=>{});
         } else { try{ new Notification(t.appName,{body}); }catch(e){} }
       }
     });
-  }, [docs, myDisplayName]);
+  }, [docs, myDisplayName, pushStatus]);
 
   // Premium gate
   if (!prem) {
