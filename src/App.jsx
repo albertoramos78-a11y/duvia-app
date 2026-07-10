@@ -2048,7 +2048,8 @@ function useFamilySync(cfg, setCfg) {
   async function linkAccount(email, password, metadata) {
     try {
       const { data, error } = await supabase.auth.signUp({
-        email, password, options: { data: metadata || {} },
+        email, password,
+        options: { data: metadata || {}, emailRedirectTo: `${APP_URL}/?email_verified=1` },
       });
       if (error) {
         if (error.message?.includes("already registered"))
@@ -2060,6 +2061,21 @@ function useFamilySync(cfg, setCfg) {
         // Pas de session → on force la connexion
         const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
         if (signInErr) throw signInErr;
+      }
+      // 🔧 Vérification email obligatoire pour les parents (créateur ou 2e
+      // parent) : on déclenche explicitement l'email de confirmation natif
+      // Supabase, indépendamment du réglage global "Confirm email" (laissé
+      // désactivé pour ne pas casser les comptes enfants/observateurs par
+      // téléphone) — voir le garde-fou plein-écran plus bas dans App().
+      if (metadata?.role === "parent") {
+        try {
+          await supabase.auth.resend({
+            type: "signup", email,
+            options: { emailRedirectTo: `${APP_URL}/?email_verified=1` },
+          });
+        } catch (resendErr) {
+          console.warn("[Duvia][sync] confirmation email resend failed:", resendErr);
+        }
       }
       const getUserRes = await supabase.auth.getUser();
       const newUserId = getUserRes.data?.user?.id;
@@ -3090,6 +3106,24 @@ export default function App() {
     } catch {}
     return DEMO_USERS.find(u => u.email === sessionEmail) || null;
   });
+  // 🔧 Vérification email parent : null = confirmé non fait (bloque), une
+  // date = confirmé, undefined = pas encore su (ne bloque jamais, évite un
+  // flash de l'écran de blocage pendant le chargement initial).
+  const [emailConfirmedAt, setEmailConfirmedAt] = useState(undefined);
+  const [resendMsg, setResendMsg] = useState("");
+  useEffect(() => {
+    if (!user || user.role !== "parent") return;
+    let cancelled = false;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!cancelled) setEmailConfirmedAt(data?.user?.email_confirmed_at ?? null);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "USER_UPDATED" && session?.user) {
+        setEmailConfirmedAt(session.user.email_confirmed_at ?? null);
+      }
+    });
+    return () => { cancelled = true; sub?.subscription?.unsubscribe(); };
+  }, [user?.id, user?.role]);
   // ── Notifications push ──────────────────────────────────────────────────
   const { status: pushStatus, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe, pending: pushPending, restrictiveOem: pushRestrictiveOem } =
     usePush(user?.id || null, import.meta.env.VITE_VAPID_PUBLIC_KEY);
@@ -4194,6 +4228,39 @@ export default function App() {
       </div>
     </div>
   );
+
+  if(user?.role === "parent" && emailConfirmedAt === null) {
+    async function handleResendVerification() {
+      try {
+        await supabase.auth.resend({
+          type: "signup", email: user.email,
+          options: { emailRedirectTo: `${APP_URL}/?email_verified=1` },
+        });
+        setResendMsg(t.parentEmailVerifyResendOk || "Email renvoyé.");
+      } catch (e) {
+        setResendMsg(e.message || "Erreur.");
+      }
+    }
+    async function handleRefreshVerification() {
+      const { data } = await supabase.auth.getUser();
+      setEmailConfirmedAt(data?.user?.email_confirmed_at ?? null);
+    }
+    return (
+      <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
+        <div style={{textAlign:"center",maxWidth:340}}>
+          <div style={{fontSize:40,marginBottom:10}}>✉️</div>
+          <div style={{fontWeight:900,fontSize:17,marginBottom:8,color:C.txt}}>{t.parentEmailVerifyTitle||"Vérifie ton email"}</div>
+          <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:20}}>{(t.parentEmailVerifyBody||"Un email de confirmation a été envoyé à {email}. Clique sur le lien qu'il contient pour accéder à l'application.").replace("{email}", user.email||"")}</div>
+          {resendMsg && <div style={{fontSize:12,color:C.grn,marginBottom:14}}>{resendMsg}</div>}
+          <button onClick={handleRefreshVerification} style={{height:44,padding:"0 20px",background:C.vio,color:"#fff",border:"none",fontSize:13,fontWeight:700,borderRadius:10,marginRight:10,marginBottom:10}}>{t.parentEmailVerifyRefresh||"J'ai vérifié, actualiser"}</button>
+          <button onClick={handleResendVerification} style={{height:44,padding:"0 20px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13,borderRadius:10,marginBottom:10}}>{t.parentEmailVerifyResend||"Renvoyer l'email"}</button>
+          <div>
+            <button onClick={()=>handleSetUser(null)} style={{height:36,padding:"0 16px",background:"transparent",color:C.mut,border:"none",fontSize:12,textDecoration:"underline"}}>{t.logout||"Se déconnecter"}</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if(familySync.pendingApproval) return (
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
