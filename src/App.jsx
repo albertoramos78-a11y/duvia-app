@@ -5692,26 +5692,13 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
           );
         }
       } else if(isParentInvite && obsInviteCode.family){
-
-        // 🔗 Maintenant que le compte Auth existe, rejoindre la famille via le lien d'invitation
-        const joinRes = await familySync.joinFamily(obsInviteCode.family);
-        if(joinRes.ok){
-          // ✅ Délai 100ms pour laisser le useEffect remettre skipNextSave à false
-          // après le setCfg(famRow.data) dans joinFamily — sinon cette MAJ n'est pas
-          // envoyée à Supabase et le Parent 1 ne voit pas que le Parent 2 a rejoint.
-          await new Promise(r => setTimeout(r, 100));
-          setCfg(c=>{
-            const p=[...(c.parents||[])];
-            while(p.length<2) p.push({});
-            p[1] = {...p[1], name:cleanName, email:cleanEmail,
-              gender:parentGender||p[1]?.gender||"M",
-              phone:parentPhone.trim()||p[1]?.phone||"",
-              inviteStatus:"accepted"};
-            return {...c, parents:p};
-          });
-        } else {
-          console.warn("[Duvia] Auto-join family failed:", joinRes.error);
-        }
+        // 🔧 Ancien format de lien d'invitation parent (pré-token) retiré :
+        // il contournait la validation du créateur (inviteStatus:"accepted"
+        // immédiat, sans passer par le statut pending). Toutes les
+        // invitations parent utilisent désormais le format à token —
+        // ce cas ne devrait plus survenir qu'avec un très ancien lien
+        // enregistré ailleurs (favori, message déjà envoyé, etc.).
+        setErr(t.invErrInvalid);
       }
     }
 
