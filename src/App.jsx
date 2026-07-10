@@ -3108,16 +3108,19 @@ export default function App() {
   // 🔧 Vérification email parent : false = pas encore vérifié (bloque),
   // true = vérifié, undefined = pas encore su (ne bloque jamais, évite un
   // flash de l'écran de blocage pendant le chargement initial). Source :
-  // user_metadata.email_verified (mécanisme maison, PAS email_confirmed_at
-  // — voir linkAccount plus haut pour le pourquoi).
+  // RPC is_parent_email_verified() → table parent_email_verifications.
+  // PAS user_metadata.email_verified : ce champ est auto-géré par Supabase
+  // lui-même (peuplé à true dès l'inscription auto-confirmée, comme
+  // email_confirmed_at) — s'y fier recréait exactement le bug de la v1 sous
+  // un autre nom (constaté en prod le 2026-07-10, voir migration 0030).
   const [emailVerified, setEmailVerified] = useState(undefined);
   const [resendMsg, setResendMsg] = useState("");
   const [resendCooldown, setResendCooldown] = useState(false);
   useEffect(() => {
     if (!user || user.role !== "parent") return;
     let cancelled = false;
-    supabase.auth.getUser().then(({ data }) => {
-      if (!cancelled) setEmailVerified(!!data?.user?.user_metadata?.email_verified);
+    supabase.rpc("is_parent_email_verified").then(({ data }) => {
+      if (!cancelled) setEmailVerified(!!data);
     });
     return () => { cancelled = true; };
   }, [user?.id, user?.role]);
@@ -3142,8 +3145,8 @@ export default function App() {
       const newSearch = params.toString();
       window.history.replaceState({}, "", window.location.pathname + (newSearch ? `?${newSearch}` : ""));
       if (user?.role === "parent") {
-        const { data } = await supabase.auth.getUser();
-        setEmailVerified(!!data?.user?.user_metadata?.email_verified);
+        const { data } = await supabase.rpc("is_parent_email_verified");
+        setEmailVerified(!!data);
       }
     })();
   }, []);
@@ -4266,8 +4269,8 @@ export default function App() {
       setTimeout(() => setResendCooldown(false), 30000);
     }
     async function handleRefreshVerification() {
-      const { data } = await supabase.auth.getUser();
-      setEmailVerified(!!data?.user?.user_metadata?.email_verified);
+      const { data } = await supabase.rpc("is_parent_email_verified");
+      setEmailVerified(!!data);
     }
     return (
       <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
