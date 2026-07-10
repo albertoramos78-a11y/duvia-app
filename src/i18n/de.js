@@ -520,6 +520,7 @@ const de = {
     backupErrNotDuvia:"Diese Datei ist keine Duvia-Sicherung.",
     backupErrInvalidVer:"Unbekannte Sicherungsversion.",
     backupErrVerTooNew:"Diese Sicherung wurde mit einer neueren Version von Duvia erstellt. Bitte aktualisieren Sie die App.",
+    backupErrEmailMismatch:"Diese Datei entspricht keinem Elternteil dieser Familie. Import zu Ihrer Sicherheit blockiert.",
     backupDownloadBeforeDelete:"Meine Daten zuerst herunterladen",
     cloudBackupLabel:"Automatische Cloud-Sicherung",
     cloudBackupDesc:"Eine verschlüsselte Kopie Ihrer Daten wird 30 Tage auf unseren Servern aufbewahrt, damit der Duvia-Support Ihr Konto bei Bedarf wiederherstellen kann.",

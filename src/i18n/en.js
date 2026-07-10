@@ -522,6 +522,7 @@ const en = {
     backupErrNotDuvia:"This file is not a Duvia backup.",
     backupErrInvalidVer:"Unknown backup version.",
     backupErrVerTooNew:"This backup was created with a newer version of Duvia. Please update the app.",
+    backupErrEmailMismatch:"This file doesn't match any parent in this family. Import blocked for your safety.",
     backupDownloadBeforeDelete:"Download my data first",
     cloudBackupLabel:"Automatic cloud backup",
     cloudBackupDesc:"An encrypted copy of your data is kept on our servers for 30 days so Duvia support can restore your account if needed.",

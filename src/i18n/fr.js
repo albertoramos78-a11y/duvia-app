@@ -573,6 +573,7 @@ const fr = {
     backupErrNotDuvia:"Ce fichier n'est pas une sauvegarde Duvia.",
     backupErrInvalidVer:"Version de sauvegarde inconnue.",
     backupErrVerTooNew:"Cette sauvegarde a été créée avec une version plus récente de Duvia. Mettez à jour l'application.",
+    backupErrEmailMismatch:"Ce fichier ne correspond à aucun parent de cette famille. Import bloqué pour votre sécurité.",
     backupDownloadBeforeDelete:"Télécharger mes données avant",
     cloudBackupLabel:"Sauvegarde cloud automatique",
     cloudBackupDesc:"Une copie chiffrée de vos données est conservée 30 jours sur nos serveurs pour permettre au support Duvia de restaurer votre compte en cas de problème.",

@@ -520,6 +520,7 @@ const pt = {
     backupErrNotDuvia:"Este ficheiro não é uma cópia de segurança Duvia.",
     backupErrInvalidVer:"Versão de cópia de segurança desconhecida.",
     backupErrVerTooNew:"Esta cópia foi criada com uma versão mais recente do Duvia. Atualize a aplicação.",
+    backupErrEmailMismatch:"Este ficheiro não corresponde a nenhum progenitor desta família. Importação bloqueada por segurança.",
     backupDownloadBeforeDelete:"Descarregar os meus dados antes",
     cloudBackupLabel:"Cópia de segurança automática na nuvem",
     cloudBackupDesc:"Uma cópia cifrada dos seus dados é mantida durante 30 dias nos nossos servidores para que o apoio ao cliente Duvia possa restaurar a sua conta em caso de problema.",

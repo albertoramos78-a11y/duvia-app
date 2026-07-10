@@ -20,7 +20,7 @@ import { useHistory } from "./hooks/useHistory";
 import { usePush } from "./hooks/usePush";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION, APP_VERSION } from './config.js';
-import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate } from './utils/core.js';
+import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, LICORNE, BRAND, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
 
@@ -6597,6 +6597,9 @@ function PrefsTab() {
       const currentFid = familySync?.familyId || null;
       const backupFid  = parsed._familyId || null;
       if (backupFid && currentFid && backupFid !== currentFid) {
+        if (!hasMatchingParentEmail(cfg?.parents, parsed?.family?.parents)) {
+          throw new Error("parent_email_mismatch");
+        }
         const okOther = window.confirm(t.backupOtherFamilyConfirm || "⚠️ Ce fichier provient d'une AUTRE famille.\n\nContinuer ? Vos données actuelles seront écrasées.");
         if (!okOther) { setBackupImporting(false); return; }
       }
@@ -6615,6 +6618,7 @@ function PrefsTab() {
         not_duvia_file: t.backupErrNotDuvia || "Ce fichier n'est pas une sauvegarde Duvia.",
         invalid_version: t.backupErrInvalidVer || "Version de sauvegarde inconnue.",
         version_too_new: t.backupErrVerTooNew || "Cette sauvegarde a été créée avec une version plus récente de Duvia. Mettez à jour l'application.",
+        parent_email_mismatch: t.backupErrEmailMismatch || "Ce fichier ne correspond à aucun parent de cette famille. Import bloqué pour votre sécurité.",
       };
       setBackupImportErr(codes[e?.message] || (t.backupImportFailed || "Impossible d'importer le fichier."));
     } finally {
@@ -14458,9 +14462,9 @@ function applyDuviaBackupToCfg(currentCfg, backup) {
   const cal = b.calendar || {};
   return {
     ...currentCfg,
-    parents: Array.isArray(fam.parents) ? fam.parents : (currentCfg?.parents || []),
-    children: Array.isArray(fam.children) ? fam.children : (currentCfg?.children || []),
-    observers: Array.isArray(fam.observers) ? fam.observers : (currentCfg?.observers || []),
+    parents: mergeBackupArrayPreservingContact(currentCfg?.parents, fam.parents),
+    children: mergeBackupArrayPreservingContact(currentCfg?.children, fam.children),
+    observers: mergeBackupArrayPreservingContact(currentCfg?.observers, fam.observers),
     contacts: Array.isArray(fam.contacts) ? fam.contacts : (currentCfg?.contacts || []),
     custody: cust.main || currentCfg?.custody || {},
     custodyPerChild: cust.perChild || currentCfg?.custodyPerChild || {},
