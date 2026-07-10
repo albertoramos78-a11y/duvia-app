@@ -8349,25 +8349,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
 // ─── PARENT INVITE SHARE BUTTONS ─────────────────────────────────────────────
 function ParentInviteShareBtns({ C, parent, familyName }) {
   const { t } = useApp();
-  function cleanPhoneWA(phone) {
-    if (!phone) return null;
-    let p = phone.replace(/[\s.\-()+]/g, "");
-    if (p.startsWith("00")) p = p.slice(2);
-    else if (p.startsWith("0")) p = "33" + p.slice(1);
-    return p || null;
-  }
-
   const msg = `Bonjour 👋\n${familyName} t'invite à rejoindre la famille sur Duvia.\nCrée ton compte ici :\n${parent.inviteUrl}`;
-
-  function handleSMS() {
-    const phone = parent.invitePhone ? parent.invitePhone.replace(/[\s.\-()+]/g,"") : "";
-    window.open(`sms:${phone}?&body=${encodeURIComponent(msg)}`, "_blank");
-  }
-
-  function handleWhatsApp() {
-    const phone = cleanPhoneWA(parent.invitePhone);
-    window.open(`https://wa.me/${phone||""}?text=${encodeURIComponent(msg)}`, "_blank");
-  }
 
   function handleEmail() {
     const subject = encodeURIComponent(`Rejoins notre famille sur Duvia 👨‍👩‍👧`);
@@ -8385,24 +8367,11 @@ function ParentInviteShareBtns({ C, parent, familyName }) {
         {t.sendInviteLink}
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <button onClick={handleSMS} style={{
-          padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",
-          background:"#25D36618",color:"#128C7E",border:"1.5px solid #25D36644",
-        }}>💬 SMS</button>
-        <button onClick={handleWhatsApp} style={{
-          padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",
-          background:"#25D36618",color:"#25D366",border:"1.5px solid #25D36644",
-        }}>📱 WhatsApp</button>
         <button onClick={handleEmail} style={{
           padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",
           background:`${C.vio}12`,color:C.vio,border:`1.5px solid ${C.vio}44`,
         }}>✉️ Email</button>
       </div>
-      {!parent.invitePhone && (
-        <div style={{fontSize:10,color:C.mut,marginTop:5}}>
-          {t.reinviteNumberTip}
-        </div>
-      )}
     </div>
   );
 }
