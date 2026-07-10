@@ -5903,21 +5903,14 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
         }
         return;
       }
-      // Compte Parent 2 existant, ancien format → déjà connecté ci-dessus → rejoindre la famille
-      const joinRes = await familySync.joinFamily(obsInviteCode.family);
-      if(joinRes.ok){
-        await new Promise(r => setTimeout(r, 100));
-        setCfg(c=>{
-          const p=[...(c.parents||[])];
-          while(p.length<2) p.push({});
-          p[1]={...p[1], name:updatedUser.name, email:cleanEmail, inviteStatus:"accepted"};
-          return {...c, parents:p};
-        });
-      } else {
-        console.warn("[Duvia] join (existing) failed:", joinRes.error);
-      }
-      setShowExistingAccount(false); setErr("");
-      onLogin(updatedUser);
+      // 🔧 Ancien format de lien d'invitation parent (pré-token) retiré : même
+      // faille que dans doReg (voir plus haut) — familySync.joinFamily() +
+      // inviteStatus:"accepted" contournait la validation du créateur, ici
+      // pour un parent qui se connecte à un compte DÉJÀ existant plutôt que
+      // d'en créer un. Symétrique au correctif de doReg, trouvé par la revue
+      // finale de la fonctionnalité de vérification email.
+      setShowExistingAccount(false);
+      setErr(t.invErrInvalid);
     } else {
       // Inscription directe sans invitation → connexion simple
       setShowExistingAccount(false); setErr(""); onLogin(updatedUser);
