@@ -6800,6 +6800,67 @@ function PrefsTab() {
   const [savingEmail,setSavingEmail] = useState(false);
   const [customerId, setCustomerId] = useState("");
   const [cidCopied,  setCidCopied]  = useState(false);
+  // ── 2FA (double authentification) ──────────────────────────────────────
+  const [mfaEnrolled, setMfaEnrolled] = useState(false);
+  const [mfaFactorId, setMfaFactorId] = useState(null);
+  const [mfaMode, setMfaMode] = useState(false);
+  const [mfaEnrollData, setMfaEnrollData] = useState(null); // {factorId, qrCode, secret}
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaErr, setMfaErr] = useState("");
+  const [mfaBusy, setMfaBusy] = useState(false);
+  const [mfaBackupCodes, setMfaBackupCodes] = useState(null); // affichés une seule fois
+
+  useEffect(()=>{
+    supabase.auth.mfa.listFactors().then(({data})=>{
+      const factor = data?.totp?.[0];
+      if (factor) { setMfaEnrolled(true); setMfaFactorId(factor.id); }
+    });
+  },[]);
+
+  async function startMfaEnroll(){
+    setMfaErr(""); setMfaBusy(true);
+    const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp" });
+    setMfaBusy(false);
+    if (error) { setMfaErr(error.message||"Erreur."); return; }
+    setMfaEnrollData({ factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret });
+    setMfaMode(true);
+  }
+  async function confirmMfaEnroll(){
+    if (!mfaCode.trim()) return;
+    setMfaBusy(true); setMfaErr("");
+    const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: mfaEnrollData.factorId, code: mfaCode.trim() });
+    if (error) { setMfaErr(t.mfaCodeInvalid||"Code invalide."); setMfaBusy(false); return; }
+    const { data: codes } = await supabase.rpc("generate_mfa_backup_codes");
+    setMfaBackupCodes(codes||[]);
+    setMfaEnrolled(true); setMfaFactorId(mfaEnrollData.factorId);
+    setMfaEnrollData(null); setMfaCode(""); setMfaMode(false); setMfaBusy(false);
+  }
+  function cancelMfaEnroll(){
+    setMfaEnrollData(null); setMfaCode(""); setMfaErr(""); setMfaMode(false);
+  }
+  async function disableMfa(){
+    if (!mfaFactorId) return;
+    setMfaBusy(true); setMfaErr("");
+    const { error } = await supabase.auth.mfa.unenroll({ factorId: mfaFactorId });
+    if (error) { setMfaErr(error.message||"Erreur."); setMfaBusy(false); return; }
+    await supabase.rpc("clear_mfa_backup_codes").catch(()=>{});
+    setMfaEnrolled(false); setMfaFactorId(null); setMfaBackupCodes(null); setMfaBusy(false);
+  }
+  async function regenerateBackupCodes(){
+    setMfaBusy(true); setMfaErr("");
+    const { data, error } = await supabase.rpc("generate_mfa_backup_codes");
+    setMfaBusy(false);
+    if (error) { setMfaErr(error.message||"Erreur."); return; }
+    setMfaBackupCodes(data||[]);
+  }
+  function downloadBackupCodes(){
+    const text = (mfaBackupCodes||[]).join("\n");
+    const blob = new Blob([text], {type:"text/plain"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "duvia-codes-secours.txt"; a.click();
+    URL.revokeObjectURL(url);
+  }
 
   useEffect(()=>{
     supabase.from("customer_ids").select("customer_id").maybeSingle().then(({data})=>{
@@ -7173,6 +7234,61 @@ function PrefsTab() {
             )}
           </>
         )}
+        {/* ── Double authentification (2FA) ── */}
+        <div style={{height:1,background:C.bor,margin:"12px 0"}}/>
+        {mfaErr && <div style={{color:C.red,fontSize:12,marginBottom:8,padding:"6px 10px",background:`${C.red}10`,borderRadius:8}}>{mfaErr}</div>}
+        {mfaBackupCodes ? (
+          <div style={{background:C.sur,borderRadius:12,padding:16,border:`1.5px solid ${C.vio}`}}>
+            <div style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:8}}>🔑 {t.mfaBackupCodesTitle||"Tes codes de secours"}</div>
+            <div style={{fontSize:11,color:C.red,fontWeight:700,marginBottom:10}}>{t.mfaBackupCodesWarning||"Note-les maintenant : ils ne seront plus jamais affichés."}</div>
+            <div style={{fontFamily:"JetBrains Mono",fontSize:13,color:C.txt,lineHeight:1.8,marginBottom:12,background:C.bg,borderRadius:8,padding:10}}>
+              {mfaBackupCodes.map((c,i)=><div key={i}>{c}</div>)}
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={downloadBackupCodes} style={{flex:1,height:38,background:C.vio,color:"#fff",borderRadius:8,fontSize:13,fontWeight:800,border:"none",cursor:"pointer"}}>{t.mfaDownloadCodes||"Télécharger"}</button>
+              <button onClick={()=>setMfaBackupCodes(null)} style={{height:38,padding:"0 16px",background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",fontSize:13,color:C.txt}}>{t.mfaBackupCodesDone||"J'ai noté mes codes"}</button>
+            </div>
+          </div>
+        ) : !mfaEnrolled ? (
+          !mfaMode ? (
+            <button onClick={startMfaEnroll} disabled={mfaBusy} style={{...row}}>
+              <span style={{fontSize:13,fontWeight:700,color:C.txt}}>🔐 {t.mfaActivate||"Activer la double authentification"}</span>
+            </button>
+          ) : (
+            <div style={{background:C.sur,borderRadius:12,padding:16,border:`1px solid ${C.bor}`}}>
+              {mfaEnrollData?.qrCode && (
+                <div style={{textAlign:"center",marginBottom:12}}>
+                  <img src={mfaEnrollData.qrCode} alt="QR code" style={{width:160,height:160,background:"#fff",borderRadius:8,padding:8}} />
+                  <div style={{fontSize:10,color:C.mut,marginTop:6,wordBreak:"break-all"}}>{mfaEnrollData.secret}</div>
+                </div>
+              )}
+              <div style={{fontSize:11,color:C.mut,marginBottom:10,lineHeight:1.5}}>{t.mfaScanInstructions||"Scanne ce QR code avec ton appli d'authentification, puis entre le code à 6 chiffres généré."}</div>
+              <input value={mfaCode} onChange={e=>setMfaCode(e.target.value.replace(/\D/g,"").slice(0,6))}
+                placeholder="123456" inputMode="numeric"
+                style={{width:"100%",height:42,borderRadius:8,border:`1.5px solid ${C.bor}`,padding:"0 12px",fontSize:16,textAlign:"center",letterSpacing:3,fontFamily:"JetBrains Mono",marginBottom:8,boxSizing:"border-box"}} />
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={confirmMfaEnroll} disabled={mfaBusy||mfaCode.length<6} style={{flex:1,height:38,background:C.vio,color:"#fff",borderRadius:8,fontSize:13,fontWeight:800,border:"none",cursor:"pointer",opacity:mfaBusy||mfaCode.length<6?.6:1}}>
+                  {mfaBusy?"…":(t.confirm||"Confirmer")}
+                </button>
+                <button onClick={cancelMfaEnroll} style={{height:38,padding:"0 16px",background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",fontSize:13,color:C.txt}}>
+                  {t.cancel||"Annuler"}
+                </button>
+              </div>
+            </div>
+          )
+        ) : (
+          <div style={{background:C.sur,borderRadius:12,padding:16,border:`1px solid ${C.bor}`}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:10}}>✅ {t.mfaEnabled||"Double authentification activée"}</div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={regenerateBackupCodes} disabled={mfaBusy} style={{flex:1,height:38,background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",fontSize:12,color:C.txt}}>
+                {t.mfaRegenerateCodes||"Régénérer mes codes de secours"}
+              </button>
+              <button onClick={disableMfa} disabled={mfaBusy} style={{height:38,padding:"0 16px",background:`${C.red}12`,border:`1px solid ${C.red}`,borderRadius:8,cursor:"pointer",fontSize:13,color:C.red,fontWeight:700}}>
+                {t.mfaDisable||"Désactiver"}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Sauvegarde des données (.duvia) ── */}
@@ -7287,6 +7403,67 @@ function ObserverPrefsTab() {
   const [savingEmail,setSavingEmail] = useState(false);
   const [customerId, setCustomerId] = useState("");
   const [cidCopied, setCidCopied] = useState(false);
+  // ── 2FA (double authentification) ──────────────────────────────────────
+  const [mfaEnrolled, setMfaEnrolled] = useState(false);
+  const [mfaFactorId, setMfaFactorId] = useState(null);
+  const [mfaMode, setMfaMode] = useState(false);
+  const [mfaEnrollData, setMfaEnrollData] = useState(null); // {factorId, qrCode, secret}
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaErr, setMfaErr] = useState("");
+  const [mfaBusy, setMfaBusy] = useState(false);
+  const [mfaBackupCodes, setMfaBackupCodes] = useState(null); // affichés une seule fois
+
+  useEffect(()=>{
+    supabase.auth.mfa.listFactors().then(({data})=>{
+      const factor = data?.totp?.[0];
+      if (factor) { setMfaEnrolled(true); setMfaFactorId(factor.id); }
+    });
+  },[]);
+
+  async function startMfaEnroll(){
+    setMfaErr(""); setMfaBusy(true);
+    const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp" });
+    setMfaBusy(false);
+    if (error) { setMfaErr(error.message||"Erreur."); return; }
+    setMfaEnrollData({ factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret });
+    setMfaMode(true);
+  }
+  async function confirmMfaEnroll(){
+    if (!mfaCode.trim()) return;
+    setMfaBusy(true); setMfaErr("");
+    const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: mfaEnrollData.factorId, code: mfaCode.trim() });
+    if (error) { setMfaErr(t.mfaCodeInvalid||"Code invalide."); setMfaBusy(false); return; }
+    const { data: codes } = await supabase.rpc("generate_mfa_backup_codes");
+    setMfaBackupCodes(codes||[]);
+    setMfaEnrolled(true); setMfaFactorId(mfaEnrollData.factorId);
+    setMfaEnrollData(null); setMfaCode(""); setMfaMode(false); setMfaBusy(false);
+  }
+  function cancelMfaEnroll(){
+    setMfaEnrollData(null); setMfaCode(""); setMfaErr(""); setMfaMode(false);
+  }
+  async function disableMfa(){
+    if (!mfaFactorId) return;
+    setMfaBusy(true); setMfaErr("");
+    const { error } = await supabase.auth.mfa.unenroll({ factorId: mfaFactorId });
+    if (error) { setMfaErr(error.message||"Erreur."); setMfaBusy(false); return; }
+    await supabase.rpc("clear_mfa_backup_codes").catch(()=>{});
+    setMfaEnrolled(false); setMfaFactorId(null); setMfaBackupCodes(null); setMfaBusy(false);
+  }
+  async function regenerateBackupCodes(){
+    setMfaBusy(true); setMfaErr("");
+    const { data, error } = await supabase.rpc("generate_mfa_backup_codes");
+    setMfaBusy(false);
+    if (error) { setMfaErr(error.message||"Erreur."); return; }
+    setMfaBackupCodes(data||[]);
+  }
+  function downloadBackupCodes(){
+    const text = (mfaBackupCodes||[]).join("\n");
+    const blob = new Blob([text], {type:"text/plain"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "duvia-codes-secours.txt"; a.click();
+    URL.revokeObjectURL(url);
+  }
 
   useEffect(()=>{
     supabase.from("customer_ids").select("customer_id").maybeSingle().then(({data})=>{
@@ -7529,6 +7706,61 @@ function ObserverPrefsTab() {
               </div>
             )}
           </>
+        )}
+        {/* ── Double authentification (2FA) ── */}
+        <div style={{height:1,background:C.bor,margin:"12px 0"}}/>
+        {mfaErr && <div style={{color:C.red,fontSize:12,marginBottom:8,padding:"6px 10px",background:`${C.red}10`,borderRadius:8}}>{mfaErr}</div>}
+        {mfaBackupCodes ? (
+          <div style={{background:C.sur,borderRadius:12,padding:16,border:`1.5px solid ${C.vio}`}}>
+            <div style={{fontSize:13,fontWeight:800,color:C.txt,marginBottom:8}}>🔑 {t.mfaBackupCodesTitle||"Tes codes de secours"}</div>
+            <div style={{fontSize:11,color:C.red,fontWeight:700,marginBottom:10}}>{t.mfaBackupCodesWarning||"Note-les maintenant : ils ne seront plus jamais affichés."}</div>
+            <div style={{fontFamily:"JetBrains Mono",fontSize:13,color:C.txt,lineHeight:1.8,marginBottom:12,background:C.bg,borderRadius:8,padding:10}}>
+              {mfaBackupCodes.map((c,i)=><div key={i}>{c}</div>)}
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={downloadBackupCodes} style={{flex:1,height:38,background:C.vio,color:"#fff",borderRadius:8,fontSize:13,fontWeight:800,border:"none",cursor:"pointer"}}>{t.mfaDownloadCodes||"Télécharger"}</button>
+              <button onClick={()=>setMfaBackupCodes(null)} style={{height:38,padding:"0 16px",background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",fontSize:13,color:C.txt}}>{t.mfaBackupCodesDone||"J'ai noté mes codes"}</button>
+            </div>
+          </div>
+        ) : !mfaEnrolled ? (
+          !mfaMode ? (
+            <button onClick={startMfaEnroll} disabled={mfaBusy} style={{...row}}>
+              <span style={{fontSize:13,fontWeight:700,color:C.txt}}>🔐 {t.mfaActivate||"Activer la double authentification"}</span>
+            </button>
+          ) : (
+            <div style={{background:C.sur,borderRadius:12,padding:16,border:`1px solid ${C.bor}`}}>
+              {mfaEnrollData?.qrCode && (
+                <div style={{textAlign:"center",marginBottom:12}}>
+                  <img src={mfaEnrollData.qrCode} alt="QR code" style={{width:160,height:160,background:"#fff",borderRadius:8,padding:8}} />
+                  <div style={{fontSize:10,color:C.mut,marginTop:6,wordBreak:"break-all"}}>{mfaEnrollData.secret}</div>
+                </div>
+              )}
+              <div style={{fontSize:11,color:C.mut,marginBottom:10,lineHeight:1.5}}>{t.mfaScanInstructions||"Scanne ce QR code avec ton appli d'authentification, puis entre le code à 6 chiffres généré."}</div>
+              <input value={mfaCode} onChange={e=>setMfaCode(e.target.value.replace(/\D/g,"").slice(0,6))}
+                placeholder="123456" inputMode="numeric"
+                style={{width:"100%",height:42,borderRadius:8,border:`1.5px solid ${C.bor}`,padding:"0 12px",fontSize:16,textAlign:"center",letterSpacing:3,fontFamily:"JetBrains Mono",marginBottom:8,boxSizing:"border-box"}} />
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={confirmMfaEnroll} disabled={mfaBusy||mfaCode.length<6} style={{flex:1,height:38,background:C.vio,color:"#fff",borderRadius:8,fontSize:13,fontWeight:800,border:"none",cursor:"pointer",opacity:mfaBusy||mfaCode.length<6?.6:1}}>
+                  {mfaBusy?"…":(t.confirm||"Confirmer")}
+                </button>
+                <button onClick={cancelMfaEnroll} style={{height:38,padding:"0 16px",background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",fontSize:13,color:C.txt}}>
+                  {t.cancel||"Annuler"}
+                </button>
+              </div>
+            </div>
+          )
+        ) : (
+          <div style={{background:C.sur,borderRadius:12,padding:16,border:`1px solid ${C.bor}`}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:10}}>✅ {t.mfaEnabled||"Double authentification activée"}</div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={regenerateBackupCodes} disabled={mfaBusy} style={{flex:1,height:38,background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",fontSize:12,color:C.txt}}>
+                {t.mfaRegenerateCodes||"Régénérer mes codes de secours"}
+              </button>
+              <button onClick={disableMfa} disabled={mfaBusy} style={{height:38,padding:"0 16px",background:`${C.red}12`,border:`1px solid ${C.red}`,borderRadius:8,cursor:"pointer",fontSize:13,color:C.red,fontWeight:700}}>
+                {t.mfaDisable||"Désactiver"}
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
