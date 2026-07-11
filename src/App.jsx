@@ -7255,9 +7255,14 @@ function PrefsTab() {
           </div>
         ) : !mfaEnrolled ? (
           !mfaMode ? (
-            <button onClick={startMfaEnroll} disabled={mfaBusy} style={{...row}}>
-              <span style={{fontSize:13,fontWeight:700,color:C.txt}}>🔐 {t.mfaActivate||"Activer la double authentification"}</span>
-            </button>
+            <>
+              <div style={{fontSize:11,color:C.mut,marginBottom:8,lineHeight:1.5}}>
+                {t.mfaIntro||"Ajoute une étape de vérification en plus du mot de passe à chaque connexion, avec une appli d'authentification sur ton téléphone (Google Authenticator, Authy...)."}
+              </div>
+              <button onClick={startMfaEnroll} disabled={mfaBusy} style={{...row}}>
+                <span style={{fontSize:13,fontWeight:700,color:C.txt}}>🔐 {t.mfaActivate||"Activer la double authentification"}</span>
+              </button>
+            </>
           ) : (
             <div style={{background:C.sur,borderRadius:12,padding:16,border:`1px solid ${C.bor}`}}>
               {mfaEnrollData?.qrCode && (
@@ -7283,6 +7288,9 @@ function PrefsTab() {
         ) : (
           <div style={{background:C.sur,borderRadius:12,padding:16,border:`1px solid ${C.bor}`}}>
             <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:10}}>✅ {t.mfaEnabled||"Double authentification activée"}</div>
+            <div style={{fontSize:11,color:C.mut,marginBottom:12,lineHeight:1.6}}>
+              {t.mfaEnabledExplain||"À chaque connexion, un code à 6 chiffres généré par ton appli d'authentification te sera demandé après ton mot de passe. Si tu perds ton appareil, utilise un de tes codes de secours à la place — cela désactivera automatiquement la double authentification, que tu pourras réactiver ensuite depuis cette page."}
+            </div>
             <div style={{display:"flex",gap:8}}>
               <button onClick={regenerateBackupCodes} disabled={mfaBusy} style={{flex:1,height:38,background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",fontSize:12,color:C.txt}}>
                 {t.mfaRegenerateCodes||"Régénérer mes codes de secours"}
@@ -7732,9 +7740,14 @@ function ObserverPrefsTab() {
           </div>
         ) : !mfaEnrolled ? (
           !mfaMode ? (
-            <button onClick={startMfaEnroll} disabled={mfaBusy} style={{...row}}>
-              <span style={{fontSize:13,fontWeight:700,color:C.txt}}>🔐 {t.mfaActivate||"Activer la double authentification"}</span>
-            </button>
+            <>
+              <div style={{fontSize:11,color:C.mut,marginBottom:8,lineHeight:1.5}}>
+                {t.mfaIntro||"Ajoute une étape de vérification en plus du mot de passe à chaque connexion, avec une appli d'authentification sur ton téléphone (Google Authenticator, Authy...)."}
+              </div>
+              <button onClick={startMfaEnroll} disabled={mfaBusy} style={{...row}}>
+                <span style={{fontSize:13,fontWeight:700,color:C.txt}}>🔐 {t.mfaActivate||"Activer la double authentification"}</span>
+              </button>
+            </>
           ) : (
             <div style={{background:C.sur,borderRadius:12,padding:16,border:`1px solid ${C.bor}`}}>
               {mfaEnrollData?.qrCode && (
@@ -7760,6 +7773,9 @@ function ObserverPrefsTab() {
         ) : (
           <div style={{background:C.sur,borderRadius:12,padding:16,border:`1px solid ${C.bor}`}}>
             <div style={{fontSize:13,fontWeight:700,color:C.txt,marginBottom:10}}>✅ {t.mfaEnabled||"Double authentification activée"}</div>
+            <div style={{fontSize:11,color:C.mut,marginBottom:12,lineHeight:1.6}}>
+              {t.mfaEnabledExplain||"À chaque connexion, un code à 6 chiffres généré par ton appli d'authentification te sera demandé après ton mot de passe. Si tu perds ton appareil, utilise un de tes codes de secours à la place — cela désactivera automatiquement la double authentification, que tu pourras réactiver ensuite depuis cette page."}
+            </div>
             <div style={{display:"flex",gap:8}}>
               <button onClick={regenerateBackupCodes} disabled={mfaBusy} style={{flex:1,height:38,background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",fontSize:12,color:C.txt}}>
                 {t.mfaRegenerateCodes||"Régénérer mes codes de secours"}
