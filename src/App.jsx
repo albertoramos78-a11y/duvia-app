@@ -16719,7 +16719,7 @@ function pickSegment(isSubscriber = true) {
 }
 
 function WheelGame({ isPremium, isAdmin=false, restrictedRole=false, userId="", isSubscriber=true, isParent=true }) {
-  const {C,t,lang,sub,setSub} = useApp();
+  const {C,t,lang,sub,setSub,myUid} = useApp();
   const [spinning, setSpinning] = useState(false);
   const [deg, setDeg] = useState(0);
   const [result, setResult] = useState(null);
@@ -16730,6 +16730,15 @@ function WheelGame({ isPremium, isAdmin=false, restrictedRole=false, userId="", 
   // Cooldown : 7 jours pour les parents, 2 jours pour enfants/observateurs
   const cooldownMs = isParent ? 7*24*60*60*1000 : 2*24*60*60*1000;
   const isAdminSub = isAdmin || sub._admin || false;
+  // 🔧 Clé de cooldown : UUID Supabase (myUid) de préférence à userId (id
+  // local Date.now(), voir doReg) — userId est régénéré à chaque
+  // déconnexion/reconnexion (handleSetUser retire volontairement le profil
+  // local à la déconnexion, pour un appareil partagé), ce qui faisait
+  // perdre l'historique de spin et rendait la roue rejouable à tort
+  // (constaté en prod 2026-07-11). myUid ne change jamais pour un même
+  // compte. Repli sur userId tant que myUid n'est pas encore connu
+  // (juste après connexion, avant la résolution de la famille).
+  const spinKey = myUid || userId;
   // ── lastSpin : clé dédiée résistante aux rechargements du sub ────────────
   // duvia_spin_ts est une clé séparée, jamais écrasée par setSub()
   const [spinTimestamps, setSpinTimestamps] = useLocalStorage("duvia_spin_ts", {});
@@ -16742,7 +16751,7 @@ function WheelGame({ isPremium, isAdmin=false, restrictedRole=false, userId="", 
     });
     return merged;
   }, [sub.lastSpinByUser, spinTimestamps]);
-  const lastSpin = lastSpinByUser[userId] || null;
+  const lastSpin = lastSpinByUser[spinKey] || null;
   const hasBonusSpin = (sub.pendingSpins||0) > 0;
   const canSpin = isAdminSub || hasBonusSpin || !lastSpin || (now - new Date(lastSpin).getTime()) >= cooldownMs;
   const nextSpinDate = lastSpin ? new Date(new Date(lastSpin).getTime()+cooldownMs) : null;
@@ -16783,9 +16792,9 @@ function WheelGame({ isPremium, isAdmin=false, restrictedRole=false, userId="", 
         setShowResult(true);
         if(!restrictedRole) {
           const now_ts = new Date().toISOString();
-          setSpinTimestamps(h=>({...h,[userId]:now_ts}));
+          setSpinTimestamps(h=>({...h,[spinKey]:now_ts}));
           setSub(s=>({...s,
-            lastSpinByUser: { ...(s.lastSpinByUser||{}), [userId]: now_ts },
+            lastSpinByUser: { ...(s.lastSpinByUser||{}), [spinKey]: now_ts },
             pendingSpins: usingBonus ? Math.max(0,(s.pendingSpins||0)-1) : (s.pendingSpins||0),
             earnedTheme:   prize.id==="theme"   || s.earnedTheme,
             earnedVideo:   prize.id==="video"   || s.earnedVideo,
@@ -16796,8 +16805,8 @@ function WheelGame({ isPremium, isAdmin=false, restrictedRole=false, userId="", 
         } else {
           // Rôles restreints → on enregistre quand même le cooldown
           const now_ts = new Date().toISOString();
-          setSpinTimestamps(h=>({...h,[userId]:now_ts}));
-          setSub(s=>({...s, lastSpinByUser: { ...(s.lastSpinByUser||{}), [userId]: now_ts }}));
+          setSpinTimestamps(h=>({...h,[spinKey]:now_ts}));
+          setSub(s=>({...s, lastSpinByUser: { ...(s.lastSpinByUser||{}), [spinKey]: now_ts }}));
         }
         if(prize.id!=="nothing") {
           setParticles(Array.from({length:40},(_,i)=>({
