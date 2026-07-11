@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { supabase } from "../supabaseClient";
 import {
   upsertCustodyRule,
   replaceCustodyPatternDays,
@@ -34,7 +35,25 @@ export function useCustody(familyId: string | null) {
     try {
       await fn();
     } catch (e) {
-      console.error(`[Duvia][custody-shadow] ${label} a échoué (sans impact utilisateur) :`, e);
+      // 🔧 Diagnostic temporaire (2026-07-11, backlog item 15) : capture
+      // familyId + auth.uid() + statut family_members au moment de l'échec,
+      // pour investiguer les 403 RLS vus en prod sur ce mécanisme sans avoir
+      // à deviner. À retirer une fois la cause confirmée.
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        const uid = userData?.user?.id;
+        const { data: fmRow, error: fmErr } = await supabase
+          .from("family_members")
+          .select("family_id,user_id,role,status")
+          .eq("family_id", familyId)
+          .eq("user_id", uid || "")
+          .maybeSingle();
+        console.error(`[Duvia][custody-shadow] ${label} a échoué (sans impact utilisateur) :`, e, {
+          familyId, uid, fmRow, fmErr,
+        });
+      } catch (diagErr) {
+        console.error(`[Duvia][custody-shadow] ${label} a échoué (sans impact utilisateur) :`, e, "(diagnostic lui-même a échoué:", diagErr, ")");
+      }
     }
   }, [familyId]);
 
