@@ -6819,6 +6819,17 @@ function PrefsTab() {
 
   async function startMfaEnroll(){
     setMfaErr(""); setMfaBusy(true);
+    // 🔧 Nettoyage d'un facteur non vérifié abandonné (tentative précédente
+    // annulée sans nettoyage, ou fermeture de l'onglet avant confirmation) :
+    // Supabase refuse un nouvel enroll tant qu'un facteur non vérifié du même
+    // nom existe déjà ("A factor with the friendly name... already exists",
+    // constaté en prod 2026-07-11) — sans ce nettoyage, impossible de relancer
+    // l'activation après un premier essai abandonné.
+    const { data: existing } = await supabase.auth.mfa.listFactors();
+    const orphan = existing?.all?.find(f => f.factor_type === "totp" && f.status === "unverified");
+    if (orphan) {
+      await supabase.auth.mfa.unenroll({ factorId: orphan.id }).catch(()=>{});
+    }
     const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp" });
     setMfaBusy(false);
     if (error) { setMfaErr(error.message||"Erreur."); return; }
@@ -6840,6 +6851,12 @@ function PrefsTab() {
     setMfaBackupCodes(codes||[]);
   }
   function cancelMfaEnroll(){
+    // 🔧 Nettoie tout de suite le facteur non vérifié créé par startMfaEnroll,
+    // pour ne pas laisser d'orphelin qui bloquerait la prochaine tentative
+    // (voir le commentaire dans startMfaEnroll).
+    if (mfaEnrollData?.factorId) {
+      supabase.auth.mfa.unenroll({ factorId: mfaEnrollData.factorId }).catch(()=>{});
+    }
     setMfaEnrollData(null); setMfaCode(""); setMfaErr(""); setMfaMode(false);
   }
   async function disableMfa(){
@@ -7434,6 +7451,17 @@ function ObserverPrefsTab() {
 
   async function startMfaEnroll(){
     setMfaErr(""); setMfaBusy(true);
+    // 🔧 Nettoyage d'un facteur non vérifié abandonné (tentative précédente
+    // annulée sans nettoyage, ou fermeture de l'onglet avant confirmation) :
+    // Supabase refuse un nouvel enroll tant qu'un facteur non vérifié du même
+    // nom existe déjà ("A factor with the friendly name... already exists",
+    // constaté en prod 2026-07-11) — sans ce nettoyage, impossible de relancer
+    // l'activation après un premier essai abandonné.
+    const { data: existing } = await supabase.auth.mfa.listFactors();
+    const orphan = existing?.all?.find(f => f.factor_type === "totp" && f.status === "unverified");
+    if (orphan) {
+      await supabase.auth.mfa.unenroll({ factorId: orphan.id }).catch(()=>{});
+    }
     const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp" });
     setMfaBusy(false);
     if (error) { setMfaErr(error.message||"Erreur."); return; }
@@ -7455,6 +7483,12 @@ function ObserverPrefsTab() {
     setMfaBackupCodes(codes||[]);
   }
   function cancelMfaEnroll(){
+    // 🔧 Nettoie tout de suite le facteur non vérifié créé par startMfaEnroll,
+    // pour ne pas laisser d'orphelin qui bloquerait la prochaine tentative
+    // (voir le commentaire dans startMfaEnroll).
+    if (mfaEnrollData?.factorId) {
+      supabase.auth.mfa.unenroll({ factorId: mfaEnrollData.factorId }).catch(()=>{});
+    }
     setMfaEnrollData(null); setMfaCode(""); setMfaErr(""); setMfaMode(false);
   }
   async function disableMfa(){
