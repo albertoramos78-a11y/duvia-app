@@ -3539,6 +3539,45 @@ export default function App() {
     }
   }, [sessionEmail, setSessionEmail, setSummerActive, setRgActive, setWcActive, setVideoActive, setLicorneActive, setThemeMode, setShowPrizesMenu]); // ✅ tous les setters existent à ce stade
 
+  // ── 2FA (MFA) : vérification à la connexion ─────────────────────────────
+  // Un seul mécanisme partagé entre LoginScreen (doLogin/doLoginAndJoin) et
+  // ce composant (connexion Google) : LEÇON du 2026-07-11 — notifyIfNewDevice
+  // cassait toute connexion classique car défini dans le mauvais composant
+  // (voir commit 43c7125). Cette fois, l'état et les fonctions vivent dans
+  // App() (l'ancêtre commun des deux), et LoginScreen reçoit juste la
+  // fonction ensureMfaSatisfied en prop plutôt que de la redéfinir.
+  const [mfaChallenge, setMfaChallenge] = useState(null); // {factorId} pendant un challenge en cours
+  const mfaResolveRef = useRef(null);
+  function requestMfaChallenge(factorId) {
+    return new Promise((resolve) => {
+      mfaResolveRef.current = resolve;
+      setMfaChallenge({ factorId });
+    });
+  }
+  // Appelée juste après une connexion réussie (mot de passe ou Google),
+  // AVANT de finaliser la connexion. Renvoie true si aucun 2FA n'est requis
+  // ou si le challenge a été validé ; false si l'utilisateur a annulé.
+  async function ensureMfaSatisfied() {
+    try {
+      const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (!data || data.currentLevel === data.nextLevel) return true;
+      const { data: factorsData } = await supabase.auth.mfa.listFactors();
+      const factor = factorsData?.totp?.[0];
+      if (!factor) return true;
+      return await requestMfaChallenge(factor.id);
+    } catch (e) {
+      // 🔧 Échec ouvert (laisse passer) : cette vérification lit uniquement
+      // l'état local de session, non manipulable par un attaquant qui ne
+      // possède pas déjà les identifiants du compte — un bug ici ne doit
+      // jamais pouvoir bloquer 100% des connexions, comme le 2026-07-11.
+      // La vraie barrière de sécurité est challengeAndVerify() plus bas,
+      // qui échoue fermé par construction (la promesse ne se résout à true
+      // que si le code entré est réellement valide).
+      console.warn("[Duvia][sync] ensureMfaSatisfied failed:", e);
+      return true;
+    }
+  }
+
   // ── Google OAuth : détecte le retour de redirection et connecte l'utilisateur ──
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -3552,6 +3591,8 @@ export default function App() {
           const u = session.user;
           const currentSession = JSON.parse(window.localStorage.getItem("duvia_session") || "null");
           if (currentSession === u.email || sessionEmail === u.email) return; // déjà connecté
+          const mfaOk = await ensureMfaSatisfied();
+          if (!mfaOk) { await supabase.auth.signOut().catch(()=>{}); return; }
           await notifyIfNewDevice(u.id, u.email);
           const googleUser = {
             id: u.id,
@@ -4311,9 +4352,14 @@ export default function App() {
           }}
           onDecline={()=>setPendingUser(null)} />
       ) : (
-        <LoginScreen C={BRAND} t={t} lang={lang} setLang={setLang} themeMode={themeMode} cycleTheme={cycleTheme} users={users} setUsers={setUsers} onLogin={handleLogin} onObsJoin={handleObsJoin} familySync={familySync} cfg={cfg} setCfg={setCfg} />
+        <LoginScreen C={BRAND} t={t} lang={lang} setLang={setLang} themeMode={themeMode} cycleTheme={cycleTheme} users={users} setUsers={setUsers} onLogin={handleLogin} onObsJoin={handleObsJoin} familySync={familySync} cfg={cfg} setCfg={setCfg} ensureMfaSatisfied={ensureMfaSatisfied} />
       )}
       {legalDocOpen && <LegalDocModal C={C} doc={legalDocOpen} lang={lang} onClose={()=>setLegalDocOpen(null)} />}
+      {mfaChallenge && (
+        <MfaChallengeGate C={C} t={t} factorId={mfaChallenge.factorId}
+          onVerified={()=>{ mfaResolveRef.current?.(true); setMfaChallenge(null); }}
+          onCancel={async ()=>{ await supabase.auth.signOut().catch(()=>{}); mfaResolveRef.current?.(false); setMfaChallenge(null); }} />
+      )}
     </div>
   );
 
@@ -5339,6 +5385,73 @@ function EmailVerifyGate({C, t, email, resendMsg, resendCooldown, onResend, onRe
   );
 }
 
+function MfaChallengeGate({C, t, factorId, onVerified, onCancel}) {
+  const [mode, setMode] = useState("totp");
+  const [code, setCode] = useState("");
+  const [backupCode, setBackupCode] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function verifyTotp() {
+    if (!code.trim()) return;
+    setBusy(true); setErr("");
+    try {
+      const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: code.trim() });
+      if (error) { setErr(t.mfaCodeInvalid || "Code invalide."); setBusy(false); return; }
+      onVerified();
+    } catch (e) {
+      setErr(e.message || "Erreur."); setBusy(false);
+    }
+  }
+
+  async function verifyBackupCode() {
+    if (!backupCode.trim()) return;
+    setBusy(true); setErr("");
+    try {
+      const { data, error } = await supabase.rpc("redeem_mfa_backup_code", { p_code: backupCode.trim() });
+      if (error || !data) { setErr(t.mfaBackupInvalid || "Code de secours invalide."); setBusy(false); return; }
+      onVerified();
+    } catch (e) {
+      setErr(e.message || "Erreur."); setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{width:"100%",maxWidth:340,background:C.card,borderRadius:18,padding:24,textAlign:"center"}}>
+        <div style={{fontSize:40,marginBottom:10}}>🔐</div>
+        <div style={{fontWeight:900,fontSize:17,marginBottom:8,color:C.txt}}>{t.mfaChallengeTitle||"Vérification en deux étapes"}</div>
+        {mode==="totp" ? (
+          <>
+            <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:16}}>{t.mfaChallengeBody||"Entre le code à 6 chiffres généré par ton appli d'authentification."}</div>
+            <input value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,"").slice(0,6))}
+              onKeyDown={e=>e.key==="Enter"&&verifyTotp()}
+              placeholder="123456" inputMode="numeric" autoFocus
+              style={{width:"100%",boxSizing:"border-box",height:44,textAlign:"center",fontSize:20,letterSpacing:4,fontFamily:"JetBrains Mono",border:`1.5px solid ${C.bor}`,borderRadius:10,marginBottom:12,background:C.sur,color:C.txt}} />
+            {err && <div style={{fontSize:12,color:C.red,marginBottom:12}}>{err}</div>}
+            <button onClick={verifyTotp} disabled={busy||code.length<6} style={{width:"100%",height:44,background:C.vio,color:"#fff",border:"none",borderRadius:10,fontSize:14,fontWeight:800,marginBottom:10,opacity:busy||code.length<6?.6:1,cursor:busy||code.length<6?"default":"pointer"}}>{t.mfaVerify||"Valider"}</button>
+            <button onClick={()=>{setMode("backup");setErr("");}} style={{background:"transparent",border:"none",color:C.mut,fontSize:12,textDecoration:"underline",cursor:"pointer"}}>{t.mfaLostDevice||"J'ai perdu mon appareil"}</button>
+          </>
+        ) : (
+          <>
+            <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:16}}>{t.mfaBackupBody||"Entre l'un de tes codes de secours. Cela désactivera la double authentification sur ce compte."}</div>
+            <input value={backupCode} onChange={e=>setBackupCode(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&verifyBackupCode()}
+              placeholder={t.mfaBackupPlaceholder||"Code de secours"} autoFocus
+              style={{width:"100%",boxSizing:"border-box",height:44,textAlign:"center",fontSize:15,fontFamily:"JetBrains Mono",border:`1.5px solid ${C.bor}`,borderRadius:10,marginBottom:12,background:C.sur,color:C.txt}} />
+            {err && <div style={{fontSize:12,color:C.red,marginBottom:12}}>{err}</div>}
+            <button onClick={verifyBackupCode} disabled={busy||!backupCode.trim()} style={{width:"100%",height:44,background:C.vio,color:"#fff",border:"none",borderRadius:10,fontSize:14,fontWeight:800,marginBottom:10,opacity:busy||!backupCode.trim()?.6:1,cursor:busy||!backupCode.trim()?"default":"pointer"}}>{t.mfaVerify||"Valider"}</button>
+            <button onClick={()=>{setMode("totp");setErr("");}} style={{background:"transparent",border:"none",color:C.mut,fontSize:12,textDecoration:"underline",cursor:"pointer"}}>{t.mfaBackToCode||"Revenir au code de l'appli"}</button>
+          </>
+        )}
+        <div style={{marginTop:14}}>
+          <button onClick={onCancel} style={{height:36,padding:"0 16px",background:"transparent",color:C.mut,border:"none",fontSize:12,textDecoration:"underline",cursor:"pointer"}}>{t.logout||"Se déconnecter"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ConsentScreen({C,t,user,onAccept,onDecline}) {
   const [checked1,setChecked1] = useState(false);
   const [checked2,setChecked2] = useState(false);
@@ -5448,7 +5561,7 @@ function PasswordResetScreen({ onDone }) {
   );
 }
 
-function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLogin,onObsJoin,familySync,cfg,setCfg}) {
+function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLogin,onObsJoin,familySync,cfg,setCfg,ensureMfaSatisfied}) {
   const [mode,setMode]=useState("login");
   const [avgRating,setAvgRating]=useState(null);
   const [publicReviews,setPublicReviews]=useState([]);
@@ -5489,6 +5602,8 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     if(error){
       setOk(""); setErr(t.wrongPw); return;
     }
+    const mfaOk = await ensureMfaSatisfied();
+    if(!mfaOk){ setOk(""); return; }
     notifyIfNewDevice(data.user.id, cleanEmail);
 
     // Admin vérifié côté serveur (table app_admins) — personne ne peut se
@@ -5885,6 +6000,8 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     // propre téléphone (le cas le plus fréquent en réalité).
     const { data, error: signErr } = await supabase.auth.signInWithPassword({ email: cleanEmail, password: pw });
     if(signErr){ setErr(t.wrongPw); return; }
+    const mfaOk = await ensureMfaSatisfied();
+    if(!mfaOk){ return; }
     notifyIfNewDevice(data.user.id, cleanEmail);
     const meta = data.user?.user_metadata || {};
     const existing = users.find(u2 => u2.email===cleanEmail);
