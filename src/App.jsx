@@ -883,6 +883,47 @@ function duviaReload(){
   window.location.reload();
 }
 
+// 🔧 Alerte "nouvel appareil" : device_id persistant en localStorage (jamais
+// effacé à la déconnexion — il identifie l'appareil physique, pas le compte).
+// Fonctions au niveau module (pas dans App()) : appelées aussi bien depuis
+// App() (connexion Google) que depuis LoginScreen, un composant SÉPARÉ où
+// doLogin()/doLoginAndJoin() vivent — définies dans App() elles y étaient
+// invisibles, ce qui plantait toute connexion classique avec
+// "ReferenceError: notifyIfNewDevice is not defined" (bug constaté en prod
+// le 2026-07-11, juste après le déploiement de cette fonctionnalité).
+// La RPC record_device_login fait l'upsert atomique côté serveur et renvoie
+// true seulement la première fois pour ce (compte, appareil). Ne bloque
+// jamais la connexion en cas d'échec réseau/RPC — même esprit que
+// notify-password-change existant.
+function getOrCreateDeviceId() {
+  try {
+    let id = window.localStorage.getItem("duvia_device_id");
+    if (!id) {
+      id = crypto.randomUUID();
+      window.localStorage.setItem("duvia_device_id", id);
+    }
+    return id;
+  } catch {
+    return crypto.randomUUID();
+  }
+}
+async function notifyIfNewDevice(userId, userEmail) {
+  if (!userId || !userEmail || userEmail.includes("@phone.duvia.app")) return;
+  try {
+    const deviceId = getOrCreateDeviceId();
+    const { data: isNew } = await supabase.rpc("record_device_login", { p_device_id: deviceId });
+    if (!isNew) return;
+    const ua = navigator.userAgent || "";
+    const browser = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "un navigateur";
+    const os = /Windows/.test(ua) ? "Windows" : /Mac OS/.test(ua) ? "Mac" : /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iOS" : "un appareil";
+    await supabase.functions.invoke("notify-new-device-login", {
+      body: { user_id: userId, email: userEmail, device_info: `${browser} sur ${os}` },
+    });
+  } catch (e) {
+    console.warn("[Duvia][sync] notifyIfNewDevice failed:", e);
+  }
+}
+
 // Code famille : généré via le CSPRNG du navigateur (pas Math.random(), non
 // prévisible) sur un alphabet Crockford Base32 (32 symboles, sans 0/O/1/I/L
 // pour éviter les confusions à la lecture) — 32^6 combinaisons, sans biais
@@ -3178,41 +3219,6 @@ export default function App() {
   async function handleRefreshVerification() {
     const { data } = await supabase.rpc("is_parent_email_verified");
     setEmailVerified(!!data);
-  }
-  // 🔧 Alerte "nouvel appareil" : device_id persistant en localStorage
-  // (jamais effacé à la déconnexion — il identifie l'appareil physique, pas
-  // le compte). Appelée après CHAQUE connexion réussie (pas l'inscription,
-  // voir les 3 sites d'appel plus bas) : la RPC record_device_login fait
-  // l'upsert atomique côté serveur et renvoie true seulement la première
-  // fois pour ce (compte, appareil). Ne bloque jamais la connexion en cas
-  // d'échec réseau/RPC — même esprit que notify-password-change existant.
-  function getOrCreateDeviceId() {
-    try {
-      let id = window.localStorage.getItem("duvia_device_id");
-      if (!id) {
-        id = crypto.randomUUID();
-        window.localStorage.setItem("duvia_device_id", id);
-      }
-      return id;
-    } catch {
-      return crypto.randomUUID();
-    }
-  }
-  async function notifyIfNewDevice(userId, userEmail) {
-    if (!userId || !userEmail || userEmail.includes("@phone.duvia.app")) return;
-    try {
-      const deviceId = getOrCreateDeviceId();
-      const { data: isNew } = await supabase.rpc("record_device_login", { p_device_id: deviceId });
-      if (!isNew) return;
-      const ua = navigator.userAgent || "";
-      const browser = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "un navigateur";
-      const os = /Windows/.test(ua) ? "Windows" : /Mac OS/.test(ua) ? "Mac" : /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iOS" : "un appareil";
-      await supabase.functions.invoke("notify-new-device-login", {
-        body: { user_id: userId, email: userEmail, device_info: `${browser} sur ${os}` },
-      });
-    } catch (e) {
-      console.warn("[Duvia][sync] notifyIfNewDevice failed:", e);
-    }
   }
   // ── Notifications push ──────────────────────────────────────────────────
   const { status: pushStatus, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe, pending: pushPending, restrictiveOem: pushRestrictiveOem } =
