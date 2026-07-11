@@ -1647,6 +1647,39 @@ function useFamilySync(cfg, setCfg) {
       supabase.removeChannel(channel);
     };
   }, [familyId]);
+
+  // 🔧 Détection d'un changement d'identité authentifiée EN COURS DE SESSION
+  // (backlog item 15, 2026-07-11) : le gros effet ci-dessous (résolution de
+  // famille) ne s'exécute qu'UNE FOIS au montage (deps: []). Or le tout
+  // premier chargement de l'app crée automatiquement un compte anonyme
+  // "badge appareil" (voir plus bas) SI aucune session n'existe encore —
+  // ce qui arrive à CHAQUE inscription/connexion sur un appareil/onglet
+  // sans session persistée, AVANT même que l'utilisateur ait rempli le
+  // formulaire. Quand l'inscription (signUp) remplace ensuite cette
+  // session anonyme par le vrai compte, ce hook ne s'en aperçoit jamais :
+  // `familyId` reste bloqué sur la famille de l'ANCIEN compte anonyme,
+  // dont le vrai compte n'est membre nulle part — toute écriture liée à
+  // la famille échoue alors silencieusement (RLS) jusqu'au prochain
+  // rechargement complet. On détecte ce changement d'uid ici et on
+  // recharge la page, qui refait la résolution depuis zéro pour la bonne
+  // identité (même mécanisme déjà utilisé partout ailleurs dans l'app
+  // pour repartir d'un état propre — voir handleSetUser).
+  const resolvedUidRef = useRef(null);
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event !== "SIGNED_IN" || !session?.user?.id) return;
+      const newUid = session.user.id;
+      if (resolvedUidRef.current === null) {
+        resolvedUidRef.current = newUid;
+        return;
+      }
+      if (newUid !== resolvedUidRef.current) {
+        duviaReload();
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
