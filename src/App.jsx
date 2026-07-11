@@ -1655,11 +1655,18 @@ function useFamilySync(cfg, setCfg) {
         // 🔧 Compte vient d'être supprimé → ne pas recréer de famille vierge
         if (window.localStorage.getItem("duvia_account_deleted") === "1") return;
 
-        // 1. S'assurer d'avoir une session (compte anonyme automatique)
+        // 1. Sans session réelle, rien à synchroniser — on ne crée plus de compte
+        // anonyme ici (2026-07-11, backlog item 15) : rien dans l'app ne lit une
+        // famille avant une vraie connexion/inscription, et créer un compte
+        // jetable était la cause d'un bug réel (familyId resté accroché à cette
+        // famille fantôme après le passage au vrai compte). Une vraie
+        // connexion/inscription redémarre cet effet proprement (nouveau montage
+        // après duviaReload()/reload de session) et retombe alors dans la branche
+        // ci-dessous avec un vrai uid.
         const { data: sessData } = await supabase.auth.getSession();
         if (!sessData?.session) {
-          const { error: signErr } = await supabase.auth.signInAnonymously();
-          if (signErr) throw signErr;
+          if (!cancelled) setSyncStatus("synced");
+          return;
         }
         const { data: userData } = await supabase.auth.getUser();
         const uid = userData?.user?.id;
