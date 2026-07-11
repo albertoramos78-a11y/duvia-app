@@ -14753,6 +14753,18 @@ function MessagingTab(){
   const [uploadingFile,setUploadingFile]=useState(false);
   const fileInputRef=useRef(null);
   const endRef=useRef(null);
+  // 🔧 Auto-agrandissement du champ de saisie : sans ça, un message long
+  // défile hors champ au lieu que la case grandisse (retour utilisateur
+  // 2026-07-11). Un seul ref/effet partagé entre les deux textarea (celle
+  // du "premier message" et celle d'une conversation déjà ouverte) car une
+  // seule des deux est montée à la fois selon `view`.
+  const draftRef=useRef(null);
+  useEffect(()=>{
+    const el=draftRef.current;
+    if(!el) return;
+    el.style.height="auto";
+    el.style.height=Math.min(el.scrollHeight,120)+"px";
+  },[draft]);
 
   function _triggerShakeDraft(){ setShakeDraft(true); setTimeout(()=>setShakeDraft(false),600); }
 
@@ -15117,11 +15129,11 @@ function MessagingTab(){
               width:32,height:32,borderRadius:"50%",border:`1.5px solid ${C.bor}`,background:"transparent",color:C.mut,
               fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer"
             }}>📎</button>
-            <input value={draft} onChange={e=>setDraft(e.target.value)}
+            <textarea ref={draftRef} value={draft} onChange={e=>setDraft(e.target.value)}
               onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),sendMsg(picked))}
-              placeholder={pendingFile?(t.msgCaptionPlaceholder||"Légende (optionnel)…"):(t.msgFirstPlaceholder||"Premier message…")} autoFocus
+              placeholder={pendingFile?(t.msgCaptionPlaceholder||"Légende (optionnel)…"):(t.msgFirstPlaceholder||"Premier message…")} autoFocus rows={1}
               className={shakeDraft?"duvia-shake":""}
-              style={{flex:1,background:"transparent",border:"none",outline:"none",fontSize:14,color:C.txt}} />
+              style={{flex:1,background:"transparent",border:"none",outline:"none",fontSize:14,color:C.txt,resize:"none",overflowY:"auto",maxHeight:120,lineHeight:1.4,fontFamily:"inherit",padding:0}} />
             <button onClick={()=>sendMsg(picked)} disabled={(!draft.trim()&&!pendingFile)||uploadingFile} style={{
               width:36,height:36,borderRadius:"50%",border:"none",background:"transparent",padding:0,
               cursor:(draft.trim()||pendingFile)&&!uploadingFile?"pointer":"default",
@@ -15373,11 +15385,11 @@ function MessagingTab(){
             width:38,height:38,borderRadius:"50%",border:`1.5px solid ${C.bor}`,background:C.sur,color:C.mut,
             fontSize:17,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer"
           }}>📎</button>
-          <input value={draft} onChange={e=>setDraft(e.target.value)}
+          <textarea ref={draftRef} value={draft} onChange={e=>setDraft(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),sendMsg(otherIds))}
-            placeholder={pendingFile?(t.msgCaptionPlaceholder||"Légende (optionnel)…"):(t.msgPlaceholder||"Message…")}
+            placeholder={pendingFile?(t.msgCaptionPlaceholder||"Légende (optionnel)…"):(t.msgPlaceholder||"Message…")} rows={1}
             className={shakeDraft?"duvia-shake":""}
-            style={{flex:1,padding:"10px 14px",background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:22,fontSize:14,color:C.txt,outline:"none"}} />
+            style={{flex:1,padding:"10px 14px",background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:22,fontSize:14,color:C.txt,outline:"none",resize:"none",overflowY:"auto",maxHeight:120,lineHeight:1.4,fontFamily:"inherit"}} />
           <button onClick={()=>sendMsg(otherIds)} disabled={(!draft.trim()&&!pendingFile)||uploadingFile} style={{
             width:42,height:42,borderRadius:"50%",border:"none",background:"transparent",padding:0,flexShrink:0,
             display:"flex",alignItems:"center",justifyContent:"center",
