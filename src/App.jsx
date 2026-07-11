@@ -1529,10 +1529,14 @@ function useLocalStorage(key, initialValue) {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SYNCHRONISATION FAMILLE — Phase 1 Supabase
-// Chaque appareil obtient un "badge invisible" (compte anonyme Supabase).
 // Les données de la famille (cfg) sont sauvegardées dans la table `families`,
 // identifiées par `cfg.shareCode`. Un 2e parent peut "rejoindre" cette même
 // famille en saisissant ce code.
+// 🔧 Tant qu'aucune vraie session n'existe (pas encore connecté/inscrit),
+// familyId reste null — plus de compte "anonyme" créé ici depuis le
+// 2026-07-11 (voir le commentaire plus bas dans cet effet) : ce mécanisme ne
+// servait plus à rien et était la cause d'un bug (familyId resté accroché à
+// une famille fantôme après le passage à un vrai compte).
 // ═══════════════════════════════════════════════════════════════════════════════
 function useFamilySync(cfg, setCfg) {
   const [syncStatus, setSyncStatus] = useState("connecting"); // connecting | synced | offline | error

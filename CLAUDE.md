@@ -36,7 +36,7 @@ When adding a new persisted feature, follow this same service → hook → compo
 - Server-authoritative RPCs (`SECURITY DEFINER`) drive sensitive family/invite transitions instead of trusting client writes: `set_member_identity`, `peek_invitation`, `accept_family_invitation`, `find_family_by_share_code`.
 - Edge Functions: `supabase/functions/delete-account`, `supabase/functions/notify-expense`.
 - Auth session storage is "smart" (`src/supabaseClient.js`): persists to `localStorage` only if the user checked "remember me" (`duvia_remember`), otherwise `sessionStorage` — deliberate, since devices are often shared between co-parents.
-- Anonymous Supabase accounts are used as a per-device "invisible badge" for family sync before a user has a real account (see the "SYNCHRONISATION FAMILLE" section of `App.jsx`).
+- **Removed 2026-07-11:** `useFamilySync` (the "SYNCHRONISATION FAMILLE" section of `App.jsx`) used to create a throwaway anonymous Supabase account + blank family on every page load before a user had a real account (a per-device "invisible badge"). It was removed — nothing in the app read that anonymous-created family before a real login, and it was the confirmed root cause of a stale-`familyId` bug (RLS 403s) once a real account replaced the anonymous session in the same page load. `familyId` now simply stays `null` until a real login/registration happens. Don't reintroduce an eager anonymous sign-in here.
 
 ### Other modules
 
