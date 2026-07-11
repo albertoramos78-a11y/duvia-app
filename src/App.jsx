@@ -1818,8 +1818,17 @@ function useFamilySync(cfg, setCfg) {
               seedCfg = { ...cfg, parents };
             }
           } catch {}
-          await supabase.from("families").insert({ id: familyId, share_code: seedCfg.shareCode, data: seedCfg });
-          await supabase.from("family_members").insert({ family_id: familyId, user_id: uid, role: "parent" });
+          // 🔧 Vérifier les erreurs ici est indispensable (backlog item 15,
+          // 2026-07-11) : sans ça, un échec de la 2e insertion (ex: course
+          // avec une autre tentative concurrente de création) passait
+          // inaperçu — l'app continuait avec un familyId exposé alors
+          // qu'aucune ligne family_members correspondante n'existait,
+          // faisant échouer silencieusement (403 RLS) toute écriture
+          // ultérieure liée à cette famille (dates spéciales, etc.).
+          const { error: famErr } = await supabase.from("families").insert({ id: familyId, share_code: seedCfg.shareCode, data: seedCfg });
+          if (famErr) throw famErr;
+          const { error: memErr2 } = await supabase.from("family_members").insert({ family_id: familyId, user_id: uid, role: "parent" });
+          if (memErr2) throw memErr2;
           try { window.localStorage.setItem("duvia_family_id", familyId); } catch {}
         } else {
           // S'assurer que ce compte est bien membre (sécurité) — le serveur a
@@ -2479,10 +2488,15 @@ function useFamilySync(cfg, setCfg) {
               gender: myOld.gender || fresh.parents[0].gender, phone: myOld.phone || "",
             };
           } catch {}
-          // Même schéma d'insertion que la création de famille normale (qui marche) :
-          // family_members sans 'status' explicite → le défaut (actif) s'applique.
-          await supabase.from("families").insert({ id: newId, share_code: fresh.shareCode, data: fresh });
-          await supabase.from("family_members").insert({ family_id: newId, user_id: uid, role: "parent" });
+          // 🔧 Vérifier les erreurs ici (backlog item 15, 2026-07-11) : sans
+          // ça, un échec silencieux de l'une des 2 insertions laissait
+          // `duvia_family_id` pointer vers une famille sans ligne
+          // family_members correspondante, faisant échouer (403 RLS) toute
+          // écriture ultérieure liée à cette famille.
+          const { error: famErr } = await supabase.from("families").insert({ id: newId, share_code: fresh.shareCode, data: fresh });
+          if (famErr) throw famErr;
+          const { error: memErr } = await supabase.from("family_members").insert({ family_id: newId, user_id: uid, role: "parent" });
+          if (memErr) throw memErr;
           try { window.localStorage.setItem("duvia_family_id", newId); } catch {}
           // 🔧 Remplacer aussi le cache local `duvia_cfg` : sans ça, il garde le
           // contenu de l'ANCIENNE famille partagée (ex: l'autre parent en index 0)
