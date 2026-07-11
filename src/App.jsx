@@ -6830,10 +6830,14 @@ function PrefsTab() {
     setMfaBusy(true); setMfaErr("");
     const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: mfaEnrollData.factorId, code: mfaCode.trim() });
     if (error) { setMfaErr(t.mfaCodeInvalid||"Code invalide."); setMfaBusy(false); return; }
-    const { data: codes } = await supabase.rpc("generate_mfa_backup_codes");
-    setMfaBackupCodes(codes||[]);
+    const { data: codes, error: codesErr } = await supabase.rpc("generate_mfa_backup_codes");
     setMfaEnrolled(true); setMfaFactorId(mfaEnrollData.factorId);
     setMfaEnrollData(null); setMfaCode(""); setMfaMode(false); setMfaBusy(false);
+    if (codesErr) {
+      setMfaErr(t.mfaBackupCodesGenFailed || "La double authentification est activée, mais la génération des codes de secours a échoué. Régénère-les depuis cette page avant de continuer.");
+      return;
+    }
+    setMfaBackupCodes(codes||[]);
   }
   function cancelMfaEnroll(){
     setMfaEnrollData(null); setMfaCode(""); setMfaErr(""); setMfaMode(false);
@@ -7433,10 +7437,14 @@ function ObserverPrefsTab() {
     setMfaBusy(true); setMfaErr("");
     const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: mfaEnrollData.factorId, code: mfaCode.trim() });
     if (error) { setMfaErr(t.mfaCodeInvalid||"Code invalide."); setMfaBusy(false); return; }
-    const { data: codes } = await supabase.rpc("generate_mfa_backup_codes");
-    setMfaBackupCodes(codes||[]);
+    const { data: codes, error: codesErr } = await supabase.rpc("generate_mfa_backup_codes");
     setMfaEnrolled(true); setMfaFactorId(mfaEnrollData.factorId);
     setMfaEnrollData(null); setMfaCode(""); setMfaMode(false); setMfaBusy(false);
+    if (codesErr) {
+      setMfaErr(t.mfaBackupCodesGenFailed || "La double authentification est activée, mais la génération des codes de secours a échoué. Régénère-les depuis cette page avant de continuer.");
+      return;
+    }
+    setMfaBackupCodes(codes||[]);
   }
   function cancelMfaEnroll(){
     setMfaEnrollData(null); setMfaCode(""); setMfaErr(""); setMfaMode(false);
