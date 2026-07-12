@@ -6843,6 +6843,11 @@ function PrefsTab() {
   const [customerId, setCustomerId] = useState("");
   const [cidCopied,  setCidCopied]  = useState(false);
   const [debugMode, setDebugModeState] = useState(isDebugMode);
+  useEffect(() => {
+    const sync = () => setDebugModeState(isDebugMode());
+    window.addEventListener("duvia-debug-mode-changed", sync);
+    return () => window.removeEventListener("duvia-debug-mode-changed", sync);
+  }, []);
   // ── 2FA (double authentification) ──────────────────────────────────────
   const [mfaEnrolled, setMfaEnrolled] = useState(false);
   const [mfaFactorId, setMfaFactorId] = useState(null);
@@ -7485,6 +7490,11 @@ function ObserverPrefsTab() {
   const [customerId, setCustomerId] = useState("");
   const [cidCopied, setCidCopied] = useState(false);
   const [debugMode, setDebugModeState] = useState(isDebugMode);
+  useEffect(() => {
+    const sync = () => setDebugModeState(isDebugMode());
+    window.addEventListener("duvia-debug-mode-changed", sync);
+    return () => window.removeEventListener("duvia-debug-mode-changed", sync);
+  }, []);
   // ── 2FA (double authentification) ──────────────────────────────────────
   const [mfaEnrolled, setMfaEnrolled] = useState(false);
   const [mfaFactorId, setMfaFactorId] = useState(null);

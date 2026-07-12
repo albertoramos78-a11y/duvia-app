@@ -39,6 +39,12 @@ export function setDebugMode(on) {
     if (debugModeOn) window.localStorage.setItem(DEBUG_MODE_KEY, "1");
     else window.localStorage.removeItem(DEBUG_MODE_KEY);
   } catch { /* noop */ }
+  // 🔧 Un composant React qui a lu isDebugMode() dans son état local (ex: la
+  // case à cocher "Mode debug" en Préférences) ne voit pas ce changement
+  // automatiquement si c'est UN AUTRE endroit du code qui l'a déclenché (ex:
+  // auto-désactivation dans submitBugReport pendant que Préférences est
+  // affiché en arrière-plan) — cet évènement lui permet de se resynchroniser.
+  try { window.dispatchEvent(new Event("duvia-debug-mode-changed")); } catch { /* noop */ }
 }
 
 const logs = [];
@@ -201,6 +207,12 @@ export async function retryPendingReport() {
     if (!raw) return;
     const report = JSON.parse(raw);
     const { error } = await supabase.from("bug_reports").insert(report);
-    if (!error) window.localStorage.removeItem(RETRY_KEY);
+    if (!error) {
+      window.localStorage.removeItem(RETRY_KEY);
+      // 🔧 Le rapport a bien été envoyé (avec retard) — mêmes règles
+      // d'auto-désactivation que dans submitBugReport, sinon le mode debug
+      // resterait actif indéfiniment après un envoi réussi via ce chemin.
+      setDebugMode(false);
+    }
   } catch { /* silencieux : best-effort */ }
 }
