@@ -47,13 +47,26 @@ Deno.serve(async (req: Request) => {
     return new Response("Missing record", { status: 400, headers: CORS });
   }
 
-  const comment    = record.comment || "(aucun commentaire)";
-  const appVersion = record.app_version || "?";
-  const platform   = record.system?.platform || "?";
-  const userAgent  = record.system?.userAgent || "?";
-  const userId     = record.user_id || "non connecté";
-  const familyId   = record.family_id || "aucune famille";
-  const reportId   = record.id || "?";
+  // 🔒 record.comment est du texte libre saisi par l'utilisateur — jamais
+  // interpolé tel quel dans le HTML de l'email, sinon un commentaire de bug
+  // pourrait injecter des balises (faux lien, mise en page cassée, etc.)
+  // dans le mail reçu par duvia.services@gmail.com.
+  function escapeHtml(s: string): string {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  const comment    = escapeHtml(record.comment || "(aucun commentaire)");
+  const appVersion = escapeHtml(record.app_version || "?");
+  const platform   = escapeHtml(record.system?.platform || "?");
+  const userAgent  = escapeHtml(record.system?.userAgent || "?");
+  const userId     = escapeHtml(record.user_id || "non connecté");
+  const familyId   = escapeHtml(record.family_id || "aucune famille");
+  const reportId   = escapeHtml(record.id || "?");
 
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
