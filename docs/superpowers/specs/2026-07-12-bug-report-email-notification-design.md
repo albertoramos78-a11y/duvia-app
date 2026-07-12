@@ -47,9 +47,10 @@ Aucun fichier sous `src/` n'est modifié. Pas de bump `APP_VERSION`/`SW_VERSION`
 ## Mise en place (manuelle, après écriture du code)
 
 1. Coller le code de `notify-bug-report` dans le tableau de bord Supabase (Edge Functions → New function), comme pour les fonctions précédentes.
-2. Vérifier que `RESEND_API_KEY` est déjà configuré comme secret de la fonction (déjà utilisé par les fonctions existantes — normalement partagé au niveau du projet, à confirmer).
-3. Générer une valeur aléatoire pour `BUG_REPORT_WEBHOOK_SECRET`, l'ajouter comme secret de la fonction.
-4. Créer le Database Webhook (Database → Webhooks → Create a new webhook) : table `bug_reports`, event `Insert`, type `HTTP Request` vers l'URL de la fonction déployée, avec l'en-tête `x-webhook-secret` réglé sur la même valeur qu'à l'étape 3.
+2. **Désactiver la vérification JWT de la fonction** (option "Verify JWT" à décocher au moment de la création, ou dans ses paramètres ensuite). Par défaut, Supabase exige un jeton d'authentification valide sur CHAQUE appel entrant, avant même que le code de la fonction ne s'exécute — un Database Webhook n'en envoie pas (contrairement à `supabase.functions.invoke()` côté client, qui l'ajoute automatiquement), donc sans cette étape la fonction rejetterait le webhook systématiquement (401), silencieusement, avant même de vérifier `x-webhook-secret`. C'est le secret partagé (étape 4) qui fait office de protection à la place.
+3. Vérifier que `RESEND_API_KEY` est déjà configuré comme secret de la fonction (déjà utilisé par les fonctions existantes — normalement partagé au niveau du projet, à confirmer).
+4. Générer une valeur aléatoire pour `BUG_REPORT_WEBHOOK_SECRET`, l'ajouter comme secret de la fonction.
+5. Créer le Database Webhook (Database → Webhooks → Create a new webhook) : table `bug_reports`, event `Insert`, type `HTTP Request` vers l'URL de la fonction déployée, avec l'en-tête `x-webhook-secret` réglé sur la même valeur qu'à l'étape 4.
 
 Ces étapes manuelles seront guidées une par une au moment de l'implémentation, comme pour les fonctionnalités précédentes de cette session.
 
