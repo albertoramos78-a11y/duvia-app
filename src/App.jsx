@@ -10,7 +10,7 @@ import iconNavRight      from "./assets/bouton_droite.png";
 import coeurHeartMask    from "./assets/coeur_mask.png";
 import posthog from "posthog-js";
 import { supabase } from "./supabaseClient";
-import { initDiagnostics, retryPendingReport, submitBugReport, captureScreenshot } from "./services/diagnostics";
+import { initDiagnostics, retryPendingReport, submitBugReport, captureScreenshot, logAction, isDebugMode, setDebugMode } from "./services/diagnostics";
 import { useVault } from "./hooks/useVault";
 import { useMessages } from "./hooks/useMessages";
 import { useCustody } from "./hooks/useCustody";
@@ -3427,7 +3427,11 @@ export default function App() {
   },[]);
   const [tab,setTab]   = useLocalStorage("duvia_tab", 0);
   const tabDir = useRef("right");
-  function switchTab(i){ tabDir.current = i > tab ? "right" : "left"; setTab(i); }
+  function switchTab(i){
+    tabDir.current = i > tab ? "right" : "left";
+    setTab(i);
+    if (isDebugMode()) logAction("tab_switch", { tab: TABS[i]?.label || i });
+  }
   const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [bell,setBell] = useState(false);
   const [showMenu,setShowMenu] = useState(false);
@@ -6838,6 +6842,7 @@ function PrefsTab() {
   const [savingEmail,setSavingEmail] = useState(false);
   const [customerId, setCustomerId] = useState("");
   const [cidCopied,  setCidCopied]  = useState(false);
+  const [debugMode, setDebugModeState] = useState(isDebugMode);
   // ── 2FA (double authentification) ──────────────────────────────────────
   const [mfaEnrolled, setMfaEnrolled] = useState(false);
   const [mfaFactorId, setMfaFactorId] = useState(null);
@@ -7356,6 +7361,15 @@ function PrefsTab() {
             </div>
           </div>
         )}
+        <div style={{height:1,background:C.bor,margin:"12px 0"}}/>
+        <label style={{display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer",padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`}}>
+          <input type="checkbox" checked={debugMode} onChange={e=>{ setDebugMode(e.target.checked); setDebugModeState(e.target.checked); }}
+            style={{width:16,height:16,marginTop:2,accentColor:C.vio,cursor:"pointer"}} />
+          <div>
+            <div style={{fontSize:13,fontWeight:700,color:C.txt}}>🐞 {t.debugModeLabel||"Mode debug"}</div>
+            <div style={{fontSize:11,color:C.mut,marginTop:2,lineHeight:1.4}}>{t.debugModeDesc||"Enregistre les changements d'écran pour aider à diagnostiquer un bug. Se désactive automatiquement après l'envoi du prochain rapport."}</div>
+          </div>
+        </label>
       </div>
 
       {/* ── Sauvegarde des données (.duvia) ── */}
@@ -7470,6 +7484,7 @@ function ObserverPrefsTab() {
   const [savingEmail,setSavingEmail] = useState(false);
   const [customerId, setCustomerId] = useState("");
   const [cidCopied, setCidCopied] = useState(false);
+  const [debugMode, setDebugModeState] = useState(isDebugMode);
   // ── 2FA (double authentification) ──────────────────────────────────────
   const [mfaEnrolled, setMfaEnrolled] = useState(false);
   const [mfaFactorId, setMfaFactorId] = useState(null);
@@ -7858,6 +7873,15 @@ function ObserverPrefsTab() {
             </div>
           </div>
         )}
+        <div style={{height:1,background:C.bor,margin:"12px 0"}}/>
+        <label style={{display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer",padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`}}>
+          <input type="checkbox" checked={debugMode} onChange={e=>{ setDebugMode(e.target.checked); setDebugModeState(e.target.checked); }}
+            style={{width:16,height:16,marginTop:2,accentColor:C.vio,cursor:"pointer"}} />
+          <div>
+            <div style={{fontSize:13,fontWeight:700,color:C.txt}}>🐞 {t.debugModeLabel||"Mode debug"}</div>
+            <div style={{fontSize:11,color:C.mut,marginTop:2,lineHeight:1.4}}>{t.debugModeDesc||"Enregistre les changements d'écran pour aider à diagnostiquer un bug. Se désactive automatiquement après l'envoi du prochain rapport."}</div>
+          </div>
+        </label>
       </div>
 
       {/* ── Supprimer sauvegarde locale (données de secours navigateur) ── */}

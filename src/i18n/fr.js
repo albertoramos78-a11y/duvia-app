@@ -552,6 +552,8 @@ const fr = {
     bugReportScreenshot:"Joindre une capture de l'écran actuel",
     bugReportScreenshotWarn:"La capture peut contenir des infos visibles à l'écran (noms, données). À activer seulement si utile.",
     bugReportScreenshotUnavailable:"indisponible",
+    debugModeLabel:"Mode debug",
+    debugModeDesc:"Enregistre les changements d'écran pour aider à diagnostiquer un bug. Se désactive automatiquement après l'envoi du prochain rapport.",
     bugReportSend:"Envoyer",
     bugReportSending:"Envoi…",
     bugReportThanks:"Merci. Le rapport de diagnostic a été envoyé.",

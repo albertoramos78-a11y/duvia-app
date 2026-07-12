@@ -20,6 +20,26 @@ import { APP_VERSION } from "../config.js";
 const MAX_LOGS = 300; // dernières actions conservées
 const MAX_ERRORS = 50; // dernières erreurs conservées
 const RETRY_KEY = "duvia_bugreport_retry";
+const DEBUG_MODE_KEY = "duvia_debug_mode";
+
+// ── Mode debug (opt-in) ───────────────────────────────────────────────────
+// Désactivé par défaut. Une fois activé (Préférences), logAction() reçoit
+// des appels supplémentaires (ex: changements d'onglet) qui seraient sinon
+// silencieux — voir switchTab() dans App.jsx. Se désactive automatiquement
+// après le prochain rapport de bug envoyé avec succès (submitBugReport).
+let debugModeOn = (() => {
+  try { return window.localStorage.getItem(DEBUG_MODE_KEY) === "1"; } catch { return false; }
+})();
+
+export function isDebugMode() { return debugModeOn; }
+
+export function setDebugMode(on) {
+  debugModeOn = !!on;
+  try {
+    if (debugModeOn) window.localStorage.setItem(DEBUG_MODE_KEY, "1");
+    else window.localStorage.removeItem(DEBUG_MODE_KEY);
+  } catch { /* noop */ }
+}
 
 const logs = [];
 const errs = [];
@@ -170,6 +190,7 @@ export async function submitBugReport({ comment, screenshot, context }) {
   }
   try { window.localStorage.removeItem(RETRY_KEY); } catch { /* noop */ }
   logAction("bug_report_sent", { hasScreenshot: !!screenshot });
+  setDebugMode(false);
   return true;
 }
 
