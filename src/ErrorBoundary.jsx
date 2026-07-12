@@ -35,11 +35,16 @@ const STYLES = {
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { error: null, sending: false, sent: false };
+    this.state = { hasError: false, error: null, sending: false, sent: false };
   }
 
+  // 🔧 hasError est un booléen dédié, pas juste "error est truthy" : un
+  // composant qui fait `throw undefined`/`throw null`/`throw 0` (rare mais
+  // possible) donnerait un `error` falsy, et render() retomberait sur
+  // `this.props.children` — c'est-à-dire exactement l'écran blanc que ce
+  // composant existe pour éviter.
   static getDerivedStateFromError(error) {
-    return { error };
+    return { hasError: true, error };
   }
 
   componentDidCatch(error, errorInfo) {
@@ -67,7 +72,7 @@ class ErrorBoundary extends Component {
   };
 
   render() {
-    if (!this.state.error) return this.props.children;
+    if (!this.state.hasError) return this.props.children;
     return (
       <div style={STYLES.wrap}>
         <div style={STYLES.card}>
