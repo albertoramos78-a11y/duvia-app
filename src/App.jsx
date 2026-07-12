@@ -10,7 +10,7 @@ import iconNavRight      from "./assets/bouton_droite.png";
 import coeurHeartMask    from "./assets/coeur_mask.png";
 import posthog from "posthog-js";
 import { supabase } from "./supabaseClient";
-import { initDiagnostics, retryPendingReport, submitBugReport } from "./services/diagnostics";
+import { initDiagnostics, retryPendingReport, submitBugReport, captureScreenshot } from "./services/diagnostics";
 import { useVault } from "./hooks/useVault";
 import { useMessages } from "./hooks/useMessages";
 import { useCustody } from "./hooks/useCustody";
@@ -2910,7 +2910,7 @@ function StepAccessInfoButton({C,t,user}) {
 // ROOT
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── Modale "Installer l'application" (réutilisable) ─────────────────────────
-function BugReportModal({ C, t, open, onClose, getContext }) {
+function BugReportModal({ C, t, open, screenshot, onClose, getContext }) {
   const [comment, setComment] = useState("");
   const [withShot, setWithShot] = useState(false);
   const [sending, setSending] = useState(false);
@@ -2921,7 +2921,7 @@ function BugReportModal({ C, t, open, onClose, getContext }) {
     if (sending || !comment.trim()) return;
     setSending(true); setStatus(null);
     try {
-      await submitBugReport({ comment, withScreenshot: withShot, context: getContext ? getContext() : {} });
+      await submitBugReport({ comment, screenshot: withShot ? screenshot : null, context: getContext ? getContext() : {} });
       setStatus("ok");
     } catch { setStatus("err"); }
     finally { setSending(false); }
@@ -2941,11 +2941,11 @@ function BugReportModal({ C, t, open, onClose, getContext }) {
             <div style={{fontSize:12.5,color:C.mut,textAlign:"center",lineHeight:1.5,margin:"4px 0 14px"}}>{t.bugReportDesc}</div>
             <textarea value={comment} onChange={e=>setComment(e.target.value)} placeholder={t.bugReportPlaceholder} rows={4} maxLength={4000}
               style={{width:"100%",boxSizing:"border-box",padding:12,borderRadius:12,border:`1.5px solid ${C.bor}`,fontSize:13,fontFamily:"inherit",resize:"vertical",marginBottom:12,background:C.sur,color:C.txt}} />
-            <label style={{display:"flex",alignItems:"flex-start",gap:8,cursor:"pointer",marginBottom:6,fontSize:12.5,color:C.txt}}>
-              <input type="checkbox" checked={withShot} onChange={e=>setWithShot(e.target.checked)} style={{width:16,height:16,marginTop:2,accentColor:C.vio,cursor:"pointer"}} />
-              <span>{t.bugReportScreenshot}</span>
+            <label style={{display:"flex",alignItems:"flex-start",gap:8,cursor:screenshot?"pointer":"default",opacity:screenshot?1:.5,marginBottom:6,fontSize:12.5,color:C.txt}}>
+              <input type="checkbox" checked={withShot && !!screenshot} disabled={!screenshot} onChange={e=>setWithShot(e.target.checked)} style={{width:16,height:16,marginTop:2,accentColor:C.vio,cursor:screenshot?"pointer":"default"}} />
+              <span>{t.bugReportScreenshot}{!screenshot && ` (${t.bugReportScreenshotUnavailable || "indisponible"})`}</span>
             </label>
-            {withShot && <div style={{fontSize:11,color:C.ora,lineHeight:1.4,marginBottom:12}}>⚠️ {t.bugReportScreenshotWarn}</div>}
+            {withShot && screenshot && <div style={{fontSize:11,color:C.ora,lineHeight:1.4,marginBottom:12}}>⚠️ {t.bugReportScreenshotWarn}</div>}
             {status==="err" && <div style={{fontSize:12,color:C.red,lineHeight:1.4,marginBottom:10}}>{t.bugReportError}</div>}
             <button disabled={sending || !comment.trim()} onClick={send}
               style={{width:"100%",height:46,background:(sending||!comment.trim())?C.bor:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:14,marginBottom:8,cursor:(sending||!comment.trim())?"not-allowed":"pointer"}}>
@@ -3432,6 +3432,7 @@ export default function App() {
   const [bell,setBell] = useState(false);
   const [showMenu,setShowMenu] = useState(false);
   const [showBugModal,setShowBugModal] = useState(false);
+  const [bugScreenshot,setBugScreenshot] = useState(null);
   const [showInstallModal,setShowInstallModal] = useState(false);
   const [showLicenseModal,setShowLicenseModal] = useState(false);
   const [showChildInfoModal,setShowChildInfoModal] = useState(false);
@@ -4829,7 +4830,17 @@ export default function App() {
                 </>
               )}
 
-              <button onClick={()=>{setShowBugModal(true);setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+              <button onClick={async ()=>{
+                setShowMenu(false);
+                // 🔧 Capturée AVANT l'ouverture de la modale, pas au moment de
+                // l'envoi : BugReportModal est un overlay plein écran, donc une
+                // capture prise pendant que l'utilisateur rédige son commentaire
+                // ne montrerait que la modale elle-même, jamais l'écran/bug qu'il
+                // essaie de signaler (voir services/diagnostics.js).
+                const shot = await captureScreenshot();
+                setBugScreenshot(shot);
+                setShowBugModal(true);
+              }} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
                 <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🐛</span><span style={{flex:1,textAlign:"left"}}>{t.bugReportMenu}</span>
               </button>
               <button onClick={()=>{setShowInstallModal(true);setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
@@ -4864,7 +4875,8 @@ export default function App() {
       {legalDocOpen && <LegalDocModal C={C} doc={legalDocOpen} lang={lang} onClose={()=>setLegalDocOpen(null)} />}
 
       {/* Modale "Signaler un problème" (diagnostic) */}
-      <BugReportModal C={C} t={t} open={showBugModal} onClose={()=>setShowBugModal(false)}
+      <BugReportModal C={C} t={t} open={showBugModal} screenshot={bugScreenshot}
+        onClose={()=>{setShowBugModal(false);setBugScreenshot(null);}}
         getContext={()=>({
           userId: myUid || null,
           familyId: familySync?.familyId || null,

@@ -117,9 +117,14 @@ function systemInfo() {
 }
 
 // ── Capture d'écran optionnelle (opt-in) ─────────────────────────────────────
-// html2canvas est chargé À LA DEMANDE depuis un CDN : zéro poids tant que
-// l'utilisateur ne coche pas la case. Réduit l'échelle + compresse en JPEG.
-async function captureScreenshot() {
+// html2canvas est chargé À LA DEMANDE depuis un CDN. Réduit l'échelle +
+// compresse en JPEG.
+// 🔧 Appelée par l'appelant AVANT l'ouverture de BugReportModal (voir le
+// bouton "Signaler un problème" dans App.jsx), pas au moment de l'envoi :
+// la modale est un overlay plein écran, donc une capture faite pendant que
+// l'utilisateur rédige son commentaire ne montrerait que la modale
+// elle-même, jamais l'écran/bug qu'il essaie de signaler.
+export async function captureScreenshot() {
   if (typeof window === "undefined" || typeof document === "undefined") return null;
   try {
     if (!window.html2canvas) {
@@ -155,10 +160,8 @@ function buildReport({ comment, screenshot, context }) {
   };
 }
 
-export async function submitBugReport({ comment, withScreenshot, context }) {
-  let screenshot = null;
-  if (withScreenshot) screenshot = await captureScreenshot();
-  const report = buildReport({ comment, screenshot, context });
+export async function submitBugReport({ comment, screenshot, context }) {
+  const report = buildReport({ comment, screenshot: screenshot || null, context });
   const { error } = await supabase.from("bug_reports").insert(report);
   if (error) {
     // Échec → conserver pour réessai (sans la capture, trop lourde pour localStorage).

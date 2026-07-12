@@ -6,8 +6,9 @@
 // client juste après l'action — elle part automatiquement côté serveur dès
 // qu'une ligne est insérée, même si l'onglet du navigateur qui a soumis le
 // rapport se ferme immédiatement après. Envoie un email de synthèse (avec la
-// capture d'écran en pièce jointe si l'utilisateur en a fourni une — pas les
-// logs bruts, trop volumineux) à une adresse fixe.
+// capture d'écran en pièce jointe si l'utilisateur en a fourni une, et les 5
+// dernières actions journalisées en aperçu — le détail complet des logs et
+// erreurs reste dans Supabase, trop volumineux pour l'email) à une adresse fixe.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const RESEND_API_KEY        = Deno.env.get("RESEND_API_KEY")!;
@@ -69,6 +70,33 @@ Deno.serve(async (req: Request) => {
   const familyId   = escapeHtml(record.family_id || "aucune famille");
   const reportId   = escapeHtml(record.id || "?");
 
+  // Aperçu rapide : les 5 dernières actions journalisées avant le rapport
+  // (record.logs est déjà présent dans la ligne bug_reports — on en affiche
+  // juste un extrait ici, le détail complet des logs/erreurs reste dans
+  // Supabase pour ne pas alourdir l'email).
+  function formatTime(ts: string): string {
+    try { return new Date(ts).toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris" }); }
+    catch { return ts || "?"; }
+  }
+  function summarize(value: unknown): string {
+    if (value == null) return "";
+    try {
+      const s = JSON.stringify(value);
+      return s.length > 120 ? s.slice(0, 120) + "…" : s;
+    } catch { return ""; }
+  }
+  const lastLogs: any[] = Array.isArray(record.logs) ? record.logs.slice(-5) : [];
+  const logsHtml = lastLogs.length
+    ? lastLogs.map((l) => {
+        const time   = escapeHtml(formatTime(l?.ts));
+        const type   = escapeHtml(l?.type || "?");
+        const params = escapeHtml(summarize(l?.params));
+        return `<div style="padding:3px 0;border-bottom:1px solid #f0f0f0">
+          <span style="color:#999">${time}</span> <strong>${type}</strong>${params ? ` <span style="color:#999">${params}</span>` : ""}
+        </div>`;
+      }).join("")
+    : `<div style="color:#999">(aucune action journalisée)</div>`;
+
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,sans-serif">
@@ -87,7 +115,11 @@ Deno.serve(async (req: Request) => {
         <tr><td style="padding:4px 0;font-weight:700">Famille</td><td style="padding:4px 0">${familyId}</td></tr>
         <tr><td style="padding:4px 0;font-weight:700">ID rapport</td><td style="padding:4px 0">${reportId}</td></tr>
       </table>
-      <p style="color:#999;margin:20px 0 0;font-size:12px">Logs détaillés : voir la table bug_reports dans Supabase (ID ci-dessus)${record.screenshot ? " — capture d'écran jointe à cet email" : ""}.</p>
+      <div style="margin-top:18px">
+        <div style="font-size:11px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px">Dernières actions</div>
+        <div style="font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace">${logsHtml}</div>
+      </div>
+      <p style="color:#999;margin:16px 0 0;font-size:12px">Logs complets et erreurs : voir la table bug_reports dans Supabase (ID ci-dessus)${record.screenshot ? " — capture d'écran jointe à cet email" : ""}.</p>
     </div>
     <div style="padding:16px 24px;text-align:center;color:#bbb;font-size:11px;border-top:1px solid #f0f0f0">
       Duvia · <a href="${APP_URL}" style="color:#bbb">app.duvia.fr</a>

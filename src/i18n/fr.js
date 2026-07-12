@@ -551,6 +551,7 @@ const fr = {
     bugReportPlaceholder:"Décris ce qui s'est passé…",
     bugReportScreenshot:"Joindre une capture de l'écran actuel",
     bugReportScreenshotWarn:"La capture peut contenir des infos visibles à l'écran (noms, données). À activer seulement si utile.",
+    bugReportScreenshotUnavailable:"indisponible",
     bugReportSend:"Envoyer",
     bugReportSending:"Envoi…",
     bugReportThanks:"Merci. Le rapport de diagnostic a été envoyé.",
