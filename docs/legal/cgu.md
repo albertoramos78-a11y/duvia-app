@@ -52,6 +52,20 @@ L'utilisation du Service implique l'acceptation pleine et entière des
 présentes CGU. Si vous n'acceptez pas ces conditions, vous ne devez pas
 utiliser l'Application.
 
+**Champ d'application géographique.** Le Service est conçu et destiné aux
+utilisateurs résidant dans l'Union Européenne (et plus largement l'Espace
+Économique Européen). L'Éditeur ne garantit ni la conformité ni
+l'adéquation du Service à toute réglementation applicable en dehors de
+cette zone. **[À trancher avec le professionnel du droit] :** une simple
+déclaration de ce type ne suffit pas nécessairement, à elle seule, à
+écarter l'application d'un droit étranger (ex : droit américain, y compris
+des textes spécifiques comme le COPPA sur les données de mineurs) dès lors
+que le Service est, en pratique, effectivement utilisé par des résidents
+de ce pays — le professionnel du droit consulté devra confirmer si une
+simple mention contractuelle est suffisante dans le cas de Duvia, ou si
+une restriction technique d'accès et/ou une clause distincte est
+nécessaire.
+
 ## Article 2 — Accès au Service et catégories d'utilisateurs
 
 L'Application distingue plusieurs profils :
