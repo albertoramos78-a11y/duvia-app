@@ -5,8 +5,9 @@
 // Contrairement aux autres fonctions notify-*, elle n'est pas appelée par le
 // client juste après l'action — elle part automatiquement côté serveur dès
 // qu'une ligne est insérée, même si l'onglet du navigateur qui a soumis le
-// rapport se ferme immédiatement après. Envoie un email de synthèse (sans la
-// capture d'écran ni les logs bruts, trop volumineux) à une adresse fixe.
+// rapport se ferme immédiatement après. Envoie un email de synthèse (avec la
+// capture d'écran en pièce jointe si l'utilisateur en a fourni une — pas les
+// logs bruts, trop volumineux) à une adresse fixe.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const RESEND_API_KEY        = Deno.env.get("RESEND_API_KEY")!;
@@ -86,13 +87,22 @@ Deno.serve(async (req: Request) => {
         <tr><td style="padding:4px 0;font-weight:700">Famille</td><td style="padding:4px 0">${familyId}</td></tr>
         <tr><td style="padding:4px 0;font-weight:700">ID rapport</td><td style="padding:4px 0">${reportId}</td></tr>
       </table>
-      <p style="color:#999;margin:20px 0 0;font-size:12px">Capture d'écran et logs détaillés : voir la table bug_reports dans Supabase (ID ci-dessus).</p>
+      <p style="color:#999;margin:20px 0 0;font-size:12px">Logs détaillés : voir la table bug_reports dans Supabase (ID ci-dessus)${record.screenshot ? " — capture d'écran jointe à cet email" : ""}.</p>
     </div>
     <div style="padding:16px 24px;text-align:center;color:#bbb;font-size:11px;border-top:1px solid #f0f0f0">
       Duvia · <a href="${APP_URL}" style="color:#bbb">app.duvia.fr</a>
     </div>
   </div>
 </body></html>`;
+
+  // La capture d'écran est stockée en data URI ("data:image/jpeg;base64,XXXX")
+  // par captureScreenshot() côté client (diagnostics.js) — Resend attend le
+  // contenu en base64 SANS ce préfixe pour une pièce jointe.
+  const attachments: { filename: string; content: string }[] = [];
+  if (typeof record.screenshot === "string" && record.screenshot.startsWith("data:")) {
+    const base64 = record.screenshot.split(",")[1];
+    if (base64) attachments.push({ filename: "capture-ecran.jpg", content: base64 });
+  }
 
   try {
     const res = await fetch("https://api.resend.com/emails", {
@@ -106,6 +116,7 @@ Deno.serve(async (req: Request) => {
         to: [ADMIN_EMAIL],
         subject: "🐛 Nouveau bug signalé sur Duvia",
         html,
+        ...(attachments.length ? { attachments } : {}),
       }),
     });
     const resBody = await res.json();
