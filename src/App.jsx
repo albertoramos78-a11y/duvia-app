@@ -5622,7 +5622,13 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     supabase.rpc("get_ratings_summary").then(({data})=>{ if(data?.total_count>0) setAvgRating(data); }).catch(()=>{});
     supabase.rpc("get_public_ratings",{max_count:3}).then(({data})=>{ if(data?.length) setPublicReviews(data); }).catch(()=>{});
   },[]);
-  const [email,setEmail]=useState(()=>{ try{return window.localStorage.getItem("duvia_last_email")||"";}catch{return "";} }); const [pw,setPw]=useState("");
+  const [email,setEmail]=useState(()=>{
+    try{
+      const fromReg = window.sessionStorage.getItem("duvia_prefill_email");
+      if(fromReg){ window.sessionStorage.removeItem("duvia_prefill_email"); return fromReg; }
+      return window.localStorage.getItem("duvia_last_email")||"";
+    }catch{return "";}
+  }); const [pw,setPw]=useState("");
   const [name,setName]=useState(""); const [role,setRole]=useState("parent");
   const [showInstallModal,setShowInstallModal]=useState(false);
   const [err,setErr]=useState(""); const [ok,setOk]=useState("");
@@ -5839,7 +5845,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
         <div style={{fontSize:44,marginBottom:12}}>⏳</div>
         <div style={{fontWeight:900,fontSize:18,marginBottom:8,color:C.txt}}>{t.obsJoinWaiting||"En attente d'approbation"}</div>
         <div style={{fontSize:13.5,color:C.mut,lineHeight:1.6,marginBottom:18,whiteSpace:"pre-line"}}>{t.obsJoinWaitingInfo||"Votre demande pour rejoindre la famille a bien été envoyée.\n\nPour des raisons de sécurité, la personne qui vous a invité(e) doit valider votre entrée.\n\nUne fois approuvé(e), vous pourrez vous connecter sur app.duvia.fr."}</div>
-        <button onClick={()=>{ try{ window.location.href = window.location.origin + "/"; }catch{ setMode("login"); } }}
+        <button onClick={()=>{ try{ window.sessionStorage.setItem("duvia_prefill_email", email); }catch{} try{ window.location.href = window.location.origin + "/"; }catch{ setMode("login"); } }}
           style={{height:42,padding:"0 24px",background:C.vio,color:"#fff",border:"none",fontSize:13,fontWeight:700,borderRadius:10}}>
           {t.understood||"Compris"}
         </button>
