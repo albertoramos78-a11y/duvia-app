@@ -4172,7 +4172,11 @@ export default function App() {
     pushNotif(`👥 ${obsData.name} — ${t.obsPendingInfo||"demande à rejoindre la famille"}`, "info");
   }
   function addHist(action,detail="",type="") {
-    addHistEntry(action, detail, type, cfg.parents?.[user?.parentIdx]?.name || user?.name || "Système", myUid||null);
+    // 🔧 Retourne la promesse d'écriture (voir useHistory.ts) : la plupart
+    // des appelants l'ignorent (fire-and-forget), mais certains (ex: quitter
+    // la famille, suivi d'un rechargement immédiat) doivent l'attendre pour
+    // ne pas couper l'écriture en vol.
+    return addHistEntry(action, detail, type, cfg.parents?.[user?.parentIdx]?.name || user?.name || "Système", myUid||null);
   }
   function updateCal(ds,data) {
     setCfg(c=>({...c,overrides:{...c.overrides,[ds]:{...(c.overrides[ds]||{}),...data}}}));
@@ -4814,7 +4818,7 @@ export default function App() {
                   <button onClick={async()=>{
                     if(!window.confirm(t.obsLeaveFamilyConfirm||"Quitter la famille ? Vous n'aurez plus accès au calendrier ni à la messagerie.")) return;
                     const res = await familySync?.leaveFamily?.();
-                    if(res?.ok) addHist(`${user?.name||"Cet observateur"} a quitté la famille`, "", "family");
+                    if(res?.ok) await addHist(`${user?.name||"Cet observateur"} a quitté la famille`, "", "family");
                     setShowMenu(false);
                     handleSetUser(null); setTab(0);
                   }} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.red,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
@@ -5076,7 +5080,7 @@ export default function App() {
                 <div style={{fontSize:44,marginBottom:12}}>🏚️</div>
                 <div style={{fontWeight:900,fontSize:17,color:C.txt,marginBottom:8}}>{t.familyDisbanded||"Cette famille n'a plus de parent actif."}</div>
                 <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:20}}>{t.familyDisbandedObs||"Votre accès est maintenu mais aucun parent ne gère plus cette famille. Vous pouvez quitter."}</div>
-                <button onClick={async()=>{if(!window.confirm(t.leaveFamilyConfirmSimple||"Quitter la famille ?")) return; const res = await familySync?.leaveFamily?.(); if(res?.ok) addHist(`${user?.name||"Cet observateur"} a quitté la famille`, "", "family"); handleSetUser(null); setTab(0);}}
+                <button onClick={async()=>{if(!window.confirm(t.leaveFamilyConfirmSimple||"Quitter la famille ?")) return; const res = await familySync?.leaveFamily?.(); if(res?.ok) await addHist(`${user?.name||"Cet observateur"} a quitté la famille`, "", "family"); handleSetUser(null); setTab(0);}}
                   style={{height:44,padding:"0 24px",background:C.red,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:14,cursor:"pointer"}}>
                   🚪 {t.obsLeaveFamily||"Quitter la famille"}
                 </button>
@@ -8095,7 +8099,9 @@ function ConfigTab() {
     const res = await familySync?.leaveFamily?.();
     if(res?.ok){
       const who = cfg.parents?.[user?.parentIdx]?.name || user?.name || "Ce parent";
-      addHist(`${who} a quitté la famille`, "", "family");
+      // 🔧 attendu avant de recharger : addHist est fire-and-forget par
+      // défaut, et duviaReload() coupe la requête en vol si on ne l'attend pas.
+      await addHist(`${who} a quitté la famille`, "", "family");
       duviaReload();
     }
     else { alert("⚠️ Impossible de quitter la famille.\n\nDétail : "+(res?.error||"inconnu")+"\n\n(Si l'erreur mentionne « leave_family », la migration SQL 0018 n'est pas encore exécutée sur Supabase.)"); }
@@ -8151,8 +8157,8 @@ function ConfigTab() {
     //    (userId), enregistré sur le créneau au moment de la validation.
     if(parent.userId){
       familySync?.removeFamilyMember?.(parent.userId).then(res=>{
-        if(res && !res.ok) console.warn("[Duvia] removeFamilyMember:", res.error);
-        else addHist(`${parentName} a été retiré de la famille`, "", "family");
+        if(res?.ok) addHist(`${parentName} a été retiré de la famille`, "", "family");
+        else console.warn("[Duvia] removeFamilyMember:", res?.error);
       });
     } else {
       console.warn("[Duvia] executeDeletion: pas de userId sur le parent — retrait serveur impossible.");

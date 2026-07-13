@@ -63,7 +63,7 @@ export function useHistory(familyId: string | null) {
     return () => { supabase.removeChannel(channel); };
   }, [familyId]);
 
-  // ── addHistEntry : optimiste, fire-and-forget ─────────────────────────────
+  // ── addHistEntry : optimiste, awaitable (fire-and-forget par défaut) ──────
 
   const addHistEntry = useCallback(
     (
@@ -73,7 +73,7 @@ export function useHistory(familyId: string | null) {
       who: string = "Système",
       userId: string | null = null
     ) => {
-      if (!familyId) return;
+      if (!familyId) return Promise.resolve();
 
       // Mise à jour optimiste immédiate
       const tempId = `temp_${Date.now()}`;
@@ -88,8 +88,16 @@ export function useHistory(familyId: string | null) {
       };
       setHistory((prev) => [optimistic, ...prev]);
 
-      // Écriture en base (asynchrone, on ne bloque pas l'UI)
-      addHistoryEntry(familyId, { action, detail, type, who, userId })
+      // 🔧 Le retour (Promise) permet aux appelants qui enchaînent tout de
+      // suite un rechargement de page ou une déconnexion (ex: quitter la
+      // famille) d'ATTENDRE que l'écriture ait réellement atteint Supabase
+      // avant de naviguer — sans ça, la navigation coupait la requête en vol
+      // et l'entrée n'était jamais enregistrée en base. La plupart des
+      // appelants n'attendent pas cette promesse (fire-and-forget inchangé),
+      // c'est un ajout rétrocompatible. Ne rejette jamais : l'échec est déjà
+      // loggé ci-dessous et l'entrée optimiste reste visible localement,
+      // donc l'appelant n'a pas besoin de gérer d'erreur lui-même.
+      return addHistoryEntry(familyId, { action, detail, type, who, userId })
         .then((saved) => {
           setHistory((prev) => {
             const withoutTemp = prev.filter((h) => h.id !== tempId);
