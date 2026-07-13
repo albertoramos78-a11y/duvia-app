@@ -4813,8 +4813,8 @@ export default function App() {
                   </button>
                   <button onClick={async()=>{
                     if(!window.confirm(t.obsLeaveFamilyConfirm||"Quitter la famille ? Vous n'aurez plus accès au calendrier ni à la messagerie.")) return;
-                    await familySync?.leaveFamily?.();
-                    addHist(`${user?.name||"Cet observateur"} a quitté la famille`, "", "family");
+                    const res = await familySync?.leaveFamily?.();
+                    if(res?.ok) addHist(`${user?.name||"Cet observateur"} a quitté la famille`, "", "family");
                     setShowMenu(false);
                     handleSetUser(null); setTab(0);
                   }} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.red,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
@@ -5076,7 +5076,7 @@ export default function App() {
                 <div style={{fontSize:44,marginBottom:12}}>🏚️</div>
                 <div style={{fontWeight:900,fontSize:17,color:C.txt,marginBottom:8}}>{t.familyDisbanded||"Cette famille n'a plus de parent actif."}</div>
                 <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:20}}>{t.familyDisbandedObs||"Votre accès est maintenu mais aucun parent ne gère plus cette famille. Vous pouvez quitter."}</div>
-                <button onClick={async()=>{if(!window.confirm(t.leaveFamilyConfirmSimple||"Quitter la famille ?")) return; await familySync?.leaveFamily?.(); addHist(`${user?.name||"Cet observateur"} a quitté la famille`, "", "family"); handleSetUser(null); setTab(0);}}
+                <button onClick={async()=>{if(!window.confirm(t.leaveFamilyConfirmSimple||"Quitter la famille ?")) return; const res = await familySync?.leaveFamily?.(); if(res?.ok) addHist(`${user?.name||"Cet observateur"} a quitté la famille`, "", "family"); handleSetUser(null); setTab(0);}}
                   style={{height:44,padding:"0 24px",background:C.red,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:14,cursor:"pointer"}}>
                   🚪 {t.obsLeaveFamily||"Quitter la famille"}
                 </button>
