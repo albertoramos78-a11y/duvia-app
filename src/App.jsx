@@ -21,7 +21,7 @@ import { usePush } from "./hooks/usePush";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION, APP_VERSION } from './config.js';
 import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact } from './utils/core.js';
-import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, LICORNE, BRAND, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
+import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, LICORNE, BRAND, BRAND_GRADIENT, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
 
 // ─── POSTHOG — Analytics (pays, logins, comportement) ───────────────────────
@@ -3888,7 +3888,12 @@ export default function App() {
   [licorneActive, videoActive, wcActive, rgActive, summerActive, themeMode]); // ✅ recalculé uniquement si le thème change
   const cssString = useMemo(() => css(C), [C]); // ✅ ~300 lignes CSS générées une seule fois par thème
   const brandCssString = useMemo(() => css(BRAND), []); // ✅ toujours BRAND pour la page de login
-  const headerBG = C._brand ? `linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)` : C.card;
+  const headerBG = C._brand ? `linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),${BRAND_GRADIENT}` : C.card;
+  useEffect(() => {
+    // La barre de statut Android/iOS (PWA) suit désormais le thème actif au lieu de rester figée.
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", C.vio);
+  }, [C]);
   const t     = useMemo(() => TR[lang], [lang]);
   const st    = useMemo(() => subStatus(sub), [sub]);
   const prem  = useMemo(() => isPrem(sub), [sub]);
@@ -4389,7 +4394,7 @@ export default function App() {
       ) : (
         <LoginScreen C={BRAND} t={t} lang={lang} setLang={setLang} themeMode={themeMode} cycleTheme={cycleTheme} users={users} setUsers={setUsers} onLogin={handleLogin} onObsJoin={handleObsJoin} familySync={familySync} cfg={cfg} setCfg={setCfg} ensureMfaSatisfied={ensureMfaSatisfied} />
       )}
-      {legalDocOpen && <LegalDocModal C={C} doc={legalDocOpen} lang={lang} onClose={()=>setLegalDocOpen(null)} />}
+      {legalDocOpen && <LegalDocModal C={C} t={t} doc={legalDocOpen} lang={lang} onClose={()=>setLegalDocOpen(null)} />}
       {mfaChallenge && (
         <MfaChallengeGate C={C} t={t} factorId={mfaChallenge.factorId}
           onVerified={()=>{ mfaResolveRef.current?.(true); setMfaChallenge(null); }}
@@ -4881,7 +4886,7 @@ export default function App() {
       {showInstallModal && <InstallAppModal C={C} t={t} onClose={()=>setShowInstallModal(false)} />}
 
       {/* Modale CGU/CGV */}
-      {legalDocOpen && <LegalDocModal C={C} doc={legalDocOpen} lang={lang} onClose={()=>setLegalDocOpen(null)} />}
+      {legalDocOpen && <LegalDocModal C={C} t={t} doc={legalDocOpen} lang={lang} onClose={()=>setLegalDocOpen(null)} />}
 
       {/* Modale "Signaler un problème" (diagnostic) */}
       <BugReportModal C={C} t={t} open={showBugModal} screenshot={bugScreenshot}
@@ -5299,7 +5304,7 @@ function renderLegalInline(text) {
     : <Fragment key={i}>{part}</Fragment>);
 }
 
-function LegalDocModal({ C, doc, lang, onClose }) {
+function LegalDocModal({ C, t, doc, lang, onClose }) {
   const docLang = LEGAL_DOCS[doc]?.[lang] ? lang : "fr";
   const title = LEGAL_TITLES[doc]?.[docLang] || LEGAL_TITLES[doc]?.fr;
   const blocks = LEGAL_DOCS[doc]?.[docLang] || [];
@@ -5328,7 +5333,7 @@ function LegalDocModal({ C, doc, lang, onClose }) {
           ))}
         </div>
 
-        <button onClick={onClose} style={{width:"100%",height:44,marginTop:20,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13,cursor:"pointer"}}>Fermer</button>
+        <button onClick={onClose} style={{width:"100%",height:44,marginTop:20,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13,cursor:"pointer"}}>{t.legalDocClose||"Fermer"}</button>
       </div>
     </div>
   );
@@ -5346,7 +5351,7 @@ function RgpdConsentScreen({C,t,lang,setLang,onAccept,onOpenLegal}) {
   const foundLang = LANGS[lang]||LANGS["fr"];
   const link = {color:C.vio,fontWeight:800,textDecoration:"underline",background:"none",border:"none",padding:0,fontSize:"inherit",fontFamily:"inherit",cursor:"pointer"};
   return (
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:C.bg}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),${BRAND_GRADIENT}`:C.bg}}>
       <div style={{width:"100%",maxWidth:460}} className="fi">
         <div style={{background:C.card,borderRadius:20,padding:"26px 24px",boxShadow:"0 10px 40px rgba(0,0,0,.12)"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:18}}>
@@ -5505,7 +5510,7 @@ function ConsentScreen({C,t,user,onAccept,onDecline}) {
   const [checked3,setChecked3] = useState(false);
   const canAccept = checked1 && checked2 && checked3;
   return (
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:`radial-gradient(ellipse at 30% 20%,rgba(124,111,205,.15) 0%,transparent 60%),${C.bg}`}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?BRAND_GRADIENT:`radial-gradient(ellipse at 30% 20%,rgba(124,111,205,.15) 0%,transparent 60%),${C.bg}`}}>
       <div style={{width:"100%",maxWidth:420}} className="fi">
         <div style={{textAlign:"center",marginBottom:22,paddingLeft:180}}>
           <div style={{fontSize:36,marginBottom:8}}>👨‍👩‍👧</div>
@@ -6172,7 +6177,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     }
   }
   return (
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`:`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),radial-gradient(ellipse at 30% 20%,rgba(124,111,205,.15) 0%,transparent 60%),${C.bg}`}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),${BRAND_GRADIENT}`:`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),radial-gradient(ellipse at 30% 20%,rgba(124,111,205,.15) 0%,transparent 60%),${C.bg}`}}>
       <div style={{width:"100%",maxWidth:400}} className="fi">
         <div style={{display:"grid",gridTemplateColumns:"auto 1fr auto auto",alignItems:"center",gap:8,marginBottom:36}}>
           <div style={{display:"flex",gap:6}}>
@@ -6213,7 +6218,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
             </div>
           )}
         </div>
-        <div className="card" style={C._brand?{background:`linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)`}:undefined}>
+        <div className="card" style={C._brand?{background:`linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),${BRAND_GRADIENT}`}:undefined}>
           {isExpiredInvite && (
             <div style={{background:`${C.red}12`,border:`1.5px solid ${C.red}44`,borderRadius:10,padding:"12px 14px",marginBottom:14,fontSize:13,color:C.red,fontWeight:700,textAlign:"center"}}>
               ⏰ {t.invErrExpiredWait}
@@ -6617,6 +6622,7 @@ function Avatar({emoji, color, size=40, onClick, selected=false}) {
 
 // ─── CROP MODAL (zoom + recadrage photo) ──────────────────────────────────────
 function CropModal({ file, onCrop, onCancel }) {
+  const {C,t} = useApp();
   const canvasRef = useRef(null);
   const [img, setImg] = useState(null);
   const [zoom, setZoom] = useState(1);
@@ -6653,10 +6659,10 @@ function CropModal({ file, onCrop, onCancel }) {
     // Bordure du cercle
     ctx.beginPath();
     ctx.arc(SIZE/2, SIZE/2, SIZE/2 - 1, 0, Math.PI*2);
-    ctx.strokeStyle = "#7c6fcd";
+    ctx.strokeStyle = C.vio;
     ctx.lineWidth = 2;
     ctx.stroke();
-  }, [img, zoom, offset]);
+  }, [img, zoom, offset, C.vio]);
 
   function clampOffset(ox, oy, z) {
     if (!img) return {x:ox, y:oy};
@@ -6695,20 +6701,20 @@ function CropModal({ file, onCrop, onCancel }) {
   if (!file) return null;
   return (
     <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{background:"#fff",borderRadius:20,padding:20,maxWidth:320,width:"90%",textAlign:"center"}}>
-        <div style={{fontWeight:800,fontSize:14,marginBottom:12}}>📷 Recadrer la photo</div>
+      <div style={{background:C.card,borderRadius:20,padding:20,maxWidth:320,width:"90%",textAlign:"center"}}>
+        <div style={{fontWeight:800,fontSize:14,marginBottom:12,color:C.txt}}>📷 {t.cropPhotoTitle||"Recadrer la photo"}</div>
         <canvas ref={canvasRef} width={SIZE} height={SIZE}
           onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp}
           style={{width:SIZE,height:SIZE,borderRadius:"50%",cursor:"grab",touchAction:"none",display:"block",margin:"0 auto"}} />
         <div style={{marginTop:14,display:"flex",alignItems:"center",gap:8,justifyContent:"center"}}>
           <span style={{fontSize:12}}>🔍</span>
           <input type="range" min="1" max="3" step="0.05" value={zoom} onChange={e=>handleZoom(+e.target.value)}
-            style={{flex:1,maxWidth:180,accentColor:"#7c6fcd"}} />
-          <span style={{fontSize:10,color:"#999"}}>{Math.round(zoom*100)}%</span>
+            style={{flex:1,maxWidth:180,accentColor:C.vio}} />
+          <span style={{fontSize:10,color:C.mut}}>{Math.round(zoom*100)}%</span>
         </div>
         <div style={{marginTop:14,display:"flex",gap:10,justifyContent:"center"}}>
-          <button onClick={onCancel} style={{padding:"8px 20px",borderRadius:10,border:"1.5px solid #ddd",background:"#f5f5f5",fontSize:13,fontWeight:600,cursor:"pointer"}}>Annuler</button>
-          <button onClick={handleCrop} style={{padding:"8px 20px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#7c6fcd,#e66fd2)",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>✓ Valider</button>
+          <button onClick={onCancel} style={{padding:"8px 20px",borderRadius:10,border:`1.5px solid ${C.bor}`,background:C.sur,color:C.txt,fontSize:13,fontWeight:600,cursor:"pointer"}}>{t.cropCancel||"Annuler"}</button>
+          <button onClick={handleCrop} style={{padding:"8px 20px",borderRadius:10,border:"none",background:`linear-gradient(135deg,${C.vio},${C.pin})`,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>✓ {t.cropConfirm||"Valider"}</button>
         </div>
       </div>
     </div>
@@ -6720,13 +6726,14 @@ function AvatarPicker({current, onSelect, pool, color}) {
   const [uploading, setUploading] = useState(false);
   const [cropFile, setCropFile] = useState(null);
   const fileRef = useRef(null);
-  const {myUid} = useApp();
+  const {C,t,myUid} = useApp();
+  const swatch = color||C.vio;
 
   function handleFileSelect(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { alert("Photo trop lourde (max 5 Mo)"); return; }
-    if (!file.type.startsWith("image/")) { alert("Fichier non supporté"); return; }
+    if (file.size > 5 * 1024 * 1024) { alert(t.avatarTooLarge||"Photo trop lourde (max 5 Mo)"); return; }
+    if (!file.type.startsWith("image/")) { alert(t.avatarFileNotSupported||"Fichier non supporté"); return; }
     setCropFile(file);
     if (fileRef.current) fileRef.current.value = "";
   }
@@ -6743,7 +6750,7 @@ function AvatarPicker({current, onSelect, pool, color}) {
       if (data?.publicUrl) { onSelect(data.publicUrl); setOpen(false); }
     } catch (err) {
       console.error("[Duvia] Avatar upload error:", err);
-      alert("Erreur lors de l'upload de la photo");
+      alert(t.avatarUploadError||"Erreur lors de l'upload de la photo");
     } finally {
       setUploading(false);
     }
@@ -6755,12 +6762,12 @@ function AvatarPicker({current, onSelect, pool, color}) {
       {open && (
         <>
           <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:498}} />
-          <div style={{position:"absolute",top:50,left:0,zIndex:499,background:"white",border:"1.5px solid #e5e7eb",borderRadius:14,padding:8,boxShadow:"0 8px 24px rgba(0,0,0,.25)",display:"grid",gridTemplateColumns:"repeat(5,44px)",gap:4,width:"auto"}}>
+          <div style={{position:"absolute",top:50,left:0,zIndex:499,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:14,padding:8,boxShadow:"0 8px 24px rgba(0,0,0,.25)",display:"grid",gridTemplateColumns:"repeat(5,44px)",gap:4,width:"auto"}}>
             {pool.map((em,i)=>(
               <div key={i} onClick={()=>{onSelect(em);setOpen(false);}} style={{
                 width:40,height:40,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:24,cursor:"pointer",background:current===em?`${color||"#7c6fcd"}22`:"transparent",
-                border:`1.5px solid ${current===em?color||"#7c6fcd":"transparent"}`,
+                fontSize:24,cursor:"pointer",background:current===em?`${swatch}22`:"transparent",
+                border:`1.5px solid ${current===em?swatch:"transparent"}`,
                 transition:"all .1s",flexShrink:0,
               }}>{em}</div>
             ))}
@@ -6768,8 +6775,8 @@ function AvatarPicker({current, onSelect, pool, color}) {
             <div onClick={()=>!uploading && fileRef.current?.click()} style={{
               width:40,height:40,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",
               fontSize:uploading?14:20,cursor:uploading?"wait":"pointer",
-              background:typeof current==="string"&&current.startsWith("http")?`${color||"#7c6fcd"}22`:"transparent",
-              border:`1.5px solid ${typeof current==="string"&&current.startsWith("http")?color||"#7c6fcd":"#e5e7eb"}`,
+              background:typeof current==="string"&&current.startsWith("http")?`${swatch}22`:"transparent",
+              border:`1.5px solid ${typeof current==="string"&&current.startsWith("http")?swatch:C.bor}`,
               transition:"all .1s",flexShrink:0,
             }}>{uploading?"⏳":"🖼️"}</div>
             {/* Bouton appareil photo (mobile) */}
@@ -6777,7 +6784,7 @@ function AvatarPicker({current, onSelect, pool, color}) {
               width:40,height:40,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",
               fontSize:20,cursor:uploading?"wait":"pointer",
               background:"transparent",
-              border:`1.5px solid #e5e7eb`,
+              border:`1.5px solid ${C.bor}`,
               transition:"all .1s",flexShrink:0,
             }}>📷</div>
             <input ref={fileRef} type="file" accept="image/*" onChange={handleFileSelect} style={{display:"none"}} />
@@ -6800,7 +6807,7 @@ function StepLang({lang,setLang}) {
           <button key={k} onClick={()=>setLang(k)} style={{
             padding:"14px 12px",
             background:lang===k?`${C.vio}18`:C.sur,
-            border:`2px solid ${lang===k?C.vio:C.bor}`,
+            border:`1.5px solid ${lang===k?C.vio:C.bor}`,
             borderRadius:12,
             display:"flex",alignItems:"center",justifyContent:"center",gap:8,
             cursor:"pointer",transition:"all .15s"
@@ -7184,7 +7191,7 @@ function PrefsTab() {
         <div style={{display:"flex",gap:8}}>
           {["€","$","CHF","£"].map(c=>(
             <button key={c} onClick={()=>{ setCurrency(c); savePref("currency",c); }}
-              style={{flex:1,height:44,borderRadius:12,border:`2px solid ${currency===c?C.vio:C.bor}`,background:currency===c?`${C.vio}12`:C.sur,color:currency===c?C.vio:C.txt,fontSize:16,fontWeight:800,cursor:"pointer",transition:"all .15s"}}>
+              style={{flex:1,height:44,borderRadius:12,border:`1.5px solid ${currency===c?C.vio:C.bor}`,background:currency===c?`${C.vio}12`:C.sur,color:currency===c?C.vio:C.txt,fontSize:16,fontWeight:800,cursor:"pointer",transition:"all .15s"}}>
               {c}
             </button>
           ))}
@@ -7197,7 +7204,7 @@ function PrefsTab() {
         <div style={{display:"flex",gap:8}}>
           {[{k:"lundi",l:"Lundi"},{k:"dimanche",l:"Dimanche"}].map(({k,l})=>(
             <button key={k} onClick={()=>{ setWeekStart(k); savePref("week_start",k); }}
-              style={{flex:1,height:44,borderRadius:12,border:`2px solid ${weekStart===k?C.vio:C.bor}`,background:weekStart===k?`${C.vio}12`:C.sur,color:weekStart===k?C.vio:C.txt,fontSize:13,fontWeight:700,cursor:"pointer",transition:"all .15s"}}>
+              style={{flex:1,height:44,borderRadius:12,border:`1.5px solid ${weekStart===k?C.vio:C.bor}`,background:weekStart===k?`${C.vio}12`:C.sur,color:weekStart===k?C.vio:C.txt,fontSize:13,fontWeight:700,cursor:"pointer",transition:"all .15s"}}>
               {l}
             </button>
           ))}
@@ -8219,7 +8226,7 @@ function ConfigTab() {
               ))}
             </div>
             <div style={{display:"flex",gap:10}}>
-              <button onClick={()=>setConfirmDelIdx(null)} style={{flex:1,height:44,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13}}>Annuler</button>
+              <button onClick={()=>setConfirmDelIdx(null)} style={{flex:1,height:44,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13}}>{t.deleteParentCancel||"Annuler"}</button>
               <button onClick={()=>requestDeletion(confirmDelIdx)} style={{flex:2,height:44,background:C.red,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13}}>
                 📨 Envoyer la demande
               </button>
@@ -10487,7 +10494,7 @@ function StepAccess() {
               setPendingActionId(null);
               if(!res.ok) alert("⚠️ Erreur lors de la validation.");
               else { const who = m.displayName || m.email || (m.role==="observer" ? (t.roleObs||"Observateur") : "Parent invité"); addHist(`${who} a rejoint la famille`, "", "family"); }
-            }} style={{padding:"7px 12px",background:C.grn,color:"#fff",borderRadius:8,fontSize:12,fontWeight:800,opacity:pendingActionId===m.userId?0.6:1}}>Valider</button>
+            }} style={{padding:"7px 12px",background:C.grn,color:"#fff",borderRadius:8,fontSize:12,fontWeight:800,opacity:pendingActionId===m.userId?0.6:1}}>{t.validateRequestBtn||"Valider"}</button>
             <button disabled={pendingActionId===m.userId} onClick={async ()=>{
               if(!window.confirm(t.rejectRequestConfirm||"Refuser cette demande ?")) return;
               setPendingActionId(m.userId);
@@ -13562,7 +13569,7 @@ window.addEventListener('message',function(e){
                         style={{padding:"4px 10px",fontSize:11,fontWeight:700,borderRadius:8,
                           background:sp===v?C.vio:C.sur,
                           color:sp===v?"#fff":C.mut,
-                          border:`1px solid ${sp===v?C.vio:C.bor}`,
+                          border:`1.5px solid ${sp===v?C.vio:C.bor}`,
                           cursor:"pointer"}}>{v}%</button>
                     ))}
                   </div>
@@ -14512,7 +14519,7 @@ function AdminTab() {
             <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:6}}>Familles :</div>
             {bmFamilies.map(f => (
               <button key={f.family_id} onClick={() => bmListFamily(f.family_id)}
-                style={{display:"block",width:"100%",textAlign:"left",padding:"8px 10px",marginBottom:4,background:bmFamId===f.family_id?`${C.vio}22`:C.sur,border:`1px solid ${bmFamId===f.family_id?C.vio:C.bor}`,borderRadius:8,fontSize:12,cursor:"pointer",color:C.txt}}>
+                style={{display:"block",width:"100%",textAlign:"left",padding:"8px 10px",marginBottom:4,background:bmFamId===f.family_id?`${C.vio}22`:C.sur,border:`1.5px solid ${bmFamId===f.family_id?C.vio:C.bor}`,borderRadius:8,fontSize:12,cursor:"pointer",color:C.txt}}>
                 <div style={{fontWeight:700}}>{f.family_id}</div>
                 <div style={{fontSize:10,color:C.mut}}>role: {f.role} · status: {f.status}</div>
               </button>
@@ -17780,7 +17787,9 @@ function VaultTab() {
     return (
       <div className="fi">
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-          <button onClick={()=>setPreviewDoc(null)} style={{height:36,padding:"0 14px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:12,borderRadius:8}}>← Retour</button>
+          <button onClick={()=>setPreviewDoc(null)} style={{width:36,height:36,background:"transparent",border:"none",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0}}>
+            <img src={iconBackButton} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} />
+          </button>
           <div style={{flex:1,fontWeight:800,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{previewDoc.name}</div>
         </div>
         <div className="card" style={{marginBottom:12}}>
@@ -17859,7 +17868,9 @@ function VaultTab() {
     return (
       <div className="fi">
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-          <button onClick={()=>{setShowForm(false);setEditDoc(null);}} style={{height:36,padding:"0 14px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:12,borderRadius:8}}>← {t.vaultCancel||"Annuler"}</button>
+          <button onClick={()=>{setShowForm(false);setEditDoc(null);}} style={{width:36,height:36,background:"transparent",border:"none",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0}}>
+            <img src={iconBackButton} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}} />
+          </button>
           <div style={{fontWeight:800,fontSize:14}}>{editDoc ? "✎ "+t.vaultEdit : "➕ "+t.vaultAdd}</div>
         </div>
         <div className="card" style={{display:"flex",flexDirection:"column",gap:14}}>

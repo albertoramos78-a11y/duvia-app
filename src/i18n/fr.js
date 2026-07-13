@@ -764,5 +764,14 @@ const fr = {
     deleteConfirmBtn:"🗑️ Supprimer",
     deleting:"Suppression…",
     weekdaysLabel:"semaine",
+    cropPhotoTitle:"Recadrer la photo",
+    cropCancel:"Annuler",
+    cropConfirm:"Valider",
+    avatarTooLarge:"Photo trop lourde (max 5 Mo)",
+    avatarFileNotSupported:"Fichier non supporté",
+    avatarUploadError:"Erreur lors de l'upload de la photo",
+    legalDocClose:"Fermer",
+    deleteParentCancel:"Annuler",
+    validateRequestBtn:"Valider",
   };
 export default fr;
