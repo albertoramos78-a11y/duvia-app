@@ -617,3 +617,52 @@ export function mergeBackupArrayPreservingContact(currentArr, backupArr) {
     return merged;
   });
 }
+
+// ── Météo calendrier (backlog 18a) ────────────────────────────────────────────
+// Codes météo WMO (Open-Meteo) → {emoji, label}. Sous-ensemble couvrant les
+// codes réellement documentés par Open-Meteo (0-3, 45-48, 51-67, 71-77, 80-99).
+const WMO_WEATHER = {
+  0:  { emoji: "☀️",  label: "Ciel clair" },
+  1:  { emoji: "🌤️", label: "Peu nuageux" },
+  2:  { emoji: "⛅",  label: "Partiellement nuageux" },
+  3:  { emoji: "☁️",  label: "Couvert" },
+  45: { emoji: "🌫️", label: "Brouillard" },
+  48: { emoji: "🌫️", label: "Brouillard givrant" },
+  51: { emoji: "🌦️", label: "Bruine légère" },
+  53: { emoji: "🌦️", label: "Bruine" },
+  55: { emoji: "🌦️", label: "Bruine dense" },
+  56: { emoji: "🌧️", label: "Bruine verglaçante" },
+  57: { emoji: "🌧️", label: "Bruine verglaçante dense" },
+  61: { emoji: "🌧️", label: "Pluie légère" },
+  63: { emoji: "🌧️", label: "Pluie" },
+  65: { emoji: "🌧️", label: "Pluie forte" },
+  66: { emoji: "🌧️", label: "Pluie verglaçante" },
+  67: { emoji: "🌧️", label: "Pluie verglaçante forte" },
+  71: { emoji: "🌨️", label: "Neige légère" },
+  73: { emoji: "🌨️", label: "Neige" },
+  75: { emoji: "🌨️", label: "Neige forte" },
+  77: { emoji: "🌨️", label: "Grains de neige" },
+  80: { emoji: "🌦️", label: "Averses légères" },
+  81: { emoji: "🌧️", label: "Averses" },
+  82: { emoji: "⛈️",  label: "Averses violentes" },
+  85: { emoji: "🌨️", label: "Averses de neige légères" },
+  86: { emoji: "🌨️", label: "Averses de neige" },
+  95: { emoji: "⛈️",  label: "Orage" },
+  96: { emoji: "⛈️",  label: "Orage avec grêle légère" },
+  99: { emoji: "⛈️",  label: "Orage avec grêle forte" },
+};
+
+export function weatherIconFor(code) {
+  return WMO_WEATHER[code] || { emoji: "", label: "" };
+}
+
+// dateStr au format "YYYY-MM-DD" (même format que `ds`/toStr() partout ailleurs
+// dans ce fichier). true si dateStr tombe entre aujourd'hui inclus et
+// aujourd'hui + maxDays exclu (fenêtre de prévision gratuite Open-Meteo : 16
+// jours par défaut).
+export function isWithinForecastWindow(dateStr, maxDays = 16) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr + "T00:00:00");
+  const diffDays = Math.round((target - today) / 86400000);
+  return diffDays >= 0 && diffDays < maxDays;
+}

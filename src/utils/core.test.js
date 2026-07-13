@@ -19,6 +19,7 @@ import {
   containsBadWord, isCleanText,
   upsertMessageById, addReader,
   insertValidatedParent, reconcileOwnParentSlot, placeholderNameFromEmail,
+  weatherIconFor, isWithinForecastWindow,
 } from "./core.js";
 
 // ── B1 — validatePassword (majuscule + caractère spécial désormais requis) ────
@@ -743,4 +744,41 @@ test("mergeBackupArrayPreservingContact : backupArr pas un tableau → renvoie c
 test("mergeBackupArrayPreservingContact : currentArr absent, backupArr avec des éléments → tous passent tels quels", () => {
   const backup = [{ name: "Parent 1", email: "fichier@example.com" }];
   assert.deepStrictEqual(mergeBackupArrayPreservingContact(undefined, backup), backup);
+});
+
+// ── weatherIconFor / isWithinForecastWindow (backlog 18a — météo calendrier) ──
+test("weatherIconFor : code 0 -> ciel clair", () => {
+  const w = weatherIconFor(0);
+  assert.strictEqual(w.emoji, "☀️");
+  assert.strictEqual(w.label, "Ciel clair");
+});
+test("weatherIconFor : code 61 -> pluie légère", () => {
+  const w = weatherIconFor(61);
+  assert.strictEqual(w.emoji, "🌧️");
+});
+test("weatherIconFor : code inconnu -> emoji et label vides", () => {
+  const w = weatherIconFor(999);
+  assert.strictEqual(w.emoji, "");
+  assert.strictEqual(w.label, "");
+});
+
+function daysFromNow(n) {
+  const d = new Date(Date.now() + n * 86400000);
+  return toStr(d);
+}
+test("isWithinForecastWindow : aujourd'hui -> true", () => {
+  assert.strictEqual(isWithinForecastWindow(daysFromNow(0)), true);
+});
+test("isWithinForecastWindow : hier -> false", () => {
+  assert.strictEqual(isWithinForecastWindow(daysFromNow(-1)), false);
+});
+test("isWithinForecastWindow : dans 15 jours (dans la fenêtre de 16) -> true", () => {
+  assert.strictEqual(isWithinForecastWindow(daysFromNow(15)), true);
+});
+test("isWithinForecastWindow : dans 20 jours (au-delà de 16) -> false", () => {
+  assert.strictEqual(isWithinForecastWindow(daysFromNow(20)), false);
+});
+test("isWithinForecastWindow : fenêtre personnalisée à 3 jours", () => {
+  assert.strictEqual(isWithinForecastWindow(daysFromNow(2), 3), true);
+  assert.strictEqual(isWithinForecastWindow(daysFromNow(4), 3), false);
 });
