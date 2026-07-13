@@ -2988,12 +2988,6 @@ function InstallAppModal({C,t,onClose}) {
 }
 
 export default function App() {
-  // 🔧 TEMPORAIRE — test manuel du filet de sécurité (Error Boundary), à
-  // retirer juste après. Ne se déclenche que sur ?crashtest=1 dans l'URL,
-  // donc aucun risque pour les utilisateurs normaux.
-  if (typeof window !== "undefined" && window.location.search.includes("crashtest")) {
-    throw new Error("Test du filet de sécurité (déclenché volontairement)");
-  }
   // ── Persistent state (survives refresh) ──────────────────────────────────
   const [cfg,setCfg]     = useLocalStorage("duvia_cfg", makeCfg);
   const familySync = useFamilySync(cfg, setCfg);
