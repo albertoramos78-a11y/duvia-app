@@ -20,7 +20,7 @@ import { useHistory } from "./hooks/useHistory";
 import { usePush } from "./hooks/usePush";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION, APP_VERSION } from './config.js';
-import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact } from './utils/core.js';
+import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact, weatherIconFor, isWithinForecastWindow } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, LICORNE, BRAND, BRAND_GRADIENT, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
 
@@ -586,6 +586,29 @@ function hasMultipleZones(country) {
 // In-memory cache: key → { schoolHols, publicHols, ts }
 const OH_CACHE = {};
 function ohCacheKey(country, zone, year) { return `${country}|${zone||""}|${year}`; }
+
+// In-memory cache: key → { [dateStr]: {code, tempMax, tempMin} }
+const WEATHER_CACHE = {};
+function weatherCacheKey(lat, lon) { return `${Number(lat).toFixed(2)}|${Number(lon).toFixed(2)}`; }
+
+async function fetchWeatherForecast(lat, lon) {
+  const key = weatherCacheKey(lat, lon);
+  if (WEATHER_CACHE[key]) return WEATHER_CACHE[key];
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=16`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("weather fetch failed");
+  const data = await res.json();
+  const days = {};
+  (data?.daily?.time || []).forEach((dateStr, idx) => {
+    days[dateStr] = {
+      code: data.daily.weathercode[idx],
+      tempMax: data.daily.temperature_2m_max[idx],
+      tempMin: data.daily.temperature_2m_min[idx],
+    };
+  });
+  WEATHER_CACHE[key] = days;
+  return days;
+}
 
 async function fetchOHSchoolHols(country, zone, year) {
   // zone is a full subdivisionCode e.g. "FR-IDF", "DE-BY"
@@ -3875,6 +3898,20 @@ export default function App() {
   }, [cfg.country, cfg.subdivisionCode, cfg.zone]);
   // ─────────────────────────────────────────────────────────────────────────
 
+  // ─── Météo (Open-Meteo) — une prévision par parent ayant une ville ────────
+  const [weatherData, setWeatherData] = useState({});
+  const p0lat = cfg.parents?.[0]?.lat, p0lon = cfg.parents?.[0]?.lon;
+  const p1lat = cfg.parents?.[1]?.lat, p1lon = cfg.parents?.[1]?.lon;
+  useEffect(() => {
+    (cfg.parents || []).forEach((p, idx) => {
+      if (p?.lat == null || p?.lon == null) return;
+      fetchWeatherForecast(p.lat, p.lon)
+        .then(days => setWeatherData(w => ({ ...w, [idx]: days })))
+        .catch(() => {});
+    });
+  }, [p0lat, p0lon, p1lat, p1lon]);
+  // ─────────────────────────────────────────────────────────────────────────
+
   const C = useMemo(() =>
     licorneActive ? LICORNE : videoActive ? VIDEO : wcActive ? WC : rgActive ? RG :
     summerActive ? SUMMER : themeMode==="sombre" ? DARK :
@@ -4480,7 +4517,7 @@ export default function App() {
     cfg, setCfg, sub, setSub, user, users, setUsers,
     prem, perms, st, days, isAdm, isObs, isChild, unread, adminVerified,
     addHist, pushNotif, updateCal, onUpgrade, handleObsJoin,
-    apiData, apiLoading,
+    apiData, apiLoading, weatherData,
     setMenuTab, setShowMenu,
     msgs, sendCloudMessage, markCloudMessageRead, reactToCloudMessage, deleteCloudMessage, myUid,
     hiddenConvs, hideConversation,
@@ -10991,7 +11028,7 @@ function getSpecialEvents(date, cfg) {
 // CALENDAR TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
-  const {C,t,cfg,setCfg,updateCal: ctxUpdateCal,apiData,setMenuTab,setConfigStep,prem,perms,onUpgrade,isObs,isChild,user,sub,addHist,pushNotif,custodyShadow,familySync} = useApp();
+  const {C,t,cfg,setCfg,updateCal: ctxUpdateCal,apiData,weatherData,setMenuTab,setConfigStep,prem,perms,onUpgrade,isObs,isChild,user,sub,addHist,pushNotif,custodyShadow,familySync} = useApp();
   const premFull = isPremFull(sub); // PDF calendrier réservé full premium uniquement
   const editBlocked = !canEdit;
   const updateCal = updateCalProp !== undefined ? updateCalProp : ctxUpdateCal;
@@ -11486,6 +11523,23 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
           inlineDs={inlineDs} setInlineDs={setInlineDs}
           setFullDs={setFullDs}
         />
+        {(() => {
+          const todayStr = toStr(new Date());
+          if (!isWithinForecastWindow(todayStr)) return null;
+          const todayGuard = resolveGuard(todayStr, cfg, activeChildId);
+          const pIdx = todayGuard?.parentIdx;
+          const wx = (pIdx >= 0 && weatherData?.[pIdx]) ? weatherData[pIdx][todayStr] : null;
+          if (!wx) return null;
+          const { emoji, label } = weatherIconFor(wx.code);
+          const parentName = cfg.parents[pIdx]?.name?.trim() || `${t.parentFallback||"Parent"} ${pIdx+1}`;
+          const todayLabel = (t.weatherTodayAt||"Aujourd'hui chez {name}").replace("{name}", parentName);
+          return (
+            <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",marginTop:8,background:C.sur,borderRadius:12,fontSize:12,color:C.txt}}>
+              <span style={{fontSize:20}}>{emoji}</span>
+              <span>{todayLabel} : <strong>{Math.round(wx.tempMax)}°C</strong> — {label}</span>
+            </div>
+          );
+        })()}
         </div>
       )}
       {calView==="list" && (
