@@ -13,20 +13,21 @@ Backlog item 8a. Décidé par l'utilisateur le 2026-07-13 : « quelqu'un qui veu
 
 Deux options envisagées :
 - **(A) Modifier `delete-account`** pour qu'elle écrive elle-même l'entrée. Rejetée : cette fonction a déjà été prise en flagrant délit de dérive dashboard/dépôt (audit sécurité 2026-07-08) — la modifier impose de faire coller son contenu réel par l'utilisateur avant tout changement, puis un redéploiement manuel.
-- **(B) Un trigger PostgreSQL sur `auth.users`** — retenue. Migration SQL pure, committée dans le repo comme unique source de vérité (aucun risque de dérive, contrairement à une Edge Function). Se déclenche uniquement quand un compte est réellement supprimé, quel que soit le chemin de code qui le déclenche (pas seulement `delete-account`) — protège aussi contre un futur autre mécanisme de suppression qu'on n'aurait pas prévu.
+- **(B) Un trigger PostgreSQL** — retenue. Migration SQL pure, committée dans le repo comme unique source de vérité (aucun risque de dérive, contrairement à une Edge Function).
 
-## Mécanique du trigger
+**⚠️ Révision post-test live (2026-07-13) :** la première version de cette migration déclenchait le trigger sur `auth.users` (`BEFORE DELETE`). Testée en live avec 2 comptes réels, elle n'a produit aucune entrée. Diagnostic (journal temporaire inséré dans la fonction) : le trigger se déclenchait bien, mais ne trouvait plus aucune ligne `family_members` à lire. Cause réelle : l'Edge Function `delete-account` supprime la ligne `family_members` en **étape 1** de son exécution, et ne supprime `auth.users` qu'en **étape 5**, tout à la fin — au moment où le trigger `auth.users` se déclenche, la ligne `family_members` est déjà partie depuis longtemps. Design corrigé ci-dessous.
 
-Nouvelle migration `supabase/migrations/0034_log_account_deletion_history.sql`, à exécuter par l'utilisateur dans le SQL Editor Supabase (aucun accès direct de l'assistant à la base — voir CLAUDE.md).
+## Mécanique du trigger (design corrigé)
 
-- Une fonction `SECURITY DEFINER` (`set search_path = public`, même convention que `set_member_identity` en 0020) déclenchée par un trigger **`BEFORE DELETE ON auth.users FOR EACH ROW`**.
-- `BEFORE` plutôt que `AFTER` : garantit que les lignes `family_members` de ce compte sont encore intactes au moment de la lecture, sans dépendre de l'ordre exact d'une éventuelle suppression en cascade.
-- Pour chaque ligne `family_members` où `user_id = OLD.id` :
-  1. Compter les autres membres `status = 'active'` de la même famille (`family_id`, `user_id <> OLD.id`).
-  2. Si ce compte n'est **pas** le dernier membre actif → insérer une entrée dans `history`.
-  3. Si c'était le dernier membre actif → ne rien insérer (décidé : personne ne resterait pour la lire).
+Migration `supabase/migrations/0034_log_account_deletion_history.sql`, à exécuter par l'utilisateur dans le SQL Editor Supabase (aucun accès direct de l'assistant à la base — voir CLAUDE.md).
 
-Ne rentre jamais en conflit avec les entrées déjà loggées côté client pour un départ volontaire ou un retrait (spec précédent) : ces flux-là ne suppriment jamais la ligne `auth.users`, seulement la ligne `family_members` — le trigger ne se déclenche donc que sur le cas réellement nouveau (suppression de compte).
+- Une fonction `SECURITY DEFINER` (`set search_path = public`, même convention que `set_member_identity` en 0020) déclenchée par un trigger **`AFTER DELETE ON public.family_members FOR EACH ROW`** — pas `auth.users`.
+- Pourquoi ça ne double-logge jamais les départs volontaires/retraits (spec précédent) : vérifié en lisant le code réel de `leave_family()` et `remove_family_member()` (RPC `SECURITY DEFINER`, via `pg_get_functiondef`) — ces deux fonctions ne font **jamais** de `DELETE` sur `family_members`, seulement `UPDATE ... SET status = 'removed'`. Un `DELETE` sur cette table ne peut donc arriver aujourd'hui que via l'appel explicite `.delete()` de `delete-account` — le trigger ne se déclenche donc que sur le cas réellement visé.
+- Logique, à partir de la ligne supprimée (`OLD`) :
+  1. Si `OLD.status` n'était pas `'active'` (déjà `'removed'` avant la suppression du compte, ex. quelqu'un qui avait quitté puis supprime son compte plus tard) → ne rien faire, ce départ a déjà été loggé en son temps.
+  2. Sinon, compter les membres `status = 'active'` restants de la même famille (`family_id = OLD.family_id`).
+  3. Si au moins un reste → insérer une entrée dans `history`.
+  4. Si c'était le dernier membre actif → ne rien insérer (décidé : personne ne resterait pour la lire).
 
 ## Forme de l'entrée
 
