@@ -11534,7 +11534,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
         <div style={{display:"flex",gap:8,overflowX:"auto",padding:"8px 4px",marginBottom:10}}>
           {myForecast.map((d,idx) => {
             const { emoji } = weatherIconFor(d.code);
-            const dowLabel = idx===0 ? (t.today||"Auj.") : new Date(d.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"short"});
+            const dowLabel = idx===0 ? (t.today||"Auj.") : new Date(d.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"short",day:"numeric"});
             return (
               <div key={d.date} style={{flexShrink:0,minWidth:56,textAlign:"center",padding:"6px 4px",borderRadius:10,background:C.sur}}>
                 <div style={{fontSize:10,fontWeight:700,color:C.mut,textTransform:"capitalize"}}>{dowLabel}</div>
