@@ -11496,7 +11496,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
           <img src={iconNavRight} alt="" style={{width:44,height:44,objectFit:"contain"}} />
         </button>
       </div>
-      <div style={{marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
+      <div style={{marginBottom:12,display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
         <div>
           <button onClick={()=>setShowLegend(v=>!v)} style={{padding:"1px 10px",height:24,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:20,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
             <span>🏷️ {t.calLegend||"Légende"}</span>
