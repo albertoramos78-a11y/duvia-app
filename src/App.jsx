@@ -6716,6 +6716,89 @@ function CropModal({ file, onCrop, onCancel }) {
   );
 }
 
+function ParentCityField({parent, isMine, C, t, onSelect}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+
+  async function doSearch() {
+    const q = query.trim();
+    if (!q) return;
+    setSearching(true);
+    setResults([]);
+    try {
+      const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=fr`);
+      const data = await res.json();
+      setResults(data?.results || []);
+    } catch {
+      setResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function pick(r) {
+    const label = [r.name, r.admin1, r.country].filter(Boolean).join(", ");
+    onSelect(label, r.latitude, r.longitude);
+    setShowSearch(false); setQuery(""); setResults([]);
+  }
+
+  function useMyLocation() {
+    if (!navigator.geolocation) return;
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { onSelect(t.myLocation||"📍 Ma position", pos.coords.latitude, pos.coords.longitude); setLocating(false); },
+      () => { setLocating(false); },
+      { timeout: 10000 }
+    );
+  }
+
+  if (!isMine) {
+    return <div style={{fontSize:13,color:parent.city?C.txt:C.mut}}>{parent.city || (t.noCitySet||"Non renseignée")}</div>;
+  }
+
+  return (
+    <div>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <div style={{fontSize:13,color:parent.city?C.txt:C.mut}}>{parent.city || (t.noCitySet||"Non renseignée")}</div>
+        <button type="button" onClick={useMyLocation} disabled={locating}
+          style={{height:26,padding:"0 10px",background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:16,fontSize:11,fontWeight:700,color:C.txt,cursor:locating?"wait":"pointer"}}>
+          {locating ? "…" : `📍 ${t.useMyLocation||"Utiliser ma position"}`}
+        </button>
+        <button type="button" onClick={()=>setShowSearch(v=>!v)}
+          style={{height:26,padding:"0 10px",background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:16,fontSize:11,fontWeight:700,color:C.txt,cursor:"pointer"}}>
+          🔍 {t.searchCity||"Rechercher"}
+        </button>
+      </div>
+      {showSearch && (
+        <div style={{marginTop:8}}>
+          <div style={{display:"flex",gap:6}}>
+            <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doSearch()}
+              placeholder={t.cityPlaceholder||"Nom de la ville"}
+              style={{flex:1,height:32,padding:"0 10px",borderRadius:8,border:`1.5px solid ${C.bor}`,background:C.inp,color:C.txt,fontSize:12,boxSizing:"border-box"}} />
+            <button type="button" onClick={doSearch} disabled={searching}
+              style={{height:32,padding:"0 12px",borderRadius:8,border:"none",background:C.vio,color:"#fff",fontSize:12,fontWeight:700,cursor:searching?"wait":"pointer"}}>
+              {searching ? "…" : (t.searchBtn||"OK")}
+            </button>
+          </div>
+          {results.length > 0 && (
+            <div style={{marginTop:6,display:"flex",flexDirection:"column",gap:4}}>
+              {results.map((r,idx)=>(
+                <button key={idx} type="button" onClick={()=>pick(r)}
+                  style={{textAlign:"left",padding:"6px 10px",borderRadius:8,border:`1px solid ${C.bor}`,background:C.card,color:C.txt,fontSize:12,cursor:"pointer"}}>
+                  {[r.name, r.admin1, r.country].filter(Boolean).join(", ")}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AvatarPicker({current, onSelect, pool, color}) {
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -8726,6 +8809,13 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
                 }}
               />
             </div>
+          </div>
+
+          {/* Row 4 : Ville (météo calendrier) */}
+          <div style={{marginTop:12,...(isMine?{}:lockStyle)}}>
+            <span style={lbl}>🏙️ {t.cityLabel||"Ville"} <span style={{color:C.mut,fontWeight:400,fontSize:10}}>({t.weatherHint||"pour la météo du calendrier"})</span></span>
+            <ParentCityField parent={p} isMine={isMine} C={C} t={t}
+              onSelect={(city,lat,lon)=>{ setParent(i,"city",city); setParent(i,"lat",lat); setParent(i,"lon",lon); }} />
           </div>
         </div>
       );})}

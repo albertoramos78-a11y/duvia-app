@@ -774,5 +774,15 @@ const fr = {
     deleteParentCancel:"Annuler",
     validateRequestBtn:"Valider",
     tabChildInfo:"Enfant",
+    cityLabel:"Ville",
+    weatherHint:"pour la météo du calendrier",
+    noCitySet:"Non renseignée",
+    useMyLocation:"Utiliser ma position",
+    searchCity:"Rechercher",
+    cityPlaceholder:"Nom de la ville",
+    searchBtn:"OK",
+    myLocation:"📍 Ma position",
+    weatherTodayAt:"Aujourd'hui chez {name}",
+    parentFallback:"Parent",
   };
 export default fr;
