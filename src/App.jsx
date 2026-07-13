@@ -18,9 +18,10 @@ import { useIdLinks } from "./hooks/useIdLinks";
 import { useExpenses } from "./hooks/useExpenses";
 import { useHistory } from "./hooks/useHistory";
 import { usePush } from "./hooks/usePush";
+import { getMyLocation, setMyLocation, getFamilyWeather } from "./services/supabase/locationService";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION, APP_VERSION } from './config.js';
-import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact, weatherIconFor, isWithinForecastWindow } from './utils/core.js';
+import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact, weatherIconFor } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, LICORNE, BRAND, BRAND_GRADIENT, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
 
@@ -587,28 +588,10 @@ function hasMultipleZones(country) {
 const OH_CACHE = {};
 function ohCacheKey(country, zone, year) { return `${country}|${zone||""}|${year}`; }
 
-// In-memory cache: key → { [dateStr]: {code, tempMax, tempMin} }
+// In-memory cache: key → {code, tempMax, tempMin} — jamais de coordonnées ici,
+// seul le résumé météo dérivé (via l'Edge Function get-family-weather) l'est.
 const WEATHER_CACHE = {};
-function weatherCacheKey(lat, lon) { return `${Number(lat).toFixed(2)}|${Number(lon).toFixed(2)}`; }
-
-async function fetchWeatherForecast(lat, lon) {
-  const key = weatherCacheKey(lat, lon);
-  if (WEATHER_CACHE[key]) return WEATHER_CACHE[key];
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=16`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("weather fetch failed");
-  const data = await res.json();
-  const days = {};
-  (data?.daily?.time || []).forEach((dateStr, idx) => {
-    days[dateStr] = {
-      code: data.daily.weathercode[idx],
-      tempMax: data.daily.temperature_2m_max[idx],
-      tempMin: data.daily.temperature_2m_min[idx],
-    };
-  });
-  WEATHER_CACHE[key] = days;
-  return days;
-}
+function weatherCacheKey(targetUserId, dateStr) { return `${targetUserId}|${dateStr}`; }
 
 async function fetchOHSchoolHols(country, zone, year) {
   // zone is a full subdivisionCode e.g. "FR-IDF", "DE-BY"
@@ -3898,20 +3881,6 @@ export default function App() {
   }, [cfg.country, cfg.subdivisionCode, cfg.zone]);
   // ─────────────────────────────────────────────────────────────────────────
 
-  // ─── Météo (Open-Meteo) — une prévision par parent ayant une ville ────────
-  const [weatherData, setWeatherData] = useState({});
-  const p0lat = cfg.parents?.[0]?.lat, p0lon = cfg.parents?.[0]?.lon;
-  const p1lat = cfg.parents?.[1]?.lat, p1lon = cfg.parents?.[1]?.lon;
-  useEffect(() => {
-    (cfg.parents || []).forEach((p, idx) => {
-      if (p?.lat == null || p?.lon == null) return;
-      fetchWeatherForecast(p.lat, p.lon)
-        .then(days => setWeatherData(w => ({ ...w, [idx]: days })))
-        .catch(() => {});
-    });
-  }, [p0lat, p0lon, p1lat, p1lon]);
-  // ─────────────────────────────────────────────────────────────────────────
-
   const C = useMemo(() =>
     licorneActive ? LICORNE : videoActive ? VIDEO : wcActive ? WC : rgActive ? RG :
     summerActive ? SUMMER : themeMode==="sombre" ? DARK :
@@ -4517,7 +4486,7 @@ export default function App() {
     cfg, setCfg, sub, setSub, user, users, setUsers,
     prem, perms, st, days, isAdm, isObs, isChild, unread, adminVerified,
     addHist, pushNotif, updateCal, onUpgrade, handleObsJoin,
-    apiData, apiLoading, weatherData,
+    apiData, apiLoading,
     setMenuTab, setShowMenu,
     msgs, sendCloudMessage, markCloudMessageRead, reactToCloudMessage, deleteCloudMessage, myUid,
     hiddenConvs, hideConversation,
@@ -6753,12 +6722,30 @@ function CropModal({ file, onCrop, onCancel }) {
   );
 }
 
-function ParentCityField({parent, isMine, C, t, onSelect}) {
+function ParentCityField({isMine, C, t, familyId}) {
+  const [location, setLocation] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [locating, setLocating] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+
+  useEffect(() => {
+    if (!isMine) return;
+    getMyLocation().then(loc => { setLocation(loc); setLoading(false); }).catch(() => setLoading(false));
+  }, [isMine]);
+
+  if (!isMine) return null; // 🔒 jamais affiché pour un autre parent — voir spec vie privée
+
+  async function save(city, lat, lon) {
+    try {
+      await setMyLocation(familyId, city, lat, lon);
+      setLocation({ city, lat, lon });
+    } catch (e) {
+      console.error("[Duvia] setMyLocation error:", e);
+    }
+  }
 
   async function doSearch() {
     const q = query.trim();
@@ -6778,7 +6765,7 @@ function ParentCityField({parent, isMine, C, t, onSelect}) {
 
   function pick(r) {
     const label = [r.name, r.admin1, r.country].filter(Boolean).join(", ");
-    onSelect(label, r.latitude, r.longitude);
+    save(label, r.latitude, r.longitude);
     setShowSearch(false); setQuery(""); setResults([]);
   }
 
@@ -6786,20 +6773,18 @@ function ParentCityField({parent, isMine, C, t, onSelect}) {
     if (!navigator.geolocation) return;
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => { onSelect(t.myLocation||"📍 Ma position", pos.coords.latitude, pos.coords.longitude); setLocating(false); },
+      (pos) => { save(t.myLocation||"📍 Ma position", pos.coords.latitude, pos.coords.longitude); setLocating(false); },
       () => { setLocating(false); },
       { timeout: 10000 }
     );
   }
 
-  if (!isMine) {
-    return <div style={{fontSize:13,color:parent.city?C.txt:C.mut}}>{parent.city || (t.noCitySet||"Non renseignée")}</div>;
-  }
+  if (loading) return null;
 
   return (
     <div>
       <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-        <div style={{fontSize:13,color:parent.city?C.txt:C.mut}}>{parent.city || (t.noCitySet||"Non renseignée")}</div>
+        <div style={{fontSize:13,color:location?.city?C.txt:C.mut}}>{location?.city || (t.noCitySet||"Non renseignée")}</div>
         <button type="button" onClick={useMyLocation} disabled={locating}
           style={{height:26,padding:"0 10px",background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:16,fontSize:11,fontWeight:700,color:C.txt,cursor:locating?"wait":"pointer"}}>
           {locating ? "…" : `📍 ${t.useMyLocation||"Utiliser ma position"}`}
@@ -8851,8 +8836,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           {/* Row 4 : Ville (météo calendrier) */}
           <div style={{marginTop:12,...(isMine?{}:lockStyle)}}>
             <span style={lbl}>🏙️ {t.cityLabel||"Ville"} <span style={{color:C.mut,fontWeight:400,fontSize:10}}>({t.weatherHint||"pour la météo du calendrier"})</span></span>
-            <ParentCityField parent={p} isMine={isMine} C={C} t={t}
-              onSelect={(city,lat,lon)=>{ setParent(i,"city",city); setParent(i,"lat",lat); setParent(i,"lon",lon); }} />
+            {isMine && <ParentCityField isMine={isMine} C={C} t={t} familyId={familySync?.familyId} />}
           </div>
         </div>
       );})}
@@ -11028,7 +11012,7 @@ function getSpecialEvents(date, cfg) {
 // CALENDAR TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
-  const {C,t,cfg,setCfg,updateCal: ctxUpdateCal,apiData,weatherData,setMenuTab,setConfigStep,prem,perms,onUpgrade,isObs,isChild,user,sub,addHist,pushNotif,custodyShadow,familySync} = useApp();
+  const {C,t,cfg,setCfg,updateCal: ctxUpdateCal,apiData,setMenuTab,setConfigStep,prem,perms,onUpgrade,isObs,isChild,user,sub,addHist,pushNotif,custodyShadow,familySync} = useApp();
   const premFull = isPremFull(sub); // PDF calendrier réservé full premium uniquement
   const editBlocked = !canEdit;
   const updateCal = updateCalProp !== undefined ? updateCalProp : ctxUpdateCal;
@@ -11059,6 +11043,29 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
   const multiChild = !cfg.sameGuardAll && cfg.children?.length > 1;
   const [selChildId,setSelChildId]=useState(()=>cfg.children?.[0]?.id||null);
   const activeChildId = multiChild ? selChildId : (cfg.children?.[0]?.id||null);
+
+  // ─── Météo (get-family-weather) — résumé du jour, pour le parent gardien ──
+  // 🔒 Aucune coordonnée ne transite jamais côté client : seul un identifiant
+  // (target_user_id) part vers l'Edge Function, qui renvoie uniquement un
+  // résumé météo. Voir docs/superpowers/specs/2026-07-13-weather-location-
+  // privacy-design.md.
+  const [todayWeather, setTodayWeather] = useState(null);
+  useEffect(() => {
+    const todayStr = toStr(new Date());
+    const todayGuard = resolveGuard(todayStr, cfg, activeChildId);
+    const pIdx = todayGuard?.parentIdx;
+    const targetUserId = (pIdx >= 0) ? cfg.parents?.[pIdx]?.userId : null;
+    const familyId = familySync?.familyId;
+    if (!targetUserId || !familyId) { setTodayWeather(null); return; }
+    const cacheKey = weatherCacheKey(targetUserId, todayStr);
+    if (WEATHER_CACHE[cacheKey]) { setTodayWeather({ ...WEATHER_CACHE[cacheKey], parentIdx: pIdx }); return; }
+    getFamilyWeather(familyId, targetUserId, todayStr).then(result => {
+      if (!result) return;
+      WEATHER_CACHE[cacheKey] = result;
+      setTodayWeather({ ...result, parentIdx: pIdx });
+    }).catch(() => {});
+  }, [cfg, activeChildId, familySync?.familyId]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   // ── Légende : ne montrer que ce qui apparaît réellement ce mois-ci ──────────
   // (au lieu de toujours tout lister, même les jours fériés/parents/observateurs
@@ -11523,20 +11530,14 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
           inlineDs={inlineDs} setInlineDs={setInlineDs}
           setFullDs={setFullDs}
         />
-        {(() => {
-          const todayStr = toStr(new Date());
-          if (!isWithinForecastWindow(todayStr)) return null;
-          const todayGuard = resolveGuard(todayStr, cfg, activeChildId);
-          const pIdx = todayGuard?.parentIdx;
-          const wx = (pIdx >= 0 && weatherData?.[pIdx]) ? weatherData[pIdx][todayStr] : null;
-          if (!wx) return null;
-          const { emoji, label } = weatherIconFor(wx.code);
-          const parentName = cfg.parents[pIdx]?.name?.trim() || `${t.parentFallback||"Parent"} ${pIdx+1}`;
+        {todayWeather && (() => {
+          const { emoji, label } = weatherIconFor(todayWeather.code);
+          const parentName = cfg.parents[todayWeather.parentIdx]?.name?.trim() || `${t.parentFallback||"Parent"} ${todayWeather.parentIdx+1}`;
           const todayLabel = (t.weatherTodayAt||"Aujourd'hui chez {name}").replace("{name}", parentName);
           return (
             <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",marginTop:8,background:C.sur,borderRadius:12,fontSize:12,color:C.txt}}>
               <span style={{fontSize:20}}>{emoji}</span>
-              <span>{todayLabel} : <strong>{Math.round(wx.tempMax)}°C</strong> — {label}</span>
+              <span>{todayLabel} : <strong>{Math.round(todayWeather.tempMax)}°C</strong> — {label}</span>
             </div>
           );
         })()}
