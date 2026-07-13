@@ -773,5 +773,6 @@ const fr = {
     legalDocClose:"Fermer",
     deleteParentCancel:"Annuler",
     validateRequestBtn:"Valider",
+    tabChildInfo:"Enfant",
   };
 export default fr;
