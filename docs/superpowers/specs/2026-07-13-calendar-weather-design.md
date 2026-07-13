@@ -35,12 +35,11 @@ Même architecture que le cache jours fériés déjà en place (`OH_CACHE`, `ohC
 - Un `useEffect` dans `App()` (miroir de celui des jours fériés, `App.jsx:~3854-3875`) qui déclenche un fetch quand les coordonnées d'un des deux parents changent, stocke le résultat dans un state `weatherData`/`weatherLoading`.
 - Un seul appel par (parent, jour) — pas de rafraîchissement à chaque ouverture du calendrier dans la même session.
 
-## Affichage
+## Affichage (révisé pendant le plan — v1 volontairement restreinte)
 
-- Pour chaque jour du calendrier (vue grille mensuelle **et** vue liste) qui tombe dans les 16 prochains jours **et** dont le parent gardien a une localisation enregistrée : une icône météo + température (max du jour) s'affiche sur la cellule.
-- Au-delà de 16 jours, ou si le parent gardien n'a pas de localisation enregistrée : rien ne s'affiche (pas d'icône vide ni de message d'erreur — silence, comme le reste du calendrier gère déjà l'absence de données).
-- Le jour gardé par un observateur (pas de localisation stockée pour ce rôle, hors scope) : rien ne s'affiche non plus.
-- Détail au clic sur un jour (`EditDay`/`InlinePicker`) : ligne supplémentaire avec la météo si disponible, un peu plus de détail (min/max, description textuelle du code WMO).
+Les cases de la vue grille mensuelle (`MonthGridCalendar`) sont déjà petites et chargées (numéro, icône anniversaire, icône spéciale, pastille, badge de changement de garde, triangle vacances) — y ajouter une icône météo par case serait illisible. **Décision** : pas d'icône par case. À la place, une seule ligne résumé sous la grille : *"Aujourd'hui : ☀️ 18°C chez [nom du parent gardien]"*, calculée à partir de `resolveGuard()` pour la date du jour. Affichée seulement si le parent gardien du jour a une localisation enregistrée (silence sinon, comme le reste du calendrier gère déjà l'absence de données).
+
+La vue liste ("détaillée") n'est pas touchée dans cette v1 — reste un point de suivi séparé si le besoin se confirme à l'usage.
 
 ## Table de correspondance WMO → emoji
 
