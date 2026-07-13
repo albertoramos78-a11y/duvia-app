@@ -4814,6 +4814,7 @@ export default function App() {
                   <button onClick={async()=>{
                     if(!window.confirm(t.obsLeaveFamilyConfirm||"Quitter la famille ? Vous n'aurez plus accès au calendrier ni à la messagerie.")) return;
                     await familySync?.leaveFamily?.();
+                    addHist(`${user?.name||"Cet observateur"} a quitté la famille`, "", "family");
                     setShowMenu(false);
                     handleSetUser(null); setTab(0);
                   }} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.red,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
@@ -5075,7 +5076,7 @@ export default function App() {
                 <div style={{fontSize:44,marginBottom:12}}>🏚️</div>
                 <div style={{fontWeight:900,fontSize:17,color:C.txt,marginBottom:8}}>{t.familyDisbanded||"Cette famille n'a plus de parent actif."}</div>
                 <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:20}}>{t.familyDisbandedObs||"Votre accès est maintenu mais aucun parent ne gère plus cette famille. Vous pouvez quitter."}</div>
-                <button onClick={async()=>{if(!window.confirm(t.leaveFamilyConfirmSimple||"Quitter la famille ?")) return; await familySync?.leaveFamily?.(); handleSetUser(null); setTab(0);}}
+                <button onClick={async()=>{if(!window.confirm(t.leaveFamilyConfirmSimple||"Quitter la famille ?")) return; await familySync?.leaveFamily?.(); addHist(`${user?.name||"Cet observateur"} a quitté la famille`, "", "family"); handleSetUser(null); setTab(0);}}
                   style={{height:44,padding:"0 24px",background:C.red,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:14,cursor:"pointer"}}>
                   🚪 {t.obsLeaveFamily||"Quitter la famille"}
                 </button>
@@ -8092,7 +8093,11 @@ function ConfigTab() {
     }
 
     const res = await familySync?.leaveFamily?.();
-    if(res?.ok){ duviaReload(); }
+    if(res?.ok){
+      const who = cfg.parents?.[user?.parentIdx]?.name || user?.name || "Ce parent";
+      addHist(`${who} a quitté la famille`, "", "family");
+      duviaReload();
+    }
     else { alert("⚠️ Impossible de quitter la famille.\n\nDétail : "+(res?.error||"inconnu")+"\n\n(Si l'erreur mentionne « leave_family », la migration SQL 0018 n'est pas encore exécutée sur Supabase.)"); }
   }
 
@@ -8113,6 +8118,7 @@ function ConfigTab() {
     if(!window.confirm((t.retirerInviteConfirm||"Retirer {name} de la famille ?\n\nIl repartira sur une famille personnelle vierge. Vous conservez la famille et son code.").replace("{name}",p.name||t.guestLabel||"l'invité"))) return;
     const res = await familySync?.removeFamilyMember?.(p.userId);
     if(res?.ok){
+      addHist(`${p.name||t.guestLabel||"L'invité"} a été retiré de la famille`, "", "family");
       setCfg(c=>({...c, parents:c.parents.filter((_,j)=>j!==i)}));
     } else {
       alert("⚠️ Impossible de retirer l'invité.\n\nDétail : "+(res?.error||"inconnu")+"\n\n(Si l'erreur mentionne « remove_family_member », la migration SQL 0017 n'est pas encore exécutée sur Supabase.)");
@@ -8146,6 +8152,7 @@ function ConfigTab() {
     if(parent.userId){
       familySync?.removeFamilyMember?.(parent.userId).then(res=>{
         if(res && !res.ok) console.warn("[Duvia] removeFamilyMember:", res.error);
+        else addHist(`${parentName} a été retiré de la famille`, "", "family");
       });
     } else {
       console.warn("[Duvia] executeDeletion: pas de userId sur le parent — retrait serveur impossible.");
@@ -8398,7 +8405,7 @@ function FamilySyncCard() {
 
 
 function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,removeChild,onShowEmailSim,quitterFamille,retirerInvite}) {
-  const {C,t,cfg,setCfg,prem,perms,onUpgrade,user,sub,familySync,isChild,isObs} = useApp();
+  const {C,t,cfg,setCfg,prem,perms,onUpgrade,user,sub,familySync,isChild,isObs,addHist} = useApp();
   const [touched,setTouched] = useState({});
   const [pidActing,setPidActing] = useState(null); // userId en cours de validation/refus
   const [creatingFamily,setCreatingFamily] = useState(false);
@@ -8573,6 +8580,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
                       const res=await familySync.validateMember(m);
                       setPidActing(null);
                       if(!res.ok) alert("⚠️ Erreur lors de la validation.");
+                      else { const who = m.displayName || m.email || "Cette personne"; addHist(`${who} a rejoint la famille`, "", "family"); }
                     }} style={{flex:1,height:40,background:C.grn,color:"#fff",borderRadius:9,fontSize:13,fontWeight:800,opacity:pidActing===m.userId?0.6:1}}>
                       {pidActing===m.userId?"⏳…":"✅ Valider"}
                     </button>
@@ -10333,7 +10341,7 @@ function WeekRow({wk, wkPiCounts, dominantPi, wkColor, wkLabel, hol, det, chGetH
 
 // ─── STEP 4: ACCESS ───────────────────────────────────────────────────────────
 function StepAccess() {
-  const {C,t,cfg,setCfg,pushNotif,prem,perms,onUpgrade,user,familySync,isObs,isChild} = useApp();
+  const {C,t,cfg,setCfg,pushNotif,prem,perms,onUpgrade,user,familySync,isObs,isChild,addHist} = useApp();
   const [pendingActionId,setPendingActionId] = useState(null);
   useEffect(()=>{ familySync.refreshPendingMembers(); },[familySync.familyId]);
   const [expandedObs,setExpandedObs] = useState(()=>new Set());
@@ -10472,6 +10480,7 @@ function StepAccess() {
               const res = await familySync.validateMember(obsCard ? {...m, obsCardId: obsCard.id} : m);
               setPendingActionId(null);
               if(!res.ok) alert("⚠️ Erreur lors de la validation.");
+              else { const who = m.displayName || m.email || (m.role==="observer" ? (t.roleObs||"Observateur") : "Parent invité"); addHist(`${who} a rejoint la famille`, "", "family"); }
             }} style={{padding:"7px 12px",background:C.grn,color:"#fff",borderRadius:8,fontSize:12,fontWeight:800,opacity:pendingActionId===m.userId?0.6:1}}>Valider</button>
             <button disabled={pendingActionId===m.userId} onClick={async ()=>{
               if(!window.confirm(t.rejectRequestConfirm||"Refuser cette demande ?")) return;
@@ -10581,6 +10590,7 @@ function StepAccess() {
                 if(!window.confirm((t.removeFromFamilyConfirm||"Retirer {name} de la famille ?").replace("{name}",o.name||o.email||"cet observateur"))) return;
                 // Supprimer de Supabase si l'observateur a un compte (userId)
                 if(o.userId){ await familySync.removeFamilyMember(o.userId); }
+                addHist(`${o.name||o.email||"Cet observateur"} a été retiré de la famille`, "", "family");
                 // Supprimer de cfg local
                 setCfg(c=>({...c,observers:c.observers.filter(x=>x.id!==o.id)}));
               }} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.remove}</button>
@@ -10655,6 +10665,7 @@ function StepAccess() {
                 const res = await familySync.validateMember({...matchingPending, obsCardId: o.id});
                 setPendingActionId(null);
                 if(!res.ok) alert("⚠️ Erreur lors de la validation.");
+                else { const who = matchingPending.displayName || o.name || matchingPending.email || "Cet observateur"; addHist(`${who} a rejoint la famille`, "", "family"); }
               }} style={{flex:1,height:42,background:C.grn,color:"#fff",fontSize:13,fontWeight:800,borderRadius:10,opacity:pendingActionId===matchingPending.userId?0.6:1}}>{t.obsApprove||"Accepter"}</button>
               <button disabled={pendingActionId===matchingPending.userId} onClick={async()=>{
                 if(!window.confirm(t.rejectRequestConfirm||"Refuser cette demande ?")) return;
@@ -12098,8 +12109,8 @@ function HistTab() {
   const {C,t,cfg,setTab,setMenuTab,history:ctxHistory} = useApp();
   const history = ctxHistory || [];
   const TYPE_MAP   = {"cal":0,"schedule":1,"exp":2,"contacts":3,"vault":4,"msg":5};
-  const TYPE_ICON  = {"cal":"📅","schedule":"🏫","exp":"💰","contacts":"📞","vault":"🗄️","msg":"💬"};
-  const TYPE_LABEL = {"cal":"Calendrier","schedule":"EDT","exp":"Dépenses","contacts":"Contacts","vault":"Coffre","msg":"Messages"};
+  const TYPE_ICON  = {"cal":"📅","schedule":"🏫","exp":"💰","contacts":"📞","vault":"🗄️","msg":"💬","family":"👪"};
+  const TYPE_LABEL = {"cal":"Calendrier","schedule":"EDT","exp":"Dépenses","contacts":"Contacts","vault":"Coffre","msg":"Messages","family":"Famille"};
 
   const [filterType,setFilterType] = useState("all");
   const presentTypes = [...new Set(history.map(h=>h.type).filter(Boolean))];
