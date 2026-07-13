@@ -11536,10 +11536,10 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
             const { emoji } = weatherIconFor(d.code);
             const dowLabel = idx===0 ? (t.today||"Auj.") : new Date(d.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"short"});
             return (
-              <div key={d.date} style={{flexShrink:0,minWidth:52,textAlign:"center",padding:"6px 4px",borderRadius:10,background:C.sur}}>
+              <div key={d.date} style={{flexShrink:0,minWidth:56,textAlign:"center",padding:"6px 4px",borderRadius:10,background:C.sur}}>
                 <div style={{fontSize:10,fontWeight:700,color:C.mut,textTransform:"capitalize"}}>{dowLabel}</div>
                 <div style={{fontSize:18}}>{emoji}</div>
-                <div style={{fontSize:11,fontWeight:800,color:C.txt}}>{Math.round(d.tempMax)}°</div>
+                <div style={{fontSize:11,fontWeight:800,color:C.txt,whiteSpace:"nowrap"}}>{Math.round(d.tempMin)}° / {Math.round(d.tempMax)}°</div>
               </div>
             );
           })}
