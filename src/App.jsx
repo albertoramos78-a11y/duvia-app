@@ -346,6 +346,49 @@ function getPerms(sub) {
     spinWinSub:    isPremium,
   };
 }
+// Rang d'un plan pour comparaison : freemium < trial/earned/bêta < premium.
+// Utilisé uniquement pour choisir le "meilleur" des deux plans parents.
+function planRankFor(sub) {
+  const s = subStatus(sub);
+  if (s === "premium") return 2;
+  if (s === "trial_premium" || s === "earned_premium") return 1;
+  return 0; // freemium
+}
+
+// À partir des lignes brutes renvoyées par get_family_billing_context()
+// (une par parent actif), calcule le quota d'observateurs de la famille en
+// retenant le MEILLEUR des deux plans parents — décision produit explicite
+// (voir docs/superpowers/specs/2026-07-14-observer-quota-enforcement-design.md).
+// Aucun parent trouvé (cas défensif, ne devrait pas arriver) → le plus
+// restrictif (1), jamais Infinity par défaut.
+//
+// 🔧 Après la review du Task 1, la RPC fait désormais un LEFT JOIN vers
+// subscriptions : un parent actif peut donc arriver ici avec parent_plan
+// NULL (pas encore de ligne — l'upsert client est débounce de 3s). On ne
+// veut PAS que ce cas se traduise par subStatus() en "freemium" par défaut
+// (Date invalide → comparaison NaN → false → repli sur freemium) : ce serait
+// le sens d'erreur le plus dommageable (verrouiller à tort un observateur
+// d'une famille déjà payante juste parce que la synchro n'a pas eu le temps
+// de se faire). On traite donc un parent sans ligne comme un compte tout
+// juste créé en Trial (le défaut réel de makeSub() pour tout nouveau compte).
+function familyMaxObservers(parentRows) {
+  if (!parentRows || parentRows.length === 0) return 1;
+  const subs = parentRows.map(r => r.parent_plan ? {
+    plan: r.parent_plan,
+    premiumSince: r.parent_premium_since,
+    cycle: r.parent_cycle,
+    trialStart: r.parent_trial_start,
+    trialExtension: r.parent_trial_extension_days,
+    accountCreatedAt: r.parent_account_created_at,
+  } : {
+    plan: "trial_premium",
+    accountCreatedAt: new Date().toISOString(),
+    trialStart: new Date().toISOString(),
+    trialExtension: 0,
+  });
+  const best = subs.reduce((acc, s) => planRankFor(s) > planRankFor(acc) ? s : acc, subs[0]);
+  return getPerms(best).maxObservers;
+}
 function isAdmin(user) { return user?.role==="admin"; }
 
 // ─── BÊTA GRATUITE — Premium offert, date de fin non arrêtée ──────────────────
@@ -3227,6 +3270,34 @@ export default function App() {
     });
     return () => { cancelled = true; };
   }, [user?.id, user?.role, pendingUser?.id, pendingUser?.role]);
+  // 🔒 Backlog 17d (suite) : un observateur au-delà du quota du plan de sa
+  // famille (1 pendant Freemium/Trial, illimité en Premium) doit être bloqué
+  // sur SA PROPRE session, pas seulement caché/verrouillé côté écran de
+  // config du parent (déjà en place depuis v1.79-1.80). Fail-open en cas
+  // d'erreur réseau/RPC : ce n'est pas une frontière de sécurité (comme les
+  // autres limites Freemium/Trial de cette app, aucune n'a de RLS dédiée),
+  // juste une incitation commerciale — un faux blocage serait pire qu'un
+  // faux négatif temporaire.
+  const [observerOverQuota, setObserverOverQuota] = useState(false);
+  const checkObserverQuota = useCallback(async () => {
+    // 🔧 Pas `isObs` ici (déclaré plus bas dans App(), App.jsx:4001) : le
+    // référencer dans ce tableau de dépendances évalué à cet endroit-ci du
+    // corps de fonction lèverait un ReferenceError (TDZ) à CHAQUE rendu, pour
+    // tout le monde, pas seulement les observateurs — même famille de bug que
+    // l'incident notifyIfNewDevice documenté dans CLAUDE.md. Expression
+    // équivalente inlinée à la place.
+    if (user?.role !== "observer" || !familySync.familyId) { setObserverOverQuota(false); return; }
+    try {
+      const { data, error } = await supabase.rpc("get_family_billing_context", { p_family_id: familySync.familyId });
+      if (error) return;
+      const rows = data || [];
+      const rank = rows[0]?.my_observer_rank ?? 0;
+      setObserverOverQuota(rank >= familyMaxObservers(rows));
+    } catch (e) {
+      console.error("[Duvia] get_family_billing_context error:", e);
+    }
+  }, [user?.role, familySync.familyId]);
+  useEffect(() => { checkObserverQuota(); }, [checkObserverQuota]);
   // 🔧 Détection du clic sur le lien de vérification : si l'URL contient
   // ?verify_email=<token> au chargement, valide le jeton côté serveur (RPC
   // verify_parent_email) puis nettoie l'URL. Fonctionne que l'utilisateur
@@ -4474,6 +4545,30 @@ export default function App() {
           style={{height:44,padding:"0 24px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13,borderRadius:10}}>
           Se déconnecter
         </button>
+      </div>
+    </div>
+  );
+
+  // Page de blocage pour observateur hors quota du plan — PAS un retrait
+  // (voir removedObserver ci-dessus, volontairement un écran différent).
+  if (isObs && observerOverQuota) return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
+      <div style={{textAlign:"center",maxWidth:340}}>
+        <div style={{fontSize:48,marginBottom:12}}>⏳</div>
+        <div style={{fontWeight:900,fontSize:18,marginBottom:10,color:C.txt}}>Accès en pause — limite du plan</div>
+        <div style={{fontSize:14,color:C.mut,lineHeight:1.7,marginBottom:24}}>
+          Le plan actuel de cette famille ne permet qu'un nombre limité d'observateurs. Tu n'as pas été retiré(e) — demande à un parent de passer au Premium pour retrouver l'accès.
+        </div>
+        <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
+          <button onClick={checkObserverQuota}
+            style={{height:44,padding:"0 20px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:13,fontWeight:800,borderRadius:10,border:"none",cursor:"pointer"}}>
+            🔄 Réessayer
+          </button>
+          <button onClick={()=>handleSetUser(null)}
+            style={{height:44,padding:"0 24px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13,borderRadius:10}}>
+            Se déconnecter
+          </button>
+        </div>
       </div>
     </div>
   );
