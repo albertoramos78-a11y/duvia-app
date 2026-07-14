@@ -362,8 +362,10 @@ function planRankFor(sub) {
 // (une par parent actif), calcule le quota d'observateurs de la famille en
 // retenant le MEILLEUR des deux plans parents — décision produit explicite
 // (voir docs/superpowers/specs/2026-07-14-observer-quota-enforcement-design.md).
-// Aucun parent trouvé (cas défensif, ne devrait pas arriver) → le plus
-// restrictif (1), jamais Infinity par défaut.
+// Aucun parent trouvé (cas défensif, ne devrait pas arriver) → repli sur 1,
+// jamais Infinity par défaut (le plus restrictif réel, 0 en Freemium, n'a de
+// sens que si on sait vraiment que la famille est Freemium — ici on ne sait
+// rien du tout, donc on ne verrouille pas plus qu'un compte Trial fraîchement créé).
 //
 // 🔧 Après la review du Task 1, la RPC fait désormais un LEFT JOIN vers
 // subscriptions : un parent actif peut donc arriver ici avec parent_plan
@@ -3274,7 +3276,7 @@ export default function App() {
     return () => { cancelled = true; };
   }, [user?.id, user?.role, pendingUser?.id, pendingUser?.role]);
   // 🔒 Backlog 17d (suite) : un observateur au-delà du quota du plan de sa
-  // famille (1 pendant Freemium/Trial, illimité en Premium) doit être bloqué
+  // famille (0 Freemium, 2 Trial, 5 Premium) doit être bloqué
   // sur SA PROPRE session, pas seulement caché/verrouillé côté écran de
   // config du parent (déjà en place depuis v1.79-1.80). Fail-open en cas
   // d'erreur réseau/RPC : ce n'est pas une frontière de sécurité (comme les
