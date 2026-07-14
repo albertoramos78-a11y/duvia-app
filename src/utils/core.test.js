@@ -20,6 +20,7 @@ import {
   upsertMessageById, addReader,
   insertValidatedParent, reconcileOwnParentSlot, placeholderNameFromEmail,
   weatherIconFor, isWithinForecastWindow,
+  getInitials,
 } from "./core.js";
 
 // ── B1 — validatePassword (majuscule + caractère spécial désormais requis) ────
@@ -781,4 +782,25 @@ test("isWithinForecastWindow : dans 20 jours (au-delà de 16) -> false", () => {
 test("isWithinForecastWindow : fenêtre personnalisée à 3 jours", () => {
   assert.strictEqual(isWithinForecastWindow(daysFromNow(2), 3), true);
   assert.strictEqual(isWithinForecastWindow(daysFromNow(4), 3), false);
+});
+
+// ── getInitials (badges avatar/légende compacts) ─────────────────────────────
+test("getInitials : un seul mot -> sa première lettre", () => {
+  assert.strictEqual(getInitials("Alberto"), "A");
+});
+test("getInitials : deux mots -> première lettre du premier et du dernier", () => {
+  assert.strictEqual(getInitials("Sissi Gomes"), "SG");
+});
+test("getInitials : trois mots -> première et dernière lettre, ignore le milieu", () => {
+  assert.strictEqual(getInitials("Jean Paul Martin"), "JM");
+});
+test("getInitials : espaces multiples/en trop -> ignorés", () => {
+  assert.strictEqual(getInitials("  Sissi   Gomes  "), "SG");
+});
+test("getInitials : chaîne vide ou absente -> chaîne vide", () => {
+  assert.strictEqual(getInitials(""), "");
+  assert.strictEqual(getInitials(undefined), "");
+});
+test("getInitials : minuscules -> initiales majuscules", () => {
+  assert.strictEqual(getInitials("alberto gomez"), "AG");
 });

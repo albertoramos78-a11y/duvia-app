@@ -21,7 +21,7 @@ import { usePush } from "./hooks/usePush";
 import { getMyLocation, setMyLocation } from "./services/supabase/locationService";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION, APP_VERSION } from './config.js';
-import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact, weatherIconFor } from './utils/core.js';
+import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact, weatherIconFor, getInitials } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, LICORNE, BRAND, BRAND_GRADIENT, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
 
@@ -11506,12 +11506,31 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
             <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap",padding:"8px 12px",background:C.sur,borderRadius:8,border:`1.5px solid ${C.bor}`}}>
               {!legendHasAnything && <span style={{fontSize:11,color:C.mut,fontStyle:"italic"}}>{t.calLegendEmpty||"Rien à signaler ce mois-ci"}</span>}
               {legendPresence.hasHoliday && <span className="chip" style={{fontSize:11}}><span style={{fontSize:11,fontWeight:900,color:C.red,marginRight:4}}>14</span>{t.holiday}</span>}
-              {legendPresence.hasSchoolHoliday && <span className="chip" style={{fontSize:11}}><span style={{width:14,height:14,borderRadius:4,border:`2px solid ${C.grn}`,display:"inline-block",marginRight:4,verticalAlign:"middle"}} />{t.vacation}</span>}
+              {legendPresence.hasSchoolHoliday && <span className="chip" style={{fontSize:11}}><span style={{width:14,height:14,borderRadius:4,background:C.card,border:`1px solid ${C.bor}`,position:"relative",display:"inline-block",marginRight:4,verticalAlign:"middle",overflow:"hidden"}}><span style={{position:"absolute",bottom:0,right:0,width:0,height:0,borderStyle:"solid",borderWidth:"0 0 14px 14px",borderColor:`transparent transparent ${C.grn} transparent`}} /></span>{t.vacation}</span>}
               {legendPresence.hasMotherDay && <span className="chip" style={{fontSize:11}}>🌸 {t.motherDay?.replace(/^🌸\s*/,"")||"Fête des Mères"}</span>}
               {legendPresence.hasFatherDay && <span className="chip" style={{fontSize:11}}>🎩 {t.fatherDay?.replace(/^🎩\s*/,"")||"Fête des Pères"}</span>}
               {legendPresence.hasGrandparents && <span className="chip" style={{fontSize:11}}>👴 {t.calGrandparents||"Grands-Parents"}</span>}
-              {cfg.parents.map((p,i)=>p.name&&legendPresence.parentIdxSeen.has(i)&&<span key={i} className="chip" style={{fontSize:11,borderColor:p.color,background:`${p.color}20`,color:p.color,fontWeight:700}}><span style={{width:8,height:8,borderRadius:"50%",background:p.color,display:"inline-block",marginRight:4,flexShrink:0}} />{p.name}</span>)}
-              {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard&&legendPresence.observerIdSeen.has(String(o.id))).map(o=><span key={o.id} className="chip" style={{fontSize:11,borderColor:"#f59e0b"}}><span style={{width:8,height:8,borderRadius:"50%",background:"#f59e0b",display:"inline-block",marginRight:4}} />🏠 {obsLabel(o)}</span>)}
+              {cfg.parents.map((p,i)=>{
+                if(!(p.name&&legendPresence.parentIdxSeen.has(i))) return null;
+                const photo = (typeof p.avatar==="string" && p.avatar.startsWith("http")) ? p.avatar : null;
+                return (
+                  <span key={i} className="chip" style={{fontSize:11,borderColor:p.color,background:`${p.color}20`,padding:"2px 8px 2px 2px",display:"flex",alignItems:"center"}}>
+                    <span style={{width:16,height:16,borderRadius:"50%",background:photo?undefined:p.color,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",fontSize:8,fontWeight:900,color:"#fff",flexShrink:0}}>
+                      {photo ? <img src={photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} /> : getInitials(p.name)}
+                    </span>
+                  </span>
+                );
+              })}
+              {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard&&legendPresence.observerIdSeen.has(String(o.id))).map(o=>{
+                const photo = (typeof o.avatar==="string" && o.avatar.startsWith("http")) ? o.avatar : null;
+                return (
+                  <span key={o.id} className="chip" style={{fontSize:11,borderColor:"#f59e0b",background:"#f59e0b20",padding:"2px 8px 2px 2px",display:"flex",alignItems:"center"}}>
+                    <span style={{width:16,height:16,borderRadius:"50%",background:photo?undefined:"#f59e0b",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",fontSize:8,fontWeight:900,color:"#fff",flexShrink:0}}>
+                      {photo ? <img src={photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} /> : getInitials(o.name)||"O"}
+                    </span>
+                  </span>
+                );
+              })}
             </div>
           )}
         </div>
@@ -11744,6 +11763,24 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
     return "";
   }
 
+  // Badge photo/initiales par case (coin bas-gauche) — même identité visuelle
+  // que la légende, pour reconnaître le gardien du jour d'un coup d'œil.
+  function guardAvatarInfo(g){
+    if(!g) return null;
+    if(g.allParents) return {initials:"★", color:"#a855f7", photo:null};
+    if(g.obsId){
+      const o = (cfg.observers||[]).find(o=>String(o.id)===String(g.obsId));
+      const photo = (typeof o?.avatar==="string" && o.avatar.startsWith("http")) ? o.avatar : null;
+      return {initials:getInitials(o?.name)||"O", color:"#f59e0b", photo};
+    }
+    if(g.parentIdx>=0){
+      const p = cfg.parents[g.parentIdx];
+      const photo = (typeof p?.avatar==="string" && p.avatar.startsWith("http")) ? p.avatar : null;
+      return {initials:getInitials(p?.name)||String.fromCharCode(65+g.parentIdx), color:p?.color||C.vio, photo};
+    }
+    return null;
+  }
+
   const dayLettersBase = (t.dayNames||["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"])
     .map(n=>(n.slice(0,3)+".").toUpperCase());
   // Si dimanche en premier : [DIM., LUN., MAR., MER., JEU., VEN., SAM.]
@@ -11792,6 +11829,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
     const cellLocation = (g && g.timeType && g.timeType!=="full") ? (g.location||"") : "";
     // 🔄 masqué si une heure de prise/fin est déjà affichée (lisibilité)
     const hasBadge = d.isRealChange && d.guard && !d.isBirthday && !cellTime;
+    const guardAv = guardAvatarInfo(d.guard);
     return (
       <div key={d.ds} onClick={()=>openDay(d.ds)}
         title={(d.customGuardians?.length ? guardianNamesLabel(d.customGuardians) : null)||d.ferName||d.scoName||d.specials[0]?.label||undefined}
@@ -11832,6 +11870,16 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
             borderStyle:"solid",borderWidth:"0 0 16px 16px",
             borderColor:`transparent transparent ${C.grn} transparent`,
           }} />
+        )}
+        {guardAv && (
+          <span style={{
+            position:"absolute",bottom:5,left:5,width:16,height:16,borderRadius:"50%",
+            background:guardAv.photo?undefined:guardAv.color,
+            border:`1px solid ${C.card}`,display:"flex",alignItems:"center",justifyContent:"center",
+            overflow:"hidden",fontSize:8,fontWeight:900,color:"#fff",lineHeight:1,
+          }}>
+            {guardAv.photo ? <img src={guardAv.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} /> : guardAv.initials}
+          </span>
         )}
       </div>
     );

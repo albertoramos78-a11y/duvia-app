@@ -618,6 +618,16 @@ export function mergeBackupArrayPreservingContact(currentArr, backupArr) {
   });
 }
 
+// Initiales d'un nom pour les badges compacts (légende, cases du calendrier) :
+// un seul mot → sa première lettre ("Alberto" → "A") ; plusieurs mots →
+// première lettre du premier et du dernier mot ("Sissi Gomes" → "SG").
+export function getInitials(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
 // ── Météo calendrier (backlog 18a) ────────────────────────────────────────────
 // Codes météo WMO (Open-Meteo) → {emoji, label}. Sous-ensemble couvrant les
 // codes réellement documentés par Open-Meteo (0-3, 45-48, 51-67, 71-77, 80-99).
