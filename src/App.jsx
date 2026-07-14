@@ -332,7 +332,7 @@ function getPerms(sub) {
     customDates:   !isFree,
     maxCustomDates:isPremium?Infinity:isTrial?2:0,
     customGuard:   !isFree,
-    maxObservers:  isFree?1:Infinity,
+    maxObservers:  isPremium?Infinity:1,
     calendarEdit:  true,
     scheduleAdd:   !isFree,
     expenseAdd:    true,
@@ -10530,6 +10530,7 @@ function StepAccess() {
   // 🆕 Génération Supabase-backed (token + URL ?oinv=)
   async function sendInvite(){
     if(!email && !phone){ return; }
+    if(active.length>=(perms?.maxObservers??1)){ onUpgrade(); return; }
     setGenLoading(true); setGenErr("");
     try {
       const fid = familySync?.familyId;
@@ -10688,10 +10689,12 @@ function StepAccess() {
                 <div style={{fontSize:11,color:C.mut}}>{t.obsCanGuardDesc||"Apparaît dans le calendrier comme option de garde"}</div>
               </div>
             </div>
-            <button onClick={sendInvite} disabled={(!email&&!phone)||genLoading}
-              style={{width:"100%",height:44,background:((!email&&!phone)||genLoading)?C.bor:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:14,fontWeight:800,borderRadius:12,cursor:((!email&&!phone)||genLoading)?"not-allowed":"pointer"}}>
-              {genLoading?"⏳ Génération…":(t.obsInviteGenerate||t.obsInviteSend)}
-            </button>
+            {active.length>=(perms?.maxObservers??1)
+              ? <button onClick={onUpgrade} style={{width:"100%",height:44,padding:"0 16px",background:`${C.vio}11`,color:C.vio,border:`1.5px dashed ${C.vio}`,borderRadius:12,fontWeight:800,cursor:"pointer"}}>{t.lockObservers||"🔒 Ajouter un observateur — Premium"}</button>
+              : <button onClick={sendInvite} disabled={(!email&&!phone)||genLoading}
+                  style={{width:"100%",height:44,background:((!email&&!phone)||genLoading)?C.bor:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:14,fontWeight:800,borderRadius:12,cursor:((!email&&!phone)||genLoading)?"not-allowed":"pointer"}}>
+                  {genLoading?"⏳ Génération…":(t.obsInviteGenerate||t.obsInviteSend)}
+                </button>}
             {genErr && <div style={{fontSize:11,color:C.red,marginTop:8,lineHeight:1.4}}>{genErr}</div>}
           </>
         ):null}
@@ -10703,7 +10706,8 @@ function StepAccess() {
 
       {/* ── Active observers list ── */}
       <div className="sec">{t.observersTitle} ({active.length})</div>
-      {active.length===0?<div style={{textAlign:"center",padding:28,color:C.mut}}><div style={{fontSize:32,marginBottom:8}}>👥</div>{t.noObs}</div>:active.map(o=>{
+      {active.length===0?<div style={{textAlign:"center",padding:28,color:C.mut}}><div style={{fontSize:32,marginBottom:8}}>👥</div>{t.noObs}</div>:active.map((o,i)=>{
+        const isLocked = i >= (perms?.maxObservers ?? 1); // observateur hors limite du plan
         const setObsField=(field,val)=>setCfg(c=>({...c,observers:c.observers.map(x=>x.id===o.id?{...x,[field]:val}:x)}));
         // Observer pending validation (clicked the link, awaiting parent approval)
         // Match par email (family_invitations.used_by) OU displayName (email souvent stocké
@@ -10724,7 +10728,8 @@ function StepAccess() {
         const obsLocked = isMemberIdentityLocked(o);
         const isExpanded = expandedObs.has(o.id);
         return (
-        <div key={o.id} className="card" style={{marginBottom:12,borderColor:matchingPending?`${C.grn}88`:o.status==="pending_invite"?`${C.yel}55`:`${C.ora}55`}}>
+        <div key={o.id} style={{position:"relative",marginBottom:12}}>
+        <div className="card" style={{borderColor:matchingPending?`${C.grn}88`:o.status==="pending_invite"?`${C.yel}55`:`${C.ora}55`, filter: isLocked ? "blur(3px)" : "none", pointerEvents: isLocked ? "none" : "auto", userSelect: isLocked ? "none" : "auto", opacity: isLocked ? 0.7 : 1, transition:"filter .2s,opacity .2s"}}>
           {/* Header — cliquable pour plier/déplier */}
           <div onClick={()=>toggleObs(o.id)} style={{display:"flex",alignItems:"center",gap:12,marginBottom:isExpanded?12:0,cursor:"pointer",userSelect:"none"}}>
             {o.status==="pending_invite"
@@ -10833,6 +10838,17 @@ function StepAccess() {
               }} style={{padding:"0 16px",height:42,background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,fontSize:13,fontWeight:700,borderRadius:10,opacity:pendingActionId===matchingPending.userId?0.6:1}}>{t.obsReject||"Refuser"}</button>
             </div>
           )}
+        </div>
+        {isLocked && (
+          <div onClick={onUpgrade} style={{position:"absolute",inset:0,borderRadius:12,background:"rgba(0,0,0,.18)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,zIndex:10,cursor:"pointer"}}>
+            <div style={{background:C.card,border:`1.5px solid ${C.vio}`,borderRadius:12,padding:"12px 20px",textAlign:"center",boxShadow:"0 4px 16px rgba(0,0,0,.18)"}}>
+              <div style={{fontSize:22,marginBottom:4}}>🔒</div>
+              <div style={{fontSize:12,fontWeight:900,color:C.vio,marginBottom:2}}>Observateur {i+1} — Plan supérieur requis</div>
+              <div style={{fontSize:11,color:C.mut,marginBottom:8}}>Premium : observateurs illimités</div>
+              <div style={{padding:"5px 14px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",borderRadius:8,fontSize:11,fontWeight:800}}>⭐ Passer au Premium</div>
+            </div>
+          </div>
+        )}
         </div>
       );})}
     </div>
@@ -15000,7 +15016,7 @@ function PremiumTab() {
   const items=[
     // ── Famille & Compte ───────────────────────────────────────────────────────
     {icon:"👥", label:"2 parents · 1 enfant (Trial : 2, Premium : illimité)", badge:"free"},
-    {icon:"👁️", label:"Observateurs (1 gratuit → illimité)",    badge:"trial"},
+    {icon:"👁️", label:"Observateurs (1 en Trial/Gratuit → illimité en Premium)", badge:"premium"},
     {icon:"📨", label:"Invitations SMS / WhatsApp / Email",      badge:"free"},
     // ── Calendrier ─────────────────────────────────────────────────────────────
     {icon:"📅", label:"Calendrier de garde",                     badge:"free"},

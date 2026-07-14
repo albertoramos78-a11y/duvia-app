@@ -78,6 +78,7 @@ const fr = {
     cancelSub:"Résilier l'abonnement",confirmCancel:"Confirmer la résiliation",
     premActive:"Abonnement Premium actif",premSince:"Actif depuis le",
     lockParents:"🔒 Ajouter un parent — Premium",lockChildren:"🔒 Ajouter un enfant — Premium",
+    lockObservers:"🔒 Ajouter un observateur — Premium",
     lockSection:"Fonctionnalité Premium",lockDesc:"Disponible avec l'abonnement Premium.",
     seeOffers:"Voir les offres",
     tabSchedule:"Emploi du temps",tabContacts:"Contacts",tabGame:"🎡 Jeu",
