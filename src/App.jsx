@@ -332,6 +332,7 @@ function getPerms(sub) {
     customDates:   !isFree,
     maxCustomDates:isPremium?Infinity:isTrial?2:0,
     customGuard:   !isFree,
+    weatherEnabled: !isFree,
     maxObservers:  isFree?0:isTrial?2:5,
     calendarEdit:  true,
     scheduleAdd:   !isFree,
@@ -11633,11 +11634,18 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
       `}</style>
       {!isObs && !isChild && (
         <div style={{marginBottom:8}}>
-          <ParentCityField isMine={true} C={C} t={t} familyId={familySync?.familyId}
-            onLocationChange={(loc)=>{ fetchMyWeatherForecast(loc.lat, loc.lon).then(setMyForecast).catch(()=>{}); }} />
+          {perms?.weatherEnabled ? (
+            <ParentCityField isMine={true} C={C} t={t} familyId={familySync?.familyId}
+              onLocationChange={(loc)=>{ fetchMyWeatherForecast(loc.lat, loc.lon).then(setMyForecast).catch(()=>{}); }} />
+          ) : (
+            <button type="button" onClick={onUpgrade}
+              style={{width:"100%",height:36,padding:"0 14px",background:`${C.vio}11`,color:C.vio,border:`1.5px dashed ${C.vio}`,borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer",textAlign:"left"}}>
+              🔒 Météo — Plan supérieur requis
+            </button>
+          )}
         </div>
       )}
-      {myForecast.length > 0 && (
+      {perms?.weatherEnabled && myForecast.length > 0 && (
         <div style={{display:"flex",gap:8,overflowX:"auto",padding:"8px 4px",marginBottom:10}}>
           {myForecast.map((d,idx) => {
             const { emoji } = weatherIconFor(d.code);
