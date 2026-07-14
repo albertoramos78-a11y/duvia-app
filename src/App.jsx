@@ -10755,7 +10755,7 @@ function StepAccess() {
                 addHist(`${o.name||o.email||"Cet observateur"} a été retiré de la famille`, "", "family");
                 // Supprimer de cfg local
                 setCfg(c=>({...c,observers:c.observers.filter(x=>x.id!==o.id)}));
-              }} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.remove}</button>
+              }} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6,pointerEvents:"auto"}}>{t.remove}</button>
             </div>
           </div>
           {isExpanded && <>
@@ -10840,12 +10840,11 @@ function StepAccess() {
           )}
         </div>
         {isLocked && (
-          <div onClick={onUpgrade} style={{position:"absolute",inset:0,borderRadius:12,background:"rgba(0,0,0,.18)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,zIndex:10,cursor:"pointer"}}>
-            <div style={{background:C.card,border:`1.5px solid ${C.vio}`,borderRadius:12,padding:"12px 20px",textAlign:"center",boxShadow:"0 4px 16px rgba(0,0,0,.18)"}}>
-              <div style={{fontSize:22,marginBottom:4}}>🔒</div>
-              <div style={{fontSize:12,fontWeight:900,color:C.vio,marginBottom:2}}>Observateur {i+1} — Plan supérieur requis</div>
-              <div style={{fontSize:11,color:C.mut,marginBottom:8}}>Premium : observateurs illimités</div>
-              <div style={{padding:"5px 14px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",borderRadius:8,fontSize:11,fontWeight:800}}>⭐ Passer au Premium</div>
+          <div style={{position:"absolute",inset:0,borderRadius:12,background:"rgba(0,0,0,.18)",display:"flex",alignItems:"center",zIndex:5,padding:"0 14px",pointerEvents:"none"}}>
+            <div onClick={onUpgrade} style={{display:"flex",alignItems:"center",gap:8,background:C.card,border:`1.5px solid ${C.vio}`,borderRadius:10,padding:"6px 12px",boxShadow:"0 2px 8px rgba(0,0,0,.15)",pointerEvents:"auto",cursor:"pointer"}}>
+              <span style={{fontSize:15}}>🔒</span>
+              <span style={{fontSize:11,fontWeight:800,color:C.vio,whiteSpace:"nowrap"}}>Plan supérieur requis</span>
+              <span style={{padding:"3px 10px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",borderRadius:6,fontSize:10,fontWeight:800,whiteSpace:"nowrap"}}>⭐ Premium</span>
             </div>
           </div>
         )}
