@@ -6739,7 +6739,7 @@ function CropModal({ file, onCrop, onCancel }) {
   );
 }
 
-function ParentCityField({isMine, C, t, familyId}) {
+function ParentCityField({isMine, C, t, familyId, onLocationChange}) {
   const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
@@ -6759,6 +6759,7 @@ function ParentCityField({isMine, C, t, familyId}) {
     try {
       await setMyLocation(familyId, city, lat, lon);
       setLocation({ city, lat, lon });
+      onLocationChange?.({ city, lat, lon });
     } catch (e) {
       console.error("[Duvia] setMyLocation error:", e);
     }
@@ -8850,11 +8851,6 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             </div>
           </div>
 
-          {/* Row 4 : Ville (météo calendrier) */}
-          <div style={{marginTop:12,...(isMine?{}:lockStyle)}}>
-            <span style={lbl}>🏙️ {t.cityLabel||"Ville"} <span style={{color:C.mut,fontWeight:400,fontSize:10}}>({t.weatherHint||"pour la météo du calendrier"})</span></span>
-            {isMine && <ParentCityField isMine={isMine} C={C} t={t} familyId={familySync?.familyId} />}
-          </div>
         </div>
       );})}
       {(() => {
@@ -11496,44 +11492,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
           <img src={iconNavRight} alt="" style={{width:44,height:44,objectFit:"contain"}} />
         </button>
       </div>
-      <div style={{marginBottom:12,display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
-        <div>
-          <button onClick={()=>setShowLegend(v=>!v)} style={{padding:"1px 10px",height:24,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:20,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
-            <span>🏷️ {t.calLegend||"Légende"}</span>
-            <span style={{fontSize:9,transition:"transform .2s",display:"inline-block",transform:showLegend?"rotate(180deg)":"rotate(0deg)"}}>▼</span>
-          </button>
-          {showLegend&&(
-            <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap",padding:"8px 12px",background:C.sur,borderRadius:8,border:`1.5px solid ${C.bor}`}}>
-              {!legendHasAnything && <span style={{fontSize:11,color:C.mut,fontStyle:"italic"}}>{t.calLegendEmpty||"Rien à signaler ce mois-ci"}</span>}
-              {legendPresence.hasHoliday && <span className="chip" style={{fontSize:11}}><span style={{fontSize:11,fontWeight:900,color:C.red,marginRight:4}}>14</span>{t.holiday}</span>}
-              {legendPresence.hasSchoolHoliday && <span className="chip" style={{fontSize:11}}><span style={{width:14,height:14,borderRadius:4,background:C.card,border:`1px solid ${C.bor}`,position:"relative",display:"inline-block",marginRight:4,verticalAlign:"middle",overflow:"hidden"}}><span style={{position:"absolute",bottom:0,right:0,width:0,height:0,borderStyle:"solid",borderWidth:"0 0 14px 14px",borderColor:`transparent transparent ${C.grn} transparent`}} /></span>{t.vacation}</span>}
-              {legendPresence.hasMotherDay && <span className="chip" style={{fontSize:11}}>🌸 {t.motherDay?.replace(/^🌸\s*/,"")||"Fête des Mères"}</span>}
-              {legendPresence.hasFatherDay && <span className="chip" style={{fontSize:11}}>🎩 {t.fatherDay?.replace(/^🎩\s*/,"")||"Fête des Pères"}</span>}
-              {legendPresence.hasGrandparents && <span className="chip" style={{fontSize:11}}>👴 {t.calGrandparents||"Grands-Parents"}</span>}
-              {cfg.parents.map((p,i)=>{
-                if(!(p.name&&legendPresence.parentIdxSeen.has(i))) return null;
-                const photo = (typeof p.avatar==="string" && p.avatar.startsWith("http")) ? p.avatar : null;
-                return (
-                  <span key={i} className="chip" style={{fontSize:11,borderColor:p.color,background:`${p.color}20`,padding:"2px 8px 2px 2px",display:"flex",alignItems:"center"}}>
-                    <span style={{width:16,height:16,borderRadius:"50%",background:photo?undefined:p.color,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",fontSize:8,fontWeight:900,color:"#fff",flexShrink:0}}>
-                      {photo ? <img src={photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} /> : getInitials(p.name)}
-                    </span>
-                  </span>
-                );
-              })}
-              {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard&&legendPresence.observerIdSeen.has(String(o.id))).map(o=>{
-                const photo = (typeof o.avatar==="string" && o.avatar.startsWith("http")) ? o.avatar : null;
-                return (
-                  <span key={o.id} className="chip" style={{fontSize:11,borderColor:"#f59e0b",background:"#f59e0b20",padding:"2px 8px 2px 2px",display:"flex",alignItems:"center"}}>
-                    <span style={{width:16,height:16,borderRadius:"50%",background:photo?undefined:"#f59e0b",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",fontSize:8,fontWeight:900,color:"#fff",flexShrink:0}}>
-                      {photo ? <img src={photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} /> : getInitials(o.name)||"O"}
-                    </span>
-                  </span>
-                );
-              })}
-            </div>
-          )}
-        </div>
+      <div style={{marginBottom:12,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",gap:8,flexWrap:"wrap"}}>
         <div style={{display:"flex",gap:2,background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:20,padding:2,flexShrink:0}}>
           <button onClick={()=>switchCalView("list")}
             style={{padding:"0 12px",height:26,background:calView==="list"?C.vio:"transparent",color:calView==="list"?"#fff":C.mut,border:"none",borderRadius:18,fontSize:11,fontWeight:800,display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}>
@@ -11549,6 +11508,13 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
         @keyframes calSlideInRight{from{opacity:0;transform:translateX(32px) scale(0.98)}to{opacity:1;transform:translateX(0) scale(1)}}
         @keyframes calSlideInLeft{from{opacity:0;transform:translateX(-32px) scale(0.98)}to{opacity:1;transform:translateX(0) scale(1)}}
       `}</style>
+      {!isObs && !isChild && (
+        <div style={{marginBottom:8}}>
+          <span style={{fontSize:10,fontWeight:700,color:C.mut,textTransform:"uppercase",letterSpacing:".04em"}}>🏙️ {t.cityLabel||"Ville"} <span style={{fontWeight:400,textTransform:"none"}}>({t.weatherHint||"pour la météo du calendrier"})</span></span>
+          <ParentCityField isMine={true} C={C} t={t} familyId={familySync?.familyId}
+            onLocationChange={(loc)=>{ fetchMyWeatherForecast(loc.lat, loc.lon).then(setMyForecast).catch(()=>{}); }} />
+        </div>
+      )}
       {myForecast.length > 0 && (
         <div style={{display:"flex",gap:8,overflowX:"auto",padding:"8px 4px",marginBottom:10}}>
           {myForecast.map((d,idx) => {
@@ -11572,7 +11538,24 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
           readOnly={readOnly} editBlocked={editBlocked}
           inlineDs={inlineDs} setInlineDs={setInlineDs}
           setFullDs={setFullDs}
-        />
+        >
+          <div style={{marginBottom:10}}>
+            <button onClick={()=>setShowLegend(v=>!v)} style={{padding:"1px 10px",height:24,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:20,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
+              <span>🏷️ {t.calLegend||"Légende"}</span>
+              <span style={{fontSize:9,transition:"transform .2s",display:"inline-block",transform:showLegend?"rotate(180deg)":"rotate(0deg)"}}>▼</span>
+            </button>
+            {showLegend&&(
+              <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap",padding:"8px 12px",background:C.sur,borderRadius:8,border:`1.5px solid ${C.bor}`}}>
+                {!legendHasAnything && <span style={{fontSize:11,color:C.mut,fontStyle:"italic"}}>{t.calLegendEmpty||"Rien à signaler ce mois-ci"}</span>}
+                {legendPresence.hasHoliday && <span className="chip" style={{fontSize:11}}><span style={{fontSize:11,fontWeight:900,color:C.red,marginRight:4}}>14</span>{t.holiday}</span>}
+                {legendPresence.hasSchoolHoliday && <span className="chip" style={{fontSize:11}}><span style={{width:14,height:14,borderRadius:4,background:C.card,border:`1px solid ${C.bor}`,position:"relative",display:"inline-block",marginRight:4,verticalAlign:"middle",overflow:"hidden"}}><span style={{position:"absolute",bottom:0,right:0,width:0,height:0,borderStyle:"solid",borderWidth:"0 0 14px 14px",borderColor:`transparent transparent ${C.grn} transparent`}} /></span>{t.vacation}</span>}
+                {legendPresence.hasMotherDay && <span className="chip" style={{fontSize:11}}>🌸 {t.motherDay?.replace(/^🌸\s*/,"")||"Fête des Mères"}</span>}
+                {legendPresence.hasFatherDay && <span className="chip" style={{fontSize:11}}>🎩 {t.fatherDay?.replace(/^🎩\s*/,"")||"Fête des Pères"}</span>}
+                {legendPresence.hasGrandparents && <span className="chip" style={{fontSize:11}}>👴 {t.calGrandparents||"Grands-Parents"}</span>}
+              </div>
+            )}
+          </div>
+        </MonthGridCalendar>
         </div>
       )}
       {calView==="list" && (
@@ -11652,7 +11635,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
 // ═══════════════════════════════════════════════════════════════════════════════
 // VUE GRILLE MENSUELLE (calendrier "façon papier" — cases colorées par parent)
 // ═══════════════════════════════════════════════════════════════════════════════
-function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,readOnly,editBlocked,inlineDs,setInlineDs,setFullDs}) {
+function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,readOnly,editBlocked,inlineDs,setInlineDs,setFullDs,children}) {
   const {weekStart="lundi"} = useApp();
   const sunFirst = weekStart === "dimanche";
   const activeCountry = (multiChild && activeChildId && cfg.childrenCountry?.[activeChildId]) || cfg.country || "FR";
@@ -11898,6 +11881,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
 
   return (
     <div className="card" style={{padding:10,overflow:"hidden",width:"100%",boxSizing:"border-box"}}>
+      {children}
       <div style={{display:"grid",gridTemplateColumns:`${WEEKNUM_COL}px repeat(7,1fr)`,gap:5,marginBottom:6,width:"100%",boxSizing:"border-box"}}>
         <div />
         {dayLetters.map((lbl,i)=>(
