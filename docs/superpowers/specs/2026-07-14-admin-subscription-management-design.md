@@ -68,24 +68,37 @@ Nullable, uniquement pertinente quand `plan = 'beta'`.
 
 **Note sur la valeur de retour pour l'étape 3 (bêta active) :** `subStatus()` retourne `"trial_premium"`, pas une valeur `"beta"` distincte — l'accès fonctionnel est strictement identique à un trial (mêmes `getPerms()`), et cela évite de propager une 5ᵉ valeur de statut dans tout le code qui fait déjà `st==="trial_premium"`. L'écran admin affiche le `plan` BRUT (`sub.plan==="beta"`), pas `subStatus()`, pour rester traçable — voir section 6.
 
-### 4. `isBeta()` — nouvelle signature `isBeta(globalBeta)`
+### 4. `isBeta()` garde sa signature actuelle (zéro paramètre) — cache module + un seul re-render forcé
+
+`BETA_END` était déjà une simple constante module-level lue directement par `isBeta()`, sans transiter par le contexte React ni par aucun paramètre — exactement comme `TRIAL_BASE_DAYS`/`TRIAL_MAX_DAYS`/`REF_TRIAL_PALIERS`. `globalBeta` (la version "chargée depuis la base" de cette même constante) garde ce même rôle architectural : **pas la peine de la faire transiter en paramètre explicite à travers `subStatus()`/`getPerms()`/`isPrem()`/`isPremFull()`/`isFreemiumPlan()`/`planRankFor()`/`familyMaxObservers()` et leurs ~25 points d'appel** (9 pour `subStatus()`, 13 pour `isBeta()` directement, 3 pour `getPerms()`) — un simple cache module-level suffit et ne change la signature d'aucune de ces fonctions :
 
 ```js
-function isBeta(globalBeta) { return !!globalBeta?.enabled && Date.now() < (globalBeta.endMs ?? 0); }
+// Rempli une seule fois par un effet dans App() (section 5) ; lu directement
+// par isBeta(), exactement comme BETA_END l'était avant — même rôle
+// architectural (une constante partagée), juste chargée depuis la base au
+// lieu d'être codée en dur.
+let _globalBetaCache = { enabled: false, endMs: null };
+function isBeta() { return _globalBetaCache.enabled && Date.now() < (_globalBetaCache.endMs ?? 0); }
 ```
-Remplace la constante `BETA_END`/la lecture directe de `Date.now() < BETA_END.getTime()`. Tous les appels existants (9 occurrences de `subStatus(sub)`, 13 occurrences directes de `isBeta()` dans `App.jsx`) reçoivent le paramètre `globalBeta`, lu depuis `useApp()` (voir section 5) — mécanique, aucune logique propre à changer dans ces call sites au-delà d'ajouter le paramètre.
 
-### 5. Câblage client — un seul fetch, partagé via le contexte
+**Aucun changement nécessaire** sur `subStatus(sub)`, `getPerms(sub)`, `isPrem(sub)`, `isPremFull(sub)`, `isFreemiumPlan(sub)`, `planRankFor(sub)`, `familyMaxObservers(parentRows)`, ni sur leurs ~25 points d'appel existants dans `App.jsx` — ils continuent d'appeler `isBeta()` exactement comme avant, et lisent transparemment la valeur à jour dès qu'elle est chargée.
 
-Dans `App()`, un nouvel état `globalBeta` (`{enabled, endMs}`), rempli une fois via un effet au montage :
+### 5. Câblage client — un seul fetch, un seul re-render forcé au chargement
+
+Dans `App()`, un effet au montage récupère `app_config` une fois et met à jour le cache module-level ci-dessus, puis force UN SEUL re-render (via un état trivial) pour que tous les composants déjà montés qui appellent `isBeta()`/`subStatus()` pendant leur rendu (donc `App()` lui-même et tout ce qui est sous son contexte) relisent la valeur fraîche :
+
 ```js
-const [globalBeta, setGlobalBeta] = useState({ enabled: false, endMs: null });
+const [, forceBetaRerender] = useReducer(x => x + 1, 0);
 useEffect(() => {
   supabase.from("app_config").select("beta_enabled, beta_end").eq("id", 1).maybeSingle()
-    .then(({ data }) => { if (data) setGlobalBeta({ enabled: !!data.beta_enabled, endMs: data.beta_end ? new Date(data.beta_end).getTime() : null }); });
+    .then(({ data }) => {
+      if (!data) return;
+      _globalBetaCache = { enabled: !!data.beta_enabled, endMs: data.beta_end ? new Date(data.beta_end).getTime() : null };
+      forceBetaRerender();
+    });
 }, []);
 ```
-`globalBeta` rejoint `ctxValue` (le même objet passé à `AppContext.Provider`, aux côtés de `sub`/`perms`/`prem`), lisible partout via `useApp()`.
+Ce fetch se fait via une simple lecture RLS (`app_config` est lisible par tout compte authentifié, section 1) — pas besoin d'appeler la Edge Function pour LIRE la config globale, seulement pour l'ÉCRIRE (réservé aux admins).
 
 ### 6. Edge Function `admin-manage-subscriptions`
 
