@@ -12658,7 +12658,7 @@ function ExpTab() {
         // Vérification quota stockage avant upload
         const { data: usedBytes, error: quotaErr } = await supabase.rpc("get_family_storage_bytes", { fid });
         if(!quotaErr){
-          const limitBytes = (perms.maxStorageMB||50) * 1024 * 1024;
+          const limitBytes = (perms.maxStorageMB??50) * 1024 * 1024;
           const remaining  = limitBytes - (usedBytes||0);
           if(file.size > remaining){
             const usedMB = ((usedBytes||0)/1024/1024).toFixed(1);
@@ -17819,7 +17819,7 @@ function VaultTab() {
   const totalSizeBytes = useMemo(() =>
     docs.reduce((sum, d) => sum + (d.file_size || 0), 0),
   [docs]);
-  const VAULT_MAX_MB    = getPerms(sub).maxStorageMB || 50;
+  const VAULT_MAX_MB    = getPerms(sub).maxStorageMB ?? 50;
   const VAULT_MAX_BYTES = VAULT_MAX_MB * 1024 * 1024;
   const VAULT_MAX_LABEL = `${VAULT_MAX_MB} Mo`;
   const totalSizeMB = (totalSizeBytes / (1024 * 1024)).toFixed(1);
