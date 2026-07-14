@@ -4523,7 +4523,7 @@ export default function App() {
   // retombe sur le premier onglet plutôt que de rendre un écran vide.
   useEffect(()=>{ if(tab>=TABS.length) setTab(0); },[TABS.length]);
 
-  // 🔧 Les 4 écrans de blocage ci-dessous sont volontairement placés APRÈS
+  // 🔧 Les 5 écrans de blocage ci-dessous sont volontairement placés APRÈS
   // tous les hooks du composant (dont le useEffect juste au-dessus) : leurs
   // conditions peuvent devenir vraies APRÈS le premier rendu (ex: emailVerified
   // passe de undefined à false une fois la vérification async résolue), et un
