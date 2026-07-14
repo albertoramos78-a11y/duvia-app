@@ -610,6 +610,21 @@ async function fetchMyWeatherForecast(lat, lon) {
   return days;
 }
 
+// Open-Meteo n'a pas d'endpoint de reverse-geocoding (coordonnées → nom de
+// ville) — Nominatim (OpenStreetMap) est le seul service gratuit sans clé
+// pour ça. Usage ponctuel (un clic utilisateur), donc dans les clous de leur
+// politique d'usage (pas de bulk, User-Agent identifiable requis).
+async function reverseGeocodeCity(lat, lon) {
+  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=10&addressdetails=1`;
+  const res = await fetch(url, { headers: { "Accept-Language": "fr" } });
+  if (!res.ok) throw new Error("reverse geocode failed");
+  const data = await res.json();
+  const a = data?.address || {};
+  const city = a.city || a.town || a.village || a.municipality || a.county;
+  if (!city) throw new Error("no city in reverse geocode result");
+  return a.country ? `${city}, ${a.country}` : city;
+}
+
 async function fetchOHSchoolHols(country, zone, year) {
   // zone is a full subdivisionCode e.g. "FR-IDF", "DE-BY"
   const sub = zone || getDefaultSub(country);
@@ -6791,7 +6806,17 @@ function ParentCityField({isMine, C, t, familyId, onLocationChange}) {
     if (!navigator.geolocation) return;
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => { save(t.myLocation||"📍 Ma position", pos.coords.latitude, pos.coords.longitude); setLocating(false); },
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        let city;
+        try {
+          city = await reverseGeocodeCity(latitude, longitude);
+        } catch {
+          city = t.myLocation||"📍 Ma position";
+        }
+        await save(city, latitude, longitude);
+        setLocating(false);
+      },
       () => { setLocating(false); },
       { timeout: 10000 }
     );
@@ -6803,13 +6828,13 @@ function ParentCityField({isMine, C, t, familyId, onLocationChange}) {
     <div>
       <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
         <div style={{fontSize:13,color:location?.city?C.txt:C.mut}}>{location?.city || (t.noCitySet||"Non renseignée")}</div>
-        <button type="button" onClick={useMyLocation} disabled={locating}
-          style={{height:26,padding:"0 10px",background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:16,fontSize:11,fontWeight:700,color:C.txt,cursor:locating?"wait":"pointer"}}>
-          {locating ? "…" : `📍 ${t.useMyLocation||"Utiliser ma position"}`}
+        <button type="button" onClick={useMyLocation} disabled={locating} title={t.useMyLocation||"Utiliser ma position"} aria-label={t.useMyLocation||"Utiliser ma position"}
+          style={{height:26,width:26,padding:0,background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:"50%",fontSize:13,color:C.txt,cursor:locating?"wait":"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          {locating ? "…" : "📍"}
         </button>
-        <button type="button" onClick={()=>setShowSearch(v=>!v)}
-          style={{height:26,padding:"0 10px",background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:16,fontSize:11,fontWeight:700,color:C.txt,cursor:"pointer"}}>
-          🔍 {t.searchCity||"Rechercher"}
+        <button type="button" onClick={()=>setShowSearch(v=>!v)} title={t.searchCity||"Rechercher"} aria-label={t.searchCity||"Rechercher"}
+          style={{height:26,width:26,padding:0,background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:"50%",fontSize:13,color:C.txt,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          🔍
         </button>
       </div>
       {showSearch && (
@@ -11510,7 +11535,6 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
       `}</style>
       {!isObs && !isChild && (
         <div style={{marginBottom:8}}>
-          <span style={{fontSize:10,fontWeight:700,color:C.mut,textTransform:"uppercase",letterSpacing:".04em"}}>🏙️ {t.cityLabel||"Ville"} <span style={{fontWeight:400,textTransform:"none"}}>({t.weatherHint||"pour la météo du calendrier"})</span></span>
           <ParentCityField isMine={true} C={C} t={t} familyId={familySync?.familyId}
             onLocationChange={(loc)=>{ fetchMyWeatherForecast(loc.lat, loc.lon).then(setMyForecast).catch(()=>{}); }} />
         </div>
