@@ -6827,13 +6827,13 @@ function ParentCityField({isMine, C, t, familyId, onLocationChange}) {
   return (
     <div>
       <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-        <div style={{fontSize:13,color:location?.city?C.txt:C.mut}}>{location?.city || (t.noCitySet||"Non renseignée")}</div>
         <button type="button" onClick={useMyLocation} disabled={locating} title={t.useMyLocation||"Utiliser ma position"} aria-label={t.useMyLocation||"Utiliser ma position"}
-          style={{height:26,width:26,padding:0,background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:"50%",fontSize:13,color:C.txt,cursor:locating?"wait":"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          style={{height:26,width:26,padding:0,background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:"50%",fontSize:13,color:C.txt,cursor:locating?"wait":"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
           {locating ? "…" : "📍"}
         </button>
+        <div style={{fontSize:13,color:location?.city?C.txt:C.mut}}>{location?.city || (t.noCitySet||"Non renseignée")}</div>
         <button type="button" onClick={()=>setShowSearch(v=>!v)} title={t.searchCity||"Rechercher"} aria-label={t.searchCity||"Rechercher"}
-          style={{height:26,width:26,padding:0,background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:"50%",fontSize:13,color:C.txt,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          style={{height:26,width:26,padding:0,background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:"50%",fontSize:13,color:C.txt,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
           🔍
         </button>
       </div>
@@ -11517,18 +11517,6 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
           <img src={iconNavRight} alt="" style={{width:44,height:44,objectFit:"contain"}} />
         </button>
       </div>
-      <div style={{marginBottom:12,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",gap:8,flexWrap:"wrap"}}>
-        <div style={{display:"flex",gap:2,background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:20,padding:2,flexShrink:0}}>
-          <button onClick={()=>switchCalView("list")}
-            style={{padding:"0 12px",height:26,background:calView==="list"?C.vio:"transparent",color:calView==="list"?"#fff":C.mut,border:"none",borderRadius:18,fontSize:11,fontWeight:800,display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}>
-            ☰ {t.calViewList||"Détaillée"}
-          </button>
-          <button onClick={()=>switchCalView("grid")}
-            style={{padding:"0 12px",height:26,background:calView==="grid"?C.vio:"transparent",color:calView==="grid"?"#fff":C.mut,border:"none",borderRadius:18,fontSize:11,fontWeight:800,display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}>
-            ▦ {t.calViewGrid||"Mois"}
-          </button>
-        </div>
-      </div>
       <style>{`
         @keyframes calSlideInRight{from{opacity:0;transform:translateX(32px) scale(0.98)}to{opacity:1;transform:translateX(0) scale(1)}}
         @keyframes calSlideInLeft{from{opacity:0;transform:translateX(-32px) scale(0.98)}to{opacity:1;transform:translateX(0) scale(1)}}
@@ -11554,6 +11542,18 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
           })}
         </div>
       )}
+      <div style={{marginBottom:12,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",gap:8,flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:2,background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:20,padding:2,flexShrink:0}}>
+          <button onClick={()=>switchCalView("list")}
+            style={{padding:"0 12px",height:26,background:calView==="list"?C.vio:"transparent",color:calView==="list"?"#fff":C.mut,border:"none",borderRadius:18,fontSize:11,fontWeight:800,display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}>
+            ☰ {t.calViewList||"Détaillée"}
+          </button>
+          <button onClick={()=>switchCalView("grid")}
+            style={{padding:"0 12px",height:26,background:calView==="grid"?C.vio:"transparent",color:calView==="grid"?"#fff":C.mut,border:"none",borderRadius:18,fontSize:11,fontWeight:800,display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}>
+            ▦ {t.calViewGrid||"Mois"}
+          </button>
+        </div>
+      </div>
       {calView==="grid" && (
         <div style={{animation:`calSlideIn${calViewDir.current==="right"?"Right":"Left"} 0.28s cubic-bezier(.22,.68,0,1.2) both`}}>
         <MonthGridCalendar
