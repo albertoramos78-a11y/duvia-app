@@ -334,6 +334,7 @@ function getPerms(sub) {
     customGuard:   !isFree,
     weatherEnabled: !isFree,
     messagingEnabled: !isFree,
+    obsCanGuardEnabled: !isFree,
     maxObservers:  isFree?0:isTrial?2:5,
     calendarEdit:  true,
     scheduleAdd:   !isFree,
@@ -10777,12 +10778,12 @@ function StepAccess() {
                 {value:"other",label:t.otherFamily,icon:"🧑"},
               ]} />
             </div>
-            <div onClick={()=>setCanGuard(v=>!v)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",marginBottom:10,background:canGuard?`#f59e0b18`:`${C.sur}`,border:`1.5px solid ${canGuard?"#f59e0b":C.bor}`,borderRadius:10,cursor:"pointer",transition:"all .15s"}}>
+            <div onClick={()=>{if(!prem)return onUpgrade();setCanGuard(v=>!v);}} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",marginBottom:10,background:canGuard?`#f59e0b18`:`${C.sur}`,border:`1.5px solid ${canGuard?"#f59e0b":C.bor}`,borderRadius:10,cursor:"pointer",transition:"all .15s",opacity:prem?1:0.7}}>
               <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${canGuard?"#f59e0b":C.bor}`,background:canGuard?"#f59e0b":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>
                 {canGuard&&<span style={{color:"#fff",fontSize:13,fontWeight:900}}>✓</span>}
               </div>
               <div>
-                <div style={{fontSize:13,fontWeight:700,color:canGuard?"#f59e0b":C.txt}}>🏠 {t.obsCanGuard||"Peut être gardien"}</div>
+                <div style={{fontSize:13,fontWeight:700,color:canGuard?"#f59e0b":C.txt,display:"flex",alignItems:"center",gap:6}}>🏠 {t.obsCanGuard||"Peut être gardien"}{!prem&&<span className="badge" style={{background:`${C.ora}10`,color:C.ora,border:`1px dashed ${C.ora}66`}}>🔒 Réservé Premium</span>}</div>
                 <div style={{fontSize:11,color:C.mut}}>{t.obsCanGuardDesc||"Apparaît dans le calendrier comme option de garde"}</div>
               </div>
             </div>
@@ -10889,11 +10890,11 @@ function StepAccess() {
           </div>
           {/* Notes supprimées (simplification UX) */}
           {/* canGuard toggle dans la fiche active */}
-          <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",marginTop:10,padding:"10px 14px",borderRadius:10,background:o.canGuard?`#f59e0b18`:`${C.bor}22`,border:`1.5px solid ${o.canGuard?"#f59e0b":C.bor}`,transition:"all .2s"}}>
-            <input type="checkbox" checked={!!o.canGuard} onChange={e=>setObsField("canGuard",e.target.checked)}
-              style={{width:18,height:18,accentColor:"#f59e0b",cursor:"pointer",flexShrink:0}} />
+          <label style={{display:"flex",alignItems:"center",gap:10,cursor:prem?"pointer":"not-allowed",marginTop:10,padding:"10px 14px",borderRadius:10,background:o.canGuard?`#f59e0b18`:`${C.bor}22`,border:`1.5px solid ${o.canGuard?"#f59e0b":C.bor}`,transition:"all .2s",opacity:prem?1:0.7}} onClick={!prem?onUpgrade:undefined}>
+            <input type="checkbox" checked={!!o.canGuard} disabled={!prem} onChange={e=>prem&&setObsField("canGuard",e.target.checked)}
+              style={{width:18,height:18,accentColor:"#f59e0b",cursor:prem?"pointer":"not-allowed",flexShrink:0}} />
             <div>
-              <div style={{fontSize:13,fontWeight:800,color:o.canGuard?"#f59e0b":C.txt}}>🏠 {t.obsCanGuard||"Peut être gardien"}</div>
+              <div style={{fontSize:13,fontWeight:800,color:o.canGuard?"#f59e0b":C.txt,display:"flex",alignItems:"center",gap:6}}>🏠 {t.obsCanGuard||"Peut être gardien"}{!prem&&<span className="badge" style={{background:`${C.ora}10`,color:C.ora,border:`1px dashed ${C.ora}66`}}>🔒 Réservé Premium</span>}</div>
               <div style={{fontSize:11,color:C.mut}}>{t.obsCanGuardDesc||"Apparaît dans le calendrier comme option de garde"}</div>
             </div>
           </label>
