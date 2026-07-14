@@ -322,7 +322,7 @@ function getPerms(sub) {
   const isPremium = st==="premium"||sub._admin;
   return {
     maxParents:    2,
-    maxChildren:   isFree?1:isTrial?2:Infinity,
+    maxChildren:   isFree?1:isTrial?2:5,
     sameGuardAll:  !isFree,
     zoneChoice:    !isFree,
     feteMere:      !isFree,
@@ -332,7 +332,7 @@ function getPerms(sub) {
     customDates:   !isFree,
     maxCustomDates:isPremium?Infinity:isTrial?2:0,
     customGuard:   !isFree,
-    maxObservers:  isPremium?Infinity:1,
+    maxObservers:  isFree?0:isTrial?2:5,
     calendarEdit:  true,
     scheduleAdd:   !isFree,
     expenseAdd:    true,
@@ -340,8 +340,8 @@ function getPerms(sub) {
     balanceVisible:!isFree,
     contactAdd:    !isFree,
     maxVaultDocs:  (isPremium||isTrial) ? Infinity : 0,   // Coffre-fort : Premium + Bêta/trial
-    maxStorageMB:   isPremium ? 500 : isTrial ? 50 : 5,   // Stockage total : Premium 500 Mo · Trial 50 Mo · Freemium 5 Mo
-    maxVaultSizeGB: isPremium ? 500/1024 : isTrial ? 50/1024 : 5/1024, // dérivé de maxStorageMB
+    maxStorageMB:   isPremium ? 200 : isTrial ? 50 : 0,   // Stockage total : Premium 200 Mo · Trial 50 Mo · Freemium 0 Mo
+    maxVaultSizeGB: isPremium ? 200/1024 : isTrial ? 50/1024 : 0, // dérivé de maxStorageMB
     canSpin:       !isFree,
     spinWinSub:    isPremium,
   };
@@ -9142,7 +9142,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
               <div style={{background:C.card,border:`1.5px solid ${C.vio}`,borderRadius:12,padding:"12px 20px",textAlign:"center",boxShadow:"0 4px 16px rgba(0,0,0,.18)"}}>
                 <div style={{fontSize:22,marginBottom:4}}>🔒</div>
                 <div style={{fontSize:12,fontWeight:900,color:C.vio,marginBottom:2}}>Enfant {i+1} — Plan supérieur requis</div>
-                <div style={{fontSize:11,color:C.mut,marginBottom:8}}>{i===1?"Trial Premium : jusqu'à 2 enfants":"Premium : enfants illimités"}</div>
+                <div style={{fontSize:11,color:C.mut,marginBottom:8}}>{i===1?"Trial Premium : jusqu'à 2 enfants":"Premium : jusqu'à 5 enfants"}</div>
                 <div style={{padding:"5px 14px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",borderRadius:8,fontSize:11,fontWeight:800}}>⭐ Passer au Premium</div>
               </div>
             </div>
@@ -12662,7 +12662,7 @@ function ExpTab() {
           const remaining  = limitBytes - (usedBytes||0);
           if(file.size > remaining){
             const usedMB = ((usedBytes||0)/1024/1024).toFixed(1);
-            setAttErr(`Quota atteint (${usedMB} Mo / ${perms.maxStorageMB} Mo). ${!prem?"Passez en Premium pour 500 Mo.":"Supprimez des fichiers pour libérer de l'espace."}`);
+            setAttErr(`Quota atteint (${usedMB} Mo / ${perms.maxStorageMB} Mo). ${!prem?"Passez en Premium pour 200 Mo.":"Supprimez des fichiers pour libérer de l'espace."}`);
             break;
           }
         }
@@ -15109,8 +15109,8 @@ function PremiumTab() {
   // badge: "free" = gratuit · "trial" = Trial/Bêta · "premium" = Premium abonné uniquement
   const items=[
     // ── Famille & Compte ───────────────────────────────────────────────────────
-    {icon:"👥", label:"2 parents · 1 enfant (Trial : 2, Premium : illimité)", badge:"free"},
-    {icon:"👁️", label:"Observateurs (1 en Trial/Gratuit → illimité en Premium)", badge:"premium"},
+    {icon:"👥", label:"2 parents · 1 enfant (Trial : 2, Premium : 5)", badge:"free"},
+    {icon:"👁️", label:"Observateurs (0 Freemium, 2 Trial, 5 Premium)", badge:"trial"},
     {icon:"📨", label:"Invitations SMS / WhatsApp / Email",      badge:"free"},
     // ── Calendrier ─────────────────────────────────────────────────────────────
     {icon:"📅", label:"Calendrier de garde",                     badge:"free"},
@@ -15128,7 +15128,7 @@ function PremiumTab() {
     // ── Contacts ───────────────────────────────────────────────────────────────
     {icon:"📞", label:"Répertoire contacts",                     badge:"trial"},
     // ── Coffre-fort ────────────────────────────────────────────────────────────
-    {icon:"🔐", label:"Coffre-fort illimité — 1 Go",            badge:"premium"},
+    {icon:"🔐", label:"Coffre-fort — 200 Mo",            badge:"premium"},
     // ── Messagerie ─────────────────────────────────────────────────────────────
     {icon:"💬", label:"Messagerie famille (18 ans+ pour enfants)",badge:"trial"},
     // ── Jeu & Récompenses ──────────────────────────────────────────────────────
