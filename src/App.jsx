@@ -333,6 +333,7 @@ function getPerms(sub) {
     maxCustomDates:isPremium?Infinity:isTrial?2:0,
     customGuard:   !isFree,
     weatherEnabled: !isFree,
+    messagingEnabled: !isFree,
     maxObservers:  isFree?0:isTrial?2:5,
     calendarEdit:  true,
     scheduleAdd:   !isFree,
@@ -15562,7 +15563,7 @@ function formatFileSize(bytes){
 
 // ─── MESSAGING TAB ────────────────────────────────────────────────────────────
 function MessagingTab(){
-  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,reactToCloudMessage,deleteCloudMessage,myUid,uidToLocal,localToUid,emailToUid,familySync,isChild,isObs,hiddenConvs,hideConversation}=useApp();
+  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,reactToCloudMessage,deleteCloudMessage,myUid,uidToLocal,localToUid,emailToUid,familySync,isChild,isObs,hiddenConvs,hideConversation,prem,onUpgrade}=useApp();
   const [view,setView]=useState("list");
   const [convId,setConvId]=useState(null);
   const [draft,setDraft]=useState("");
@@ -15804,6 +15805,16 @@ function MessagingTab(){
   },[convId,myUid,msgs]);
 
   useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[currentMsgs.length,view]);
+
+  if(!prem) return (
+    <div style={{textAlign:"center",padding:"48px 20px"}}>
+      <div style={{fontSize:40,marginBottom:12}}>💬</div>
+      <div style={{fontWeight:900,fontSize:17,marginBottom:8,color:C.txt}}>Messagerie</div>
+      <div style={{fontWeight:700,fontSize:14,color:C.ora,marginBottom:8}}>🔒 {t.lockSection}</div>
+      <div style={{fontSize:13,color:C.mut,marginBottom:20,lineHeight:1.6}}>{t.lockDesc}</div>
+      <button onClick={onUpgrade} style={{height:44,padding:"0 26px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",borderRadius:12,fontSize:15,fontWeight:800}}>{t.upgradeCTA}</button>
+    </div>
+  );
 
   function _afterSend(toIds){
     setDraft("");
