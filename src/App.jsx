@@ -6831,11 +6831,11 @@ function ParentCityField({isMine, C, t, familyId, onLocationChange}) {
           style={{height:26,width:26,padding:0,background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:"50%",fontSize:13,color:C.txt,cursor:locating?"wait":"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
           {locating ? "…" : "📍"}
         </button>
-        <div style={{fontSize:13,color:location?.city?C.txt:C.mut}}>{location?.city || (t.noCitySet||"Non renseignée")}</div>
         <button type="button" onClick={()=>setShowSearch(v=>!v)} title={t.searchCity||"Rechercher"} aria-label={t.searchCity||"Rechercher"}
           style={{height:26,width:26,padding:0,background:C.sur,border:`1.5px solid ${C.bor}`,borderRadius:"50%",fontSize:13,color:C.txt,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
           🔍
         </button>
+        <div style={{fontSize:13,color:location?.city?C.txt:C.mut}}>{location?.city || (t.noCitySet||"Non renseignée")}</div>
       </div>
       {showSearch && (
         <div style={{marginTop:8}}>
