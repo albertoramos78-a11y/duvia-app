@@ -3461,7 +3461,7 @@ export default function App() {
       try {
         const { data: subRow } = await supabase
           .from("subscriptions")
-          .select("plan, premium_since, cycle, trial_start, trial_extension_days, beta_end")
+          .select("plan, premium_since, cycle, trial_start, trial_extension_days, beta_end, ref_count, validated_ref_count, ref_months, pending_spins, monthly_ref_month, monthly_ref_count")
           .eq("user_id", myUid)
           .maybeSingle();
         if (!subRow) return;
@@ -3473,6 +3473,18 @@ export default function App() {
           trialStart:    subRow.trial_start     || s.trialStart,
           trialExtension:subRow.trial_extension_days ?? s.trialExtension,
           betaEnd:       subRow.beta_end        ?? s.betaEnd,
+          // 🔧 2026-07-15 : ajoutés pour que le popup "bonus parrain" (voir
+          // l'effet de détection plus haut, duvia_ref_last_seen_*) voie le
+          // vrai crédit fait par credit_referral_validation() sur CE compte,
+          // même en session persistante ("remember me") ou connexion Google —
+          // cet effet-ci tourne à chaque login/reload, contrairement à
+          // doLogin() (mot de passe uniquement) qui faisait déjà ce mapping.
+          refCount:        subRow.ref_count            ?? s.refCount,
+          validatedRefCount: subRow.validated_ref_count ?? s.validatedRefCount,
+          refMonths:       subRow.ref_months            ?? s.refMonths,
+          pendingSpins:    subRow.pending_spins         ?? s.pendingSpins,
+          monthlyRefMonth: subRow.monthly_ref_month     ?? s.monthlyRefMonth,
+          monthlyRefCount: subRow.monthly_ref_count     ?? s.monthlyRefCount,
         }));
       } catch (e) {
         console.error("[Duvia] Erreur vérification plan:", e);
