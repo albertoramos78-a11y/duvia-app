@@ -43,30 +43,17 @@ serve(async (req) => {
 
   if (action === "lookup_user") {
     const userId = String(payload?.user_id || "").trim();
-    const email = String(payload?.email || "").trim().toLowerCase();
+    if (!userId) return jsonResponse({ error: "missing_user_id" }, 400);
 
-    // 🔎 Recherche par UUID : passe par l'API admin Supabase (auth.users),
-    // fiable pour n'importe quel compte réel — contrairement à la recherche
-    // par email ci-dessous, qui dépend de family_members.email (pas toujours
-    // rempli, ex. un parent jamais passé par le flux d'invitation observateur).
-    if (userId) {
-      const { data: userData, error: userErr } = await admin.auth.admin.getUserById(userId);
-      if (userErr || !userData?.user) return jsonResponse({ error: "user_not_found" }, 404);
-      const { data: member } = await admin.from("family_members").select("display_name").eq("user_id", userId).limit(1).maybeSingle();
-      const { data: subRow } = await admin.from("subscriptions").select("*").eq("user_id", userId).maybeSingle();
-      return jsonResponse({ user_id: userId, name: member?.display_name || null, email: userData.user.email || null, sub: subRow || null });
-    }
-
-    if (!email) return jsonResponse({ error: "missing_email" }, 400);
-    const { data: member } = await admin
-      .from("family_members")
-      .select("user_id, display_name, email")
-      .eq("email", email)
-      .limit(1)
-      .maybeSingle();
-    if (!member?.user_id) return jsonResponse({ error: "user_not_found" }, 404);
-    const { data: subRow } = await admin.from("subscriptions").select("*").eq("user_id", member.user_id).maybeSingle();
-    return jsonResponse({ user_id: member.user_id, name: member.display_name || null, email: member.email, sub: subRow || null });
+    // Passe par l'API admin Supabase (auth.users) — fiable pour n'importe
+    // quel compte réel, contrairement à une recherche par email basée sur
+    // family_members.email (pas toujours rempli, ex. un parent jamais passé
+    // par le flux d'invitation observateur, ou connecté via Google).
+    const { data: userData, error: userErr } = await admin.auth.admin.getUserById(userId);
+    if (userErr || !userData?.user) return jsonResponse({ error: "user_not_found" }, 404);
+    const { data: member } = await admin.from("family_members").select("display_name").eq("user_id", userId).limit(1).maybeSingle();
+    const { data: subRow } = await admin.from("subscriptions").select("*").eq("user_id", userId).maybeSingle();
+    return jsonResponse({ user_id: userId, name: member?.display_name || null, email: userData.user.email || null, sub: subRow || null });
   }
 
   if (action === "set_user_plan") {

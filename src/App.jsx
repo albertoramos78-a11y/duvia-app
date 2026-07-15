@@ -14794,7 +14794,7 @@ function GlobalBetaCard({ C }) {
 }
 
 function AccountSubscriptionCard({ C }) {
-  const [email, setEmail] = useState("");
+  const [userIdInput, setUserIdInput] = useState("");
   const [account, setAccount] = useState(null);
   const [betaEndDate, setBetaEndDate] = useState("");
   const [premiumCycle, setPremiumCycle] = useState("yearly");
@@ -14811,12 +14811,11 @@ function AccountSubscriptionCard({ C }) {
   }
 
   async function lookup() {
-    const q = email.trim();
+    const q = userIdInput.trim();
     if (!q) return;
     setLoading(true); setErr(""); setMsg(""); setAccount(null);
     try {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q);
-      const d = await call(isUuid ? { action: "lookup_user", user_id: q } : { action: "lookup_user", email: q });
+      const d = await call({ action: "lookup_user", user_id: q });
       setAccount(d);
     } catch (ex) {
       setErr(String(ex?.message || ex));
@@ -14848,9 +14847,9 @@ function AccountSubscriptionCard({ C }) {
     <div className="card" style={{borderColor:`${C.vio}44`,background:`${C.vio}06`}}>
       <div style={{fontSize:11,fontWeight:800,color:C.vio,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>👤 Gérer l'abonnement d'un compte</div>
       <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
-        <input type="text" placeholder="email@duvia.fr ou UUID du compte" value={email} onChange={e=>setEmail(e.target.value)}
+        <input type="text" placeholder="UUID du compte" value={userIdInput} onChange={e=>setUserIdInput(e.target.value)}
           style={{flex:1,minWidth:180,padding:"9px 12px",border:`1px solid ${C.bor}`,borderRadius:8,fontSize:13}} />
-        <button onClick={lookup} disabled={loading || !email.trim()}
+        <button onClick={lookup} disabled={loading || !userIdInput.trim()}
           style={{padding:"0 14px",height:38,background:C.vio,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer",opacity:loading?.6:1}}>
           🔍 Chercher
         </button>
