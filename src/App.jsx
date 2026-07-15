@@ -3927,13 +3927,24 @@ export default function App() {
   const [showReferreePopup, setShowReferreePopup] = useState(false);
   const [showReferrerPopup, setShowReferrerPopup] = useState(false);
 
-  // Parrain : afficher popup si bonus en attente (après login)
+  // Parrain : afficher popup si le compte a gagné un nouveau bonus depuis la
+  // dernière visite. 🔧 2026-07-15 : remplace l'ancien mécanisme (un flag
+  // localStorage écrit par le FILLEUL sous la clé duvia_ref_bonus_pending_family_
+  // — ne pouvait jamais fonctionner entre deux appareils réels, seulement si
+  // parrain et filleul partageaient le même navigateur). Le crédit réel est
+  // désormais fait côté serveur par credit_referral_validation() (voir
+  // docs/superpowers/specs/2026-07-15-referral-system-fix-design.md) ; ce
+  // popup ne fait que détecter, sur CET appareil, que validatedRefCount ou
+  // pendingSpins a augmenté depuis la dernière fois qu'on l'a vu — pas de
+  // notification temps réel cross-appareil, cohérent avec le non-objectif du
+  // design ("il le verra à sa prochaine connexion").
+  const [lastSeenRefCredit, setLastSeenRefCredit] = useLocalStorage(`duvia_ref_last_seen_${user?.id||"default"}`, null);
   useEffect(()=>{
-    if(!user?.refCode) return;
-    const bonusKey = `duvia_ref_bonus_pending_family_${user.refCode}`;
-    const pending = localStorage.getItem(bonusKey);
-    if(pending){ setShowReferrerPopup(true); localStorage.removeItem(bonusKey); }
-  },[user?.id]);
+    if(!user?.id) return;
+    const current = (sub.validatedRefCount||0) + (sub.pendingSpins||0);
+    if(lastSeenRefCredit!==null && current>lastSeenRefCredit) setShowReferrerPopup(true);
+    if(current!==lastSeenRefCredit) setLastSeenRefCredit(current);
+  },[user?.id, sub.validatedRefCount, sub.pendingSpins]);
 
   // Popup remboursement en attente à la connexion
   useEffect(()=>{
