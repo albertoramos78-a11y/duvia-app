@@ -15450,8 +15450,20 @@ function AdminTab() {
 }
 
 
+// Rang des paliers pour le sélecteur "Fonctionnalités incluses" de PremiumTab —
+// une fonctionnalité taguée badge:X s'allume dès que TIER_RANK[X] <= le palier
+// actuellement sélectionné par l'utilisateur (clic sur un des 4 boutons).
+const TIER_RANK = {free:0, trial:1, premium:2, premium_ai:3};
+
 function PremiumTab() {
   const {C,t,sub,setSub,st,days,perms,setMenuTab,setShowMenu,users,user,familyPremiumFromCoParent,familyBestSub} = useApp();
+  const TIERS = [
+    {key:"free",       label:"Freemium",      emoji:"🆓", color:C.grn},
+    {key:"trial",      label:"Trial Premium", emoji:"⭐", color:C.vio},
+    {key:"premium",    label:"Premium",       emoji:"💎", color:C.pin},
+    {key:"premium_ai", label:"Premium+AI",    emoji:"🤖", color:C.blu},
+  ];
+  const [tierPreview, setTierPreview] = useState("free");
   const [confirmCancelSub,setConfirmCancelSub] = useState(false);
   const isPremium=st==="premium"||sub._admin;
   // Résout l'email du co-parent payeur uniquement quand le statut affiché
@@ -15663,31 +15675,30 @@ function PremiumTab() {
       </div>
       <div className="card" style={{marginBottom:14}}>
         <div className="sec">Fonctionnalités incluses</div>
-        {[
-          {key:"free",    title:"🆓 Freemium",                                        color:C.grn},
-          {key:"trial",   title:"⭐ Trial Premium — en plus de Freemium",              color:C.vio},
-          {key:"premium", title:"💎 Premium — en plus de Freemium + Trial Premium",    color:C.pin},
-        ].map(tier=>{
-          const tierItems = items.filter(f=>f.badge===tier.key);
+        {/* Sélecteur de palier : clique pour voir ce qui s'allume à chaque niveau */}
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14,paddingBottom:12,borderBottom:`1px solid ${C.bor}`}}>
+          {TIERS.map(tier=>(
+            <button key={tier.key} onClick={()=>setTierPreview(tier.key)}
+              style={{padding:"6px 12px",borderRadius:20,border:`1.5px solid ${tierPreview===tier.key?tier.color:C.bor}`,
+                background:tierPreview===tier.key?tier.color:"transparent",
+                color:tierPreview===tier.key?"#fff":C.mut,fontSize:12,fontWeight:800,cursor:"pointer",transition:"all .15s"}}>
+              {tier.emoji} {tier.label}
+            </button>
+          ))}
+        </div>
+        {items.map((f,i)=>{
+          const active = TIER_RANK[f.badge] <= TIER_RANK[tierPreview];
+          const tierColor = TIERS.find(t=>t.key===f.badge)?.color || C.mut;
           return (
-            <div key={tier.key} style={{marginBottom:16}}>
-              <div style={{fontSize:12,fontWeight:800,color:tier.color,marginBottom:8,paddingBottom:6,borderBottom:`1.5px solid ${tier.color}33`}}>{tier.title}</div>
-              {tierItems.map((f,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:i<tierItems.length-1?`1px solid ${C.bor}`:"none"}}>
-                  <div style={{width:30,height:30,borderRadius:8,background:`${tier.color}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>{f.icon}</div>
-                  <div style={{flex:1,fontSize:13,fontWeight:600,color:C.txt}}>{f.label}</div>
-                  {f.value && <span style={{fontSize:12,fontWeight:800,color:tier.color,background:`${tier.color}18`,padding:"2px 10px",borderRadius:20,flexShrink:0}}>{f.value}</span>}
-                  {f.soon && <span style={{fontSize:10,fontWeight:800,color:C.mut,background:C.sur,border:`1px solid ${C.bor}`,padding:"2px 8px",borderRadius:6,flexShrink:0}}>Bientôt</span>}
-                </div>
-              ))}
+            <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:i<items.length-1?`1px solid ${C.bor}`:"none",opacity:active?1:.35,transition:"opacity .2s"}}>
+              <div style={{width:30,height:30,borderRadius:8,background:active?`${tierColor}18`:C.sur,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0,filter:active?"none":"grayscale(1)"}}>{f.icon}</div>
+              <div style={{flex:1,fontSize:13,fontWeight:600,color:active?C.txt:C.mut}}>{f.label}</div>
+              {f.value && <span style={{fontSize:12,fontWeight:800,color:active?tierColor:C.mut,background:active?`${tierColor}18`:C.sur,padding:"2px 10px",borderRadius:20,flexShrink:0}}>{f.value}</span>}
+              {f.soon && <span style={{fontSize:10,fontWeight:800,color:C.mut,background:C.sur,border:`1px solid ${C.bor}`,padding:"2px 8px",borderRadius:6,flexShrink:0}}>Bientôt</span>}
+              {!active && <span style={{fontSize:13,flexShrink:0}}>🔒</span>}
             </div>
           );
         })}
-        {/* Premium+AI : palier futur (backlog #23), pas encore scopé — simple teaser sans liste de fonctionnalités précises */}
-        <div>
-          <div style={{fontSize:12,fontWeight:800,color:C.mut,marginBottom:8,paddingBottom:6,borderBottom:`1.5px solid ${C.bor}`}}>🤖 Premium+AI</div>
-          <div style={{padding:"7px 0",fontSize:12,color:C.mut,fontStyle:"italic"}}>Bientôt disponible.</div>
-        </div>
       </div>
     </div>
   );
