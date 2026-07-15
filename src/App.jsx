@@ -15515,11 +15515,12 @@ function PremiumTab() {
   // soon: fonctionnalité pas encore construite, affichée avec un marqueur "Bientôt"
   const items=[
     // ── Freemium ───────────────────────────────────────────────────────────────
-    {icon:"👥", label:"2 parents",                               badge:"free"},
-    {icon:"🧒", label:"1 enfant",                                 badge:"free"},
+    {icon:"👥", label:"Parents",                                 value:"2", badge:"free"},
+    {icon:"🧒", label:"Enfant",                                   value:"1", badge:"free"},
     {icon:"📅", label:"Calendrier de garde",                     badge:"free"},
     {icon:"🌍", label:"Jours fériés 15+ pays",                  badge:"free"},
-    {icon:"💰", label:"Dépenses & remboursements",               badge:"free"},
+    {icon:"💰", label:"Dépenses & remboursements (sans pièces jointes ni balance)", badge:"free"},
+    {icon:"📞", label:"Répertoire (sans ajout de numéros)",      badge:"free"},
     {icon:"🌐", label:"5 langues (FR · EN · DE · ES · PT)",     badge:"free"},
     {icon:"📱", label:"Installable sur mobile (PWA)",            badge:"free"},
 
