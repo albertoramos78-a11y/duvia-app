@@ -14911,9 +14911,158 @@ function AccountSubscriptionCard({ C }) {
   );
 }
 
+function PremiumSubscribersCard({ C }) {
+  const [subscribers, setSubscribers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    supabase.functions.invoke("admin-manage-subscriptions", { body: { action: "list_premium_users" } })
+      .then(({ data, error }) => {
+        if (error) throw new Error(error.message || "invoke_failed");
+        if (data?.error) throw new Error(data.error);
+        setSubscribers(data?.subscribers || []);
+      })
+      .catch(e => setErr(String(e?.message || e)))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const rows = subscribers.map(r => {
+    const since = r.premium_since ? new Date(r.premium_since) : null;
+    let expiry = null;
+    if (since) { expiry = new Date(since); r.cycle === "yearly" ? expiry.setFullYear(expiry.getFullYear() + 1) : expiry.setMonth(expiry.getMonth() + 1); }
+    const now = new Date();
+    const isActive = expiry ? expiry > now : true;
+    const daysLeft = expiry ? Math.ceil((expiry - now) / 86400000) : null;
+    return { ...r, since, expiry, isActive, daysLeft };
+  });
+
+  return (
+    <div className="card" style={{marginBottom:14,borderColor:`${C.vio}44`,background:`${C.vio}06`}}>
+      <div style={{fontSize:11,fontWeight:800,color:C.vio,letterSpacing:".1em",textTransform:"uppercase",marginBottom:12}}>⭐ Abonnés Premium</div>
+      {loading ? (
+        <div style={{fontSize:13,color:C.mut,textAlign:"center",padding:"12px 0"}}>Chargement…</div>
+      ) : err ? (
+        <div style={{fontSize:11,color:C.red}}>⚠️ {err}</div>
+      ) : rows.length === 0 ? (
+        <div style={{fontSize:13,color:C.mut,textAlign:"center",padding:"12px 0"}}>Aucun abonné Premium pour l'instant.</div>
+      ) : (
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead>
+              <tr style={{background:C.sur}}>
+                {["Abonné","Souscrit le","Cycle","Échéance","Statut"].map(h=>(
+                  <th key={h} style={{padding:"7px 8px",textAlign:"left",fontWeight:800,color:C.mut,borderBottom:`1.5px solid ${C.bor}`,whiteSpace:"nowrap"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r,i)=>(
+                <tr key={r.user_id} style={{borderBottom:`1px solid ${C.bor}`,background:i%2===0?"transparent":C.sur}}>
+                  <td style={{padding:"8px",fontWeight:700,color:C.txt}}>
+                    <div>{r.name || "—"}</div>
+                    <div style={{fontSize:10,color:C.mut}}>{r.email}</div>
+                  </td>
+                  <td style={{padding:"8px",color:C.txt,whiteSpace:"nowrap"}}>{r.since?r.since.toLocaleDateString("fr-FR"):"—"}</td>
+                  <td style={{padding:"8px",whiteSpace:"nowrap"}}>
+                    <span style={{background:`${C.vio}18`,color:C.vio,padding:"2px 8px",borderRadius:6,fontWeight:700,fontSize:11}}>
+                      {r.cycle==="yearly"?"Annuel":"Mensuel"}
+                    </span>
+                  </td>
+                  <td style={{padding:"8px",color:C.txt,whiteSpace:"nowrap"}}>
+                    {r.expiry?r.expiry.toLocaleDateString("fr-FR"):"—"}
+                    {r.daysLeft!==null&&<div style={{fontSize:10,color:r.daysLeft<=7?C.red:r.daysLeft<=30?C.yel:C.mut}}>{r.daysLeft>0?`J-${r.daysLeft}`:"Expiré"}</div>}
+                  </td>
+                  <td style={{padding:"8px"}}>
+                    <span style={{background:r.isActive?`${C.grn}22`:`${C.red}22`,color:r.isActive?C.grn:C.red,padding:"2px 8px",borderRadius:6,fontWeight:800,fontSize:11,whiteSpace:"nowrap"}}>
+                      {r.isActive?"✅ Actif":"❌ Expiré"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminChangeLogCard({ C }) {
+  const [changes, setChanges] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const [reverting, setReverting] = useState(null);
+  const [msg, setMsg] = useState("");
+
+  async function load() {
+    setLoading(true); setErr("");
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-manage-subscriptions", { body: { action: "list_admin_changes" } });
+      if (error) throw new Error(error.message || "invoke_failed");
+      if (data?.error) throw new Error(data.error);
+      setChanges(data?.changes || []);
+    } catch (e) {
+      setErr(String(e?.message || e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function revert(id) {
+    if (!window.confirm("Annuler ce changement et restaurer l'état précédent de ce compte ?")) return;
+    setReverting(id); setErr(""); setMsg("");
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-manage-subscriptions", { body: { action: "revert_change", log_id: id } });
+      if (error) throw new Error(error.message || "invoke_failed");
+      if (data?.error) throw new Error(data.error);
+      setMsg("✅ Changement annulé.");
+      await load();
+    } catch (e) {
+      setErr(String(e?.message || e));
+    } finally {
+      setReverting(null);
+    }
+  }
+
+  return (
+    <div className="card" style={{marginBottom:14,borderColor:`${C.vio}44`,background:`${C.vio}06`}}>
+      <div style={{fontSize:11,fontWeight:800,color:C.vio,letterSpacing:".1em",textTransform:"uppercase",marginBottom:12}}>📋 Historique des modifications admin</div>
+      {loading ? (
+        <div style={{fontSize:13,color:C.mut,textAlign:"center",padding:"12px 0"}}>Chargement…</div>
+      ) : changes.length === 0 ? (
+        <div style={{fontSize:13,color:C.mut,textAlign:"center",padding:"12px 0"}}>Aucune modification pour l'instant.</div>
+      ) : (
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {changes.map(c => (
+            <div key={c.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:C.sur,borderRadius:8,flexWrap:"wrap"}}>
+              <div style={{flex:1,minWidth:180}}>
+                <div style={{fontSize:12,fontWeight:700,color:C.txt}}>{c.target_email || c.target_user_id}</div>
+                <div style={{fontSize:11,color:C.mut}}>
+                  {c.previous_plan || "—"} → <strong>{c.new_plan}</strong> · par {c.admin_email || "?"} · {new Date(c.changed_at).toLocaleString("fr-FR")}
+                </div>
+              </div>
+              {c.can_revert && (
+                <button onClick={()=>revert(c.id)} disabled={reverting===c.id}
+                  style={{padding:"5px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:6,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                  {reverting===c.id ? "…" : "↩️ Annuler"}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {msg && <div style={{marginTop:8,fontSize:11,color:C.grn}}>{msg}</div>}
+      {err && <div style={{marginTop:8,fontSize:11,color:C.red}}>⚠️ {err}</div>}
+    </div>
+  );
+}
+
 // ─── ADMIN TAB ────────────────────────────────────────────────────────────────
 function AdminTab() {
-  const {C, sub, setSub, users, setUsers, setShowResetConfirm, simDate, setSimDate} = useApp();
+  const {C, sub, setSub, setShowResetConfirm, simDate, setSimDate} = useApp();
 
   // ── Admin Backup Manager ─────────────────────────────────────────────────
   const [bmEmail,  setBmEmail]  = useState("");
@@ -14996,21 +15145,6 @@ function AdminTab() {
     setBmMsg("Backup supprimé.");
     if (bmFamId) bmListFamily(bmFamId);
   }
-
-  // subscriberRows
-  const subscriberRows = (() => {
-    const all = (users||[]).filter(u => u.sub && u.sub.plan === "premium");
-    return all.map(u => {
-      const since = u.sub.premiumSince ? new Date(u.sub.premiumSince) : null;
-      const cycle = u.sub.cycle;
-      let expiry = null;
-      if(since){ expiry = new Date(since); cycle==="yearly" ? expiry.setFullYear(expiry.getFullYear()+1) : expiry.setMonth(expiry.getMonth()+1); }
-      const now = new Date();
-      const isActive = expiry ? expiry > now : true;
-      const daysLeft = expiry ? Math.ceil((expiry-now)/86400000) : null;
-      return {name:u.name, email:u.email, since, cycle, expiry, isActive, daysLeft};
-    });
-  })();
 
   return (
     <div>
@@ -15211,50 +15345,9 @@ function AdminTab() {
       <GlobalBetaCard C={C} />
       <AccountSubscriptionCard C={C} />
 
-      {/* ── Abonnés Premium ──────────────────────────────────────────── */}
-      <div className="card" style={{borderColor:`${C.vio}44`,background:`${C.vio}06`}}>
-        <div style={{fontSize:11,fontWeight:800,color:C.vio,letterSpacing:".1em",textTransform:"uppercase",marginBottom:12}}>⭐ Abonnés Premium</div>
-        {subscriberRows.length === 0 ? (
-          <div style={{fontSize:13,color:C.mut,textAlign:"center",padding:"12px 0"}}>Aucun abonné Premium pour l'instant.</div>
-        ) : (
-          <div style={{overflowX:"auto"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-              <thead>
-                <tr style={{background:C.sur}}>
-                  {["Abonné","Souscrit le","Cycle","Échéance","Statut"].map(h=>(
-                    <th key={h} style={{padding:"7px 8px",textAlign:"left",fontWeight:800,color:C.mut,borderBottom:`1.5px solid ${C.bor}`,whiteSpace:"nowrap"}}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {subscriberRows.map((r,i)=>(
-                  <tr key={i} style={{borderBottom:`1px solid ${C.bor}`,background:i%2===0?"transparent":C.sur}}>
-                    <td style={{padding:"8px",fontWeight:700,color:C.txt}}>
-                      <div>{r.name}</div>
-                      <div style={{fontSize:10,color:C.mut}}>{r.email}</div>
-                    </td>
-                    <td style={{padding:"8px",color:C.txt,whiteSpace:"nowrap"}}>{r.since?r.since.toLocaleDateString("fr-FR"):"—"}</td>
-                    <td style={{padding:"8px",whiteSpace:"nowrap"}}>
-                      <span style={{background:`${C.vio}18`,color:C.vio,padding:"2px 8px",borderRadius:6,fontWeight:700,fontSize:11}}>
-                        {r.cycle==="yearly"?"Annuel":"Mensuel"}
-                      </span>
-                    </td>
-                    <td style={{padding:"8px",color:C.txt,whiteSpace:"nowrap"}}>
-                      {r.expiry?r.expiry.toLocaleDateString("fr-FR"):"—"}
-                      {r.daysLeft!==null&&<div style={{fontSize:10,color:r.daysLeft<=7?C.red:r.daysLeft<=30?C.yel:C.mut}}>{r.daysLeft>0?`J-${r.daysLeft}`:"Expiré"}</div>}
-                    </td>
-                    <td style={{padding:"8px"}}>
-                      <span style={{background:r.isActive?`${C.grn}22`:`${C.red}22`,color:r.isActive?C.grn:C.red,padding:"2px 8px",borderRadius:6,fontWeight:800,fontSize:11,whiteSpace:"nowrap"}}>
-                        {r.isActive?"✅ Actif":"❌ Expiré"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {/* ── Abonnés Premium + historique des modifications admin ──────── */}
+      <PremiumSubscribersCard C={C} />
+      <AdminChangeLogCard C={C} />
     </div>
   );
 }

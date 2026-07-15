@@ -75,8 +75,21 @@ serve(async (req) => {
       if (!["monthly", "yearly"].includes(cycle)) return jsonResponse({ error: "invalid_cycle" }, 400);
       update = { ...update, premium_since: new Date().toISOString(), cycle };
     }
+
+    // 📝 Snapshot AVANT modification — permet un vrai "annuler" plus tard
+    // (revert_change ci-dessous), pas juste un historique en lecture seule.
+    const { data: previousRow } = await admin.from("subscriptions").select("*").eq("user_id", userId).maybeSingle();
+
     const { error } = await admin.from("subscriptions").upsert({ user_id: userId, ...update }, { onConflict: "user_id" });
     if (error) return jsonResponse({ error: error.message }, 500);
+
+    await admin.from("admin_subscription_log").insert({
+      admin_id: callerData.user.id,
+      target_user_id: userId,
+      previous_state: previousRow || null,
+      new_plan: plan,
+    });
+
     return jsonResponse({ ok: true });
   }
 
@@ -85,6 +98,77 @@ serve(async (req) => {
     const endDate = payload?.end_date || null;
     const { error } = await admin.from("app_config").update({ beta_enabled: enabled, beta_end: endDate }).eq("id", 1);
     if (error) return jsonResponse({ error: error.message }, 500);
+    return jsonResponse({ ok: true });
+  }
+
+  if (action === "list_premium_users") {
+    const { data: rows, error } = await admin.from("subscriptions").select("user_id, premium_since, cycle").eq("plan", "premium");
+    if (error) return jsonResponse({ error: error.message }, 500);
+    const results = [];
+    for (const row of rows || []) {
+      const { data: userData } = await admin.auth.admin.getUserById(row.user_id);
+      const { data: member } = await admin.from("family_members").select("display_name").eq("user_id", row.user_id).limit(1).maybeSingle();
+      results.push({
+        user_id: row.user_id,
+        name: member?.display_name || null,
+        email: userData?.user?.email || null,
+        premium_since: row.premium_since,
+        cycle: row.cycle,
+      });
+    }
+    return jsonResponse({ subscribers: results });
+  }
+
+  if (action === "list_admin_changes") {
+    const { data: rows, error } = await admin
+      .from("admin_subscription_log")
+      .select("id, admin_id, target_user_id, previous_state, new_plan, changed_at")
+      .order("changed_at", { ascending: false })
+      .limit(50);
+    if (error) return jsonResponse({ error: error.message }, 500);
+    const results = [];
+    for (const row of rows || []) {
+      const { data: adminData } = await admin.auth.admin.getUserById(row.admin_id);
+      const { data: targetData } = await admin.auth.admin.getUserById(row.target_user_id);
+      results.push({
+        id: row.id,
+        admin_email: adminData?.user?.email || null,
+        target_user_id: row.target_user_id,
+        target_email: targetData?.user?.email || null,
+        previous_plan: row.previous_state?.plan || null,
+        new_plan: row.new_plan,
+        changed_at: row.changed_at,
+        can_revert: !!row.previous_state,
+      });
+    }
+    return jsonResponse({ changes: results });
+  }
+
+  if (action === "revert_change") {
+    const logId = payload?.log_id;
+    if (!logId) return jsonResponse({ error: "missing_log_id" }, 400);
+    const { data: logRow, error: logErr } = await admin.from("admin_subscription_log").select("*").eq("id", logId).maybeSingle();
+    if (logErr || !logRow) return jsonResponse({ error: "log_not_found" }, 404);
+
+    if (logRow.previous_state) {
+      // Restaure exactement la ligne subscriptions telle qu'elle était avant
+      // ce changement (tous les champs, pas seulement plan/cycle/dates).
+      const { error } = await admin.from("subscriptions").upsert(logRow.previous_state, { onConflict: "user_id" });
+      if (error) return jsonResponse({ error: error.message }, 500);
+    } else {
+      // Le compte n'avait aucune ligne subscriptions avant ce changement —
+      // "annuler" veut dire supprimer celle créée depuis.
+      const { error } = await admin.from("subscriptions").delete().eq("user_id", logRow.target_user_id);
+      if (error) return jsonResponse({ error: error.message }, 500);
+    }
+
+    await admin.from("admin_subscription_log").insert({
+      admin_id: callerData.user.id,
+      target_user_id: logRow.target_user_id,
+      previous_state: null, // reverts don't chain further back
+      new_plan: `revert_of_${logId}`,
+    });
+
     return jsonResponse({ ok: true });
   }
 
