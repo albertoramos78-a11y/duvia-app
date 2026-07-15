@@ -14730,10 +14730,179 @@ function ParrainageSection() {
   );
 }
 
+function GlobalBetaCard({ C }) {
+  const [enabled, setEnabled] = useState(false);
+  const [endDate, setEndDate] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    supabase.from("app_config").select("beta_enabled, beta_end").eq("id", 1).maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setEnabled(!!data.beta_enabled);
+          setEndDate(data.beta_end ? data.beta_end.slice(0, 10) : "");
+        }
+        setLoading(false);
+      });
+  }, []);
+
+  async function save() {
+    setSaving(true); setMsg(""); setErr("");
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-manage-subscriptions", {
+        body: { action: "set_global_beta", enabled, end_date: endDate ? new Date(endDate + "T23:59:59").toISOString() : null },
+      });
+      if (error) throw new Error(error.message || "invoke_failed");
+      if (data?.error) throw new Error(data.error);
+      setMsg("✅ Bascule bêta globale enregistrée.");
+    } catch (e) {
+      setErr(String(e?.message || e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) return null;
+
+  return (
+    <div className="card" style={{marginBottom:14,borderColor:`${C.vio}44`,background:`${C.vio}06`}}>
+      <div style={{fontSize:11,fontWeight:800,color:C.vio,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>🌍 Bêta globale</div>
+      <div style={{fontSize:11,color:C.mut,marginBottom:12,lineHeight:1.5}}>
+        Si activée : tous les comptes passent en Trial Premium jusqu'à la date de fin, sauf ceux ayant un vrai abonnement Premium payé.
+      </div>
+      <label style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,cursor:"pointer"}}>
+        <input type="checkbox" checked={enabled} onChange={e=>setEnabled(e.target.checked)} style={{width:18,height:18}} />
+        <span style={{fontSize:13,fontWeight:700,color:C.txt}}>Bêta globale activée</span>
+      </label>
+      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+        <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} style={{flex:1,minWidth:140}} />
+        <button onClick={save} disabled={saving}
+          style={{padding:"0 16px",height:38,background:C.vio,color:"#fff",border:"none",borderRadius:8,fontSize:12,fontWeight:800,cursor:saving?"wait":"pointer"}}>
+          {saving?"…":"Enregistrer"}
+        </button>
+      </div>
+      {msg && <div style={{marginTop:8,fontSize:11,color:C.grn}}>{msg}</div>}
+      {err && <div style={{marginTop:8,fontSize:11,color:C.red}}>⚠️ {err}</div>}
+    </div>
+  );
+}
+
+function AccountSubscriptionCard({ C }) {
+  const [email, setEmail] = useState("");
+  const [account, setAccount] = useState(null);
+  const [betaEndDate, setBetaEndDate] = useState("");
+  const [premiumCycle, setPremiumCycle] = useState("yearly");
+  const [loading, setLoading] = useState(false);
+  const [applying, setApplying] = useState("");
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+
+  async function call(body) {
+    const { data, error } = await supabase.functions.invoke("admin-manage-subscriptions", { body });
+    if (error) throw new Error(error.message || "invoke_failed");
+    if (data?.error) throw new Error(data.error);
+    return data;
+  }
+
+  async function lookup() {
+    const e = email.trim();
+    if (!e) return;
+    setLoading(true); setErr(""); setMsg(""); setAccount(null);
+    try {
+      const d = await call({ action: "lookup_user", email: e });
+      setAccount(d);
+    } catch (ex) {
+      setErr(String(ex?.message || ex));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function applyPlan(plan) {
+    if (!account) return;
+    if (plan === "beta" && !betaEndDate) { setErr("Choisis une date de fin pour la Bêta."); return; }
+    setApplying(plan); setErr(""); setMsg("");
+    try {
+      const body = { action: "set_user_plan", user_id: account.user_id, plan };
+      if (plan === "beta") body.beta_end = new Date(betaEndDate + "T23:59:59").toISOString();
+      if (plan === "premium") body.premium_cycle = premiumCycle;
+      await call(body);
+      setMsg(`✅ Compte mis à jour : ${plan}.`);
+      const refreshed = await call({ action: "lookup_user", email: account.email });
+      setAccount(refreshed);
+    } catch (ex) {
+      setErr(String(ex?.message || ex));
+    } finally {
+      setApplying("");
+    }
+  }
+
+  return (
+    <div className="card" style={{borderColor:`${C.vio}44`,background:`${C.vio}06`}}>
+      <div style={{fontSize:11,fontWeight:800,color:C.vio,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>👤 Gérer l'abonnement d'un compte</div>
+      <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+        <input type="email" placeholder="email@duvia.fr" value={email} onChange={e=>setEmail(e.target.value)}
+          style={{flex:1,minWidth:180,padding:"9px 12px",border:`1px solid ${C.bor}`,borderRadius:8,fontSize:13}} />
+        <button onClick={lookup} disabled={loading || !email.trim()}
+          style={{padding:"0 14px",height:38,background:C.vio,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer",opacity:loading?.6:1}}>
+          🔍 Chercher
+        </button>
+      </div>
+
+      {account && (
+        <div style={{padding:"10px 12px",background:C.sur,borderRadius:8,marginBottom:12}}>
+          <div style={{fontWeight:800,fontSize:13,color:C.txt}}>{account.name || account.email}</div>
+          <div style={{fontSize:11,color:C.mut}}>{account.email}</div>
+          <div style={{fontSize:11,color:C.mut,marginTop:4}}>Plan actuel : <strong>{account.sub?.plan || "—"}</strong></div>
+        </div>
+      )}
+
+      {account && (
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <button onClick={()=>applyPlan("freemium")} disabled={!!applying}
+            style={{height:38,background:C.bor,color:C.txt,border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+            {applying==="freemium"?"…":"Freemium"}
+          </button>
+
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <input type="date" value={betaEndDate} onChange={e=>setBetaEndDate(e.target.value)} style={{flex:1,minWidth:140}} />
+            <button onClick={()=>applyPlan("beta")} disabled={!!applying}
+              style={{padding:"0 16px",height:38,background:"#7c3aed",color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+              {applying==="beta"?"…":"🌟 Bêta"}
+            </button>
+          </div>
+
+          <button onClick={()=>applyPlan("trial_premium")} disabled={!!applying}
+            style={{height:38,background:C.blu,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+            {applying==="trial_premium"?"…":"⏳ Trial Premium (15j)"}
+          </button>
+
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <select value={premiumCycle} onChange={e=>setPremiumCycle(e.target.value)}
+              style={{height:38,borderRadius:8,border:`1.5px solid ${C.bor}`,padding:"0 10px",fontSize:13}}>
+              <option value="monthly">Mensuel</option>
+              <option value="yearly">Annuel</option>
+            </select>
+            <button onClick={()=>applyPlan("premium")} disabled={!!applying}
+              style={{flex:1,minWidth:140,height:38,background:C.vio,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+              {applying==="premium"?"…":"⭐ Premium"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {msg && <div style={{marginTop:10,fontSize:11,color:C.grn}}>{msg}</div>}
+      {err && <div style={{marginTop:10,fontSize:11,color:C.red}}>⚠️ {err}</div>}
+    </div>
+  );
+}
+
 // ─── ADMIN TAB ────────────────────────────────────────────────────────────────
 function AdminTab() {
   const {C, sub, setSub, users, setUsers, setShowResetConfirm, simDate, setSimDate} = useApp();
-  const [grantTarget, setGrantTarget] = useState("");
 
   // ── Admin Backup Manager ─────────────────────────────────────────────────
   const [bmEmail,  setBmEmail]  = useState("");
@@ -15027,32 +15196,9 @@ function AdminTab() {
         </div>
       </div>
 
-      {/* ── 🎁 Offrir Premium à un compte ─────────────────────────────── */}
-      <div className="card" style={{borderColor:`${C.vio}44`,background:`${C.vio}06`}}>
-        <div style={{fontSize:11,fontWeight:800,color:C.vio,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>🎁 Offrir Premium à un compte</div>
-        <div style={{fontSize:11,color:C.mut,marginBottom:10,lineHeight:1.5}}>
-          S'applique à la prochaine connexion de ce compte, sur cet appareil. (Le statut d'abonnement n'est pas encore synchronisé dans le nuage — voir la spec multi-familles.)
-        </div>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-          <select value={grantTarget} onChange={e=>setGrantTarget(e.target.value)}
-            style={{flex:1,minWidth:180,height:38,borderRadius:8,border:`1.5px solid ${C.bor}`,padding:"0 10px",fontSize:13,background:C.card,color:C.txt}}>
-            <option value="">— Choisir un compte —</option>
-            {(users||[]).filter(u=>u.role!=="admin").map(u=>(
-              <option key={u.id} value={u.id}>{u.name} ({u.email}){u.sub?.plan==="premium"?" ⭐ déjà Premium":""}</option>
-            ))}
-          </select>
-          <button disabled={!grantTarget} onClick={()=>{
-              setUsers(prev => prev.map(u => String(u.id)===String(grantTarget) ? {
-                ...u,
-                sub: { ...(u.sub||{}), plan:"premium", premiumSince:new Date().toISOString(), cycle:"yearly" },
-              } : u));
-              setGrantTarget("");
-            }}
-            style={{padding:"8px 16px",background:grantTarget?C.vio:C.bor,color:"#fff",border:"none",borderRadius:10,fontSize:12,fontWeight:800,cursor:grantTarget?"pointer":"not-allowed"}}>
-            🎁 Donner Premium (1 an)
-          </button>
-        </div>
-      </div>
+      {/* ── Gestion admin des abonnements ────────────────────────────── */}
+      <GlobalBetaCard C={C} />
+      <AccountSubscriptionCard C={C} />
 
       {/* ── Abonnés Premium ──────────────────────────────────────────── */}
       <div className="card" style={{borderColor:`${C.vio}44`,background:`${C.vio}06`}}>
