@@ -5194,7 +5194,7 @@ export default function App() {
       )}
       {!isObs && !isChild && st==="premium" && (
         <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>
-          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`${C.grn}18`,border:`1.5px solid ${C.grn}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.grn,fontWeight:800,display:"inline-flex",alignItems:"center",gap:6,cursor:"pointer"}}>⭐ Premium</div>
+          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`${C.grn}18`,border:`1.5px solid ${C.grn}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.grn,fontWeight:800,display:"inline-flex",alignItems:"center",gap:6,cursor:"pointer"}}>⭐ {familyPremiumFromCoParent ? "Premium hérité" : "Premium"}</div>
         </div>
       )}
       </div>
