@@ -14,7 +14,9 @@
 --    même outil. Nullable, pertinent uniquement quand subscriptions.plan =
 --    'beta'.
 --
--- À exécuter sur Supabase APRÈS 0036. Idempotent (réexécutable sans risque).
+-- ⚠️ À exécuter sur Supabase AVANT 0036 (pas après) : 0036 a été modifié après
+-- coup pour lire subscriptions.beta_end, la colonne créée ici. Idempotent
+-- (réexécutable sans risque).
 -- ─────────────────────────────────────────────────────────────────────────────
 
 create table if not exists public.app_config (
