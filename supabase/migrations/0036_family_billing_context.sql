@@ -43,7 +43,13 @@
 --      on garde le comportement `limit 1` d'aujourd'hui (pas pire que
 --      l'existant ailleurs dans ce repo pour la même ambiguïté).
 --
--- À exécuter sur Supabase APRÈS 0035. Idempotent (réexécutable sans risque).
+-- ⚠️ À exécuter sur Supabase APRÈS 0037, pas seulement après 0035 : ce fichier
+-- a été modifié après coup (revue finale de la feature gestion admin des
+-- abonnements) pour sélectionner s.beta_end, une colonne que seule 0037
+-- ajoute à subscriptions. Lancé dans l'ordre numérique naïf (0035→0036→0037),
+-- ce CREATE OR REPLACE FUNCTION échouera immédiatement avec une erreur claire
+-- ("column s.beta_end does not exist") — inoffensif mais à éviter : lancer
+-- 0037 avant 0036. Idempotent (réexécutable sans risque) une fois dans le bon ordre.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 create or replace function public.get_family_billing_context(p_family_id uuid default null)
