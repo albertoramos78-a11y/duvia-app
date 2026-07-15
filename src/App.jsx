@@ -15446,10 +15446,21 @@ function AdminTab() {
 
 
 function PremiumTab() {
-  const {C,t,sub,setSub,st,days,perms,setMenuTab,setShowMenu,users,user,setConfirmDeleteAccount} = useApp();
+  const {C,t,sub,setSub,st,days,perms,setMenuTab,setShowMenu,users,user,setConfirmDeleteAccount,familyPremiumFromCoParent,familyBestSub} = useApp();
   const [confirm,setConfirm]=useState(false);
   const [confirmCancelSub,setConfirmCancelSub] = useState(false);
   const isPremium=st==="premium"||sub._admin;
+  // Résout l'email du co-parent payeur uniquement quand le statut affiché
+  // vient effectivement de lui (jamais un appel réseau pour rien).
+  const [coparentEmail, setCoparentEmail] = useState("");
+  useEffect(() => {
+    if (!familyPremiumFromCoParent || !familyBestSub?.parentUserId) { setCoparentEmail(""); return; }
+    let cancelled = false;
+    supabase.rpc("get_coparent_email", { p_user_id: familyBestSub.parentUserId }).then(({ data }) => {
+      if (!cancelled) setCoparentEmail(data || "");
+    });
+    return () => { cancelled = true; };
+  }, [familyPremiumFromCoParent, familyBestSub?.parentUserId]);
 
   // ── Annuler l'abonnement (fin de période) ────────────────────────────
   // Ne coupe pas le premium immédiatement : marque cancelAtPeriodEnd=true,
@@ -15557,13 +15568,14 @@ function PremiumTab() {
             {sub._admin?"Admin ⚙️":isPremium?"Premium Actif ⭐":st==="earned_premium"?`Premium – ${days}j restant${days>1?"s":""}  🎁`:st==="trial_premium"?`Trial Premium — ${days} jour${days>1?"s":""} restant${days>1?"s":""}` :"Freemium"}
           </div>
           {isPremium&&sub.premiumSince&&<div style={{fontSize:12,color:C.mut}}>{t.premSince} {new Date(sub.premiumSince).toLocaleDateString()} · {sub.cycle==="monthly"?t.monthly:t.yearly}</div>}
+          {familyPremiumFromCoParent&&<div style={{fontSize:12,color:C.vio,fontWeight:700,marginTop:6}}>👨‍👩‍👧 Premium via votre famille{coparentEmail?` : ${coparentEmail} y a souscrit`:""}</div>}
           {st==="trial_premium"&&<div style={{fontSize:12,color:C.mut,marginTop:4}}>Passez à Premium pour un accès illimité</div>}
           {st==="freemium"&&<div style={{fontSize:12,color:C.mut,marginTop:4}}>Compte gratuit permanent — fonctions limitées</div>}
         </div>
       )}
 
       {/* Gestion abonnement : annuler / reprendre (Netflix-style, fin de période) */}
-      {isPremium && !sub._admin && !isBeta() && (
+      {isPremium && !sub._admin && !isBeta() && !familyPremiumFromCoParent && (
         <div className="card" style={{marginBottom:14}}>
           {!sub.cancelAtPeriodEnd ? (
             <>
@@ -15669,7 +15681,7 @@ function PremiumTab() {
         ))}
       </div>
       {/* Cancel sub - premium only */}
-      {isPremium&&(
+      {isPremium && !familyPremiumFromCoParent && (
         <div className="card" style={{borderColor:`${C.red}44`}}>
           <div className="sec">{t.cancelSub}</div>
           {!confirm?(
