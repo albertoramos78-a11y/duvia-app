@@ -5402,7 +5402,7 @@ export default function App() {
             {menuTab==="parrainage" && <ParrainageSection />}
             {menuTab==="rating" && <RatingTab />}
             {menuTab==="admin" && isAdm && <AdminTab />}
-            {!menuTab && tab===0 && <div key="t0" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><CalTab readOnly={false} canEdit={!isFreemiumPlan(sub)} /></div>}
+            {!menuTab && tab===0 && <div key="t0" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><CalTab readOnly={false} canEdit={st!=="freemium"} /></div>}
             {!menuTab && tab===1 && <div key="t1" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><ScheduleTab /></div>}
             {!menuTab && tab===2 && <div key="t2" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><ExpTab /></div>}
             {!menuTab && tab===3 && <div key="t3" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><ContactsTab /></div>}
@@ -11277,8 +11277,11 @@ function getSpecialEvents(date, cfg) {
 // CALENDAR TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
-  const {C,t,cfg,setCfg,updateCal: ctxUpdateCal,apiData,setMenuTab,setConfigStep,prem,perms,onUpgrade,isObs,isChild,user,sub,addHist,pushNotif,custodyShadow,familySync} = useApp();
-  const premFull = isPremFull(sub); // PDF calendrier réservé full premium uniquement
+  const {C,t,cfg,setCfg,updateCal: ctxUpdateCal,apiData,setMenuTab,setConfigStep,prem,perms,st,onUpgrade,isObs,isChild,user,sub,addHist,pushNotif,custodyShadow,familySync} = useApp();
+  // 🔧 st vient du statut effectif partagé par la famille (effectiveSub), pas
+  // du sub individuel — un parent couvert par le Premium de son co-parent doit
+  // aussi avoir accès à l'export PDF, pas seulement le payeur réel.
+  const premFull = st==="premium"; // PDF calendrier réservé full premium uniquement
   const editBlocked = !canEdit;
   const updateCal = updateCalProp !== undefined ? updateCalProp : ctxUpdateCal;
   // Persiste la position du calendrier dans localStorage pour survivre aux changements d'onglet et rechargements JSX
@@ -12646,8 +12649,10 @@ function HistTab() {
 
 // ─── EXPENSES ─────────────────────────────────────────────────────────────────
 function ExpTab() {
-  const {C,t,cfg,setCfg,addHist,pushNotif,user,prem,perms,onUpgrade,isAdm,setActivity,sub,simDate,setExpSubmittedPopup,addRefAction,currency="€",expenses:ctxExpenses,reimbursements:ctxReimbursements,expMethods,history:ctxHistory,familySync,removedUserIds,myUid} = useApp();
-  const premFull = isPremFull(sub); // PDF réservé full premium uniquement
+  const {C,t,cfg,setCfg,addHist,pushNotif,user,prem,perms,st,onUpgrade,isAdm,setActivity,sub,simDate,setExpSubmittedPopup,addRefAction,currency="€",expenses:ctxExpenses,reimbursements:ctxReimbursements,expMethods,history:ctxHistory,familySync,removedUserIds,myUid} = useApp();
+  // 🔧 st vient du statut effectif partagé par la famille (effectiveSub), pas
+  // du sub individuel — voir CalTab pour la même correction.
+  const premFull = st==="premium"; // PDF réservé full premium uniquement
   const now = simDate ? new Date(simDate) : new Date();
   const todayStr = toStr(now);
   const [showAdd,setShowAdd]=useState(false);
@@ -18178,8 +18183,10 @@ function GameTab() {
 // VAULT TAB — Coffre-fort de documents
 // ═══════════════════════════════════════════════════════════════════════════════
 function VaultTab() {
-  const { C, t, cfg, setCfg, user, users, prem, perms, onUpgrade, isObs, setActivity, addRefAction, sub, familySync, pushNotif, addHist, myUid, unreadVaultDocIds, setUnreadVaultDocIds, pushStatus } = useApp();
-  const premFull = isPremFull(sub);
+  const { C, t, cfg, setCfg, user, users, prem, perms, st, onUpgrade, isObs, setActivity, addRefAction, sub, familySync, pushNotif, addHist, myUid, unreadVaultDocIds, setUnreadVaultDocIds, pushStatus } = useApp();
+  // 🔧 st vient du statut effectif partagé par la famille (effectiveSub), pas
+  // du sub individuel — voir CalTab pour la même correction.
+  const premFull = st==="premium";
 
   // Identité cloud de la personne connectée (nécessaire pour savoir qui a uploadé quoi)
   const [uid, setUid] = useState(null);
@@ -18207,7 +18214,9 @@ function VaultTab() {
   const totalSizeBytes = useMemo(() =>
     docs.reduce((sum, d) => sum + (d.file_size || 0), 0),
   [docs]);
-  const VAULT_MAX_MB    = getPerms(sub).maxStorageMB ?? 50;
+  // 🔧 perms vient déjà du statut effectif partagé par la famille — recalculer
+  // getPerms(sub) ici recalculait à tort depuis le sub individuel.
+  const VAULT_MAX_MB    = perms.maxStorageMB ?? 50;
   const VAULT_MAX_BYTES = VAULT_MAX_MB * 1024 * 1024;
   const VAULT_MAX_LABEL = `${VAULT_MAX_MB} Mo`;
   const totalSizeMB = (totalSizeBytes / (1024 * 1024)).toFixed(1);
