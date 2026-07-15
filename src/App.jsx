@@ -396,6 +396,7 @@ function familyMaxObservers(parentRows) {
     trialStart: r.parent_trial_start,
     trialExtension: r.parent_trial_extension_days,
     accountCreatedAt: r.parent_account_created_at,
+    betaEnd: r.parent_beta_end,
   } : {
     plan: "trial_premium",
     accountCreatedAt: new Date().toISOString(),
@@ -3440,7 +3441,7 @@ export default function App() {
       try {
         const { data: subRow } = await supabase
           .from("subscriptions")
-          .select("plan, premium_since, cycle, trial_start, trial_extension_days")
+          .select("plan, premium_since, cycle, trial_start, trial_extension_days, beta_end")
           .eq("user_id", myUid)
           .maybeSingle();
         if (!subRow) return;
@@ -3451,6 +3452,7 @@ export default function App() {
           cycle:         subRow.cycle           || s.cycle,
           trialStart:    subRow.trial_start     || s.trialStart,
           trialExtension:subRow.trial_extension_days ?? s.trialExtension,
+          betaEnd:       subRow.beta_end        ?? s.betaEnd,
         }));
       } catch (e) {
         console.error("[Duvia] Erreur vérification plan:", e);
@@ -5863,6 +5865,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
           plan: subRow.plan, premiumSince: subRow.premium_since, cycle: subRow.cycle,
           trialStart: subRow.trial_start, accountCreatedAt: subRow.account_created_at,
           trialExtension: subRow.trial_extension_days,
+          betaEnd: subRow.beta_end,
           refCode: subRow.ref_code, refUsed: subRow.ref_used,
           refCount: subRow.ref_count || 0, validatedRefCount: subRow.validated_ref_count || 0,
           refMonths: subRow.ref_months || 0, pendingSpins: subRow.pending_spins || 0,
@@ -14411,9 +14414,9 @@ function ReferralProgressCard({C, refTracking}) {
 // ─── PREMIUM TAB & PARRAINAGE ────────────────────────────────────────────────
 function ParrainageSection() {
   const {C,t,sub,setSub,user,setUsers,users,st,days,addRefAction,refActions,showReferreePopup,setShowReferreePopup,showReferrerPopup,setShowReferrerPopup} = useApp();
-  const isPremium = sub.plan==="premium" || sub._admin;
-  const isEarned  = sub.plan==="earned_premium";
-  const isTrial   = sub.plan==="trial_premium";
+  const isPremium = st==="premium";
+  const isEarned  = st==="earned_premium";
+  const isTrial   = st==="trial_premium";
   const isFreemium= st==="freemium";
 
   const [copied,setCopied]         = useState(false);

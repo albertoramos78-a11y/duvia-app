@@ -54,6 +54,7 @@ returns table (
   parent_trial_start          timestamptz,
   parent_trial_extension_days int,
   parent_account_created_at   timestamptz,
+  parent_beta_end              timestamptz,
   my_observer_rank             int
 )
 language plpgsql
@@ -99,7 +100,7 @@ begin
      and joined_at < v_joined_at;
 
   return query
-    select s.plan, s.premium_since, s.cycle, s.trial_start, s.trial_extension_days, s.account_created_at, v_rank
+    select s.plan, s.premium_since, s.cycle, s.trial_start, s.trial_extension_days, s.account_created_at, s.beta_end, v_rank
       from public.family_members fm
       left join public.subscriptions s on s.user_id = fm.user_id
      where fm.family_id = v_family_id
