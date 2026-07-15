@@ -15659,28 +15659,29 @@ function PremiumTab() {
       </div>
       <div className="card" style={{marginBottom:14}}>
         <div className="sec">Fonctionnalités incluses</div>
-        {/* Légende */}
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12,paddingBottom:10,borderBottom:`1px solid ${C.bor}`}}>
-          {[
-            {bg:`${C.grn}22`,color:C.grn,label:"🆓 Gratuit"},
-            {bg:`${C.vio}22`,color:C.vio,label:"⭐ Trial / Bêta"},
-            {bg:`${C.pin}22`,color:C.pin,label:"💎 Premium"},
-          ].map(b=>(
-            <span key={b.label} style={{fontSize:10,fontWeight:800,background:b.bg,color:b.color,padding:"2px 8px",borderRadius:6}}>{b.label}</span>
-          ))}
+        {[
+          {key:"free",    title:"🆓 Freemium",                                        color:C.grn},
+          {key:"trial",   title:"⭐ Trial Premium — en plus de Freemium",              color:C.vio},
+          {key:"premium", title:"💎 Premium — en plus de Freemium + Trial Premium",    color:C.pin},
+        ].map(tier=>{
+          const tierItems = items.filter(f=>f.badge===tier.key);
+          return (
+            <div key={tier.key} style={{marginBottom:16}}>
+              <div style={{fontSize:12,fontWeight:800,color:tier.color,marginBottom:8,paddingBottom:6,borderBottom:`1.5px solid ${tier.color}33`}}>{tier.title}</div>
+              {tierItems.map((f,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:i<tierItems.length-1?`1px solid ${C.bor}`:"none"}}>
+                  <div style={{width:30,height:30,borderRadius:8,background:`${tier.color}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>{f.icon}</div>
+                  <div style={{flex:1,fontSize:13,fontWeight:600,color:C.txt}}>{f.label}</div>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+        {/* Premium+AI : palier futur (backlog #23), pas encore scopé — simple teaser sans liste de fonctionnalités précises */}
+        <div>
+          <div style={{fontSize:12,fontWeight:800,color:C.mut,marginBottom:8,paddingBottom:6,borderBottom:`1.5px solid ${C.bor}`}}>🤖 Premium+AI</div>
+          <div style={{padding:"7px 0",fontSize:12,color:C.mut,fontStyle:"italic"}}>Bientôt disponible.</div>
         </div>
-        {items.map((f,i)=>(
-          <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<items.length-1?`1px solid ${C.bor}`:"none"}}>
-            <div style={{width:32,height:32,borderRadius:9,background:`${C.vio}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>{f.icon}</div>
-            <div style={{flex:1,fontSize:13,fontWeight:600,color:C.txt}}>{f.label}</div>
-            <span style={{fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:6,flexShrink:0,
-              background:f.badge==="free"?`${C.grn}22`:f.badge==="trial"?`${C.vio}22`:`${C.pin}22`,
-              color:f.badge==="free"?C.grn:f.badge==="trial"?C.vio:C.pin,
-            }}>
-              {f.badge==="free"?"🆓 Gratuit":f.badge==="trial"?"⭐ Trial / Bêta":"💎 Premium"}
-            </span>
-          </div>
-        ))}
       </div>
       {/* Cancel sub - premium only */}
       {isPremium && !familyPremiumFromCoParent && (
