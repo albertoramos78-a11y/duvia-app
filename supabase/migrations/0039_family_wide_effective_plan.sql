@@ -7,8 +7,14 @@
 -- seulement son propre plan individuel. Voir
 -- docs/superpowers/specs/2026-07-15-family-wide-premium-sharing-design.md.
 --
--- create or replace function est idempotent — même pattern que 0030 sur une
--- fonction antérieure. Aucune table modifiée, aucune donnée migrée.
+-- create or replace function est idempotent, mais PostgreSQL n'autorise à
+-- changer la liste de colonnes d'un `returns table` existant que par un AJOUT
+-- EN FIN DE LISTE — jamais une insertion au milieu (ça échoue avec "cannot
+-- change return type of existing function"). parent_user_id est donc ajouté
+-- APRÈS my_observer_rank (dernière colonne de la version déployée par 0036),
+-- pas avant : aucun impact côté client, qui lit les champs par nom
+-- (r.parent_user_id), jamais par position. Aucune table modifiée, aucune
+-- donnée migrée.
 --
 -- Sécurité : ajoute parent_user_id aux lignes retournées, mais UNIQUEMENT
 -- rempli si l'appelant est lui-même un parent actif de cette famille (vérifié
@@ -27,8 +33,8 @@ returns table (
   parent_trial_extension_days int,
   parent_account_created_at   timestamptz,
   parent_beta_end              timestamptz,
-  parent_user_id               uuid,
-  my_observer_rank             int
+  my_observer_rank             int,
+  parent_user_id               uuid
 )
 language plpgsql
 security definer
@@ -82,8 +88,8 @@ begin
     select
       s.plan, s.premium_since, s.cycle, s.trial_start, s.trial_extension_days,
       s.account_created_at, s.beta_end,
-      case when v_role = 'parent' then fm.user_id else null end,
-      v_rank
+      v_rank,
+      case when v_role = 'parent' then fm.user_id else null end
       from public.family_members fm
       left join public.subscriptions s on s.user_id = fm.user_id
      where fm.family_id = v_family_id
