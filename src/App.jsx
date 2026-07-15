@@ -387,8 +387,16 @@ function planRankFor(sub) {
 // d'une famille déjà payante juste parce que la synchro n'a pas eu le temps
 // de se faire). On traite donc un parent sans ligne comme un compte tout
 // juste créé en Trial (le défaut réel de makeSub() pour tout nouveau compte).
-function familyMaxObservers(parentRows) {
-  if (!parentRows || parentRows.length === 0) return 1;
+// bestParentSub : réduit les lignes brutes de get_family_billing_context() au
+// "meilleur des deux plans parents" de la famille — réutilisé à la fois par
+// familyMaxObservers() (quota d'observateurs, inchangé) et par le statut
+// effectif partagé par toute la famille (voir l'effet checkFamilyBilling et
+// effectiveSub plus bas dans App()). Un parent sans encore de ligne
+// subscriptions (upsert client-side avec 3s de debounce) est traité comme un
+// Trial fraîchement créé, jamais comme Freemium par défaut (voir le
+// commentaire détaillé ci-dessus sur le LEFT JOIN de la RPC).
+function bestParentSub(parentRows) {
+  if (!parentRows || parentRows.length === 0) return null;
   const subs = parentRows.map(r => r.parent_plan ? {
     plan: r.parent_plan,
     premiumSince: r.parent_premium_since,
@@ -397,14 +405,19 @@ function familyMaxObservers(parentRows) {
     trialExtension: r.parent_trial_extension_days,
     accountCreatedAt: r.parent_account_created_at,
     betaEnd: r.parent_beta_end,
+    parentUserId: r.parent_user_id || null,
   } : {
     plan: "trial_premium",
     accountCreatedAt: new Date().toISOString(),
     trialStart: new Date().toISOString(),
     trialExtension: 0,
+    parentUserId: null,
   });
-  const best = subs.reduce((acc, s) => planRankFor(s) > planRankFor(acc) ? s : acc, subs[0]);
-  return getPerms(best).maxObservers;
+  return subs.reduce((acc, s) => planRankFor(s) > planRankFor(acc) ? s : acc, subs[0]);
+}
+function familyMaxObservers(parentRows) {
+  const best = bestParentSub(parentRows);
+  return best ? getPerms(best).maxObservers : 1;
 }
 function isAdmin(user) { return user?.role==="admin"; }
 
@@ -3318,25 +3331,33 @@ export default function App() {
   // juste une incitation commerciale — un faux blocage serait pire qu'un
   // faux négatif temporaire.
   const [observerOverQuota, setObserverOverQuota] = useState(false);
-  const checkObserverQuota = useCallback(async () => {
+  // 🔧 2026-07-15 : élargi à tous les rôles (plus seulement l'observateur) —
+  // voir docs/superpowers/specs/2026-07-15-family-wide-premium-sharing-design.md.
+  // familyBestSub alimente effectiveSub plus bas dans App() : le statut
+  // effectif de TOUT membre de la famille devient le meilleur des deux plans
+  // parents, pas seulement son propre plan individuel.
+  const [familyBestSub, setFamilyBestSub] = useState(null);
+  const checkFamilyBilling = useCallback(async () => {
     // 🔧 Pas `isObs` ici (déclaré plus bas dans App(), App.jsx:4001) : le
     // référencer dans ce tableau de dépendances évalué à cet endroit-ci du
     // corps de fonction lèverait un ReferenceError (TDZ) à CHAQUE rendu, pour
     // tout le monde, pas seulement les observateurs — même famille de bug que
     // l'incident notifyIfNewDevice documenté dans CLAUDE.md. Expression
     // équivalente inlinée à la place.
-    if (user?.role !== "observer" || !familySync.familyId) { setObserverOverQuota(false); return; }
+    if (user?.role === "admin" || !familySync.familyId) { setObserverOverQuota(false); setFamilyBestSub(null); return; }
     try {
       const { data, error } = await supabase.rpc("get_family_billing_context", { p_family_id: familySync.familyId });
       if (error) return;
       const rows = data || [];
+      setFamilyBestSub(bestParentSub(rows));
+      if (user?.role !== "observer") { setObserverOverQuota(false); return; }
       const rank = rows[0]?.my_observer_rank ?? 0;
       setObserverOverQuota(rank >= familyMaxObservers(rows));
     } catch (e) {
       console.error("[Duvia] get_family_billing_context error:", e);
     }
   }, [user?.role, familySync.familyId]);
-  useEffect(() => { checkObserverQuota(); }, [checkObserverQuota]);
+  useEffect(() => { checkFamilyBilling(); }, [checkFamilyBilling]);
   // 🔧 Détection du clic sur le lien de vérification : si l'URL contient
   // ?verify_email=<token> au chargement, valide le jeton côté serveur (RPC
   // verify_parent_email) puis nettoie l'URL. Fonctionne que l'utilisateur
@@ -4045,10 +4066,34 @@ export default function App() {
     if (meta) meta.setAttribute("content", C.vio);
   }, [C]);
   const t     = useMemo(() => TR[lang], [lang]);
-  const st    = useMemo(() => subStatus(sub), [sub]);
-  const prem  = useMemo(() => isPrem(sub), [sub]);
-  const perms = useMemo(() => getPerms(sub), [sub]);
-  const days  = useMemo(() => trialLeft(sub), [sub]);
+  // 🔧 2026-07-15 : le statut effectif de la famille (parent/enfant/observateur)
+  // devient le meilleur des deux plans parents, pas seulement le plan
+  // individuel du compte connecté — voir docs/superpowers/specs/2026-07-15-
+  // family-wide-premium-sharing-design.md. familyBestSub vient de l'effet
+  // checkFamilyBilling ci-dessus ; on ne dégrade jamais : si l'appel réseau
+  // échoue ou n'a pas encore répondu, effectiveSub retombe sur le sub
+  // individuel, exactement comme avant cette fonctionnalité.
+  const effectiveSub = useMemo(
+    () => (familyBestSub && planRankFor(familyBestSub) > planRankFor(sub)) ? familyBestSub : sub,
+    [sub, familyBestSub]
+  );
+  const st    = useMemo(() => subStatus(effectiveSub), [effectiveSub]);
+  const prem  = useMemo(() => isPrem(effectiveSub), [effectiveSub]);
+  const perms = useMemo(() => ({
+    ...getPerms(effectiveSub),
+    // spinWinSub : gagner du Premium à la roue reste réservé à qui est
+    // RÉELLEMENT payeur — pas à qui bénéficie du plan familial sans payer.
+    spinWinSub: subStatus(sub)==="premium" || sub._admin,
+  }), [effectiveSub, sub]);
+  const days  = useMemo(() => trialLeft(effectiveSub), [effectiveSub]);
+  // familyPremiumFromCoParent : vrai seulement si le statut affiché vient du
+  // co-parent (jamais de moi-même) — utilisé par PremiumTab pour la bannière
+  // "Premium via votre famille" et pour masquer les actions d'abonnement qui
+  // n'ont pas de sens pour qui ne paie pas personnellement.
+  const familyPremiumFromCoParent = !!(
+    familyBestSub && familyBestSub.parentUserId && familyBestSub.parentUserId !== myUid &&
+    planRankFor(familyBestSub) > planRankFor(sub)
+  );
   // isAdm = vrai seulement si Supabase confirme (app_admins) — résiste au localStorage falsifié
   const isAdm = user?.role === "admin" && adminVerified;
   const isObs = user?.role==="observer";
@@ -4626,7 +4671,7 @@ export default function App() {
           Le plan actuel de cette famille ne permet qu'un nombre limité d'observateurs. Tu n'as pas été retiré(e) — demande à un parent de passer au Premium pour retrouver l'accès.
         </div>
         <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
-          <button onClick={checkObserverQuota}
+          <button onClick={checkFamilyBilling}
             style={{height:44,padding:"0 20px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:13,fontWeight:800,borderRadius:10,border:"none",cursor:"pointer"}}>
             🔄 Réessayer
           </button>
@@ -4678,6 +4723,7 @@ export default function App() {
     currency, setCurrency, weekStart, setWeekStart,
     cfg, setCfg, sub, setSub, user, users, setUsers,
     prem, perms, st, days, isAdm, isObs, isChild, unread, adminVerified,
+    familyBestSub, familyPremiumFromCoParent,
     addHist, pushNotif, updateCal, onUpgrade, handleObsJoin,
     apiData, apiLoading,
     setMenuTab, setShowMenu,
