@@ -5194,7 +5194,7 @@ export default function App() {
       )}
       {!isObs && !isChild && st==="premium" && (
         <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>
-          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`${C.grn}18`,border:`1.5px solid ${C.grn}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.grn,fontWeight:800,display:"inline-flex",alignItems:"center",gap:6,cursor:"pointer"}}>⭐ {familyPremiumFromCoParent ? "Premium hérité" : "Premium"}</div>
+          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`${C.grn}18`,border:`1.5px solid ${C.grn}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.grn,fontWeight:800,display:"inline-flex",alignItems:"center",gap:6,cursor:"pointer"}}>⭐ {familyPremiumFromCoParent ? (t.premHeaderInherited||"Premium hérité") : (t.premHeaderPremium||"Premium")}</div>
         </div>
       )}
       </div>
@@ -15528,29 +15528,30 @@ function PremiumTab() {
   // values: valeur qui change selon le palier sélectionné (ex. quota) — une
   // seule ligne par fonctionnalité au lieu d'une ligne par palier.
   // soon: fonctionnalité pas encore construite, affichée avec un marqueur "Bientôt"
+  const unlimited = t.premUnlimited||"Illimité";
   const items=[
-    {icon:"👥", label:"Parents",                                 value:"2", badge:"free"},
-    {icon:"🧒", label:"Enfants",                                 values:{free:"1",trial:"2",premium:"5",premium_ai:"5"}, badge:"free"},
-    {icon:"👁️", label:"Observateurs",                           values:{free:"0",trial:"2",premium:"5",premium_ai:"5"}, badge:"trial"},
-    {icon:"📅", label:"Calendrier de garde",                     badge:"free"},
-    {icon:"🌍", label:"Jours fériés 15+ pays",                  badge:"free"},
-    {icon:"🌤️", label:"Météo sur le calendrier",                badge:"trial"},
-    {icon:"🌸", label:"Fête des mères / des pères",             badge:"trial"},
-    {icon:"🎂", label:"Anniversaires parents & enfants",         badge:"trial"},
-    {icon:"🗓️", label:"Dates personnalisées",                   values:{free:"0",trial:"2",premium:"Illimité",premium_ai:"Illimité"}, badge:"trial"},
-    {icon:"🎒", label:"Emploi du temps des enfants",             badge:"trial"},
-    {icon:"💰", label:"Dépenses & remboursements",               badge:"free"},
-    {icon:"📊", label:"Dépenses : Balance & soldes visibles",    badge:"trial"},
-    {icon:"📞", label:"Répertoire (sans ajout de numéros)",      badge:"free"},
-    {icon:"📞", label:"Répertoire des contacts : ajout de numéros", badge:"trial"},
-    {icon:"🔐", label:"Coffre-fort",                             values:{free:"0 Mo",trial:"50 Mo",premium:"200 Mo",premium_ai:"200 Mo"}, badge:"trial"},
-    {icon:"💬", label:"Messagerie famille",                      badge:"trial"},
-    {icon:"🎡", label:"Roue Duvia — jeu & récompenses",         badge:"trial"},
-    {icon:"🌐", label:"5 langues (FR · EN · DE · ES · PT)",     badge:"free"},
-    {icon:"📱", label:"Installable sur mobile (PWA)",            badge:"free"},
-    {icon:"📄", label:"Export PDF des dépenses",                 badge:"premium"},
-    {icon:"📄", label:"Export PDF calendrier annuel",           badge:"premium"},
-    {icon:"📄", label:"Export PDF planning d'activité enfant",  badge:"premium", soon:true},
+    {icon:"👥", label:t.premFeatParents||"Parents",                                 value:"2", badge:"free"},
+    {icon:"🧒", label:t.premFeatChildren||"Enfants",                                 values:{free:"1",trial:"2",premium:"5",premium_ai:"5"}, badge:"free"},
+    {icon:"👁️", label:t.premFeatObservers||"Observateurs",                         values:{free:"0",trial:"2",premium:"5",premium_ai:"5"}, badge:"trial"},
+    {icon:"📅", label:t.premFeatCalendar||"Calendrier de garde",                     badge:"free"},
+    {icon:"🌍", label:t.premFeatHolidays||"Jours fériés 15+ pays",                  badge:"free"},
+    {icon:"🌤️", label:t.premFeatWeather||"Météo sur le calendrier",                badge:"trial"},
+    {icon:"🌸", label:t.premFeatMotherFatherDay||"Fête des mères / des pères",      badge:"trial"},
+    {icon:"🎂", label:t.premFeatBirthdays||"Anniversaires parents & enfants",        badge:"trial"},
+    {icon:"🗓️", label:t.premFeatCustomDates||"Dates personnalisées",                values:{free:"0",trial:"2",premium:unlimited,premium_ai:unlimited}, badge:"trial"},
+    {icon:"🎒", label:t.premFeatSchedule||"Emploi du temps des enfants",             badge:"trial"},
+    {icon:"💰", label:t.premFeatExpenses||"Dépenses & remboursements",               badge:"free"},
+    {icon:"📊", label:t.premFeatExpenseBalance||"Dépenses : Balance & soldes visibles", badge:"trial"},
+    {icon:"📞", label:t.premFeatContactsView||"Répertoire (sans ajout de numéros)",  badge:"free"},
+    {icon:"📞", label:t.premFeatContactsAdd||"Répertoire des contacts : ajout de numéros", badge:"trial"},
+    {icon:"🔐", label:t.premFeatVault||"Coffre-fort",                               values:{free:"0 Mo",trial:"50 Mo",premium:"200 Mo",premium_ai:"200 Mo"}, badge:"trial"},
+    {icon:"💬", label:t.premFeatMessaging||"Messagerie famille",                     badge:"trial"},
+    {icon:"🎡", label:t.premFeatWheel||"Roue Duvia — jeu & récompenses",            badge:"trial"},
+    {icon:"🌐", label:t.premFeatLanguages||"5 langues (FR · EN · DE · ES · PT)",    badge:"free"},
+    {icon:"📱", label:t.premFeatPWA||"Installable sur mobile (PWA)",                 badge:"free"},
+    {icon:"📄", label:t.premFeatExportExpenses||"Export PDF des dépenses",           badge:"premium"},
+    {icon:"📄", label:t.premFeatExportCalendar||"Export PDF calendrier annuel",     badge:"premium"},
+    {icon:"📄", label:t.premFeatExportSchedule||"Export PDF planning d'activité enfant", badge:"premium", soon:true},
   ];
   return (
     <div>
@@ -15559,17 +15560,15 @@ function PremiumTab() {
         <div className="card" style={{marginBottom:14,borderColor:C.vio,background:`linear-gradient(135deg,${C.vio}12,${C.blu}08)`,textAlign:"center",padding:"20px 18px"}}>
           <div style={{fontSize:36,marginBottom:8}}>🎉</div>
           <div style={{fontSize:17,fontWeight:900,color:C.vio,marginBottom:6}}>
-            Bêta — Trial Premium gratuit 🎉
+            {t.premBetaTitle||"Bêta — Trial Premium gratuit 🎉"}
           </div>
           <div style={{fontSize:12,color:C.txt,lineHeight:1.7,marginBottom:10}}>
-            Duvia est en phase bêta non commerciale.<br/>
-            Toutes les fonctionnalités <strong>Trial Premium</strong> sont gratuites<br/>
-            pendant toute la durée de la bêta.<br/>
-            <span style={{color:C.mut,fontSize:11}}>L'export PDF est réservé aux abonnés Premium.</span>
+            {t.premBetaDesc||"Duvia est en phase bêta non commerciale. Toutes les fonctionnalités Trial Premium sont gratuites pendant toute la durée de la bêta."}<br/>
+            <span style={{color:C.mut,fontSize:11}}>{t.premBetaPdfNote||"L'export PDF est réservé aux abonnés Premium."}</span>
           </div>
           <div style={{fontSize:11,color:C.mut,marginTop:12,lineHeight:1.5}}>
-            Un abonnement payant sera proposé à la fin de la bêta.<br/>
-            Vous serez prévenus à l'avance, aucune date n'est encore fixée.
+            {t.premBetaFooter1||"Un abonnement payant sera proposé à la fin de la bêta."}<br/>
+            {t.premBetaFooter2||"Vous serez prévenus à l'avance, aucune date n'est encore fixée."}
           </div>
         </div>
       )}
@@ -15579,12 +15578,12 @@ function PremiumTab() {
         <div className="card" style={{marginBottom:14,borderColor:sub._admin?"#FFD700":isPremium?C.vio:st==="trial_premium"?C.yel:C.red,textAlign:"center",padding:"24px 18px"}}>
           <div style={{fontSize:42,marginBottom:8}}>{sub._admin?"👑":isPremium?"⭐":st==="trial_premium"?"⏳":"🔓"}</div>
           <div style={{fontSize:19,fontWeight:900,marginBottom:5,color:sub._admin?"#FFD700":isPremium?C.vio:st==="trial_premium"?C.yel:C.mut}}>
-            {sub._admin?"Admin ⚙️":isPremium?"Premium Actif ⭐":st==="earned_premium"?`Premium – ${days}j restant${days>1?"s":""}  🎁`:st==="trial_premium"?`Trial Premium — ${days} jour${days>1?"s":""} restant${days>1?"s":""}` :"Freemium"}
+            {sub._admin?(t.premAdminLabel||"Admin ⚙️"):isPremium?(t.premActiveLabel||"Premium Actif ⭐"):st==="earned_premium"?(t.premEarnedLabel||"Premium – {days}j restant{s} 🎁").replace("{days}",days).replace(/\{s\}/g,days>1?"s":""):st==="trial_premium"?(t.premTrialLabel||"Trial Premium — {days} jour{s} restant{s}").replace("{days}",days).replace(/\{s\}/g,days>1?"s":""):(t.premFreemiumLabel||"Freemium")}
           </div>
           {isPremium&&sub.premiumSince&&<div style={{fontSize:12,color:C.mut}}>{t.premSince} {new Date(sub.premiumSince).toLocaleDateString()} · {sub.cycle==="monthly"?t.monthly:t.yearly}</div>}
-          {familyPremiumFromCoParent&&<div style={{fontSize:12,color:C.vio,fontWeight:700,marginTop:6}}>👨‍👩‍👧 Premium via votre famille{coparentEmail?` : ${coparentEmail} y a souscrit`:""}</div>}
-          {st==="trial_premium"&&<div style={{fontSize:12,color:C.mut,marginTop:4}}>Passez à Premium pour un accès illimité</div>}
-          {st==="freemium"&&<div style={{fontSize:12,color:C.mut,marginTop:4}}>Compte gratuit permanent — fonctions limitées</div>}
+          {familyPremiumFromCoParent&&<div style={{fontSize:12,color:C.vio,fontWeight:700,marginTop:6}}>{t.premFamilyBanner||"👨‍👩‍👧 Premium via votre famille"}{coparentEmail?(t.premFamilyBannerSuffix||" : {email} y a souscrit").replace("{email}",coparentEmail):""}</div>}
+          {st==="trial_premium"&&<div style={{fontSize:12,color:C.mut,marginTop:4}}>{t.premTrialUpgradeHint||"Passez à Premium pour un accès illimité"}</div>}
+          {st==="freemium"&&<div style={{fontSize:12,color:C.mut,marginTop:4}}>{t.premFreemiumHint||"Compte gratuit permanent — fonctions limitées"}</div>}
         </div>
       )}
 
@@ -15645,16 +15644,16 @@ function PremiumTab() {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
           {[{cy:"monthly",pr:t.monthly,save:null},{cy:"yearly",pr:t.yearly,save:t.yearlyNote}].map(p=>(
             <div key={p.cy} className="card" style={{borderColor:p.cy==="yearly"?C.vio:C.bor,textAlign:"center",padding:"16px 10px",position:"relative"}}>
-              {p.save&&<div style={{position:"absolute",top:-9,left:"50%",transform:"translateX(-50%)",background:C.grn,color:"#fff",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:8,whiteSpace:"nowrap"}}>2 mois offerts</div>}
+              {p.save&&<div style={{position:"absolute",top:-9,left:"50%",transform:"translateX(-50%)",background:C.grn,color:"#fff",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:8,whiteSpace:"nowrap"}}>{t.premYearlyBadge||"2 mois offerts"}</div>}
               <div style={{fontSize:22,fontWeight:900,color:C.vio,filter:isBeta()?"blur(6px)":"none",userSelect:isBeta()?"none":"auto"}}>{p.pr}</div>
               <div style={{fontSize:11,color:C.mut,marginBottom:10,filter:isBeta()?"blur(4px)":"none",userSelect:isBeta()?"none":"auto"}}>{t.perFamily}</div>
               {isBeta() ? (
                 <div style={{width:"100%",padding:"9px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:12,fontWeight:700,borderRadius:8,textAlign:"center"}}>
-                  🔒 Dispo après la bêta
+                  {t.premAvailableAfterBeta||"🔒 Dispo après la bêta"}
                 </div>
               ) : (
                 <button onClick={()=>setSub(s=>({...s,plan:"premium",premiumSince:new Date().toISOString(),cycle:p.cy,subscriberParentIdx:user?.parentIdx}))} style={{width:"100%",padding:"9px",background:p.cy==="yearly"?C.vio:C.sur,color:p.cy==="yearly"?"#fff":C.mut,border:`1.5px solid ${p.cy==="yearly"?C.vio:C.bor}`,fontSize:13}}>
-                  Choisir
+                  {t.premChooseBtn||"Choisir"}
                 </button>
               )}
             </div>
@@ -15664,11 +15663,11 @@ function PremiumTab() {
       {/* Parrainage shortcut — toute la carte est cliquable */}
       <div onClick={()=>{setMenuTab("parrainage");}} style={{marginBottom:14,borderColor:`${C.pin}33`,background:`${C.pin}06`,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer"}} className="card">
         <div style={{fontSize:28}}>🎁</div>
-        <div style={{flex:1,fontSize:14,fontWeight:800,color:C.pin}}>Parrainage</div>
+        <div style={{flex:1,fontSize:14,fontWeight:800,color:C.pin}}>{t.parrainage}</div>
         <div style={{fontSize:18,color:C.pin,flexShrink:0}}>→</div>
       </div>
       <div className="card" style={{marginBottom:14}}>
-        <div className="sec">Fonctionnalités incluses</div>
+        <div className="sec">{t.premFeaturesTitle||"Fonctionnalités incluses"}</div>
         {/* Sélecteur de palier : clique pour voir ce qui s'allume à chaque niveau */}
         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14,paddingBottom:12,borderBottom:`1px solid ${C.bor}`}}>
           {TIERS.map(tier=>(
@@ -15689,7 +15688,7 @@ function PremiumTab() {
               <div style={{width:30,height:30,borderRadius:8,background:active?`${tierColor}18`:C.sur,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0,filter:active?"none":"grayscale(1)"}}>{f.icon}</div>
               <div style={{flex:1,fontSize:13,fontWeight:600,color:active?C.txt:C.mut}}>{f.label}</div>
               {displayValue && <span style={{fontSize:12,fontWeight:800,color:active?tierColor:C.mut,background:active?`${tierColor}18`:C.sur,padding:"2px 10px",borderRadius:20,flexShrink:0,transition:"all .2s"}}>{displayValue}</span>}
-              {f.soon && <span style={{fontSize:10,fontWeight:800,color:C.mut,background:C.sur,border:`1px solid ${C.bor}`,padding:"2px 8px",borderRadius:6,flexShrink:0}}>Bientôt</span>}
+              {f.soon && <span style={{fontSize:10,fontWeight:800,color:C.mut,background:C.sur,border:`1px solid ${C.bor}`,padding:"2px 8px",borderRadius:6,flexShrink:0}}>{t.premComingSoon||"Bientôt"}</span>}
               {!active && <span style={{fontSize:13,flexShrink:0}}>🔒</span>}
             </div>
           );
