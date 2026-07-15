@@ -42,7 +42,21 @@ serve(async (req) => {
   const action: string | undefined = payload?.action;
 
   if (action === "lookup_user") {
+    const userId = String(payload?.user_id || "").trim();
     const email = String(payload?.email || "").trim().toLowerCase();
+
+    // 🔎 Recherche par UUID : passe par l'API admin Supabase (auth.users),
+    // fiable pour n'importe quel compte réel — contrairement à la recherche
+    // par email ci-dessous, qui dépend de family_members.email (pas toujours
+    // rempli, ex. un parent jamais passé par le flux d'invitation observateur).
+    if (userId) {
+      const { data: userData, error: userErr } = await admin.auth.admin.getUserById(userId);
+      if (userErr || !userData?.user) return jsonResponse({ error: "user_not_found" }, 404);
+      const { data: member } = await admin.from("family_members").select("display_name").eq("user_id", userId).limit(1).maybeSingle();
+      const { data: subRow } = await admin.from("subscriptions").select("*").eq("user_id", userId).maybeSingle();
+      return jsonResponse({ user_id: userId, name: member?.display_name || null, email: userData.user.email || null, sub: subRow || null });
+    }
+
     if (!email) return jsonResponse({ error: "missing_email" }, 400);
     const { data: member } = await admin
       .from("family_members")
