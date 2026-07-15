@@ -109,7 +109,16 @@ begin
     raise exception 'already_validated';
   end if;
 
-  select * into v_referrer from public.subscriptions where ref_code = v_referee.ref_used;
+  -- 🔒 FOR UPDATE : verrouille la ligne du parrain pour toute la durée de la
+  -- transaction. Sans ça, deux FILLEULS DIFFÉRENTS validant en même temps
+  -- pour le MÊME parrain liraient chacun l'ancien validated_ref_count/
+  -- monthly_ref_count avant que l'autre n'ait committé, calculeraient tous
+  -- les deux le même palier (ex. "1er filleul" au lieu de "1er" puis "2e"),
+  -- et écraseraient la valeur de l'autre au lieu de l'incrémenter — un vrai
+  -- moyen de contourner les paliers/plafonds en déclenchant plusieurs appels
+  -- concurrents. Avec FOR UPDATE, le 2e appel bloque jusqu'au commit du 1er,
+  -- puis relit l'état réellement à jour avant de calculer son propre palier.
+  select * into v_referrer from public.subscriptions where ref_code = v_referee.ref_used for update;
   if v_referrer is null then
     raise exception 'referrer_not_found';
   end if;
