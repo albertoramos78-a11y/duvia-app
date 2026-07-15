@@ -47,7 +47,7 @@ serve(async (req) => {
     const { data: member } = await admin
       .from("family_members")
       .select("user_id, display_name, email")
-      .ilike("email", email)
+      .eq("email", email)
       .limit(1)
       .maybeSingle();
     if (!member?.user_id) return jsonResponse({ error: "user_not_found" }, 404);
@@ -74,7 +74,7 @@ serve(async (req) => {
       if (!["monthly", "yearly"].includes(cycle)) return jsonResponse({ error: "invalid_cycle" }, 400);
       update = { ...update, premium_since: new Date().toISOString(), cycle };
     }
-    const { error } = await admin.from("subscriptions").upsert({ user_id: userId, ...update });
+    const { error } = await admin.from("subscriptions").upsert({ user_id: userId, ...update }, { onConflict: "user_id" });
     if (error) return jsonResponse({ error: error.message }, 500);
     return jsonResponse({ ok: true });
   }
