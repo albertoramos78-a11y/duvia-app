@@ -53,7 +53,9 @@ serve(async (req) => {
     if (userErr || !userData?.user) return jsonResponse({ error: "user_not_found" }, 404);
     const { data: member } = await admin.from("family_members").select("display_name").eq("user_id", userId).limit(1).maybeSingle();
     const { data: subRow } = await admin.from("subscriptions").select("*").eq("user_id", userId).maybeSingle();
-    return jsonResponse({ user_id: userId, name: member?.display_name || null, email: userData.user.email || null, sub: subRow || null });
+    const meta = userData.user.user_metadata || {};
+    const name = member?.display_name || meta.full_name || meta.name || null;
+    return jsonResponse({ user_id: userId, name, email: userData.user.email || null, sub: subRow || null });
   }
 
   if (action === "set_user_plan") {
@@ -108,9 +110,10 @@ serve(async (req) => {
     for (const row of rows || []) {
       const { data: userData } = await admin.auth.admin.getUserById(row.user_id);
       const { data: member } = await admin.from("family_members").select("display_name").eq("user_id", row.user_id).limit(1).maybeSingle();
+      const meta = userData?.user?.user_metadata || {};
       results.push({
         user_id: row.user_id,
-        name: member?.display_name || null,
+        name: member?.display_name || meta.full_name || meta.name || null,
         email: userData?.user?.email || null,
         premium_since: row.premium_since,
         cycle: row.cycle,
