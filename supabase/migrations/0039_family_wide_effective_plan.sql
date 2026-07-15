@@ -7,14 +7,14 @@
 -- seulement son propre plan individuel. Voir
 -- docs/superpowers/specs/2026-07-15-family-wide-premium-sharing-design.md.
 --
--- create or replace function est idempotent, mais PostgreSQL n'autorise à
--- changer la liste de colonnes d'un `returns table` existant que par un AJOUT
--- EN FIN DE LISTE — jamais une insertion au milieu (ça échoue avec "cannot
--- change return type of existing function"). parent_user_id est donc ajouté
--- APRÈS my_observer_rank (dernière colonne de la version déployée par 0036),
--- pas avant : aucun impact côté client, qui lit les champs par nom
--- (r.parent_user_id), jamais par position. Aucune table modifiée, aucune
--- donnée migrée.
+-- PostgreSQL n'autorise AUCUN changement de la liste de colonnes d'un
+-- `returns table` existant via CREATE OR REPLACE FUNCTION — ni insertion au
+-- milieu, ni même un simple ajout en fin de liste (confirmé en pratique :
+-- "ERROR 42P13: cannot change return type of existing function... Use DROP
+-- FUNCTION get_family_billing_context(uuid) first."). Il faut donc DROP puis
+-- CREATE. Tout le bloc est protégé par une transaction (BEGIN/COMMIT) pour
+-- qu'aucune session concurrente ne voie jamais la fonction "manquante" entre
+-- les deux — soit tout s'applique d'un coup au COMMIT, soit rien.
 --
 -- Sécurité : ajoute parent_user_id aux lignes retournées, mais UNIQUEMENT
 -- rempli si l'appelant est lui-même un parent actif de cette famille (vérifié
@@ -23,6 +23,10 @@
 -- jamais l'identité d'un parent. Pas de champ email ici (voir
 -- get_coparent_email ci-dessous, restreint aux seuls appelants parents).
 -- ─────────────────────────────────────────────────────────────────────────────
+
+begin;
+
+drop function if exists public.get_family_billing_context(uuid);
 
 create or replace function public.get_family_billing_context(p_family_id uuid default null)
 returns table (
@@ -100,6 +104,8 @@ $$;
 
 revoke all     on function public.get_family_billing_context(uuid) from public;
 grant  execute on function public.get_family_billing_context(uuid) to authenticated;
+
+commit;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- get_coparent_email : résout l'email d'un co-parent pour l'affichage du
