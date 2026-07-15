@@ -3338,7 +3338,7 @@ export default function App() {
   // parents, pas seulement son propre plan individuel.
   const [familyBestSub, setFamilyBestSub] = useState(null);
   const checkFamilyBilling = useCallback(async () => {
-    // 🔧 Pas `isObs` ici (déclaré plus bas dans App(), App.jsx:4001) : le
+    // 🔧 Pas `isObs` ici (déclaré plus bas dans App(), App.jsx:4099) : le
     // référencer dans ce tableau de dépendances évalué à cet endroit-ci du
     // corps de fonction lèverait un ReferenceError (TDZ) à CHAQUE rendu, pour
     // tout le monde, pas seulement les observateurs — même famille de bug que
@@ -15456,8 +15456,10 @@ function PremiumTab() {
   useEffect(() => {
     if (!familyPremiumFromCoParent || !familyBestSub?.parentUserId) { setCoparentEmail(""); return; }
     let cancelled = false;
-    supabase.rpc("get_coparent_email", { p_user_id: familyBestSub.parentUserId }).then(({ data }) => {
-      if (!cancelled) setCoparentEmail(data || "");
+    supabase.rpc("get_coparent_email", { p_user_id: familyBestSub.parentUserId }).then(({ data, error }) => {
+      if (cancelled) return;
+      if (error) console.warn("[Duvia] get_coparent_email failed:", error);
+      setCoparentEmail(data || "");
     });
     return () => { cancelled = true; };
   }, [familyPremiumFromCoParent, familyBestSub?.parentUserId]);
@@ -17462,7 +17464,8 @@ function isPrizeActive(p) {
 }
 
 // ─── PROBABILITÉS PAR RÔLE ───────────────────────────────────────────────────
-// "Souscripteur" = parent avec parentIdx === 0 (celui qui a souscrit l'abonnement)
+// "Souscripteur" = parent dont le sub INDIVIDUEL (pas le plan familial partagé)
+// est premium (perms.spinWinSub, voir GameTab) — celui qui paie réellement.
 // "Autres" = autre parent, enfant, observateur
 const PROBS_SUBSCRIBER = { year:0.001, month:0.010, theme:0.200, video:0.100, licorne:0.100, rg:0.050, wc:0.050, nothing:0.489 };
 const PROBS_OTHERS     = { year:0.000, month:0.000, theme:0.200, video:0.100, licorne:0.100, rg:0.050, wc:0.050, nothing:0.500 };
@@ -18087,11 +18090,17 @@ function GiftShopSection() {
 
 // ─── GAME TAB ────────────────────────────────────────────────────────────────
 function GameTab() {
-  const {C,t,sub,setSub,prem,onUpgrade,st,isChild,isObs,isAdm,user,videoActive,licorneActive} = useApp();
+  const {C,t,sub,setSub,prem,perms,onUpgrade,st,isChild,isObs,isAdm,user,videoActive,licorneActive} = useApp();
   const isPremium = prem; // trial_premium + premium peuvent jouer (freemium : non)
   // Rôle du joueur
   const isParent  = user?.role === "parent";
-  const isSubscriber = isParent && (user?.parentIdx === 0); // Parent souscripteur (parentIdx 0)
+  // Souscripteur RÉEL (paie personnellement Premium) — perms.spinWinSub reste
+  // toujours basé sur le sub INDIVIDUEL (jamais le plan familial partagé), donc
+  // un parent couvert par le Premium de son co-parent sans payer lui-même ne
+  // peut jamais gagner ce lot, même s'il occupe le slot parent 0. Remplace
+  // l'ancienne heuristique parentIdx===0, qui pouvait déjà être fausse avant
+  // cette fonctionnalité (ex. un parent slot 0 en Trial, jamais payeur).
+  const isSubscriber = isParent && perms.spinWinSub;
   const isAdult   = (isParent || isObs) && !isAdm; // adulte non-admin
   const restrictedRole = (isChild || isObs) && !isAdm; // roue sans gains d'abonnement
   const cooldownLabel = isChild ? t.cooldown2days : t.cooldown7days;
