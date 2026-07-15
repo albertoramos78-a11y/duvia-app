@@ -14823,7 +14823,7 @@ function GlobalBetaCard({ C }) {
   );
 }
 
-function AccountSubscriptionCard({ C }) {
+function AccountSubscriptionCard({ C, onChanged }) {
   const [userIdInput, setUserIdInput] = useState("");
   const [account, setAccount] = useState(null);
   const [betaEndDate, setBetaEndDate] = useState("");
@@ -14866,6 +14866,7 @@ function AccountSubscriptionCard({ C }) {
       setMsg(`✅ Compte mis à jour : ${plan}.`);
       const refreshed = await call({ action: "lookup_user", user_id: account.user_id });
       setAccount(refreshed);
+      onChanged?.();
     } catch (ex) {
       setErr(String(ex?.message || ex));
     } finally {
@@ -14876,55 +14877,68 @@ function AccountSubscriptionCard({ C }) {
   return (
     <div className="card" style={{borderColor:`${C.vio}44`,background:`${C.vio}06`}}>
       <div style={{fontSize:11,fontWeight:800,color:C.vio,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>👤 Gérer l'abonnement d'un compte</div>
-      <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
-        <input type="text" placeholder="UUID du compte" value={userIdInput} onChange={e=>setUserIdInput(e.target.value)}
-          style={{flex:1,minWidth:180,padding:"9px 12px",border:`1px solid ${C.bor}`,borderRadius:8,fontSize:13}} />
-        <button onClick={lookup} disabled={loading || !userIdInput.trim()}
-          style={{padding:"0 14px",height:38,background:C.vio,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer",opacity:loading?.6:1}}>
-          🔍 Chercher
-        </button>
+
+      {/* Bulle 1 : recherche + fiche compte */}
+      <div style={{padding:12,background:C.sur,borderRadius:10,border:`1px solid ${C.bor}`,marginBottom:12}}>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <input type="text" placeholder="UUID du compte" value={userIdInput} onChange={e=>setUserIdInput(e.target.value)}
+            style={{flex:1,minWidth:180,padding:"9px 12px",border:`1px solid ${C.bor}`,borderRadius:8,fontSize:13}} />
+          <button onClick={lookup} disabled={loading || !userIdInput.trim()}
+            style={{padding:"0 14px",height:38,background:C.vio,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer",opacity:loading?.6:1}}>
+            🔍 Chercher
+          </button>
+        </div>
+
+        {account && (
+          <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.bor}`}}>
+            <div style={{fontWeight:800,fontSize:13,color:C.txt}}>{account.name || account.email}</div>
+            <div style={{fontSize:11,color:C.mut}}>{account.email}</div>
+            <div style={{fontSize:11,color:C.mut,marginTop:4}}>Plan actuel : <strong>{account.sub?.plan || "—"}</strong></div>
+          </div>
+        )}
       </div>
 
       {account && (
-        <div style={{padding:"10px 12px",background:C.sur,borderRadius:8,marginBottom:12}}>
-          <div style={{fontWeight:800,fontSize:13,color:C.txt}}>{account.name || account.email}</div>
-          <div style={{fontSize:11,color:C.mut}}>{account.email}</div>
-          <div style={{fontSize:11,color:C.mut,marginTop:4}}>Plan actuel : <strong>{account.sub?.plan || "—"}</strong></div>
-        </div>
-      )}
+        <>
+          {/* Bulle 2 : plans gratuits / temporaires */}
+          <div style={{padding:12,background:C.sur,borderRadius:10,border:`1px solid ${C.bor}`,marginBottom:12,display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{fontSize:10,fontWeight:800,color:C.mut,letterSpacing:".08em",textTransform:"uppercase"}}>Freemium / Bêta / Essai</div>
 
-      {account && (
-        <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          <button onClick={()=>applyPlan("freemium")} disabled={!!applying}
-            style={{height:38,background:C.bor,color:C.txt,border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
-            {applying==="freemium"?"…":"Freemium"}
-          </button>
+            <button onClick={()=>applyPlan("freemium")} disabled={!!applying}
+              style={{height:38,background:C.bor,color:C.txt,border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+              {applying==="freemium"?"…":"Freemium"}
+            </button>
 
-          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-            <input type="date" value={betaEndDate} onChange={e=>setBetaEndDate(e.target.value)} style={{flex:1,minWidth:140}} />
-            <button onClick={()=>applyPlan("beta")} disabled={!!applying}
-              style={{padding:"0 16px",height:38,background:"#7c3aed",color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
-              {applying==="beta"?"…":"🌟 Bêta"}
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              <input type="date" value={betaEndDate} onChange={e=>setBetaEndDate(e.target.value)} style={{flex:1,minWidth:140}} />
+              <button onClick={()=>applyPlan("beta")} disabled={!!applying}
+                style={{padding:"0 16px",height:38,background:"#7c3aed",color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                {applying==="beta"?"…":"🌟 Bêta"}
+              </button>
+            </div>
+
+            <button onClick={()=>applyPlan("trial_premium")} disabled={!!applying}
+              style={{height:38,background:C.blu,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+              {applying==="trial_premium"?"…":"⏳ Trial Premium (15j)"}
             </button>
           </div>
 
-          <button onClick={()=>applyPlan("trial_premium")} disabled={!!applying}
-            style={{height:38,background:C.blu,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
-            {applying==="trial_premium"?"…":"⏳ Trial Premium (15j)"}
-          </button>
-
-          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-            <select value={premiumCycle} onChange={e=>setPremiumCycle(e.target.value)}
-              style={{height:38,borderRadius:8,border:`1.5px solid ${C.bor}`,padding:"0 10px",fontSize:13}}>
-              <option value="monthly">Mensuel</option>
-              <option value="yearly">Annuel</option>
-            </select>
-            <button onClick={()=>applyPlan("premium")} disabled={!!applying}
-              style={{flex:1,minWidth:140,height:38,background:C.vio,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
-              {applying==="premium"?"…":"⭐ Premium"}
-            </button>
+          {/* Bulle 3 : plan payant */}
+          <div style={{padding:12,background:C.sur,borderRadius:10,border:`1px solid ${C.bor}`,marginBottom:12}}>
+            <div style={{fontSize:10,fontWeight:800,color:C.mut,letterSpacing:".08em",textTransform:"uppercase",marginBottom:10}}>Premium (payant)</div>
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              <select value={premiumCycle} onChange={e=>setPremiumCycle(e.target.value)}
+                style={{height:38,borderRadius:8,border:`1.5px solid ${C.bor}`,padding:"0 10px",fontSize:13}}>
+                <option value="monthly">Mensuel</option>
+                <option value="yearly">Annuel</option>
+              </select>
+              <button onClick={()=>applyPlan("premium")} disabled={!!applying}
+                style={{flex:1,minWidth:140,height:38,background:C.vio,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                {applying==="premium"?"…":"⭐ Premium"}
+              </button>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {msg && <div style={{marginTop:10,fontSize:11,color:C.grn}}>{msg}</div>}
@@ -14933,12 +14947,13 @@ function AccountSubscriptionCard({ C }) {
   );
 }
 
-function PremiumSubscribersCard({ C }) {
+function PremiumSubscribersCard({ C, refreshKey }) {
   const [subscribers, setSubscribers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
   useEffect(() => {
+    setLoading(true);
     supabase.functions.invoke("admin-manage-subscriptions", { body: { action: "list_premium_users" } })
       .then(({ data, error }) => {
         if (error) throw new Error(error.message || "invoke_failed");
@@ -14947,7 +14962,7 @@ function PremiumSubscribersCard({ C }) {
       })
       .catch(e => setErr(String(e?.message || e)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [refreshKey]);
 
   const rows = subscribers.map(r => {
     const since = r.premium_since ? new Date(r.premium_since) : null;
@@ -15014,7 +15029,7 @@ function PremiumSubscribersCard({ C }) {
   );
 }
 
-function AdminChangeLogCard({ C }) {
+function AdminChangeLogCard({ C, onChanged }) {
   const [changes, setChanges] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -15046,6 +15061,7 @@ function AdminChangeLogCard({ C }) {
       if (data?.error) throw new Error(data.error);
       setMsg("✅ Changement annulé.");
       await load();
+      onChanged?.();
     } catch (e) {
       setErr(String(e?.message || e));
     } finally {
@@ -15089,6 +15105,10 @@ function AdminChangeLogCard({ C }) {
 // ─── ADMIN TAB ────────────────────────────────────────────────────────────────
 function AdminTab() {
   const {C, sub, setSub, setShowResetConfirm, simDate, setSimDate} = useApp();
+  // Clé partagée : incrémentée après tout changement de plan ou annulation,
+  // pour que "Abonnés Premium" et l'historique se rechargent automatiquement
+  // même si le changement a été fait depuis une autre carte.
+  const [subsRefreshKey, setSubsRefreshKey] = useState(0);
 
   // ── Admin Backup Manager ─────────────────────────────────────────────────
   const [bmEmail,  setBmEmail]  = useState("");
@@ -15369,11 +15389,11 @@ function AdminTab() {
 
       {/* ── Gestion admin des abonnements ────────────────────────────── */}
       <GlobalBetaCard C={C} />
-      <AccountSubscriptionCard C={C} />
+      <AccountSubscriptionCard C={C} onChanged={()=>setSubsRefreshKey(k=>k+1)} />
 
       {/* ── Abonnés Premium + historique des modifications admin ──────── */}
-      <PremiumSubscribersCard C={C} />
-      <AdminChangeLogCard C={C} />
+      <PremiumSubscribersCard C={C} refreshKey={subsRefreshKey} />
+      <AdminChangeLogCard C={C} onChanged={()=>setSubsRefreshKey(k=>k+1)} />
     </div>
   );
 }
