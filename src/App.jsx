@@ -4199,16 +4199,29 @@ export default function App() {
     if (!user?.id || !sub || !myUid || user?.role === "admin") return;
     const timer = setTimeout(async () => {
       try {
+        // 🔧 2026-07-15 : trial_extension_days, ref_count, validated_ref_count,
+        // monthly_ref_month/monthly_ref_count sont RETIRÉS de ce payload —
+        // depuis le fix du parrainage cross-appareil, ces colonnes sont
+        // exclusivement incrémentées côté serveur par consume_referral_code()/
+        // credit_referral_validation() (aucun code client non-admin ne les
+        // écrit plus). Les laisser ici recréait exactement le bug que ces RPC
+        // existent pour corriger : ce même upsert, tournant 3s après CHAQUE
+        // changement de sub pendant une session déjà ouverte, écrasait un
+        // crédit fraîchement appliqué côté serveur par l'ancienne valeur locale
+        // (potentiellement obsolète tant que l'effet de vérification du plan
+        // n'a pas re-fetché) — une perte silencieuse et définitive, puisque
+        // ref_validated empêche tout nouveau crédit pour le même filleul.
+        // ref_code/ref_used restent nécessaires (création de la toute première
+        // ligne d'un nouveau compte) ; pending_spins reste nécessaire (la
+        // consommation d'un spin, App.jsx:~17606, reste un vrai flux
+        // client→serveur, contrairement aux autres champs ci-dessus).
         await supabase.from("subscriptions").upsert({
           user_id: myUid, plan: sub.plan || "trial_premium",
           premium_since: sub.premiumSince || null, cycle: sub.cycle || "yearly",
           trial_start: sub.trialStart || sub.accountCreatedAt,
           account_created_at: sub.accountCreatedAt,
-          trial_extension_days: sub.trialExtension || 0,
           ref_code: sub.refCode || null, ref_used: sub.refUsed || null,
-          ref_count: sub.refCount || 0, validated_ref_count: sub.validatedRefCount || 0,
-          ref_months: sub.refMonths || 0, pending_spins: sub.pendingSpins || 0,
-          monthly_ref_month: sub.monthlyRefMonth || null, monthly_ref_count: sub.monthlyRefCount || 0,
+          pending_spins: sub.pendingSpins || 0,
         }, { onConflict: "user_id" });
       } catch(e) { console.warn("[Duvia] sub sync failed:", e); }
     }, 3000);

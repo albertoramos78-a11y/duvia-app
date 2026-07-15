@@ -189,8 +189,12 @@ begin
          monthly_ref_count = v_new_monthly_count
    where user_id = v_referrer.user_id;
 
+  -- 🔧 Exclut 'beta' du même ensemble écrasable que pour le parrain plus haut
+  -- (cohérence) — un filleul qui vient de s'inscrire est en pratique toujours
+  -- trial_premium à ce stade, donc ceci est surtout défensif, pas un vrai cas
+  -- rencontré aujourd'hui.
   update public.subscriptions
-     set plan = case when plan not in ('premium') then 'earned_premium' else plan end
+     set plan = case when plan not in ('premium','beta') then 'earned_premium' else plan end
    where user_id = v_uid;
 
   return json_build_object('ok', true);
