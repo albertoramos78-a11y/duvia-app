@@ -88,10 +88,9 @@ declare
   v_referee              record;
   v_referrer             record;
   v_referrer_is_premium  boolean;
-  v_referrer_premium_expired boolean;
   v_referrer_days_elapsed numeric;
   v_referrer_max_days    numeric;
-  v_referrer_is_freemium boolean;
+  v_referrer_is_freemium boolean := false;
   v_new_validated_count  int;
   v_bonus_days           int := 0;
   v_new_monthly_month    text;
@@ -148,19 +147,41 @@ begin
     end if;
   end if;
 
+  -- Marque le filleul comme validé de façon ATOMIQUE, AVANT de créditer le
+  -- parrain — la clause WHERE ref_validated=false est réévaluée par Postgres
+  -- contre l'état réellement committé au moment du UPDATE (pas au moment du
+  -- SELECT plus haut), donc deux appels concurrents pour le même filleul ne
+  -- peuvent jamais tous les deux passer : le second bloque sur le verrou de
+  -- ligne du premier, puis échoue silencieusement (0 ligne affectée) une
+  -- fois le premier committé. En créditant le parrain SEULEMENT après que ce
+  -- UPDATE ait réellement affecté une ligne, un double appel simultané ne
+  -- peut jamais créditer le parrain deux fois.
+  update public.subscriptions
+     set ref_validated = true
+   where user_id = v_uid and ref_validated = false;
+
+  if not found then
+    raise exception 'already_validated';
+  end if;
+
   update public.subscriptions
      set validated_ref_count = v_new_validated_count,
          trial_extension_days = coalesce(trial_extension_days, 0) + v_bonus_days,
          pending_spins = coalesce(pending_spins, 0) + 1,
-         plan = case when not v_referrer_is_premium and v_new_validated_count >= 1
-                       and plan not in ('premium','earned_premium') then 'earned_premium' else plan end,
+         -- 🔧 Reprend exactement la garde de l'ancien code client
+         -- (shouldUpgrade = !parrainIsPrem && !parrainIsFreemium && ...) :
+         -- un parrain freemium (trial expiré) n'est PAS promu earned_premium,
+         -- et un parrain en "beta" (palier spécial par compte, sa propre
+         -- logique dans subStatus()) n'est jamais écrasé non plus.
+         plan = case when not v_referrer_is_premium and not v_referrer_is_freemium
+                       and v_new_validated_count >= 1
+                       and plan not in ('premium','earned_premium','beta') then 'earned_premium' else plan end,
          monthly_ref_month = v_new_monthly_month,
          monthly_ref_count = v_new_monthly_count
    where user_id = v_referrer.user_id;
 
   update public.subscriptions
-     set ref_validated = true,
-         plan = case when plan not in ('premium') then 'earned_premium' else plan end
+     set plan = case when plan not in ('premium') then 'earned_premium' else plan end
    where user_id = v_uid;
 
   return json_build_object('ok', true);
