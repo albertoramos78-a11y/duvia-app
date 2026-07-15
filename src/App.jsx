@@ -14962,6 +14962,10 @@ function PremiumSubscribersCard({ C }) {
                   <td style={{padding:"8px",fontWeight:700,color:C.txt}}>
                     <div>{r.name || "—"}</div>
                     <div style={{fontSize:10,color:C.mut}}>{r.email}</div>
+                    <div title="Cliquer pour copier l'UUID" onClick={()=>navigator.clipboard?.writeText(r.user_id)}
+                      style={{fontSize:9,color:C.mut,opacity:.7,cursor:"pointer",fontFamily:"monospace"}}>
+                      {r.user_id}
+                    </div>
                   </td>
                   <td style={{padding:"8px",color:C.txt,whiteSpace:"nowrap"}}>{r.since?r.since.toLocaleDateString("fr-FR"):"—"}</td>
                   <td style={{padding:"8px",whiteSpace:"nowrap"}}>
