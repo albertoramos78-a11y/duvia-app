@@ -15522,41 +15522,35 @@ function PremiumTab() {
       return { name: u.name, email: u.email, since, cycle, expiry, isActive, daysLeft };
     });
   })() : [];
-  // badge: "free" = gratuit · "trial" = Trial/Bêta · "premium" = Premium abonné uniquement
-  // value: valeur numérique affichée en pastille (ex. quota qui augmente par palier)
+  // badge: palier minimum où la fonctionnalité s'allume (aussi utilisé pour le
+  // premier palier affiché dans values, s'il y en a un).
+  // value: valeur fixe affichée en pastille, identique à tous les paliers.
+  // values: valeur qui change selon le palier sélectionné (ex. quota) — une
+  // seule ligne par fonctionnalité au lieu d'une ligne par palier.
   // soon: fonctionnalité pas encore construite, affichée avec un marqueur "Bientôt"
   const items=[
-    // ── Freemium ───────────────────────────────────────────────────────────────
     {icon:"👥", label:"Parents",                                 value:"2", badge:"free"},
-    {icon:"🧒", label:"Enfant",                                   value:"1", badge:"free"},
+    {icon:"🧒", label:"Enfants",                                 values:{free:"1",trial:"2",premium:"5",premium_ai:"5"}, badge:"free"},
+    {icon:"👁️", label:"Observateurs",                           values:{free:"0",trial:"2",premium:"5",premium_ai:"5"}, badge:"trial"},
     {icon:"📅", label:"Calendrier de garde",                     badge:"free"},
     {icon:"🌍", label:"Jours fériés 15+ pays",                  badge:"free"},
-    {icon:"💰", label:"Dépenses & remboursements (sans pièces jointes ni balance)", badge:"free"},
-    {icon:"📞", label:"Répertoire (sans ajout de numéros)",      badge:"free"},
-    {icon:"🌐", label:"5 langues (FR · EN · DE · ES · PT)",     badge:"free"},
-    {icon:"📱", label:"Installable sur mobile (PWA)",            badge:"free"},
-
-    // ── Trial Premium ──────────────────────────────────────────────────────────
-    {icon:"👁️", label:"Observateurs",                           value:"2", badge:"trial"},
-    {icon:"🧒", label:"Enfants",                                 value:"2", badge:"trial"},
     {icon:"🌤️", label:"Météo sur le calendrier",                badge:"trial"},
     {icon:"🌸", label:"Fête des mères / des pères",             badge:"trial"},
     {icon:"🎂", label:"Anniversaires parents & enfants",         badge:"trial"},
-    {icon:"🗓️", label:"Dates personnalisées (2 en trial)",      badge:"trial"},
+    {icon:"🗓️", label:"Dates personnalisées",                   values:{free:"0",trial:"2",premium:"Illimité",premium_ai:"Illimité"}, badge:"trial"},
     {icon:"🎒", label:"Emploi du temps des enfants",             badge:"trial"},
+    {icon:"💰", label:"Dépenses & remboursements",               badge:"free"},
     {icon:"📊", label:"Dépenses : Balance & soldes visibles",    badge:"trial"},
+    {icon:"📞", label:"Répertoire (sans ajout de numéros)",      badge:"free"},
     {icon:"📞", label:"Répertoire des contacts : ajout de numéros", badge:"trial"},
-    {icon:"🔐", label:"Coffre-fort — 50 Mo",                     badge:"trial"},
+    {icon:"🔐", label:"Coffre-fort",                             values:{free:"0 Mo",trial:"50 Mo",premium:"200 Mo",premium_ai:"200 Mo"}, badge:"trial"},
     {icon:"💬", label:"Messagerie famille",                      badge:"trial"},
     {icon:"🎡", label:"Roue Duvia — jeu & récompenses",         badge:"trial"},
-
-    // ── Premium ────────────────────────────────────────────────────────────────
-    {icon:"👁️", label:"Observateurs",                           value:"5", badge:"premium"},
-    {icon:"🧒", label:"Enfants",                                 value:"5", badge:"premium"},
+    {icon:"🌐", label:"5 langues (FR · EN · DE · ES · PT)",     badge:"free"},
+    {icon:"📱", label:"Installable sur mobile (PWA)",            badge:"free"},
     {icon:"📄", label:"Export PDF des dépenses",                 badge:"premium"},
     {icon:"📄", label:"Export PDF calendrier annuel",           badge:"premium"},
     {icon:"📄", label:"Export PDF planning d'activité enfant",  badge:"premium", soon:true},
-    {icon:"🔐", label:"Coffre-fort — 200 Mo",                    badge:"premium"},
   ];
   return (
     <div>
@@ -15688,12 +15682,13 @@ function PremiumTab() {
         </div>
         {items.map((f,i)=>{
           const active = TIER_RANK[f.badge] <= TIER_RANK[tierPreview];
-          const tierColor = TIERS.find(t=>t.key===f.badge)?.color || C.mut;
+          const tierColor = TIERS.find(t=>t.key===tierPreview)?.color || C.mut;
+          const displayValue = f.values ? f.values[tierPreview] : f.value;
           return (
             <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:i<items.length-1?`1px solid ${C.bor}`:"none",opacity:active?1:.35,transition:"opacity .2s"}}>
               <div style={{width:30,height:30,borderRadius:8,background:active?`${tierColor}18`:C.sur,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0,filter:active?"none":"grayscale(1)"}}>{f.icon}</div>
               <div style={{flex:1,fontSize:13,fontWeight:600,color:active?C.txt:C.mut}}>{f.label}</div>
-              {f.value && <span style={{fontSize:12,fontWeight:800,color:active?tierColor:C.mut,background:active?`${tierColor}18`:C.sur,padding:"2px 10px",borderRadius:20,flexShrink:0}}>{f.value}</span>}
+              {displayValue && <span style={{fontSize:12,fontWeight:800,color:active?tierColor:C.mut,background:active?`${tierColor}18`:C.sur,padding:"2px 10px",borderRadius:20,flexShrink:0,transition:"all .2s"}}>{displayValue}</span>}
               {f.soon && <span style={{fontSize:10,fontWeight:800,color:C.mut,background:C.sur,border:`1px solid ${C.bor}`,padding:"2px 8px",borderRadius:6,flexShrink:0}}>Bientôt</span>}
               {!active && <span style={{fontSize:13,flexShrink:0}}>🔒</span>}
             </div>
