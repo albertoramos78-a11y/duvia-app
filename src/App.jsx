@@ -3774,7 +3774,14 @@ export default function App() {
             name: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split("@")[0] || "Utilisateur",
             role: "parent",
             parentIdx: 0,
-            sub: u.user_metadata?.sub || undefined,
+            // 🔧 2026-07-15 : NE PAS lire u.user_metadata.sub ici — pour un compte
+            // Google, ce champ est le "sub" OAuth du fournisseur (l'identifiant
+            // Google, une chaîne numérique), pas un snapshot de notre état
+            // d'abonnement. Le lire comme tel corrompait sub côté app (voir le
+            // commentaire détaillé sur l'effet "Sync sub → table subscriptions").
+            // L'effet "Vérification plan d'abonnement depuis Supabase" recharge
+            // déjà le vrai abonnement depuis la table subscriptions une fois
+            // myUid résolu — aucune perte, juste une source de vérité unique.
             accountCreatedAt: new Date().toISOString(),
           };
           // 🔧 Invitation dans l'URL (Google OAuth + lien d'invitation)
@@ -4138,7 +4145,19 @@ export default function App() {
       setSub(base);
     }
   },[user?.id]);
-  // ── Sync sub → table subscriptions (Stripe-ready) + user_metadata fallback ─
+  // ── Sync sub → table subscriptions (Stripe-ready) ────────────────────────
+  // 🔧 2026-07-15 : ne PLUS écrire sub dans user_metadata.sub — ce nom de
+  // champ est aussi celui que Supabase/GoTrue remplit automatiquement avec le
+  // "sub" (subject) OAuth du fournisseur d'identité (ex: l'identifiant Google
+  // numérique) pour tout compte connecté via Google. La table subscriptions
+  // ci-dessous est déjà la source faisant autorité partout ailleurs dans
+  // l'app — ce miroir dans user_metadata était un legacy d'avant son
+  // existence, et collisionnait silencieusement avec le "sub" de Google,
+  // corrompant les métadonnées Auth réelles (confirmé en prod sur un compte
+  // Google : user_metadata.sub contenait un mélange de caractères de
+  // l'identifiant Google éclatés en clés numériques ET des champs
+  // d'abonnement, propagé par les 2 autres endroits corrigés dans ce même
+  // commit — voir App.jsx pour l'historique complet du mécanisme).
   useEffect(() => {
     if (!user?.id || !sub || !myUid || user?.role === "admin") return;
     const timer = setTimeout(async () => {
@@ -4154,7 +4173,6 @@ export default function App() {
           ref_months: sub.refMonths || 0, pending_spins: sub.pendingSpins || 0,
           monthly_ref_month: sub.monthlyRefMonth || null, monthly_ref_count: sub.monthlyRefCount || 0,
         }, { onConflict: "user_id" });
-        await supabase.auth.updateUser({ data: { sub } });
       } catch(e) { console.warn("[Duvia] sub sync failed:", e); }
     }, 3000);
     return () => clearTimeout(timer);
@@ -5864,7 +5882,14 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
           accountCreatedAt: new Date().toISOString(),
         };
     if(!existing) setUsers(u => [...u, profile]);
-    // 🔧 Restaurer sub depuis table subscriptions (priorité) puis user_metadata (fallback)
+    // 🔧 Restaurer sub depuis la table subscriptions — seule source de vérité
+    // (le fallback user_metadata.sub a été retiré 2026-07-15 : ce nom de champ
+    // collisionne avec le "sub" OAuth que Supabase remplit lui-même pour les
+    // comptes Google, voir le commentaire détaillé sur l'effet "Sync sub →
+    // table subscriptions"). Si aucune ligne n'existe encore (tout premier
+    // login), profile.sub reste non défini — App() retombera sur makeSub()
+    // via `user.sub || makeSub()`, un essai neuf, exactement comme prévu pour
+    // un nouveau compte.
     try {
       const { data: subRow } = await supabase.from("subscriptions")
         .select("*").eq("user_id", data.user.id).maybeSingle();
@@ -5879,11 +5904,8 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
           refMonths: subRow.ref_months || 0, pendingSpins: subRow.pending_spins || 0,
           monthlyRefMonth: subRow.monthly_ref_month, monthlyRefCount: subRow.monthly_ref_count || 0,
         };
-      } else {
-        const cloudSub = meta.sub;
-        if(cloudSub) profile.sub = cloudSub;
       }
-    } catch { const cloudSub = meta.sub; if(cloudSub) profile.sub = cloudSub; }
+    } catch (e) { console.warn("[Duvia] restauration sub depuis subscriptions échouée:", e); }
     setOk("");
     onLogin(profile);
   }
