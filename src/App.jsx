@@ -15654,13 +15654,11 @@ function PremiumTab() {
           ))}
         </div>
       )}
-      {/* Parrainage shortcut */}
-      <div className="card" style={{marginBottom:14,borderColor:`${C.pin}33`,background:`${C.pin}06`,padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
+      {/* Parrainage shortcut — toute la carte est cliquable */}
+      <div onClick={()=>{setMenuTab("parrainage");}} style={{marginBottom:14,borderColor:`${C.pin}33`,background:`${C.pin}06`,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer"}} className="card">
         <div style={{fontSize:28}}>🎁</div>
         <div style={{flex:1,fontSize:14,fontWeight:800,color:C.pin}}>Parrainage</div>
-        <button onClick={()=>{setMenuTab("parrainage");}} style={{padding:"8px 14px",background:`linear-gradient(135deg,${C.vio},${C.pin})`,color:"#fff",fontSize:12,fontWeight:700,borderRadius:8,flexShrink:0}}>
-          Voir →
-        </button>
+        <div style={{fontSize:18,color:C.pin,flexShrink:0}}>→</div>
       </div>
       <div className="card" style={{marginBottom:14}}>
         <div className="sec">Fonctionnalités incluses</div>
