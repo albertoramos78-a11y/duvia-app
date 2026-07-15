@@ -302,6 +302,17 @@ function subStatus(sub) {
     }
     return "premium";
   }
+  // 🔒 Override admin "Bêta" par compte (date de fin propre à CE compte,
+  // distincte de la bascule bêta globale ci-dessous). Tant que non dépassée :
+  // accès complet (identique à un trial). Une fois dépassée : redevient un
+  // Trial Premium normal de 15 jours qui démarre à CETTE date de fin — calculé
+  // à la volée à chaque appel, jamais réécrit en base.
+  if(sub.plan==="beta") {
+    const betaEndMs = sub.betaEnd ? new Date(sub.betaEnd).getTime() : 0;
+    if(Date.now() < betaEndMs) return "trial_premium";
+    const d = (Date.now()-betaEndMs)/86400000;
+    return d<=TRIAL_BASE_DAYS ? "trial_premium" : "freemium";
+  }
   if(isBeta()) return "trial_premium"; // 🎉 Bêta — Trial Premium offert à tous
   if(sub.plan==="freemium") return "freemium";
   const created = sub.accountCreatedAt || sub.trialStart;
@@ -396,12 +407,12 @@ function familyMaxObservers(parentRows) {
 }
 function isAdmin(user) { return user?.role==="admin"; }
 
-// ─── BÊTA GRATUITE — Premium offert, date de fin non arrêtée ──────────────────
-// ⚠️ Repoussée volontairement loin (pas de date de sortie de bêta connue —
-// dépend notamment de l'intégration Stripe, pas encore faite). Ne PAS
-// remettre une date proche tant que le passage au payant n'est pas prêt :
-// à cette échéance, isBeta() bascule à false pour tout le monde d'un coup.
-const BETA_END = new Date("2030-01-01T00:00:00");
+// ─── BÊTA GRATUITE — pilotée depuis Supabase (table app_config), plus une
+// constante codée en dur. _globalBetaCache est rempli une seule fois par un
+// effet dans App() (voir plus bas) ; isBeta() le lit directement, exactement
+// comme il lisait BETA_END avant — même rôle de constante partagée, juste
+// chargée depuis la base pour être pilotable sans redéploiement de code.
+let _globalBetaCache = { enabled: false, endMs: null };
 // Âge du consentement numérique (RGPD art. 8) — le socle UE est 16 ans, sauf
 // dérogation nationale abaissant le seuil (minimum légal autorisé : 13 ans).
 // En dessous du seuil applicable, le consentement d'un titulaire de
@@ -416,7 +427,7 @@ const RGPD_CONSENT_AGE_DEFAULT = 16; // socle RGPD par défaut si pays inconnu
 function rgpdConsentAge(country) {
   return RGPD_CONSENT_AGE_BY_COUNTRY[country] ?? RGPD_CONSENT_AGE_DEFAULT;
 }
-function isBeta() { return Date.now() < BETA_END.getTime(); }
+function isBeta() { return _globalBetaCache.enabled && Date.now() < (_globalBetaCache.endMs ?? 0); }
 
 // ─── DATA ─────────────────────────────────────────────────────────────────────
 // 🔧 L'admin n'est plus un compte local codé en dur (faille de sécurité :
@@ -3084,6 +3095,22 @@ export default function App() {
   },[]);
 
   const [sub,setSub]     = useLocalStorage("duvia_sub", makeSub);
+  // 🌍 Bascule bêta globale (table app_config) — remplace l'ancienne constante
+  // BETA_END codée en dur. Un seul fetch au montage ; _globalBetaCache (scope
+  // module, voir isBeta()) est mis à jour puis un re-render est forcé pour que
+  // tout ce qui appelle isBeta()/subStatus() pendant son rendu (dont App()
+  // lui-même) relise la valeur fraîche. Pas d'état React pour la valeur elle-
+  // même : isBeta() reste une fonction à zéro argument, comme avant, pour ne
+  // rien changer aux nombreux call sites existants.
+  const [, forceBetaRerender] = useState(0);
+  useEffect(() => {
+    supabase.from("app_config").select("beta_enabled, beta_end").eq("id", 1).maybeSingle()
+      .then(({ data }) => {
+        if (!data) return;
+        _globalBetaCache = { enabled: !!data.beta_enabled, endMs: data.beta_end ? new Date(data.beta_end).getTime() : null };
+        forceBetaRerender(x => x + 1);
+      });
+  }, []);
   const [myUid, setMyUid] = useState(null);
   const { msgs: cloudMsgs, send: _sendCloudMsg, markRead: markCloudMessageRead, react: _reactCloudMsg, remove: _removeCloudMsg, hiddenConvs, hideConversation } = useMessages(familySync.familyId, myUid);
   // Phase 3 migration custody : écriture en parallèle, ne lit/affiche rien — voir hooks/useCustody.ts
