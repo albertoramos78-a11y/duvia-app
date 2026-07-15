@@ -14492,7 +14492,7 @@ function ReferralProgressCard({C, refTracking}) {
 
 // ─── PREMIUM TAB & PARRAINAGE ────────────────────────────────────────────────
 function ParrainageSection() {
-  const {C,t,sub,setSub,user,setUsers,users,st,days,addRefAction,refActions,showReferreePopup,setShowReferreePopup,showReferrerPopup,setShowReferrerPopup} = useApp();
+  const {C,t,sub,setSub,user,setUsers,users,st,days,addRefAction,refActions,showReferreePopup,setShowReferreePopup,showReferrerPopup,setShowReferrerPopup,isAdm} = useApp();
   const isPremium = st==="premium";
   const isEarned  = st==="earned_premium";
   const isTrial   = st==="trial_premium";
@@ -14628,13 +14628,17 @@ function ParrainageSection() {
             🎁 Inviter un proche
           </button>
         </div>
-        {/* Simulation démo */}
-        <div style={{marginTop:12,paddingTop:12,borderTop:`1px dashed ${C.bor}`}}>
-          <div style={{fontSize:10,color:C.mut,marginBottom:5,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>🧪 Mode démo</div>
-          <button onClick={simulateReferral} disabled={showDemo&&demoStep===1} style={{padding:"7px 16px",background:`${C.vio}15`,color:C.vio,border:`1.5px dashed ${C.vio}`,fontSize:12,fontWeight:700,borderRadius:9,opacity:(showDemo&&demoStep===1)?0.5:1}}>
-            Simuler un filleul validé ({bonusNext>0?`+${bonusNext}j + `:""}🎰×1)
-          </button>
-        </div>
+        {/* Simulation démo — réservée aux admins (2026-07-15 : c'était un
+            exploit self-service pour n'importe quel compte réel, qui créditait
+            du Premium gratuit sans aucun filleul réel). */}
+        {isAdm && (
+          <div style={{marginTop:12,paddingTop:12,borderTop:`1px dashed ${C.bor}`}}>
+            <div style={{fontSize:10,color:C.mut,marginBottom:5,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>🧪 Mode démo (admin)</div>
+            <button onClick={simulateReferral} disabled={showDemo&&demoStep===1} style={{padding:"7px 16px",background:`${C.vio}15`,color:C.vio,border:`1.5px dashed ${C.vio}`,fontSize:12,fontWeight:700,borderRadius:9,opacity:(showDemo&&demoStep===1)?0.5:1}}>
+              Simuler un filleul validé ({bonusNext>0?`+${bonusNext}j + `:""}🎰×1)
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Stats ──────────────────────────────────────────────────────── */}
