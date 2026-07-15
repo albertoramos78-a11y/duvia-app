@@ -15446,8 +15446,7 @@ function AdminTab() {
 
 
 function PremiumTab() {
-  const {C,t,sub,setSub,st,days,perms,setMenuTab,setShowMenu,users,user,setConfirmDeleteAccount,familyPremiumFromCoParent,familyBestSub} = useApp();
-  const [confirm,setConfirm]=useState(false);
+  const {C,t,sub,setSub,st,days,perms,setMenuTab,setShowMenu,users,user,familyPremiumFromCoParent,familyBestSub} = useApp();
   const [confirmCancelSub,setConfirmCancelSub] = useState(false);
   const isPremium=st==="premium"||sub._admin;
   // Résout l'email du co-parent payeur uniquement quand le statut affiché
@@ -15507,38 +15506,39 @@ function PremiumTab() {
     });
   })() : [];
   // badge: "free" = gratuit · "trial" = Trial/Bêta · "premium" = Premium abonné uniquement
+  // value: valeur numérique affichée en pastille (ex. quota qui augmente par palier)
+  // soon: fonctionnalité pas encore construite, affichée avec un marqueur "Bientôt"
   const items=[
-    // ── Famille & Compte ───────────────────────────────────────────────────────
-    {icon:"👥", label:"2 parents · 1 enfant (Trial : 2, Premium : 5)", badge:"free"},
-    {icon:"👁️", label:"Observateurs (0 Freemium, 2 Trial, 5 Premium)", badge:"trial"},
-    {icon:"📨", label:"Invitations SMS / WhatsApp / Email",      badge:"free"},
-    // ── Calendrier ─────────────────────────────────────────────────────────────
+    // ── Freemium ───────────────────────────────────────────────────────────────
+    {icon:"👥", label:"2 parents",                               badge:"free"},
+    {icon:"🧒", label:"1 enfant",                                 badge:"free"},
     {icon:"📅", label:"Calendrier de garde",                     badge:"free"},
     {icon:"🌍", label:"Jours fériés 15+ pays",                  badge:"free"},
+    {icon:"💰", label:"Dépenses & remboursements",               badge:"free"},
+    {icon:"🌐", label:"5 langues (FR · EN · DE · ES · PT)",     badge:"free"},
+    {icon:"📱", label:"Installable sur mobile (PWA)",            badge:"free"},
+
+    // ── Trial Premium ──────────────────────────────────────────────────────────
+    {icon:"👁️", label:"Observateurs",                           value:"2", badge:"trial"},
+    {icon:"🧒", label:"Enfants",                                 value:"2", badge:"trial"},
+    {icon:"🌤️", label:"Météo sur le calendrier",                badge:"trial"},
     {icon:"🌸", label:"Fête des mères / des pères",             badge:"trial"},
     {icon:"🎂", label:"Anniversaires parents & enfants",         badge:"trial"},
     {icon:"🗓️", label:"Dates personnalisées (2 en trial)",      badge:"trial"},
-    // ── Emploi du temps ────────────────────────────────────────────────────────
     {icon:"🎒", label:"Emploi du temps des enfants",             badge:"trial"},
-    // ── Dépenses ───────────────────────────────────────────────────────────────
-    {icon:"💰", label:"Dépenses & remboursements",               badge:"free"},
-    {icon:"📊", label:"Balance & soldes visibles",               badge:"trial"},
-    {icon:"📄", label:"Export PDF calendrier annuel",           badge:"premium"},
-    {icon:"📄", label:"Export PDF des dépenses",                 badge:"premium"},
-    // ── Contacts ───────────────────────────────────────────────────────────────
-    {icon:"📞", label:"Répertoire contacts",                     badge:"trial"},
-    // ── Coffre-fort ────────────────────────────────────────────────────────────
-    {icon:"🔐", label:"Coffre-fort — 200 Mo",            badge:"premium"},
-    // ── Messagerie ─────────────────────────────────────────────────────────────
-    {icon:"💬", label:"Messagerie famille (18 ans+ pour enfants)",badge:"trial"},
-    // ── Jeu & Récompenses ──────────────────────────────────────────────────────
+    {icon:"📊", label:"Dépenses : Balance & soldes visibles",    badge:"trial"},
+    {icon:"📞", label:"Répertoire des contacts : ajout de numéros", badge:"trial"},
+    {icon:"🔐", label:"Coffre-fort — 50 Mo",                     badge:"trial"},
+    {icon:"💬", label:"Messagerie famille",                      badge:"trial"},
     {icon:"🎡", label:"Roue Duvia — jeu & récompenses",         badge:"trial"},
-    // ── Parrainage ─────────────────────────────────────────────────────────────
-    {icon:"🎁", label:"Parrainage",                              badge:"free"},
-    // ── App ────────────────────────────────────────────────────────────────────
-    {icon:"🌐", label:"5 langues (FR · EN · DE · ES · PT)",     badge:"free"},
-    {icon:"🎨", label:"5 thèmes visuels",                        badge:"free"},
-    {icon:"📱", label:"Installable sur mobile (PWA)",            badge:"free"},
+
+    // ── Premium ────────────────────────────────────────────────────────────────
+    {icon:"👁️", label:"Observateurs",                           value:"5", badge:"premium"},
+    {icon:"🧒", label:"Enfants",                                 value:"5", badge:"premium"},
+    {icon:"📄", label:"Export PDF des dépenses",                 badge:"premium"},
+    {icon:"📄", label:"Export PDF calendrier annuel",           badge:"premium"},
+    {icon:"📄", label:"Export PDF planning d'activité enfant",  badge:"premium", soon:true},
+    {icon:"🔐", label:"Coffre-fort — 200 Mo",                    badge:"premium"},
   ];
   return (
     <div>
@@ -15672,6 +15672,8 @@ function PremiumTab() {
                 <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:i<tierItems.length-1?`1px solid ${C.bor}`:"none"}}>
                   <div style={{width:30,height:30,borderRadius:8,background:`${tier.color}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>{f.icon}</div>
                   <div style={{flex:1,fontSize:13,fontWeight:600,color:C.txt}}>{f.label}</div>
+                  {f.value && <span style={{fontSize:12,fontWeight:800,color:tier.color,background:`${tier.color}18`,padding:"2px 10px",borderRadius:20,flexShrink:0}}>{f.value}</span>}
+                  {f.soon && <span style={{fontSize:10,fontWeight:800,color:C.mut,background:C.sur,border:`1px solid ${C.bor}`,padding:"2px 8px",borderRadius:6,flexShrink:0}}>Bientôt</span>}
                 </div>
               ))}
             </div>
@@ -15683,39 +15685,6 @@ function PremiumTab() {
           <div style={{padding:"7px 0",fontSize:12,color:C.mut,fontStyle:"italic"}}>Bientôt disponible.</div>
         </div>
       </div>
-      {/* Cancel sub - premium only */}
-      {isPremium && !familyPremiumFromCoParent && (
-        <div className="card" style={{borderColor:`${C.red}44`}}>
-          <div className="sec">{t.cancelSub}</div>
-          {!confirm?(
-            <button onClick={()=>setConfirm(true)} style={{padding:"9px 18px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,fontSize:13}}>{t.cancelSub}</button>
-          ):(
-            <div>
-              <div style={{fontSize:13,color:C.mut,marginBottom:10}}>{t.confirmCancel} ?</div>
-              <div style={{display:"flex",gap:8}}>
-                <button onClick={()=>{setSub(s=>({...s,plan:"freemium"}));setConfirm(false);}} style={{padding:"8px 16px",background:C.red,color:"#fff",fontSize:13}}>{t.confirmCancel}</button>
-                <button onClick={()=>setConfirm(false)} style={{padding:"8px 16px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13}}>{t.cancel}</button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Supprimer le compte */}
-      {user?.role !== "admin" && (
-        <div className="card" style={{borderColor:`${C.red}22`}}>
-          <div className="sec" style={{color:C.red}}>{t.deleteAccount||"Supprimer mon compte"}</div>
-          <div style={{fontSize:12,color:C.mut,marginBottom:12,lineHeight:1.5}}>
-            {t.deleteAccountDesc||"Action définitive. Toutes vos données seront supprimées."}
-          </div>
-          <button
-            onClick={()=>setConfirmDeleteAccount(true)}
-            style={{padding:"9px 18px",background:"transparent",color:C.red,border:`1.5px solid ${C.red}`,fontSize:13,borderRadius:10,cursor:"pointer",fontWeight:700}}>
-            🗑️ {t.deleteAccount||"Supprimer mon compte"}
-          </button>
-        </div>
-      )}
-
     </div>
   );
 }
