@@ -32,6 +32,8 @@
 - Produces: `public.get_family_billing_context(p_family_id uuid default null)` — même nom/signature que la version déjà déployée (migration 0036), remplacée via `create or replace function` (idempotent, pattern déjà utilisé par la migration 0030 sur une fonction antérieure). Callable désormais par tout membre actif (`parent`/`child`/`observer`), plus seulement `observer`. Colonnes de retour inchangées **sauf** l'ajout de `parent_user_id uuid` (8ᵉ colonne, avant `my_observer_rank`), rempli uniquement si l'appelant a lui-même `role='parent'` dans `family_members`, sinon `NULL`.
 - Produces: `public.get_coparent_email(p_user_id uuid) returns text` — nouvelle fonction, utilisée uniquement par `PremiumTab` (Tâche 3) pour résoudre l'email à afficher dans le bandeau "Premium via votre famille".
 
+> **Correction post-revue (commit `e844408`)** : le SQL ci-dessous plaçait à l'origine `parent_user_id` **avant** `my_observer_rank` — PostgreSQL n'autorise `CREATE OR REPLACE FUNCTION` à étendre un `RETURNS TABLE` existant qu'en **ajoutant en fin de liste**, jamais en insérant une colonne au milieu (`cannot change return type of existing function`). Le fichier réellement committé place `parent_user_id` **après** `my_observer_rank`. Le SQL ci-dessous est laissé tel quel pour l'historique de la décision de conception ; se fier au fichier `supabase/migrations/0039_family_wide_effective_plan.sql` réel, pas à ce bloc, pour l'ordre exact des colonnes.
+
 - [ ] **Step 1: Écrire la migration complète**
 
 Créer `supabase/migrations/0039_family_wide_effective_plan.sql` avec ce contenu exact :
