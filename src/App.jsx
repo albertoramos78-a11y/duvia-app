@@ -3095,13 +3095,20 @@ export default function App() {
   },[]);
 
   const [sub,setSub]     = useLocalStorage("duvia_sub", makeSub);
+  const [myUid, setMyUid] = useState(null);
   // 🌍 Bascule bêta globale (table app_config) — remplace l'ancienne constante
-  // BETA_END codée en dur. Un seul fetch au montage ; _globalBetaCache (scope
-  // module, voir isBeta()) est mis à jour puis un re-render est forcé pour que
-  // tout ce qui appelle isBeta()/subStatus() pendant son rendu (dont App()
-  // lui-même) relise la valeur fraîche. Pas d'état React pour la valeur elle-
-  // même : isBeta() reste une fonction à zéro argument, comme avant, pour ne
-  // rien changer aux nombreux call sites existants.
+  // BETA_END codée en dur. _globalBetaCache (scope module, voir isBeta()) est
+  // mis à jour puis un re-render est forcé pour que tout ce qui appelle
+  // isBeta()/subStatus() pendant son rendu (dont App() lui-même) relise la
+  // valeur fraîche. Pas d'état React pour la valeur elle-même : isBeta()
+  // reste une fonction à zéro argument, comme avant, pour ne rien changer aux
+  // nombreux call sites existants.
+  // 🔧 Dépend de [myUid] (pas [] seul) : la policy RLS de app_config exige
+  // authenticated, donc un fetch au montage pendant qu'on est encore anon
+  // (inscription fraîche, ou connexion sans "se souvenir de moi") reçoit 0
+  // ligne silencieusement et _globalBetaCache ne se remplit jamais. Refaire
+  // le fetch quand myUid passe de null à une vraie valeur (connexion réussie
+  // dans la session de page courante) couvre ce cas sans rien changer d'autre.
   const [, forceBetaRerender] = useState(0);
   useEffect(() => {
     supabase.from("app_config").select("beta_enabled, beta_end").eq("id", 1).maybeSingle()
@@ -3110,8 +3117,7 @@ export default function App() {
         _globalBetaCache = { enabled: !!data.beta_enabled, endMs: data.beta_end ? new Date(data.beta_end).getTime() : null };
         forceBetaRerender(x => x + 1);
       });
-  }, []);
-  const [myUid, setMyUid] = useState(null);
+  }, [myUid]);
   const { msgs: cloudMsgs, send: _sendCloudMsg, markRead: markCloudMessageRead, react: _reactCloudMsg, remove: _removeCloudMsg, hiddenConvs, hideConversation } = useMessages(familySync.familyId, myUid);
   // Phase 3 migration custody : écriture en parallèle, ne lit/affiche rien — voir hooks/useCustody.ts
   const custodyShadow = useCustody(familySync.familyId);
