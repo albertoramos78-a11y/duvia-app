@@ -324,7 +324,6 @@ function subStatus(sub) {
 }
 function trialLeft(sub) { const created=sub.accountCreatedAt||sub.trialStart; const ext=sub.trialExtension||0; const maxDays=Math.min(TRIAL_BASE_DAYS+ext,TRIAL_MAX_DAYS); return Math.max(0,Math.ceil(maxDays-(Date.now()-new Date(created).getTime())/86400000)); }
 function isPrem(sub) { const st=subStatus(sub); return st==="premium"||st==="trial_premium"||st==="earned_premium"||sub._admin; }
-function isPremFull(sub) { return subStatus(sub)==="premium"||sub._admin; }
 function isFreemiumPlan(sub) { return subStatus(sub)==="freemium"; }
 function getPerms(sub) {
   const st=subStatus(sub);
@@ -3967,52 +3966,22 @@ export default function App() {
     });
   }, [user?.refUsed, setRefActions]); // ✅ référence stable
 
-  function _onFilleulValidated(){
-    // 1. Filleul → passe en earned_premium + notification
+  async function _onFilleulValidated(){
+    // 1. Filleul → passe en earned_premium + notification, mise à jour locale
+    // optimiste pour la réactivité immédiate de l'UI. La RPC ci-dessous est
+    // la source de vérité qui persiste réellement l'état (le filleul comme
+    // le parrain) — voir docs/superpowers/specs/2026-07-15-referral-system-fix-design.md.
     setShowReferreePopup(true);
     setSub(s=>({...s, plan:"earned_premium"}));
-    setUsers(us=>us.map(u=>u.id===user?.id?{...u,plan:"earned_premium"}:u));
-    // 2. Parrain → bonus selon statut
-    const parrain = users.find(u=>u.refCode===user?.refUsed);
-    if(!parrain) return;
-    const parrainIsPrem = isPremFull(parrain.sub||{}) || parrain._admin;
-    const newValidatedCount = (parrain.validatedRefCount||0)+1;
-    // Vérifier si le parrain est encore dans sa fenêtre trial (pas freemium)
-    const parrainCreated = parrain.accountCreatedAt || parrain.trialStart;
-    const parrainDaysElapsed = parrainCreated ? (Date.now()-new Date(parrainCreated).getTime())/86400000 : 999;
-    const parrainExt = parrain.trialExtension||0;
-    const parrainMaxDays = Math.min(TRIAL_BASE_DAYS+parrainExt, TRIAL_MAX_DAYS);
-    const parrainIsFreemium = !parrainIsPrem && parrainDaysElapsed > parrainMaxDays;
-    let bonusDays = 0;
-    let newMonthlyRefMonth = parrain.monthlyRefMonth||null;
-    let newMonthlyRefCount = parrain.monthlyRefCount||0;
-    if(parrainIsFreemium){
-      // Freemium : plus de jours d'extension — seulement un tour de roue
-      bonusDays = 0;
-    } else if(!parrainIsPrem){
-      // Trial / earned_premium : paliers dégressifs
-      bonusDays = refBonusDaysTrial(newValidatedCount, parrainExt);
-    } else {
-      // Premium abonné : plafond mensuel
-      const now = new Date();
-      const thisMonth = `${now.getFullYear()}-${now.getMonth()}`;
-      const mCount = (parrain.monthlyRefMonth===thisMonth ? parrain.monthlyRefCount||0 : 0)+1;
-      bonusDays = refBonusDaysPremium(mCount);
-      newMonthlyRefMonth = thisMonth;
-      newMonthlyRefCount = mCount;
+    // 2. Parrain → crédité côté serveur (jamais via le tableau local `users`,
+    // propre à cet appareil — c'était le bug racine empêchant tout crédit
+    // cross-appareil).
+    try {
+      const { error } = await supabase.rpc("credit_referral_validation");
+      if (error) console.warn("[Duvia] credit_referral_validation failed:", error);
+    } catch (e) {
+      console.warn("[Duvia] credit_referral_validation failed:", e);
     }
-    const shouldUpgrade = !parrainIsPrem && !parrainIsFreemium && newValidatedCount>=1;
-    setUsers(us=>us.map(u=>u.id===parrain.id?{
-      ...u,
-      validatedRefCount: newValidatedCount,
-      trialExtension: (u.trialExtension||0)+bonusDays,
-      pendingSpins: (u.pendingSpins||0)+SPIN_PER_REF,
-      plan: shouldUpgrade ? "earned_premium" : u.plan,
-      monthlyRefMonth: newMonthlyRefMonth,
-      monthlyRefCount: newMonthlyRefCount,
-    }:u));
-    // Signal au parrain (cross-session via localStorage)
-    try{ localStorage.setItem(`duvia_ref_bonus_pending_family_${parrain.refCode}`, "true"); }catch{}
   }
   // Auto-disable RG / WC theme outside their period — SAUF si le thème a été acheté (cadeau permanent)
   useEffect(()=>{
@@ -6125,11 +6094,12 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     let refUsed=null; let trialExtension=0;
     if(refInput.trim()){
       const code=refInput.trim().toUpperCase();
-      const referrer=users.find(u=>u.refCode===code);
-      if(!referrer){setErr(t.refInvalid||"Code parrain invalide");return;}
-      refUsed=code; // filleul → démarre en Trial Premium; bonus parrain déclenché à la validation (score ≥ 5)
-      const newRefCount=(referrer.refCount||0)+1;
-      setUsers(us=>us.map(u=>u.id===referrer.id?{...u,refCount:newRefCount}:u));
+      // 🔧 2026-07-15 : vérifié côté serveur (plus jamais via le tableau local
+      // `users`, propre à cet appareil — voir
+      // docs/superpowers/specs/2026-07-15-referral-system-fix-design.md).
+      const { data: refResult, error: refErr } = await supabase.rpc("consume_referral_code", { p_code: code });
+      if(refErr || !refResult?.valid){ setErr(t.refInvalid||"Code parrain invalide"); return; }
+      refUsed=code; // filleul → démarre en Trial Premium; bonus parrain déclenché à la validation (score ≥ 3)
     }
     const finalRole = finalRolePreCheck;
     const parentIdx = isParentInvite ? 1 : (finalRole==="parent" ? 0 : undefined);
@@ -14419,7 +14389,12 @@ const REF_ACTION_META = {
   CHANGE_ZONE:      {label:"Zone modifiée",          icon:"📍"},
   ACTIVATE_EVENT:   {label:"Événement activé",       icon:"🔔"},
 };
-const REF_SCORE_TARGET = 5;
+// 🔧 2026-07-15 : abaissé de 5 à 3 — seules 3 des 10 actions définies dans
+// REF_ACTION_WEIGHTS sont réellement déclenchées quelque part dans le code
+// (ADD_EXPENSE, SEND_MESSAGE, ADD_CONTACT) ; un seuil à 5 était impossible à
+// atteindre pour n'importe quel vrai filleul. Voir
+// docs/superpowers/specs/2026-07-15-referral-system-fix-design.md.
+const REF_SCORE_TARGET = 3;
 const REF_STRONG_MIN   = 2;
 
 function refCalcScore(actions){ return actions.reduce((s,a)=>s+(REF_ACTION_WEIGHTS[a]||0),0); }
