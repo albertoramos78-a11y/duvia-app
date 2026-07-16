@@ -15002,12 +15002,14 @@ function AccountSubscriptionCard({ C, onChanged }) {
   );
 }
 
-function PremiumSubscribersCard({ C, refreshKey }) {
+function PremiumSubscribersCard({ C, refreshKey, onChanged }) {
   const [subscribers, setSubscribers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const [resetting, setResetting] = useState(null);
+  const [resetErr, setResetErr] = useState("");
 
-  useEffect(() => {
+  function load() {
     setLoading(true);
     supabase.functions.invoke("admin-manage-subscriptions", { body: { action: "list_premium_users" } })
       .then(({ data, error }) => {
@@ -15017,7 +15019,25 @@ function PremiumSubscribersCard({ C, refreshKey }) {
       })
       .catch(e => setErr(String(e?.message || e)))
       .finally(() => setLoading(false));
-  }, [refreshKey]);
+  }
+
+  useEffect(load, [refreshKey]);
+
+  async function resetToDefault(userId) {
+    if (!window.confirm("Retirer le forçage admin de ce compte et le remettre en état par défaut ?")) return;
+    setResetting(userId); setResetErr("");
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-manage-subscriptions", { body: { action: "reset_user_to_default", user_id: userId } });
+      if (error) throw new Error(error.message || "invoke_failed");
+      if (data?.error) throw new Error(data.error);
+      load();
+      onChanged?.();
+    } catch (e) {
+      setResetErr(String(e?.message || e));
+    } finally {
+      setResetting(null);
+    }
+  }
 
   const rows = subscribers.map(r => {
     let since = null, expiry = null;
@@ -15050,7 +15070,7 @@ function PremiumSubscribersCard({ C, refreshKey }) {
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
             <thead>
               <tr style={{background:C.sur}}>
-                {["Abonné","Souscrit le","Plan","Échéance","Statut"].map(h=>(
+                {["Abonné","Souscrit le","Plan","Échéance","Statut",""].map(h=>(
                   <th key={h} style={{padding:"7px 8px",textAlign:"left",fontWeight:800,color:C.mut,borderBottom:`1.5px solid ${C.bor}`,whiteSpace:"nowrap"}}>{h}</th>
                 ))}
               </tr>
@@ -15088,6 +15108,12 @@ function PremiumSubscribersCard({ C, refreshKey }) {
                       </span>
                     )}
                   </td>
+                  <td style={{padding:"8px"}}>
+                    <button onClick={()=>resetToDefault(r.user_id)} disabled={resetting===r.user_id}
+                      style={{padding:"5px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:6,fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+                      {resetting===r.user_id ? "…" : "↩️ Retour défaut"}
+                    </button>
+                  </td>
                 </tr>
                 );
               })}
@@ -15095,6 +15121,7 @@ function PremiumSubscribersCard({ C, refreshKey }) {
           </table>
         </div>
       )}
+      {resetErr && <div style={{marginTop:10,fontSize:11,color:C.red}}>⚠️ {resetErr}</div>}
     </div>
   );
 }
@@ -15105,6 +15132,7 @@ function AdminChangeLogCard({ C, onChanged }) {
   const [err, setErr] = useState("");
   const [reverting, setReverting] = useState(null);
   const [msg, setMsg] = useState("");
+  const [collapsed, setCollapsed] = useState(true); // réduit par défaut — historique volumineux, rarement consulté
 
   async function load() {
     setLoading(true); setErr("");
@@ -15141,8 +15169,11 @@ function AdminChangeLogCard({ C, onChanged }) {
 
   return (
     <div className="card" style={{marginBottom:14,borderColor:`${C.vio}44`,background:`${C.vio}06`}}>
-      <div style={{fontSize:11,fontWeight:800,color:C.vio,letterSpacing:".1em",textTransform:"uppercase",marginBottom:12}}>📋 Historique des modifications admin</div>
-      {loading ? (
+      <div onClick={()=>setCollapsed(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",marginBottom:collapsed?0:12}}>
+        <div style={{fontSize:11,fontWeight:800,color:C.vio,letterSpacing:".1em",textTransform:"uppercase"}}>📋 Historique des modifications admin{changes.length>0?` (${changes.length})`:""}</div>
+        <span style={{fontSize:12,color:C.vio,fontWeight:700}}>{collapsed?"▼ Afficher":"▲ Réduire"}</span>
+      </div>
+      {!collapsed && (loading ? (
         <div style={{fontSize:13,color:C.mut,textAlign:"center",padding:"12px 0"}}>Chargement…</div>
       ) : changes.length === 0 ? (
         <div style={{fontSize:13,color:C.mut,textAlign:"center",padding:"12px 0"}}>Aucune modification pour l'instant.</div>
@@ -15165,9 +15196,9 @@ function AdminChangeLogCard({ C, onChanged }) {
             </div>
           ))}
         </div>
-      )}
-      {msg && <div style={{marginTop:8,fontSize:11,color:C.grn}}>{msg}</div>}
-      {err && <div style={{marginTop:8,fontSize:11,color:C.red}}>⚠️ {err}</div>}
+      ))}
+      {!collapsed && msg && <div style={{marginTop:8,fontSize:11,color:C.grn}}>{msg}</div>}
+      {!collapsed && err && <div style={{marginTop:8,fontSize:11,color:C.red}}>⚠️ {err}</div>}
     </div>
   );
 }
@@ -15462,7 +15493,7 @@ function AdminTab() {
       <AccountSubscriptionCard C={C} onChanged={()=>setSubsRefreshKey(k=>k+1)} />
 
       {/* ── Abonnés Premium + historique des modifications admin ──────── */}
-      <PremiumSubscribersCard C={C} refreshKey={subsRefreshKey} />
+      <PremiumSubscribersCard C={C} refreshKey={subsRefreshKey} onChanged={()=>setSubsRefreshKey(k=>k+1)} />
       <AdminChangeLogCard C={C} onChanged={()=>setSubsRefreshKey(k=>k+1)} />
     </div>
   );

@@ -138,6 +138,28 @@ serve(async (req) => {
     return jsonResponse({ subscribers: results });
   }
 
+  if (action === "reset_user_to_default") {
+    // "Retour défaut" — supprime le forçage admin (ligne subscriptions) pour
+    // que ce compte redevienne un compte organique normal (repart sur un
+    // Trial neuf à sa prochaine connexion, comme un tout nouveau compte).
+    // Toujours loggé (previous_state rempli) pour pouvoir "Annuler" ensuite.
+    const userId = String(payload?.user_id || "");
+    if (!userId) return jsonResponse({ error: "missing_user_id" }, 400);
+
+    const { data: previousRow } = await admin.from("subscriptions").select("*").eq("user_id", userId).maybeSingle();
+    const { error } = await admin.from("subscriptions").delete().eq("user_id", userId);
+    if (error) return jsonResponse({ error: error.message }, 500);
+
+    await admin.from("admin_subscription_log").insert({
+      admin_id: callerData.user.id,
+      target_user_id: userId,
+      previous_state: previousRow || null,
+      new_plan: "reset_to_default",
+    });
+
+    return jsonResponse({ ok: true });
+  }
+
   if (action === "list_admin_changes") {
     const { data: rows, error } = await admin
       .from("admin_subscription_log")
