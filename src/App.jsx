@@ -5960,7 +5960,14 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     setOk("");
     onLogin(profile);
   }
-  const [refInput,setRefInput] = useState("");
+  // 🔧 2026-07-16 : le parrainage ne fonctionne QUE via un lien envoyé au
+  // filleul (?ref=CODE) — plus de saisie manuelle du code (champ retiré, voir
+  // plus bas). Jusqu'ici, rien ne lisait jamais ce paramètre d'URL : refInput
+  // restait toujours vide, donc consume_referral_code() n'était jamais
+  // appelée pour aucun vrai utilisateur, même en cliquant sur le lien.
+  const [refInput,setRefInput] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get("ref") || ""; } catch { return ""; }
+  });
   // Detect invite from URL — supports encoded (?inv=base64) and legacy plain params
   const [obsInviteCode] = useState(()=>{
     try{
@@ -14511,7 +14518,6 @@ function ParrainageSection() {
   const isTrial   = st==="trial_premium";
   const isFreemium= st==="freemium";
 
-  const [copied,setCopied]         = useState(false);
   const [copiedLink,setCopiedLink] = useState(false);
   const [showInvite,setShowInvite] = useState(false);
   const [showDemo,setShowDemo]     = useState(false);
@@ -14533,12 +14539,6 @@ function ParrainageSection() {
     ? refBonusDaysPremium((sub.monthlyRefCount||0)+1)
     : refBonusDaysTrial(validatedCount+1, daysEarned);
 
-  function copyCode(){
-    try{ navigator.clipboard.writeText(code); }catch(e){}
-    const el=document.createElement("textarea"); el.value=code;
-    document.body.appendChild(el); el.select(); document.execCommand("copy"); document.body.removeChild(el);
-    setCopied(true); setTimeout(()=>setCopied(false),2000);
-  }
   function copyLink(){
     try{ navigator.clipboard.writeText(inviteLink); }catch(e){}
     const el=document.createElement("textarea"); el.value=inviteLink;
@@ -14547,11 +14547,11 @@ function ParrainageSection() {
   }
   function shareViaEmail(){
     const subj=encodeURIComponent(t.refShareEmailSubject||"Rejoins-moi sur Duvia 🏡");
-    const body=encodeURIComponent((t.refShareEmailBody||"Salut !\n\nJe t'invite sur Duvia, l'app qui simplifie la coparentalité.\n\nTélécharge l'app : {link}\nCode parrain : {code}\n\nÀ bientôt sur Duvia !").replace("{link}",inviteLink).replace("{code}",code));
+    const body=encodeURIComponent((t.refShareEmailBody||"Salut !\n\nJe t'invite sur Duvia, l'app qui simplifie la coparentalité.\n\nTélécharge l'app et crée ton compte via ce lien : {link}\n\nÀ bientôt sur Duvia !").replace("{link}",inviteLink));
     window.open(`mailto:?subject=${subj}&body=${body}`);
   }
   function shareViaSMS(){
-    const body=encodeURIComponent((t.refShareSmsBody||"Rejoins-moi sur Duvia 🏡 {link} — Code : {code}").replace("{link}",inviteLink).replace("{code}",code));
+    const body=encodeURIComponent((t.refShareSmsBody||"Rejoins-moi sur Duvia 🏡 {link}").replace("{link}",inviteLink));
     window.open(`sms:?body=${body}`);
   }
 
@@ -14631,14 +14631,11 @@ function ParrainageSection() {
         )}
       </div>
 
-      {/* ── Mon code & boutons ─────────────────────────────────────────── */}
+      {/* ── Inviter (le parrainage ne fonctionne que par lien — plus de code
+           brut affiché/copié séparément, voir doReg() : le code ne circule
+           plus que caché dans l'URL ?ref=, jamais saisi/copié à la main) ──── */}
       <div className="card" style={{marginBottom:12,textAlign:"center",padding:"20px 16px",borderColor:`${C.pin}44`}}>
-        <div style={{fontSize:11,color:C.mut,marginBottom:6,fontWeight:700,textTransform:"uppercase",letterSpacing:".1em"}}>{t.refCodeLabel}</div>
-        <div style={{fontSize:28,fontWeight:900,letterSpacing:5,color:C.vio,fontFamily:"monospace",marginBottom:14,padding:"10px 16px",background:C.sur,borderRadius:12,display:"inline-block"}}>{code}</div>
         <div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
-          <button onClick={copyCode} style={{padding:"9px 18px",background:copied?`${C.grn}22`:C.sur,color:copied?C.grn:C.txt,border:`1.5px solid ${copied?C.grn:C.bor}`,fontSize:13,fontWeight:700,borderRadius:10,transition:"all .2s"}}>
-            {copied?(t.refCopied||"✅ Copié !"):(t.refCopyBtn||"📋 Copier")}
-          </button>
           <button onClick={()=>setShowInvite(true)} style={{padding:"9px 18px",background:`linear-gradient(135deg,${C.vio},${C.pin})`,color:"#fff",fontSize:13,fontWeight:700,borderRadius:10}}>
             🎁 {t.refInviteOther}
           </button>
@@ -14772,14 +14769,10 @@ function ParrainageSection() {
           <div style={{background:C.card,borderRadius:"20px 20px 0 0",padding:"24px 20px 32px",width:"100%",maxWidth:480,boxShadow:"0 -8px 32px rgba(0,0,0,.18)"}}>
             <div style={{width:40,height:4,background:C.bor,borderRadius:4,margin:"0 auto 20px"}}/>
             <div style={{fontSize:17,fontWeight:900,marginBottom:4}}>🎁 {t.refInviteOther}</div>
-            <div style={{fontSize:13,color:C.mut,marginBottom:16}}>{t.refInviteModalDesc||"Partagez le lien + votre code — votre proche démarre en Trial Premium"}</div>
+            <div style={{fontSize:13,color:C.mut,marginBottom:16}}>{t.refInviteModalDesc||"Partagez ce lien — votre proche démarre en Trial Premium"}</div>
             <div style={{background:C.sur,borderRadius:12,padding:"12px 14px",marginBottom:14,border:`1.5px solid ${C.bor}`}}>
               <div style={{fontSize:10,fontWeight:800,color:C.mut,textTransform:"uppercase",marginBottom:6}}>{t.refInviteLinkLabel||"Lien d'invitation"}</div>
-              <div style={{fontSize:12,color:C.vio,fontFamily:"monospace",wordBreak:"break-all",fontWeight:700,marginBottom:8}}>{inviteLink}</div>
-              <div style={{display:"flex",alignItems:"center",gap:6}}>
-                <span style={{fontSize:11,color:C.mut}}>{t.refCodeColonLabel||"Code :"}</span>
-                <span style={{fontSize:14,fontWeight:900,letterSpacing:3,color:C.vio,fontFamily:"monospace"}}>{code}</span>
-              </div>
+              <div style={{fontSize:12,color:C.vio,fontFamily:"monospace",wordBreak:"break-all",fontWeight:700}}>{inviteLink}</div>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
               {[
