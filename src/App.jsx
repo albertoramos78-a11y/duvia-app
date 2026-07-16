@@ -6116,6 +6116,16 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
+  // 🔧 Arrivée via lien de parrainage (?ref=CODE) → atterrir directement sur
+  // « Créer un compte », pas sur « Connexion » (repli par défaut de l'effet
+  // ci-dessus) — sinon le filleul doit trouver lui-même le bon écran avant que
+  // refInput ne serve à quoi que ce soit. Ignoré si un lien d'invitation
+  // famille est aussi présent : ce cas-là contrôle déjà `mode` lui-même.
+  useEffect(()=>{
+    if(refInput.trim() && !isAnyInvite) setMode("register");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
   const [showExistingAccount, setShowExistingAccount] = useState(false);
 
   const [childAge, setChildAge]           = useState("");
@@ -6522,6 +6532,11 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
           {isAnyInvite && !isExpiredInvite && (
             <div style={{background:`${C.vio}10`,border:`1.5px solid ${C.vio}33`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:C.vio,fontWeight:700,textAlign:"center"}}>
               👨‍👩‍👧 {"Vous avez été invité(e) à rejoindre la famille sur Duvia"}
+            </div>
+          )}
+          {!!refInput.trim() && !isAnyInvite && (
+            <div style={{background:`${C.grn}10`,border:`1.5px solid ${C.grn}33`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:C.grn,fontWeight:700,textAlign:"center"}}>
+              🎁 {t.regReferralNote||"Création de compte avec parrainage — vous démarrez en Trial Premium offert !"}
             </div>
           )}
           <div style={{display:"flex",gap:4,marginBottom:18,background:C.sur,borderRadius:11,padding:4}}>

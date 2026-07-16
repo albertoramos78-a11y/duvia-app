@@ -482,6 +482,7 @@ const fr = {
     ratingSubmit:"Envoyer mon avis",
     ratingThanks:"Merci pour votre retour !",
     ratingPlaceholders:["",'Qu\'est-ce qui vous a déçu ?','Qu\'est-ce qui pourrait être amélioré ?','Qu\'avez-vous apprécié ?','Qu\'est-ce que vous aimez le plus ?','Qu\'est-ce que vous aimez le plus ?'],
+    regReferralNote:"🎁 Création de compte avec parrainage — vous démarrez en Trial Premium offert !",
     regExistingAccount:"👤 Un compte existe déjà avec cet email",
     regExistingAccountDesc:"Tu peux te connecter avec ton mot de passe existant pour rejoindre la famille, ou utiliser un autre email.",
     regPasswordLabel:"MOT DE PASSE",

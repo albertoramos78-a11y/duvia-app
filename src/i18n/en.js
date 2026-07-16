@@ -432,6 +432,7 @@ const en = {
     ratingPlaceholders:["","What disappointed you?","What could be improved?","What did you like?","What do you like most?","What do you like most?"],
     regExistingAccount:"👤 An account already exists with this email",
     regExistingAccountDesc:"You can sign in with your existing password to join the family, or use a different email.",
+    regReferralNote:"🎁 Creating an account via referral — you start with a free Premium Trial!",
     regPasswordLabel:"PASSWORD",
     regPasswordPlaceholder:"Your password",
     regLoginJoin:"✅ Sign in and join the family",

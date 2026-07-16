@@ -401,6 +401,7 @@ const es = {
     ratingPlaceholders:["","¿Qué te decepcionó?","¿Qué podría mejorarse?","¿Qué te gustó?","¿Qué es lo que más te gusta?","¿Qué es lo que más te gusta?"],
     regExistingAccount:"👤 Ya existe una cuenta con este correo electrónico",
     regExistingAccountDesc:"Puedes iniciar sesión con tu contraseña existente para unirte a la familia, o usar otro correo electrónico.",
+    regReferralNote:"🎁 Creación de cuenta con referido — ¡empiezas con una prueba Premium gratis!",
     regPasswordLabel:"CONTRASEÑA",
     regPasswordPlaceholder:"Tu contraseña",
     regLoginJoin:"✅ Iniciar sesión y unirse a la familia",

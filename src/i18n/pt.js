@@ -401,6 +401,7 @@ const pt = {
     ratingPlaceholders:["","O que o desapontou?","O que poderia ser melhorado?","O que gostou?","O que mais gosta?","O que mais gosta?"],
     regExistingAccount:"👤 Já existe uma conta com este email",
     regExistingAccountDesc:"Pode iniciar sessão com a sua palavra-passe existente para se juntar à família, ou usar outro email.",
+    regReferralNote:"🎁 Criação de conta com indicação — começa com um Trial Premium grátis!",
     regPasswordLabel:"PALAVRA-PASSE",
     regPasswordPlaceholder:"A sua palavra-passe",
     regLoginJoin:"✅ Iniciar sessão e juntar-se à família",

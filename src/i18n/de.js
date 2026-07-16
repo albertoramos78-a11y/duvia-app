@@ -401,6 +401,7 @@ const de = {
     ratingPlaceholders:["","Was hat Sie enttäuscht?","Was könnte verbessert werden?","Was hat Ihnen gefallen?","Was gefällt Ihnen am meisten?","Was gefällt Ihnen am meisten?"],
     regExistingAccount:"👤 Es existiert bereits ein Konto mit dieser E-Mail-Adresse",
     regExistingAccountDesc:"Sie können sich mit Ihrem bestehenden Passwort anmelden, um der Familie beizutreten, oder eine andere E-Mail-Adresse verwenden.",
+    regReferralNote:"🎁 Kontoerstellung durch Empfehlung — Sie starten mit einem kostenlosen Premium-Testzeitraum!",
     regPasswordLabel:"PASSWORT",
     regPasswordPlaceholder:"Ihr Passwort",
     regLoginJoin:"✅ Anmelden und der Familie beitreten",
