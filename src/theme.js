@@ -16,7 +16,11 @@ export const VIDEO = { bg:"#07071a",card:"#0f0f2a",sur:"#181835",bor:"#5b21b6",t
 // ─── THÈME LICORNE ────────────────────────────────────────────────────────────
 export const LICORNE = { bg:"#fdf2fb",card:"#ffffff",sur:"#fce7f8",bor:"#f0abfc",txt:"#581c62",mut:"#a855c7",inp:"#ffffff",vio:"#c026d3",blu:"#818cf8",grn:"#34d399",yel:"#fbbf24",red:"#fb7185",ora:"#fb923c",pin:"#f472b6",_licorne:true };
 // ─── BRAND THEME — Thème principal (palette extraite du gradient bleu→rose) ──
-export const BRAND = { bg:"#F2EDFF",card:"#FFFFFF",sur:"#EAE3FF",bor:"#C6B8EE",txt:"#17103A",mut:"#7269A8",inp:"#FFFFFF",vio:"#7B7CF5",blu:"#5B98F2",grn:"#2DD4A8",yel:"#F5B540",red:"#FF4692",ora:"#FF7B60",pin:"#FF6CB8",_brand:true };
+// 🔧 grn assombri (#2DD4A8 → #0C9A73) : l'original, un vert menthe clair, se
+// lisait mal en texte sur les fonds clairs de ce thème (card blanc, bulles à
+// fond blanc translucide) — même souci de contraste que DARK n'a pas puisque
+// son fond, lui, est sombre.
+export const BRAND = { bg:"#F2EDFF",card:"#FFFFFF",sur:"#EAE3FF",bor:"#C6B8EE",txt:"#17103A",mut:"#7269A8",inp:"#FFFFFF",vio:"#7B7CF5",blu:"#5B98F2",grn:"#0C9A73",yel:"#F5B540",red:"#FF4692",ora:"#FF7B60",pin:"#FF6CB8",_brand:true };
 // Dégradé signature de la marque (bleu→rose) — une seule source pour tous les écrans qui l'affichent en fond (login/consentement/header).
 export const BRAND_GRADIENT = "linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)";
 export const PCOLS = ["#f97316","#06b6d4","#10b981","#f59e0b","#ec4899","#ef4444"];

@@ -5207,7 +5207,7 @@ export default function App() {
       {/* Trial / Premium / Earned bubble — second row */}
       {!isObs && !isChild && st==="trial_premium" && (
         <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>
-          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`${C.vio}18`,border:`1.5px solid ${C.vio}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.vio,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s"}}>
+          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`linear-gradient(${C.vio}18, ${C.vio}18), rgba(255,255,255,.5)`,border:`1.5px solid ${C.vio}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.vio,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s"}}>
             {isBeta()
               ? <>🧪 {t.betaChip||"Bêta — Premium offert"}</>
               : <>⭐ {t.trialBanner} · <span style={{opacity:.85}}>{days}j restant{days>1?"s":""}</span></>
@@ -5217,14 +5217,14 @@ export default function App() {
       )}
       {!isObs && !isChild && st==="earned_premium" && (
         <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>
-          <div onClick={()=>{setMenuTab("parrainage");setShowMenu(false);}} style={{background:days<=5?`${C.red}18`:`${C.grn}18`,border:`1.5px solid ${days<=5?C.red+"66":C.grn+"66"}`,borderRadius:20,padding:"4px 12px",fontSize:11,color:days<=5?C.red:C.grn,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",animation:"pulseFade 2s ease-in-out infinite"}}>
+          <div onClick={()=>{setMenuTab("parrainage");setShowMenu(false);}} style={{background:`linear-gradient(${days<=5?`${C.red}18`:`${C.grn}18`}, ${days<=5?`${C.red}18`:`${C.grn}18`}), rgba(255,255,255,.5)`,border:`1.5px solid ${days<=5?C.red+"66":C.grn+"66"}`,borderRadius:20,padding:"4px 12px",fontSize:11,color:days<=5?C.red:C.grn,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",animation:"pulseFade 2s ease-in-out infinite"}}>
             🎁 Premium – {days}j restant{days>1?"s":""}
           </div>
         </div>
       )}
       {!isObs && !isChild && st==="freemium" && (
         <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>
-          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`${C.red}18`,border:`1.5px solid ${C.red}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.red,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}>
+          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`linear-gradient(${C.red}18, ${C.red}18), rgba(255,255,255,.5)`,border:`1.5px solid ${C.red}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.red,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}>
             ⚠️ {t.trialExpired}
           </div>
         </div>
