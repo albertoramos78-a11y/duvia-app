@@ -4167,10 +4167,17 @@ export default function App() {
     // 1ère connexion — jamais de ce qu'avait laissé la session précédente
     // (ex: Premium simulé en admin) sur cet appareil.
     const ownBase = user.sub || makeSub();
-    if(!user.refCode){ setSub(ownBase); return; }
+    // 🔧 Filet de sécurité : un compte créé avant l'introduction du parrainage
+    // (ou jamais repassé par doReg()/la 1ère connexion de doLogin(), seuls
+    // endroits qui appellent makeRefCode()) n'a jamais reçu de refCode — son
+    // lien d'invitation restait vide à vie ("?ref=—", voir ParrainageSection).
+    // On en génère un à la volée dès qu'aucun n'existe encore, peu importe le
+    // chemin de connexion emprunté, au lieu de se limiter à la création de compte.
+    const myRefCode = ownBase.refCode || user.refCode || makeRefCode(user.id, user.email);
+    if(!user.refCode){ setSub({...ownBase, refCode: myRefCode}); return; }
     const base = {
       ...ownBase,
-      refCode: ownBase.refCode||user.refCode,
+      refCode: myRefCode,
       refCount: Math.max(ownBase.refCount||0, user.refCount||0),
       validatedRefCount: Math.max(ownBase.validatedRefCount||0, user.validatedRefCount||0),
       refMonths: Math.max(ownBase.refMonths||0, user.refMonths||0),

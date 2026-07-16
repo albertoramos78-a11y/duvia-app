@@ -14,9 +14,22 @@ createRoot(document.getElementById("root")).render(
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").then((reg) => {
-      // Revérifie périodiquement s'il y a une nouvelle version, utile pour
-      // une appli installée restée ouverte longtemps sans être rechargée.
-      setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000); // toutes les heures
+      // 🔧 Revérifie s'il y a une nouvelle version SANS attendre d'action de
+      // l'utilisateur (ex: un refresh manuel). Avant ce fix, la seule
+      // vérification était un setInterval toutes les heures, dont le tout
+      // premier passage n'avait lieu qu'une heure APRÈS le chargement — un
+      // onglet resté ouvert ne voyait donc "Nouvelle version disponible"
+      // qu'après un rechargement manuel (qui refait l'enregistrement du SW
+      // depuis zéro), jamais tout seul dans les minutes suivant un déploiement.
+      // Revérifier au retour de visibilité de l'onglet couvre le cas réel le
+      // plus courant (l'appli reste ouverte, l'utilisateur y revient plus
+      // tard) ; l'intervalle réduit à 15 min reste en secours pour un onglet
+      // qui resterait au premier plan sans jamais être quitté/repris.
+      const checkForUpdate = () => reg.update().catch(() => {});
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") checkForUpdate();
+      });
+      setInterval(checkForUpdate, 15 * 60 * 1000);
     }).catch(() => {});
 
     // 🔧 "Nouvelle version disponible" : on ignore le tout premier
