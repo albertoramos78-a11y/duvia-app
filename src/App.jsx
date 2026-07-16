@@ -313,13 +313,18 @@ function subStatus(sub) {
     const d = (Date.now()-betaEndMs)/86400000;
     return d<=TRIAL_BASE_DAYS ? "trial_premium" : "freemium";
   }
-  if(isBeta()) return "trial_premium"; // 🎉 Bêta — Trial Premium offert à tous
+  // 🔒 sub.plan==="freemium" ne peut JAMAIS être organique — makeSub() démarre
+  // toujours en "trial_premium" ; "freemium" n'existe que forcé explicitement
+  // (panneau admin AccountSubscriptionCard, ou debug local). Doit donc primer
+  // sur la bêta globale ci-dessous, sinon impossible de tester le rendu
+  // Freemium pendant une période de bêta globale active.
   if(sub.plan==="freemium") return "freemium";
   const created = sub.accountCreatedAt || sub.trialStart;
   const ext = sub.trialExtension||0;
   const maxDays = Math.min(TRIAL_BASE_DAYS + ext, TRIAL_MAX_DAYS);
   const d = (Date.now()-new Date(created).getTime())/86400000;
   if(d<=maxDays) return sub.plan==="earned_premium" ? "earned_premium" : "trial_premium";
+  if(isBeta()) return "trial_premium"; // 🎉 Bêta globale — Trial Premium offert à tous, une fois le trial (forcé ou organique) réellement épuisé
   return "freemium"; // expiré → freemium
 }
 function trialLeft(sub) { const created=sub.accountCreatedAt||sub.trialStart; const ext=sub.trialExtension||0; const maxDays=Math.min(TRIAL_BASE_DAYS+ext,TRIAL_MAX_DAYS); return Math.max(0,Math.ceil(maxDays-(Date.now()-new Date(created).getTime())/86400000)); }
@@ -14887,7 +14892,6 @@ function GlobalBetaCard({ C }) {
 function AccountSubscriptionCard({ C, onChanged }) {
   const [userIdInput, setUserIdInput] = useState("");
   const [account, setAccount] = useState(null);
-  const [betaEndDate, setBetaEndDate] = useState("");
   const [premiumCycle, setPremiumCycle] = useState("yearly");
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState("");
@@ -14917,11 +14921,9 @@ function AccountSubscriptionCard({ C, onChanged }) {
 
   async function applyPlan(plan) {
     if (!account) return;
-    if (plan === "beta" && !betaEndDate) { setErr("Choisis une date de fin pour la Bêta."); return; }
     setApplying(plan); setErr(""); setMsg("");
     try {
       const body = { action: "set_user_plan", user_id: account.user_id, plan };
-      if (plan === "beta") body.beta_end = new Date(betaEndDate + "T23:59:59").toISOString();
       if (plan === "premium") body.premium_cycle = premiumCycle;
       await call(body);
       setMsg(`✅ Compte mis à jour : ${plan}.`);
@@ -14963,20 +14965,12 @@ function AccountSubscriptionCard({ C, onChanged }) {
         <>
           {/* Bulle 2 : plans gratuits / temporaires */}
           <div style={{padding:12,background:C.sur,borderRadius:10,border:`1px solid ${C.bor}`,marginBottom:12,display:"flex",flexDirection:"column",gap:10}}>
-            <div style={{fontSize:10,fontWeight:800,color:C.mut,letterSpacing:".08em",textTransform:"uppercase"}}>Freemium / Bêta / Essai</div>
+            <div style={{fontSize:10,fontWeight:800,color:C.mut,letterSpacing:".08em",textTransform:"uppercase"}}>Freemium / Essai</div>
 
             <button onClick={()=>applyPlan("freemium")} disabled={!!applying}
               style={{height:38,background:C.bor,color:C.txt,border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
               {applying==="freemium"?"…":"Freemium"}
             </button>
-
-            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-              <input type="date" value={betaEndDate} onChange={e=>setBetaEndDate(e.target.value)} style={{flex:1,minWidth:140}} />
-              <button onClick={()=>applyPlan("beta")} disabled={!!applying}
-                style={{padding:"0 16px",height:38,background:"#7c3aed",color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
-                {applying==="beta"?"…":"🌟 Bêta"}
-              </button>
-            </div>
 
             <button onClick={()=>applyPlan("trial_premium")} disabled={!!applying}
               style={{height:38,background:C.blu,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
@@ -15026,36 +15020,46 @@ function PremiumSubscribersCard({ C, refreshKey }) {
   }, [refreshKey]);
 
   const rows = subscribers.map(r => {
-    const since = r.premium_since ? new Date(r.premium_since) : null;
-    let expiry = null;
-    if (since) { expiry = new Date(since); r.cycle === "yearly" ? expiry.setFullYear(expiry.getFullYear() + 1) : expiry.setMonth(expiry.getMonth() + 1); }
+    let since = null, expiry = null;
+    if (r.plan === "premium" && r.premium_since) {
+      since = new Date(r.premium_since);
+      expiry = new Date(since);
+      r.cycle === "yearly" ? expiry.setFullYear(expiry.getFullYear() + 1) : expiry.setMonth(expiry.getMonth() + 1);
+    } else if (r.plan === "trial_premium" && r.trial_start) {
+      since = new Date(r.trial_start);
+      expiry = new Date(since);
+      expiry.setDate(expiry.getDate() + 15); // reflète le bouton "Trial Premium (15j)"
+    }
     const now = new Date();
-    const isActive = expiry ? expiry > now : true;
+    const isActive = expiry ? expiry > now : false;
     const daysLeft = expiry ? Math.ceil((expiry - now) / 86400000) : null;
     return { ...r, since, expiry, isActive, daysLeft };
   });
 
   return (
     <div className="card" style={{marginBottom:14,borderColor:`${C.vio}44`,background:`${C.vio}06`}}>
-      <div style={{fontSize:11,fontWeight:800,color:C.vio,letterSpacing:".1em",textTransform:"uppercase",marginBottom:12}}>⭐ Abonnés Premium</div>
+      <div style={{fontSize:11,fontWeight:800,color:C.vio,letterSpacing:".1em",textTransform:"uppercase",marginBottom:12}}>🛠️ Comptes forcés (admin)</div>
       {loading ? (
         <div style={{fontSize:13,color:C.mut,textAlign:"center",padding:"12px 0"}}>Chargement…</div>
       ) : err ? (
         <div style={{fontSize:11,color:C.red}}>⚠️ {err}</div>
       ) : rows.length === 0 ? (
-        <div style={{fontSize:13,color:C.mut,textAlign:"center",padding:"12px 0"}}>Aucun abonné Premium pour l'instant.</div>
+        <div style={{fontSize:13,color:C.mut,textAlign:"center",padding:"12px 0"}}>Aucun compte forcé pour l'instant.</div>
       ) : (
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
             <thead>
               <tr style={{background:C.sur}}>
-                {["Abonné","Souscrit le","Cycle","Échéance","Statut"].map(h=>(
+                {["Abonné","Souscrit le","Plan","Échéance","Statut"].map(h=>(
                   <th key={h} style={{padding:"7px 8px",textAlign:"left",fontWeight:800,color:C.mut,borderBottom:`1.5px solid ${C.bor}`,whiteSpace:"nowrap"}}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {rows.map((r,i)=>(
+              {rows.map((r,i)=>{
+                const planColor = r.plan==="premium"?C.vio:r.plan==="trial_premium"?C.blu:C.mut;
+                const planLabel = r.plan==="premium" ? (r.cycle==="yearly"?"Premium annuel":"Premium mensuel") : r.plan==="trial_premium" ? "Trial Premium" : "Freemium";
+                return (
                 <tr key={r.user_id} style={{borderBottom:`1px solid ${C.bor}`,background:i%2===0?"transparent":C.sur}}>
                   <td style={{padding:"8px",fontWeight:700,color:C.txt}}>
                     <div>{r.name || "—"}</div>
@@ -15067,8 +15071,8 @@ function PremiumSubscribersCard({ C, refreshKey }) {
                   </td>
                   <td style={{padding:"8px",color:C.txt,whiteSpace:"nowrap"}}>{r.since?r.since.toLocaleDateString("fr-FR"):"—"}</td>
                   <td style={{padding:"8px",whiteSpace:"nowrap"}}>
-                    <span style={{background:`${C.vio}18`,color:C.vio,padding:"2px 8px",borderRadius:6,fontWeight:700,fontSize:11}}>
-                      {r.cycle==="yearly"?"Annuel":"Mensuel"}
+                    <span style={{background:`${planColor}18`,color:planColor,padding:"2px 8px",borderRadius:6,fontWeight:700,fontSize:11}}>
+                      {planLabel}
                     </span>
                   </td>
                   <td style={{padding:"8px",color:C.txt,whiteSpace:"nowrap"}}>
@@ -15076,12 +15080,17 @@ function PremiumSubscribersCard({ C, refreshKey }) {
                     {r.daysLeft!==null&&<div style={{fontSize:10,color:r.daysLeft<=7?C.red:r.daysLeft<=30?C.yel:C.mut}}>{r.daysLeft>0?`J-${r.daysLeft}`:"Expiré"}</div>}
                   </td>
                   <td style={{padding:"8px"}}>
-                    <span style={{background:r.isActive?`${C.grn}22`:`${C.red}22`,color:r.isActive?C.grn:C.red,padding:"2px 8px",borderRadius:6,fontWeight:800,fontSize:11,whiteSpace:"nowrap"}}>
-                      {r.isActive?"✅ Actif":"❌ Expiré"}
-                    </span>
+                    {r.plan==="freemium" ? (
+                      <span style={{background:`${C.mut}22`,color:C.mut,padding:"2px 8px",borderRadius:6,fontWeight:800,fontSize:11,whiteSpace:"nowrap"}}>🔓 Freemium</span>
+                    ) : (
+                      <span style={{background:r.isActive?`${C.grn}22`:`${C.red}22`,color:r.isActive?C.grn:C.red,padding:"2px 8px",borderRadius:6,fontWeight:800,fontSize:11,whiteSpace:"nowrap"}}>
+                        {r.isActive?"✅ Actif":"❌ Expiré"}
+                      </span>
+                    )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
