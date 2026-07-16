@@ -14546,12 +14546,12 @@ function ParrainageSection() {
     setCopiedLink(true); setTimeout(()=>setCopiedLink(false),2000);
   }
   function shareViaEmail(){
-    const subj=encodeURIComponent("Rejoins-moi sur Duvia 🏡");
-    const body=encodeURIComponent(`Salut !\n\nJe t'invite sur Duvia, l'app qui simplifie la coparentalité.\n\nTélécharge l'app : ${inviteLink}\nCode parrain : ${code}\n\nÀ bientôt sur Duvia !`);
+    const subj=encodeURIComponent(t.refShareEmailSubject||"Rejoins-moi sur Duvia 🏡");
+    const body=encodeURIComponent((t.refShareEmailBody||"Salut !\n\nJe t'invite sur Duvia, l'app qui simplifie la coparentalité.\n\nTélécharge l'app : {link}\nCode parrain : {code}\n\nÀ bientôt sur Duvia !").replace("{link}",inviteLink).replace("{code}",code));
     window.open(`mailto:?subject=${subj}&body=${body}`);
   }
   function shareViaSMS(){
-    const body=encodeURIComponent(`Rejoins-moi sur Duvia 🏡 ${inviteLink} — Code : ${code}`);
+    const body=encodeURIComponent((t.refShareSmsBody||"Rejoins-moi sur Duvia 🏡 {link} — Code : {code}").replace("{link}",inviteLink).replace("{code}",code));
     window.open(`sms:?body=${body}`);
   }
 
@@ -14579,13 +14579,15 @@ function ParrainageSection() {
   }
 
   // ── Badge statut ─────────────────────────────────────────────────────────
+  // Noms de palier (Premium/Trial Premium/Freemium) gardés non traduits —
+  // mêmes noms de marque qu'ailleurs dans l'app (ex. TIERS dans PremiumTab).
   const statusBadge = isPremium
-    ? {label:"Premium Actif ⭐", color:"#7B7CF5", bg:"#7B7CF533"}
+    ? {label:(t.premActiveLabel||"Premium Actif ⭐"), color:"#7B7CF5", bg:"#7B7CF533"}
     : isEarned
-    ? {label:`Premium – ${days}j restants 🎁`, color:"#2DD4A8", bg:"#2DD4A833"}
+    ? {label:(t.refEarnedBadge||"Premium – {days}j restants 🎁").replace("{days}",days), color:"#2DD4A8", bg:"#2DD4A833"}
     : isTrial
-    ? {label:`Trial Premium – ${days}j restants`, color:"#5B98F2", bg:"#5B98F233"}
-    : {label:"Freemium", color:"#7269A8", bg:"#7269A833"};
+    ? {label:(t.refTrialBadge||"Trial Premium – {days}j restants").replace("{days}",days), color:"#5B98F2", bg:"#5B98F233"}
+    : {label:(t.premFreemiumLabel||"Freemium"), color:"#7269A8", bg:"#7269A833"};
 
   return (
     <div>
@@ -14594,12 +14596,12 @@ function ParrainageSection() {
         <div style={{position:"fixed",inset:0,zIndex:999,background:"rgba(23,16,58,.65)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.card,borderRadius:24,padding:"32px 24px",maxWidth:320,width:"100%",textAlign:"center",border:`2px solid ${C.grn}44`,boxShadow:`0 20px 60px ${C.grn}33`}}>
             <div style={{fontSize:52,marginBottom:10}}>🎉</div>
-            <div style={{fontSize:20,fontWeight:900,color:C.grn,marginBottom:8}}>Félicitations !</div>
+            <div style={{fontSize:20,fontWeight:900,color:C.grn,marginBottom:8}}>{t.refFelicitations||"Félicitations !"}</div>
             <div style={{fontSize:14,color:C.mut,lineHeight:1.6,marginBottom:20}}>
-              Tu as complété les actions requises et passes en <strong style={{color:C.grn}}>Premium – {FILLEUL_BONUS_DAYS}j restants</strong> ! Ton parrain reçoit également son bonus 💜
+              {(t.refFilleulPopupBody||"Tu as complété les actions requises et passes en Premium – {days}j restants ! Ton parrain reçoit également son bonus 💜").replace("{days}",FILLEUL_BONUS_DAYS)}
             </div>
             <button onClick={()=>setShowReferreePopup(false)} style={{width:"100%",padding:"13px 0",borderRadius:12,border:"none",background:`linear-gradient(90deg,${C.grn},${C.blu})`,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer"}}>
-              Super, merci ! 🙌
+              {t.refFilleulPopupBtn||"Super, merci ! 🙌"}
             </button>
           </div>
         </div>
@@ -14608,12 +14610,12 @@ function ParrainageSection() {
         <div style={{position:"fixed",inset:0,zIndex:999,background:"rgba(23,16,58,.65)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.card,borderRadius:24,padding:"32px 24px",maxWidth:320,width:"100%",textAlign:"center",border:`2px solid ${C.vio}44`,boxShadow:`0 20px 60px ${C.vio}33`}}>
             <div style={{fontSize:52,marginBottom:10}}>🎁</div>
-            <div style={{fontSize:20,fontWeight:900,color:C.vio,marginBottom:8}}>Bonne nouvelle !</div>
+            <div style={{fontSize:20,fontWeight:900,color:C.vio,marginBottom:8}}>{t.refBonneNouvelle||"Bonne nouvelle !"}</div>
             <div style={{fontSize:14,color:C.mut,lineHeight:1.6,marginBottom:20}}>
-              La personne que tu as parrainée a validé son compte. Ton bonus jours + 🎰 tour de roue est crédité !
+              {t.refReferrerPopupBody||"La personne que tu as parrainée a validé son compte. Ton bonus jours + 🎰 tour de roue est crédité !"}
             </div>
             <button onClick={()=>setShowReferrerPopup(false)} style={{width:"100%",padding:"13px 0",borderRadius:12,border:"none",background:`linear-gradient(90deg,${C.vio},${C.pin})`,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer"}}>
-              Super ! 🙌
+              {t.refReferrerPopupBtn||"Super ! 🙌"}
             </button>
           </div>
         </div>
@@ -14624,21 +14626,21 @@ function ParrainageSection() {
         <div style={{flex:1,fontSize:13,fontWeight:800,color:statusBadge.color}}>{statusBadge.label}</div>
         {(isTrial||isEarned) && (
           <div style={{fontSize:11,color:C.mut,textAlign:"right"}}>
-            Plafond<br/><strong style={{color:statusBadge.color}}>{TRIAL_MAX_DAYS}j</strong> depuis J0
+            {t.refPlafond||"Plafond"}<br/><strong style={{color:statusBadge.color}}>{TRIAL_MAX_DAYS}j</strong> {t.refDepuisJ0||"depuis J0"}
           </div>
         )}
       </div>
 
       {/* ── Mon code & boutons ─────────────────────────────────────────── */}
       <div className="card" style={{marginBottom:12,textAlign:"center",padding:"20px 16px",borderColor:`${C.pin}44`}}>
-        <div style={{fontSize:11,color:C.mut,marginBottom:6,fontWeight:700,textTransform:"uppercase",letterSpacing:".1em"}}>Mon code parrain</div>
+        <div style={{fontSize:11,color:C.mut,marginBottom:6,fontWeight:700,textTransform:"uppercase",letterSpacing:".1em"}}>{t.refCodeLabel}</div>
         <div style={{fontSize:28,fontWeight:900,letterSpacing:5,color:C.vio,fontFamily:"monospace",marginBottom:14,padding:"10px 16px",background:C.sur,borderRadius:12,display:"inline-block"}}>{code}</div>
         <div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
           <button onClick={copyCode} style={{padding:"9px 18px",background:copied?`${C.grn}22`:C.sur,color:copied?C.grn:C.txt,border:`1.5px solid ${copied?C.grn:C.bor}`,fontSize:13,fontWeight:700,borderRadius:10,transition:"all .2s"}}>
-            {copied?"✅ Copié !":"📋 Copier"}
+            {copied?(t.refCopied||"✅ Copié !"):(t.refCopyBtn||"📋 Copier")}
           </button>
           <button onClick={()=>setShowInvite(true)} style={{padding:"9px 18px",background:`linear-gradient(135deg,${C.vio},${C.pin})`,color:"#fff",fontSize:13,fontWeight:700,borderRadius:10}}>
-            🎁 Inviter un proche
+            🎁 {t.refInviteOther}
           </button>
         </div>
         {/* Simulation démo — réservée aux admins (2026-07-15 : c'était un
@@ -14646,9 +14648,9 @@ function ParrainageSection() {
             du Premium gratuit sans aucun filleul réel). */}
         {isAdm && (
           <div style={{marginTop:12,paddingTop:12,borderTop:`1px dashed ${C.bor}`}}>
-            <div style={{fontSize:10,color:C.mut,marginBottom:5,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>🧪 Mode démo (admin)</div>
+            <div style={{fontSize:10,color:C.mut,marginBottom:5,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>{t.refDemoModeLabel||"🧪 Mode démo (admin)"}</div>
             <button onClick={simulateReferral} disabled={showDemo&&demoStep===1} style={{padding:"7px 16px",background:`${C.vio}15`,color:C.vio,border:`1.5px dashed ${C.vio}`,fontSize:12,fontWeight:700,borderRadius:9,opacity:(showDemo&&demoStep===1)?0.5:1}}>
-              Simuler un filleul validé ({bonusNext>0?`+${bonusNext}j + `:""}🎰×1)
+              {t.refSimulateBtn||"Simuler un filleul validé"} ({bonusNext>0?`+${bonusNext}j + `:""}🎰×1)
             </button>
           </div>
         )}
@@ -14657,10 +14659,10 @@ function ParrainageSection() {
       {/* ── Stats ──────────────────────────────────────────────────────── */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:12}}>
         {[
-          {val:refCount,      label:"Invités",         color:C.mut},
-          {val:validatedCount,label:"Validés",         color:C.grn},
-          {val:`${daysEarned}j`,label:"Jours gagnés", color:C.blu},
-          {val:`${pendingSpins}🎰`,label:"Tours roue", color:pendingSpins>0?C.yel:C.mut,highlight:pendingSpins>0},
+          {val:refCount,      label:t.refStatInvited||"Invités",         color:C.mut},
+          {val:validatedCount,label:t.refStatValidated||"Validés",         color:C.grn},
+          {val:`${daysEarned}j`,label:t.refStatDaysEarned||"Jours gagnés", color:C.blu},
+          {val:`${pendingSpins}🎰`,label:t.refStatSpins||"Tours roue", color:pendingSpins>0?C.yel:C.mut,highlight:pendingSpins>0},
         ].map((s,i)=>(
           <div key={i} className="card" style={{textAlign:"center",padding:"12px 6px",borderColor:s.highlight?`${s.color}66`:""}}>
             <div style={{fontSize:22,fontWeight:900,color:s.color}}>{s.val}</div>
@@ -14674,38 +14676,38 @@ function ParrainageSection() {
         <div style={{marginBottom:12,borderRadius:14,border:`1.5px solid ${C.vio}33`,background:`${C.vio}06`,padding:"14px 16px"}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
             <span style={{fontSize:15}}>🎯</span>
-            <div style={{flex:1,fontSize:13,fontWeight:800,color:C.txt}}>Ta progression (en tant que filleul)</div>
-            <span style={{fontSize:12,fontWeight:700,color:C.vio}}>{score.toFixed(1)} / {REF_SCORE_TARGET} pts</span>
+            <div style={{flex:1,fontSize:13,fontWeight:800,color:C.txt}}>{t.refFilleulProgressTitle||"Ta progression (en tant que filleul)"}</div>
+            <span style={{fontSize:12,fontWeight:700,color:C.vio}}>{score.toFixed(1)} / {REF_SCORE_TARGET} {t.refPtsUnit||"pts"}</span>
           </div>
           <div style={{position:"relative",height:8,borderRadius:99,background:C.sur,overflow:"hidden",marginBottom:8}}>
             <div style={{position:"absolute",inset:0,right:`${100-scorePct}%`,background:`linear-gradient(90deg,${C.vio},${C.blu})`,borderRadius:99,transition:"right .5s cubic-bezier(.4,0,.2,1)"}}/>
           </div>
           <div style={{fontSize:11,color:C.mut}}>
-            Complète {REF_SCORE_TARGET} pts ({REF_STRONG_MIN} actions fortes) pour débloquer : <strong style={{color:C.grn}}>Premium – {FILLEUL_BONUS_DAYS}j</strong> pour toi + bonus pour ton parrain
+            {(t.refFilleulProgressDesc||"Complète {target} pts ({strong} actions fortes) pour débloquer : Premium – {days}j pour toi + bonus pour ton parrain").replace("{target}",REF_SCORE_TARGET).replace("{strong}",REF_STRONG_MIN).replace("{days}",FILLEUL_BONUS_DAYS)}
           </div>
         </div>
       )}
       {isFilleul && unlocked && (
         <div style={{marginBottom:12,borderRadius:14,border:`1.5px solid ${C.grn}66`,background:`${C.grn}08`,padding:"12px 16px",display:"flex",alignItems:"center",gap:10}}>
           <span style={{fontSize:22}}>🏅</span>
-          <div style={{fontSize:13,fontWeight:800,color:C.grn}}>Filleul validé — merci de faire partie de la famille Duvia ! 💜</div>
+          <div style={{fontSize:13,fontWeight:800,color:C.grn}}>{t.refFilleulValidatedMsg||"Filleul validé — merci de faire partie de la famille Duvia ! 💜"}</div>
         </div>
       )}
 
       {/* ── Tableau des récompenses ─────────────────────────────────────── */}
       <div className="card" style={{marginBottom:12,padding:"18px 16px"}}>
-        <div style={{fontSize:12,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".1em",marginBottom:14}}>Vos récompenses parrain</div>
+        <div style={{fontSize:12,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".1em",marginBottom:14}}>{t.refRewardsTitle||"Vos récompenses parrain"}</div>
 
         {/* Phase Trial / Earned */}
         <div style={{fontSize:11,fontWeight:800,color:C.blu,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
-          <span>🎁 Phase Premium sans abonnement</span>
-          <span style={{background:`${C.blu}18`,color:C.blu,borderRadius:8,padding:"1px 7px",fontSize:10}}>plafond {TRIAL_MAX_DAYS}j depuis J0</span>
+          <span>{t.refPhaseTrialTitle||"🎁 Phase Premium sans abonnement"}</span>
+          <span style={{background:`${C.blu}18`,color:C.blu,borderRadius:8,padding:"1px 7px",fontSize:10}}>{(t.refPhaseTrialBadge||"plafond {max}j depuis J0").replace("{max}",TRIAL_MAX_DAYS)}</span>
         </div>
         <div style={{borderRadius:10,overflow:"hidden",border:`1px solid ${C.bor}`,marginBottom:14}}>
           {[
-            {rang:"1er filleul validé", jours:`+${REF_TRIAL_PALIERS[1]}j`, upgrade:"→ Premium – x j 🎁", color:C.grn, highlight:true},
-            {rang:"2e filleul validé",  jours:`+${REF_TRIAL_PALIERS[2]}j`, upgrade:"",                   color:C.grn, highlight:false},
-            {rang:"3e filleul et +",    jours:"0j",                        upgrade:"Plafond 30j atteint", color:C.mut, highlight:false},
+            {rang:t.refTier1Label||"1er filleul validé", jours:`+${REF_TRIAL_PALIERS[1]}j`, upgrade:t.refTier1Upgrade||"→ Premium – x j 🎁", color:C.grn, highlight:true},
+            {rang:t.refTier2Label||"2e filleul validé",  jours:`+${REF_TRIAL_PALIERS[2]}j`, upgrade:"",                   color:C.grn, highlight:false},
+            {rang:t.refTier3PlusLabel||"3e filleul et +",    jours:"0j",                        upgrade:t.refTierCapReached||"Plafond 30j atteint", color:C.mut, highlight:false},
           ].map((r,i)=>(
             <div key={i} style={{display:"flex",alignItems:"center",padding:"10px 12px",background:r.highlight?`${C.grn}08`:"transparent",borderBottom:i<2?`1px solid ${C.bor}`:"none"}}>
               <div style={{flex:1}}>
@@ -14720,14 +14722,14 @@ function ParrainageSection() {
 
         {/* Phase Premium abonné */}
         <div style={{fontSize:11,fontWeight:800,color:C.vio,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
-          <span>⭐ Phase Premium abonné</span>
-          <span style={{background:`${C.vio}18`,color:C.vio,borderRadius:8,padding:"1px 7px",fontSize:10}}>reset mensuel</span>
+          <span>{t.refPhasePremiumTitle||"⭐ Phase Premium abonné"}</span>
+          <span style={{background:`${C.vio}18`,color:C.vio,borderRadius:8,padding:"1px 7px",fontSize:10}}>{t.refMonthlyResetBadge||"reset mensuel"}</span>
 
         </div>
         <div style={{borderRadius:10,overflow:"hidden",border:`1px solid ${isPremium?C.vio+"44":C.bor}`,opacity:isPremium?1:0.55}}>
           {[
-            {rang:`Filleuls 1 à ${PREM_MAX_PER_MONTH} / mois`, jours:`+${PREM_BONUS_PER_REF}j chacun`, note:`max ${PREM_MAX_PER_MONTH * PREM_BONUS_PER_REF}j/mois`, color:C.vio},
-            {rang:`Filleuls ${PREM_MAX_PER_MONTH+1}+ / mois`,  jours:"0j",                             note:"roue uniquement",                                   color:C.mut},
+            {rang:(t.refPremiumTierLabel||"Filleuls 1 à {max} / mois").replace("{max}",PREM_MAX_PER_MONTH), jours:(t.refPremiumTierDays||"+{n}j chacun").replace("{n}",PREM_BONUS_PER_REF), note:(t.refPremiumTierNote||"max {n}j/mois").replace("{n}",PREM_MAX_PER_MONTH * PREM_BONUS_PER_REF), color:C.vio},
+            {rang:(t.refPremiumTierPlusLabel||"Filleuls {n}+ / mois").replace("{n}",PREM_MAX_PER_MONTH+1),  jours:"0j",                             note:t.refWheelOnlyNote||"roue uniquement",                                   color:C.mut},
           ].map((r,i)=>(
             <div key={i} style={{display:"flex",alignItems:"center",padding:"10px 12px",background:i===0?`${C.vio}06`:"transparent",borderBottom:i===0?`1px solid ${C.bor}`:"none"}}>
               <div style={{flex:1}}>
@@ -14741,18 +14743,18 @@ function ParrainageSection() {
         </div>
 
         <div style={{marginTop:10,fontSize:11,color:C.mut,lineHeight:1.5}}>
-          🎰 Tour de roue offert à chaque filleul validé quel que soit le statut. Pool <strong>Standard</strong> (Trial/Freemium) ou pool <strong>Abonnement ⭐</strong> (mois/an gratuit) pour les abonnés.
+          {t.refWheelFooterNote||"🎰 Tour de roue offert à chaque filleul validé quel que soit le statut. Pool Standard (Trial/Freemium) ou pool Abonnement ⭐ (mois/an gratuit) pour les abonnés."}
         </div>
       </div>
 
       {/* ── Comment ça marche ───────────────────────────────────────────── */}
       <div className="card" style={{marginBottom:12,padding:"16px 16px"}}>
-        <div style={{fontSize:12,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".1em",marginBottom:12}}>Comment ça marche ?</div>
+        <div style={{fontSize:12,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".1em",marginBottom:12}}>{t.refHowItWorksTitle||"Comment ça marche ?"}</div>
         {[
-          {icon:"🔗", title:"Partagez votre lien",    desc:"Envoyez votre code ou lien personnalisé par e-mail ou SMS — invitations illimitées."},
-          {icon:"✅", title:"Le filleul s'inscrit",   desc:`Il crée son compte via votre lien et démarre en Trial Premium (${TRIAL_BASE_DAYS}j).`},
-          {icon:"🎯", title:"Il valide ses actions",  desc:`Dès qu'il atteint ${REF_SCORE_TARGET} pts d'engagement, il passe en "Premium – ${FILLEUL_BONUS_DAYS}j restants" et vous recevez votre bonus.`},
-          {icon:"🔄", title:"Il peut aussi parrainer", desc:"Un filleul validé peut à son tour inviter des proches. Les mêmes règles s'appliquent."},
+          {icon:"🔗", title:t.refStep1Title||"Partagez votre lien",    desc:t.refStep1Desc||"Envoyez votre code ou lien personnalisé par e-mail ou SMS — invitations illimitées."},
+          {icon:"✅", title:t.refStep2Title||"Le filleul s'inscrit",   desc:(t.refStep2Desc||"Il crée son compte via votre lien et démarre en Trial Premium ({days}j).").replace("{days}",TRIAL_BASE_DAYS)},
+          {icon:"🎯", title:t.refStep3Title||"Il valide ses actions",  desc:(t.refStep3Desc||"Dès qu'il atteint {target} pts d'engagement, il passe en « Premium – {days}j restants » et vous recevez votre bonus.").replace("{target}",REF_SCORE_TARGET).replace("{days}",FILLEUL_BONUS_DAYS)},
+          {icon:"🔄", title:t.refStep4Title||"Il peut aussi parrainer", desc:t.refStep4Desc||"Un filleul validé peut à son tour inviter des proches. Les mêmes règles s'appliquent."},
         ].map((s,i,arr)=>(
           <div key={i} style={{display:"flex",gap:12,alignItems:"flex-start",paddingBottom:i<arr.length-1?12:0,marginBottom:i<arr.length-1?12:0,borderBottom:i<arr.length-1?`1px solid ${C.bor}`:"none"}}>
             <div style={{width:34,height:34,borderRadius:10,background:`${C.vio}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>{s.icon}</div>
@@ -14769,21 +14771,21 @@ function ParrainageSection() {
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
           <div style={{background:C.card,borderRadius:"20px 20px 0 0",padding:"24px 20px 32px",width:"100%",maxWidth:480,boxShadow:"0 -8px 32px rgba(0,0,0,.18)"}}>
             <div style={{width:40,height:4,background:C.bor,borderRadius:4,margin:"0 auto 20px"}}/>
-            <div style={{fontSize:17,fontWeight:900,marginBottom:4}}>🎁 Inviter un proche</div>
-            <div style={{fontSize:13,color:C.mut,marginBottom:16}}>Partagez le lien + votre code — votre proche démarre en Trial Premium</div>
+            <div style={{fontSize:17,fontWeight:900,marginBottom:4}}>🎁 {t.refInviteOther}</div>
+            <div style={{fontSize:13,color:C.mut,marginBottom:16}}>{t.refInviteModalDesc||"Partagez le lien + votre code — votre proche démarre en Trial Premium"}</div>
             <div style={{background:C.sur,borderRadius:12,padding:"12px 14px",marginBottom:14,border:`1.5px solid ${C.bor}`}}>
-              <div style={{fontSize:10,fontWeight:800,color:C.mut,textTransform:"uppercase",marginBottom:6}}>Lien d'invitation</div>
+              <div style={{fontSize:10,fontWeight:800,color:C.mut,textTransform:"uppercase",marginBottom:6}}>{t.refInviteLinkLabel||"Lien d'invitation"}</div>
               <div style={{fontSize:12,color:C.vio,fontFamily:"monospace",wordBreak:"break-all",fontWeight:700,marginBottom:8}}>{inviteLink}</div>
               <div style={{display:"flex",alignItems:"center",gap:6}}>
-                <span style={{fontSize:11,color:C.mut}}>Code :</span>
+                <span style={{fontSize:11,color:C.mut}}>{t.refCodeColonLabel||"Code :"}</span>
                 <span style={{fontSize:14,fontWeight:900,letterSpacing:3,color:C.vio,fontFamily:"monospace"}}>{code}</span>
               </div>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
               {[
-                {icon:copiedLink?"✅":"📋", label:copiedLink?"Copié !":"Copier le lien", action:copyLink, active:copiedLink},
-                {icon:"✉️", label:"Par e-mail", action:shareViaEmail, active:false},
-                {icon:"💬", label:"Par SMS",    action:shareViaSMS,   active:false},
+                {icon:copiedLink?"✅":"📋", label:copiedLink?(t.refCopied||"Copié !"):(t.refCopyLinkBtn||"Copier le lien"), action:copyLink, active:copiedLink},
+                {icon:"✉️", label:t.refByEmail||"Par e-mail", action:shareViaEmail, active:false},
+                {icon:"💬", label:t.refBySms||"Par SMS",    action:shareViaSMS,   active:false},
               ].map((btn,i)=>(
                 <button key={i} onClick={btn.action} style={{padding:"12px 6px",background:btn.active?`${C.grn}15`:C.sur,color:btn.active?C.grn:C.txt,border:`1.5px solid ${btn.active?C.grn:C.bor}`,borderRadius:12,fontSize:12,fontWeight:700,display:"flex",flexDirection:"column",alignItems:"center",gap:4,cursor:"pointer"}}>
                   <span style={{fontSize:22}}>{btn.icon}</span>
@@ -14792,7 +14794,7 @@ function ParrainageSection() {
               ))}
             </div>
             <button onClick={()=>setShowInvite(false)} style={{width:"100%",padding:12,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:12,fontSize:14,fontWeight:700,cursor:"pointer"}}>
-              Fermer
+              {t.refCloseBtn||"Fermer"}
             </button>
           </div>
         </div>
@@ -14804,22 +14806,22 @@ function ParrainageSection() {
           <div style={{background:C.card,borderRadius:18,padding:26,maxWidth:300,width:"100%",textAlign:"center",border:`1.5px solid ${C.bor}`}}>
             {demoStep===1 ? (<>
               <div style={{fontSize:36,marginBottom:10}}>📨</div>
-              <div style={{fontSize:15,fontWeight:800,marginBottom:6}}>Validation en cours…</div>
-              <div style={{fontSize:13,color:C.mut,marginBottom:14}}>Un filleul atteint le score requis</div>
+              <div style={{fontSize:15,fontWeight:800,marginBottom:6}}>{t.refDemoValidatingTitle||"Validation en cours…"}</div>
+              <div style={{fontSize:13,color:C.mut,marginBottom:14}}>{t.refDemoValidatingDesc||"Un filleul atteint le score requis"}</div>
               <div style={{height:4,background:C.sur,borderRadius:4,overflow:"hidden"}}>
                 <div style={{height:"100%",width:"70%",background:`linear-gradient(90deg,${C.vio},${C.pin})`,borderRadius:4}}/>
               </div>
             </>) : (<>
               <div style={{fontSize:36,marginBottom:10}}>🎉</div>
-              <div style={{fontSize:15,fontWeight:800,color:C.grn,marginBottom:6}}>Filleul validé !</div>
+              <div style={{fontSize:15,fontWeight:800,color:C.grn,marginBottom:6}}>{t.refDemoValidatedTitle||"Filleul validé !"}</div>
               <div style={{fontSize:13,color:C.mut,marginBottom:6}}>
                 {bonusNext>0
-                  ? `+${bonusNext}j crédités sur votre compte`
-                  : "Plafond atteint — roue offerte quand même !"}
+                  ? (t.refDemoBonusCredited||"+{n}j crédités sur votre compte").replace("{n}",bonusNext)
+                  : (t.refDemoCapReachedNote||"Plafond atteint — roue offerte quand même !")}
               </div>
-              <div style={{fontSize:20,marginBottom:14}}>🎰 +{SPIN_PER_REF} tour de roue</div>
+              <div style={{fontSize:20,marginBottom:14}}>{(t.refDemoSpinAwarded||"🎰 +{n} tour de roue").replace("{n}",SPIN_PER_REF)}</div>
               <button onClick={()=>{setShowDemo(false);setDemoStep(0);}} style={{padding:"10px 24px",background:`linear-gradient(90deg,${C.vio},${C.pin})`,color:"#fff",border:"none",borderRadius:10,fontSize:13,fontWeight:700,cursor:"pointer"}}>
-                OK
+                {t.refOkBtn||"OK"}
               </button>
             </>)}
           </div>
