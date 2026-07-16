@@ -3293,6 +3293,25 @@ export default function App() {
         Object.keys(window.localStorage).some(k => k.startsWith("sb-") && k.includes("auth-token"));
       if (!hasSupaToken) return null;
     } catch {}
+    // 🔧 L'admin n'est JAMAIS ajouté à duvia_users (voir la migration de
+    // purge juste après, dans App() : elle retire toute entrée role==="admin"
+    // à CHAQUE montage). Sans ce cas à part, un refresh en tant qu'admin ne
+    // trouvait donc jamais rien dans duvia_users/DEMO_USERS ci-dessous →
+    // user restait null → re-connexion exigée alors que le jeton Supabase
+    // (vérifié juste au-dessus) était pourtant toujours valide. doLogin()
+    // pose ce marqueur {uid,email} au moment du login admin. On exige une
+    // correspondance exacte d'email avec sessionEmail (pas juste "le marqueur
+    // existe") : sinon, un AUTRE compte se connectant ensuite sur le même
+    // appareil hériterait à tort du rôle admin au refresh suivant — le vrai
+    // uid Supabase (pas null) reste nécessaire pour que l'effet "carte
+    // d'identité cloud" plus bas puisse revérifier ce rôle côté serveur
+    // (table app_admins) et faire passer adminVerified à true.
+    try {
+      const marker = JSON.parse(window.localStorage.getItem("duvia_admin_marker") || "null");
+      if (marker?.email && marker.email === sessionEmail && marker.uid) {
+        return { id: marker.uid, email: sessionEmail, name: "Administrateur", role: "admin" };
+      }
+    } catch {}
     // Priorité : liste users persistée en localStorage, fallback DEMO_USERS
     try {
       const raw = window.localStorage.getItem("duvia_users");
@@ -3731,6 +3750,7 @@ export default function App() {
       try {
         window.localStorage.removeItem("duvia_family_id");
         window.localStorage.removeItem("duvia_cfg");
+        window.localStorage.removeItem("duvia_admin_marker");
         // 🔒 Sécurité : à la déconnexion explicite, on retire le profil complet
         // (téléphone, code parrainage, plan) de la liste locale des comptes —
         // il ne doit pas traîner indéfiniment sur un appareil partagé.
@@ -5924,6 +5944,11 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
       .maybeSingle();
     if (adminRow) {
       setOk("");
+      // 🔧 Permet à un refresh de restaurer la session admin sans re-connexion
+      // (voir le commentaire détaillé sur le useState de `user` plus haut) —
+      // l'admin n'est sinon jamais persisté dans duvia_users (purgé à chaque
+      // montage), donc introuvable au prochain chargement de page.
+      try { window.localStorage.setItem("duvia_admin_marker", JSON.stringify({ uid: data.user.id, email: cleanEmail })); } catch {}
       onLogin({ id: data.user.id, email: cleanEmail, name: "Administrateur", role: "admin" });
       return;
     }
