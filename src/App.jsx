@@ -9157,7 +9157,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           <div style={{position:"absolute",top:0,left:16,transform:"translateY(-50%)",display:"flex",gap:6,alignItems:"center"}}>
             <span style={{fontSize:10,fontWeight:900,background:C.card,color:p.color,border:`1px solid ${p.color}44`,padding:"2px 8px",borderRadius:8,letterSpacing:".04em",textTransform:"uppercase"}}>{i===effectiveCreatorIdx(cfg.parents)?t.creatorLabel:t.guestLabel}</span>
             {i===user?.parentIdx && (
-              <span style={{fontSize:9,fontWeight:900,background:C.card,color:C.grn,border:`1px solid ${C.grn}44`,padding:"2px 7px",borderRadius:8,letterSpacing:".04em",textTransform:"uppercase"}}>
+              <span style={{fontSize:10,fontWeight:900,background:C.card,color:C.grn,border:`1px solid ${C.grn}44`,padding:"2px 8px",borderRadius:8,letterSpacing:".04em",textTransform:"uppercase"}}>
                 {t.accountConnected||"Compte connecté"}
               </span>
             )}
