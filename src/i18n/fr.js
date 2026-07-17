@@ -63,6 +63,7 @@ const fr = {
     inlineTitle:"Changer la garde :",fullEdit:"✎ Édition complète",
     noHistory:"Aucune modification",historyTitle:"Historique",
     noExpenses:"Aucune dépense",loading:"Chargement…",addExpense:"+ Ajouter une dépense",cancelAdd:"× Annuler",
+    offlineTitle:"Pas de connexion internet",offlineDesc:"Duvia a besoin d'une connexion internet pour fonctionner. Vérifiez votre connexion, puis réessayez.",offlineRetry:"Réessayer",
     newExpense:"Nouvelle dépense",description:"Description",amount:"Montant (€)",paidBy:"Payé par",
     category:"Catégorie",date:"Date",total:"Total",even:"Équilibre",
     noNotifs:"Aucune notification",markRead:"Tout marquer lu",newBadge:"Nouveau",

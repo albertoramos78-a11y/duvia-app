@@ -62,6 +62,7 @@ const es = {
     inlineTitle:"Cambiar custodia:",fullEdit:"✎ Edición completa",
     noHistory:"Sin cambios",historyTitle:"Historial",
     noExpenses:"Sin gastos",loading:"Cargando…",addExpense:"+ Añadir gasto",cancelAdd:"× Cancelar",
+    offlineTitle:"Sin conexión a internet",offlineDesc:"Duvia necesita una conexión a internet para funcionar. Comprueba tu conexión y vuelve a intentarlo.",offlineRetry:"Reintentar",
     newExpense:"Nuevo gasto",description:"Descripción",amount:"Importe (€)",paidBy:"Pagado por",
     category:"Categoría",date:"Fecha",total:"Total",even:"Equilibrado",
     noNotifs:"Sin notificaciones",markRead:"Marcar todo como leído",newBadge:"Nuevo",

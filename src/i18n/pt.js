@@ -62,6 +62,7 @@ const pt = {
     inlineTitle:"Alterar guarda:",fullEdit:"✎ Edição completa",
     noHistory:"Sem alterações",historyTitle:"Histórico",
     noExpenses:"Sem despesas",loading:"Carregando…",addExpense:"+ Adicionar despesa",cancelAdd:"× Cancelar",
+    offlineTitle:"Sem ligação à internet",offlineDesc:"O Duvia precisa de uma ligação à internet para funcionar. Verifique a sua ligação e tente novamente.",offlineRetry:"Tentar novamente",
     newExpense:"Nova despesa",description:"Descrição",amount:"Valor (€)",paidBy:"Pago por",
     category:"Categoria",date:"Data",total:"Total",even:"Equilibrado",
     noNotifs:"Sem notificações",markRead:"Marcar tudo como lido",newBadge:"Novo",

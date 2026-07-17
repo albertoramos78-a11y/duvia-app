@@ -62,6 +62,7 @@ const de = {
     inlineTitle:"Sorgerecht ändern:",fullEdit:"✎ Bearbeiten",
     noHistory:"Keine Änderungen",historyTitle:"Verlauf",
     noExpenses:"Keine Ausgaben",loading:"Lädt…",addExpense:"+ Ausgabe hinzufügen",cancelAdd:"× Abbrechen",
+    offlineTitle:"Keine Internetverbindung",offlineDesc:"Duvia benötigt eine Internetverbindung, um zu funktionieren. Überprüfe deine Verbindung und versuche es erneut.",offlineRetry:"Erneut versuchen",
     newExpense:"Neue Ausgabe",description:"Beschreibung",amount:"Betrag (€)",paidBy:"Bezahlt von",
     category:"Kategorie",date:"Datum",total:"Gesamt",even:"Ausgeglichen",
     noNotifs:"Keine Benachrichtigungen",markRead:"Alle als gelesen markieren",newBadge:"Neu",

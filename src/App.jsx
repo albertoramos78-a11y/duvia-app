@@ -4624,6 +4624,18 @@ export default function App() {
   // retombe sur le premier onglet plutôt que de rendre un écran vide.
   useEffect(()=>{ if(tab>=TABS.length) setTab(0); },[TABS.length]);
 
+  // ── Détection hors-ligne — bloque tout derrière un écran dédié ────────────
+  // 🔴 Comme confirmAsync ci-dessous : DOIT rester avant les 7 écrans de
+  // blocage, pas après (même risque de nombre de hooks incohérent → #300).
+  const [isOffline, setIsOffline] = useState(() => typeof navigator!=="undefined" && !navigator.onLine);
+  useEffect(() => {
+    const goOnline = () => setIsOffline(false);
+    const goOffline = () => setIsOffline(true);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => { window.removeEventListener("online", goOnline); window.removeEventListener("offline", goOffline); };
+  }, []);
+
   // ── Confirmation modale générique (remplace window.confirm()) ────────────
   // 🔧 Impeccable critique P1 : window.confirm() casse le style de l'app en
   // pleine interaction, surtout sur les actions les plus anxiogènes (quitter
@@ -4642,7 +4654,7 @@ export default function App() {
   }, []);
   function closeConfirmModal(result){ confirmModal?.resolve?.(result); setConfirmModal(null); }
 
-  // 🔧 Les 7 écrans de blocage ci-dessous sont volontairement placés APRÈS
+  // 🔧 Les écrans de blocage ci-dessous (dont isOffline) sont volontairement placés APRÈS
   // tous les hooks du composant (dont le useEffect juste au-dessus) : leurs
   // conditions peuvent devenir vraies APRÈS le premier rendu (ex: emailVerified
   // passe de undefined à false une fois la vérification async résolue), et un
@@ -4658,6 +4670,21 @@ export default function App() {
   // hooks (reconnecté) SANS remontage complet → "Rendered more hooks than
   // during the previous render" (crash confirmé en prod v1.85). Déplacés ici
   // pour rejoindre la même règle que les 4 autres.
+
+  if(isOffline) return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
+      <div style={{textAlign:"center",maxWidth:340}}>
+        <div style={{fontSize:52,marginBottom:16}}>📡</div>
+        <div style={{fontWeight:900,fontSize:20,marginBottom:10,color:C.txt}}>{t.offlineTitle||"Pas de connexion internet"}</div>
+        <div style={{fontSize:14,color:C.mut,lineHeight:1.6,marginBottom:28}}>
+          {t.offlineDesc||"Duvia a besoin d'une connexion internet pour fonctionner. Vérifiez votre connexion, puis réessayez."}
+        </div>
+        <button onClick={()=>setIsOffline(!navigator.onLine)} style={{padding:"12px 28px",background:C.vio,color:"#fff",border:"none",borderRadius:12,fontSize:15,fontWeight:700,cursor:"pointer"}}>
+          {t.offlineRetry||"Réessayer"}
+        </button>
+      </div>
+    </div>
+  );
 
   if(accountJustDeleted) return (
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
@@ -7710,7 +7737,7 @@ function PrefsTab() {
       </div>
 
       {/* ── Notifications par type (email + push) ── */}
-      <div className="sec">{t.emailNotifs||"Notifications"}</div>
+      <div className="sec">✉️ {t.emailNotifs||"Notifications"}</div>
       <div className="card" style={{marginBottom:28}}>
         <NotifRow label={t.notifMsg||"Nouveau message reçu"} desc={t.notifMsgDesc||"Email quand l'autre parent vous écrit"}
           val={emailMsg} onToggle={()=>{ const v=!emailMsg; setEmailMsg(v); savePref("email_notifs",v); }}
@@ -8237,7 +8264,7 @@ function ObserverPrefsTab() {
       </div>
 
       {/* ── Notifications email + push : messages uniquement ── */}
-      <div className="sec">{t.emailNotifs||"Notifications"}</div>
+      <div className="sec">✉️ {t.emailNotifs||"Notifications"}</div>
       <div className="card" style={{marginBottom:28}}>
         <div style={{...row,gap:12,background:"transparent",border:"none",padding:0,cursor:"default"}}>
           <div style={{flex:1,minWidth:0}}>

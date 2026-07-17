@@ -63,6 +63,7 @@ const en = {
     inlineTitle:"Change custody:",fullEdit:"✎ Full edit",
     noHistory:"No changes recorded",historyTitle:"History",
     noExpenses:"No expenses",loading:"Loading…",addExpense:"+ Add expense",cancelAdd:"× Cancel",
+    offlineTitle:"No internet connection",offlineDesc:"Duvia needs an internet connection to work. Check your connection, then try again.",offlineRetry:"Retry",
     newExpense:"New expense",description:"Description",amount:"Amount (€)",paidBy:"Paid by",
     category:"Category",date:"Date",total:"Total",even:"Even",
     noNotifs:"No notifications",markRead:"Mark all read",newBadge:"New",
