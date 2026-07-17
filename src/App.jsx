@@ -9040,7 +9040,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
       )}
       {(isObs || isChild) && <FamilySyncCard />}
 
-      <div className="sec">👨‍👩‍👧 {t.parents}</div>
+      <div className="sec" style={{marginBottom:26}}>👨‍👩‍👧 {t.parents}</div>
       {cfg.parents.map((p,i)=>{
         if(p?.left) {
           // 🔧 Correctif : quand un parent quitte la famille, on affiche UNIQUEMENT
