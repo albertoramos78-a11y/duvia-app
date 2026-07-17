@@ -9334,6 +9334,9 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           {/* Header — cliquable pour plier/déplier */}
           <div onClick={()=>toggleChild(i)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:expandedChildren.has(i)?12:0,cursor:"pointer",userSelect:"none"}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
+              {ch.avatar&&(typeof ch.avatar==="string"&&ch.avatar.startsWith("http")
+                ? <img src={ch.avatar} alt="" style={{width:22,height:22,borderRadius:"50%",objectFit:"cover",flexShrink:0}} />
+                : <Emoji size="20px">{ch.avatar}</Emoji>)}
               <span style={{fontSize:11,fontWeight:800,color:C.vio,textTransform:"uppercase",letterSpacing:".06em"}}>{ch.name.trim() || `${t.childN} ${i+1}`}</span>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:6}}>
