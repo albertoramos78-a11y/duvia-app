@@ -3049,7 +3049,7 @@ function BugReportModal({ C, t, open, screenshot, onClose, getContext }) {
           <>
             <div style={{fontSize:38,textAlign:"center",margin:"10px 0"}}>✅</div>
             <div style={{fontSize:13,color:C.mut,textAlign:"center",lineHeight:1.5,marginBottom:16}}>{t.bugReportThanks}</div>
-            <button onClick={close} style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13}}>{t.doneBtn}</button>
+            <button onClick={close} style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13,boxShadow:`0 4px 14px ${C.vio}33`}}>{t.doneBtn}</button>
           </>
         ) : (
           <>
@@ -3063,7 +3063,7 @@ function BugReportModal({ C, t, open, screenshot, onClose, getContext }) {
             {withShot && screenshot && <div style={{fontSize:11,color:C.ora,lineHeight:1.4,marginBottom:12}}>⚠️ {t.bugReportScreenshotWarn}</div>}
             {status==="err" && <div style={{fontSize:12,color:C.red,lineHeight:1.4,marginBottom:10}}>{t.bugReportError}</div>}
             <button disabled={sending || !comment.trim()} onClick={send}
-              style={{width:"100%",height:46,background:(sending||!comment.trim())?C.bor:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:14,marginBottom:8,cursor:(sending||!comment.trim())?"not-allowed":"pointer"}}>
+              style={{width:"100%",height:46,background:(sending||!comment.trim())?C.bor:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:14,marginBottom:8,cursor:(sending||!comment.trim())?"not-allowed":"pointer",boxShadow:(sending||!comment.trim())?"none":`0 4px 14px ${C.vio}33`}}>
               {sending ? t.bugReportSending : t.bugReportSend}
             </button>
             <button onClick={close} disabled={sending} style={{width:"100%",height:40,background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13}}>{t.cancel}</button>
@@ -4743,7 +4743,7 @@ export default function App() {
         </div>
         <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
           <button onClick={checkFamilyBilling}
-            style={{height:44,padding:"0 20px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:13,fontWeight:800,borderRadius:10,border:"none",cursor:"pointer"}}>
+            style={{height:44,padding:"0 20px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:13,fontWeight:800,borderRadius:10,border:"none",cursor:"pointer",boxShadow:`0 4px 14px ${C.vio}33`}}>
             🔄 Réessayer
           </button>
           <button onClick={()=>handleSetUser(null)}
@@ -4874,7 +4874,7 @@ export default function App() {
             <div style={{fontSize:13.5,color:C.mut,lineHeight:1.6,marginBottom:18}}>
               Vous avez été retiré(e) de la famille par le créateur. Vous repartez sur une famille personnelle vierge. Une synthèse de vos anciennes données (planning, comptes, messages) a été conservée sur cet appareil — l'export PDF sera bientôt disponible.
             </div>
-            <button onClick={dismissEjected} style={{width:"100%",padding:"13px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:15,fontWeight:800,borderRadius:12}}>J'ai compris</button>
+            <button onClick={dismissEjected} style={{width:"100%",padding:"13px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:15,fontWeight:800,borderRadius:12,boxShadow:`0 4px 14px ${C.vio}33`}}>J'ai compris</button>
           </div>
         </div>
       )}
@@ -5662,7 +5662,7 @@ function LegalDocModal({ C, t, doc, lang, onClose }) {
           ))}
         </div>
 
-        <button onClick={onClose} style={{width:"100%",height:44,marginTop:20,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13,cursor:"pointer"}}>{t.legalDocClose||"Fermer"}</button>
+        <button onClick={onClose} style={{width:"100%",height:44,marginTop:20,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13,cursor:"pointer",boxShadow:`0 4px 14px ${C.vio}33`}}>{t.legalDocClose||"Fermer"}</button>
       </div>
     </div>
   );
@@ -5735,7 +5735,7 @@ function RgpdConsentScreen({C,t,lang,setLang,onAccept,onOpenLegal}) {
           <button onClick={onAccept} disabled={!checked} style={{
             width:"100%",padding:"13px",background:checked?`linear-gradient(135deg,${C.vio},${C.blu})`:C.bor,
             color:checked?"#fff":C.mut,fontSize:15,fontWeight:800,borderRadius:12,
-            cursor:checked?"pointer":"not-allowed",opacity:checked?1:.7,transition:"all .2s"}}>
+            cursor:checked?"pointer":"not-allowed",opacity:checked?1:.7,transition:"all .2s",boxShadow:checked?`0 4px 14px ${C.vio}33`:"none"}}>
             {t.rgpdAcceptBtn||"✓ Continuer"}
           </button>
         </div>
@@ -5877,7 +5877,7 @@ function ConsentScreen({C,t,user,onAccept,onDecline}) {
           <button
             onClick={onAccept}
             disabled={!canAccept}
-            style={{width:"100%",padding:"13px",marginTop:18,background:canAccept?`linear-gradient(135deg,${C.vio},${C.blu})`:`${C.bor}`,color:canAccept?"#fff":C.mut,fontSize:15,fontWeight:800,borderRadius:12,cursor:canAccept?"pointer":"not-allowed",transition:"all .2s",opacity:canAccept?1:.7}}>
+            style={{width:"100%",padding:"13px",marginTop:18,background:canAccept?`linear-gradient(135deg,${C.vio},${C.blu})`:`${C.bor}`,color:canAccept?"#fff":C.mut,fontSize:15,fontWeight:800,borderRadius:12,cursor:canAccept?"pointer":"not-allowed",transition:"all .2s",opacity:canAccept?1:.7,boxShadow:canAccept?`0 4px 14px ${C.vio}33`:"none"}}>
             {t.consentAccept||"✓ J'accepte et j'accède à l'application"}
           </button>
           <button onClick={onDecline} style={{width:"100%",padding:"9px",marginTop:8,background:"transparent",color:C.mut,fontSize:12,textDecoration:"underline"}}>
@@ -6633,7 +6633,8 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
                   {err && <div style={{fontSize:12,color:C.red,marginBottom:10}}>{err}</div>}
                   <button onClick={doLoginAndJoin} style={{
                     width:"100%",height:44,background:`linear-gradient(135deg,${C.vio},${C.blu})`,
-                    color:"#fff",fontSize:14,fontWeight:800,borderRadius:10,marginBottom:8,cursor:"pointer"
+                    color:"#fff",fontSize:14,fontWeight:800,borderRadius:10,marginBottom:8,cursor:"pointer",
+                    boxShadow:`0 4px 14px ${C.vio}33`
                   }}>
                     {isAnyInvite ? (t.regLoginJoin||"✅ Se connecter et rejoindre la famille") : (t.connect||"✅ Se connecter")}
                   </button>
@@ -6919,7 +6920,7 @@ function NotifTab({prem: premProp}) {
       <div style={{fontWeight:900,fontSize:17,marginBottom:8,color:C.txt}}>{t.tabNotifs}</div>
       <div style={{fontWeight:700,fontSize:14,color:C.ora,marginBottom:8}}>🔒 {t.lockSection}</div>
       <div style={{fontSize:13,color:C.mut,marginBottom:20,lineHeight:1.6}}>{t.lockDesc}</div>
-      <button onClick={onUpgrade} style={{height:44,padding:"0 26px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",borderRadius:12,fontSize:15,fontWeight:800}}>{t.upgradeCTA}</button>
+      <button onClick={onUpgrade} style={{height:44,padding:"0 26px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",borderRadius:12,fontSize:15,fontWeight:800,boxShadow:`0 4px 14px ${C.vio}33`}}>{t.upgradeCTA}</button>
     </div>
   );
   return (
@@ -8790,7 +8791,7 @@ function ConfigTab() {
                 />
                 {inviteErr && <div style={{fontSize:12,color:C.red,marginBottom:12}}>{inviteErr}</div>}
                 <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  <button disabled={sendingInvite} onClick={confirmInvite} style={{width:"100%",minHeight:44,padding:"10px 12px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13,whiteSpace:"normal",lineHeight:1.3,opacity:sendingInvite?0.6:1,cursor:sendingInvite?"not-allowed":"pointer"}}>
+                  <button disabled={sendingInvite} onClick={confirmInvite} style={{width:"100%",minHeight:44,padding:"10px 12px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13,whiteSpace:"normal",lineHeight:1.3,opacity:sendingInvite?0.6:1,cursor:sendingInvite?"not-allowed":"pointer",boxShadow:`0 4px 14px ${C.vio}33`}}>
                     {sendingInvite ? t.inviteGenerating : t.inviteGenerate}
                   </button>
                   <button onClick={()=>setShowInviteModal(false)} style={{width:"100%",height:40,background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13}}>{t.cancel}</button>
@@ -8810,7 +8811,7 @@ function ConfigTab() {
                 }} style={{width:"100%",height:40,background:C.sur,color:C.txt,border:`1.5px solid ${C.bor}`,borderRadius:10,fontWeight:700,fontSize:13,marginBottom:10}}>
                   {t.copyInviteLink}
                 </button>
-                <button onClick={()=>{setShowInviteModal(false);setInviteResult(null);setInvitePhone("");setInviteEmail("");}} style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13}}>
+                <button onClick={()=>{setShowInviteModal(false);setInviteResult(null);setInvitePhone("");setInviteEmail("");}} style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13,boxShadow:`0 4px 14px ${C.vio}33`}}>
                   {t.doneBtn}
                 </button>
               </>
@@ -8967,7 +8968,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
               setCreatingFamily(false);
               if(!res.ok) alert("⚠️ Erreur lors de la création de la famille.");
             }}
-            style={{width:"100%",height:"100%",padding:"8px 10px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:14,fontWeight:800,fontSize:12,cursor:creatingFamily?"not-allowed":"pointer",opacity:creatingFamily?0.6:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:1,lineHeight:1.25,textAlign:"center",boxSizing:"border-box"}}>
+            style={{width:"100%",height:"100%",padding:"8px 10px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:14,fontWeight:800,fontSize:12,cursor:creatingFamily?"not-allowed":"pointer",opacity:creatingFamily?0.6:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:1,lineHeight:1.25,textAlign:"center",boxSizing:"border-box",boxShadow:`0 4px 14px ${C.vio}33`}}>
             {creatingFamily ? (t.creatingFamilyLabel||"⏳ Création…") : (() => {
               const label = t.createNewFamilyBtn||"Créer Famille";
               const [firstWord, ...rest] = label.split(" ");
@@ -9395,7 +9396,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
       );})}
       {(cfg.children.length>=(perms?.maxChildren??1))
         ? <button onClick={onUpgrade} style={{width:"100%",height:44,padding:"0 16px",background:`${C.vio}11`,color:C.vio,border:`1.5px dashed ${C.vio}`,marginBottom:12}}>{t.lockChildren}</button>
-        : <button onClick={addChild} style={{width:"100%",height:44,padding:"0 16px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:20,fontWeight:800,marginBottom:12}}>{t.addChild}</button>}
+        : <button onClick={addChild} style={{width:"100%",height:44,padding:"0 16px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:20,fontWeight:800,marginBottom:12,boxShadow:`0 4px 14px ${C.vio}33`}}>{t.addChild}</button>}
     </div>
   );
 }
@@ -9535,7 +9536,7 @@ function ChildInviteBtn({ childIdx, childName, childPhone, childEmail, childBirt
         </label>
         <div style={{display:"flex",gap:8}}>
           <button disabled={!consented} onClick={async()=>{setShowConsent(false);const url=await getOrGenUrl();if(!url)setShowConsent(true);}}
-            style={{flex:1,height:42,background:consented?`linear-gradient(135deg,${C.vio},${C.blu})`:C.bor,color:"#fff",border:"none",borderRadius:10,fontWeight:800,fontSize:13,cursor:consented?"pointer":"not-allowed"}}>
+            style={{flex:1,height:42,background:consented?`linear-gradient(135deg,${C.vio},${C.blu})`:C.bor,color:"#fff",border:"none",borderRadius:10,fontWeight:800,fontSize:13,cursor:consented?"pointer":"not-allowed",boxShadow:consented?`0 4px 14px ${C.vio}33`:"none"}}>
             {t.childConsentConfirm||"Je confirme et génère le lien"}
           </button>
           <button onClick={()=>{setShowConsent(false);setConsented(false);}}
@@ -9553,7 +9554,7 @@ function ChildInviteBtn({ childIdx, childName, childPhone, childEmail, childBirt
       {errMsg && <div style={{fontSize:11,color:C.red,marginBottom:8,lineHeight:1.4}}>⚠️ {errMsg}</div>}
       {!inviteUrl ? (
         <button onClick={handleCopy} disabled={loading}
-          style={{width:"100%",height:38,background:loading?C.bor:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:20,fontWeight:800,fontSize:12,cursor:loading?"wait":"pointer",marginBottom:6}}>
+          style={{width:"100%",height:38,background:loading?C.bor:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:20,fontWeight:800,fontSize:12,cursor:loading?"wait":"pointer",marginBottom:6,boxShadow:loading?"none":`0 4px 14px ${C.vio}33`}}>
           {genLabel}
         </button>
       ) : (
@@ -11031,7 +11032,7 @@ function StepAccess() {
             {active.length>=(perms?.maxObservers??1)
               ? <button onClick={onUpgrade} style={{width:"100%",height:44,padding:"0 16px",background:`${C.vio}11`,color:C.vio,border:`1.5px dashed ${C.vio}`,borderRadius:12,fontWeight:800,cursor:"pointer"}}>{t.lockObservers||"🔒 Ajouter un observateur — Premium"}</button>
               : <button onClick={sendInvite} disabled={(!email&&!phone)||genLoading}
-                  style={{width:"100%",height:44,background:((!email&&!phone)||genLoading)?C.bor:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:14,fontWeight:800,borderRadius:12,cursor:((!email&&!phone)||genLoading)?"not-allowed":"pointer"}}>
+                  style={{width:"100%",height:44,background:((!email&&!phone)||genLoading)?C.bor:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:14,fontWeight:800,borderRadius:12,cursor:((!email&&!phone)||genLoading)?"not-allowed":"pointer",boxShadow:((!email&&!phone)||genLoading)?"none":`0 4px 14px ${C.vio}33`}}>
                   {genLoading?"⏳ Génération…":(t.obsInviteGenerate||t.obsInviteSend)}
                 </button>}
             {genErr && <div style={{fontSize:11,color:C.red,marginTop:8,lineHeight:1.4}}>{genErr}</div>}
@@ -16350,7 +16351,7 @@ function MessagingTab(){
       <div style={{fontWeight:900,fontSize:17,marginBottom:8,color:C.txt}}>{t.tabMsg||"Messages"}</div>
       <div style={{fontWeight:700,fontSize:14,color:C.ora,marginBottom:8}}>🔒 {t.lockSection}</div>
       <div style={{fontSize:13,color:C.mut,marginBottom:20,lineHeight:1.6}}>{t.lockDesc}</div>
-      <button onClick={onUpgrade} style={{height:44,padding:"0 26px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",borderRadius:12,fontSize:15,fontWeight:800}}>{t.upgradeCTA}</button>
+      <button onClick={onUpgrade} style={{height:44,padding:"0 26px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",borderRadius:12,fontSize:15,fontWeight:800,boxShadow:`0 4px 14px ${C.vio}33`}}>{t.upgradeCTA}</button>
     </div>
   );
 
@@ -17072,7 +17073,7 @@ function ScheduleTab({prem: premProp, childReadOnly}) {
               if(!prem && currentSlots.length>=1){return;}
               setShowForm(true);setEditId(null);setForm({subject:"",room:"",building:"",from:"08:00",to:"09:00"});
             }} disabled={!prem && slots.length>=1}
-              style={{padding:"7px 14px",background:(!prem&&slots.length>=1)?C.sur:`linear-gradient(135deg,${C.vio},${C.blu})`,color:(!prem&&slots.length>=1)?C.mut:"#fff",fontSize:12,fontWeight:800,opacity:(!prem&&slots.length>=1)?0.6:1,cursor:(!prem&&slots.length>=1)?"not-allowed":"pointer"}}>
+              style={{padding:"7px 14px",background:(!prem&&slots.length>=1)?C.sur:`linear-gradient(135deg,${C.vio},${C.blu})`,color:(!prem&&slots.length>=1)?C.mut:"#fff",fontSize:12,fontWeight:800,opacity:(!prem&&slots.length>=1)?0.6:1,cursor:(!prem&&slots.length>=1)?"not-allowed":"pointer",boxShadow:(!prem&&slots.length>=1)?"none":`0 3px 10px ${C.vio}30`}}>
               {(!prem&&slots.length>=1) ? "🔒 + Ajouter" : (t.scheduleAddSlot||"+ Ajouter")}
             </button>
           )}
@@ -17186,7 +17187,7 @@ function ScheduleTab({prem: premProp, childReadOnly}) {
           )}
 
           <div style={{display:"flex",gap:8}}>
-            <button onClick={saveSlot} style={{flex:1,padding:"10px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:14,fontWeight:800}}>
+            <button onClick={saveSlot} style={{flex:1,padding:"10px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:14,fontWeight:800,boxShadow:`0 4px 14px ${C.vio}33`}}>
               {t.scheduleSave||"Enregistrer"}
             </button>
             <button onClick={cancelForm} style={{padding:"10px 16px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13}}>
@@ -18273,7 +18274,7 @@ function GameTab() {
           <div style={{fontSize:12,color:C.mut,marginBottom:14,lineHeight:1.6}}>
             {t.wheelPremiumDescLine1}<br/>{t.wheelPremiumDescLine2}
           </div>
-          <button style={{padding:"11px 28px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:14,fontWeight:800,borderRadius:50}}>
+          <button style={{padding:"11px 28px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:14,fontWeight:800,borderRadius:50,boxShadow:`0 4px 14px ${C.vio}33`}}>
             {t.wheelGoPremium}
           </button>
         </div>
@@ -18643,7 +18644,7 @@ function VaultTab() {
         <div style={{fontSize:56}}>🗄️</div>
         <div style={{fontSize:18,fontWeight:900,color:C.txt}}>{t.vaultPremLock||"🔒 Coffre-fort — Premium"}</div>
         <div style={{fontSize:13,color:C.mut,maxWidth:280,lineHeight:1.6}}>{t.vaultPremDesc||"Stockez tous vos documents légaux en sécurité."}</div>
-        <button onClick={onUpgrade} style={{height:48,padding:"0 28px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:15,fontWeight:800,borderRadius:12}}>
+        <button onClick={onUpgrade} style={{height:48,padding:"0 28px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:15,fontWeight:800,borderRadius:12,boxShadow:`0 4px 14px ${C.vio}33`}}>
           {t.upgradeCTA||"⭐ Passer Premium"}
         </button>
       </div>
@@ -18728,7 +18729,7 @@ function VaultTab() {
               </div>
             )}
             {previewUrl && (
-              <a href={previewUrl} download={f.name} target="_blank" rel="noreferrer" style={{display:"block",padding:"9px 0",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:13,fontWeight:700,borderRadius:10,textAlign:"center",textDecoration:"none"}}>
+              <a href={previewUrl} download={f.name} target="_blank" rel="noreferrer" style={{display:"block",padding:"9px 0",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:13,fontWeight:700,borderRadius:10,textAlign:"center",textDecoration:"none",boxShadow:`0 4px 14px ${C.vio}33`}}>
                 ⬇️ {t.vaultDownload||"Télécharger"}
               </a>
             )}
@@ -18815,7 +18816,7 @@ function VaultTab() {
               )}
             </div>
           </div>
-          <button onClick={saveDoc} disabled={!formName.trim() || savingDoc} style={{height:50,background:(formName.trim()&&!savingDoc)?`linear-gradient(135deg,${C.vio},${C.blu})`:`${C.bor}`,color:(formName.trim()&&!savingDoc)?"#fff":C.mut,fontSize:15,fontWeight:800,borderRadius:12,cursor:(formName.trim()&&!savingDoc)?"pointer":"not-allowed",transition:"all .2s"}}>
+          <button onClick={saveDoc} disabled={!formName.trim() || savingDoc} style={{height:50,background:(formName.trim()&&!savingDoc)?`linear-gradient(135deg,${C.vio},${C.blu})`:`${C.bor}`,color:(formName.trim()&&!savingDoc)?"#fff":C.mut,fontSize:15,fontWeight:800,borderRadius:12,cursor:(formName.trim()&&!savingDoc)?"pointer":"not-allowed",transition:"all .2s",boxShadow:(formName.trim()&&!savingDoc)?`0 4px 14px ${C.vio}33`:"none"}}>
             {savingDoc ? "⏳ Envoi…" : <>✓ {t.vaultSave||"Enregistrer"}</>}
           </button>
         </div>
@@ -18926,7 +18927,7 @@ function VaultTab() {
 
       {/* Add button */}
       {!isObs && (
-        <button onClick={openAdd} style={{width:"100%",marginBottom:14,height:44,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:13,fontWeight:800,borderRadius:10}}>
+        <button onClick={openAdd} style={{width:"100%",marginBottom:14,height:44,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:13,fontWeight:800,borderRadius:10,boxShadow:`0 4px 14px ${C.vio}33`}}>
           + {t.vaultAdd?.replace("+ ","")||"Ajouter un document"}
         </button>
       )}
