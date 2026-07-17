@@ -10540,7 +10540,10 @@ function StepDates() {
             </div>
           );
         })}
-        <button onClick={()=>prem?setCfg(c=>({...c,specialDates:{...c.specialDates,custom:[...(c.specialDates.custom||[]),{label:"",day:"",month:"",year:"",parentIdx:0,childIdx:"all",yearly:false}]}})):onUpgrade()} style={{width:"100%",height:44,padding:"0 16px",background:"transparent",color:prem?C.vio:C.mut,border:`1.5px dashed ${prem?C.vio:C.bor}`,fontSize:13,borderRadius:8}}>
+        <button onClick={()=>prem?setCfg(c=>({...c,specialDates:{...c.specialDates,custom:[...(c.specialDates.custom||[]),{label:"",day:"",month:"",year:"",parentIdx:0,childIdx:"all",yearly:false}]}})):onUpgrade()}
+          style={prem
+            ? {width:"100%",height:44,padding:"0 16px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:20,fontWeight:800,fontSize:13,boxShadow:`0 4px 14px ${C.vio}33`}
+            : {width:"100%",height:44,padding:"0 16px",background:`${C.vio}11`,color:C.vio,border:`1.5px dashed ${C.vio}`,fontSize:13,borderRadius:8}}>
           {prem?t.addDate:`🔒 ${t.addDate} — Premium`}
         </button>
         </div>
