@@ -5265,7 +5265,7 @@ export default function App() {
           <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`linear-gradient(${C.vio}18, ${C.vio}18), rgba(255,255,255,.5)`,border:`1.5px solid ${C.vio}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.vio,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s"}}>
             {isBeta()
               ? <>🧪 {t.betaChip||"Bêta — Premium offert"}</>
-              : <>⭐ {t.trialBanner} · <span style={{opacity:.85}}>{days}j restant{days>1?"s":""}</span></>
+              : <>{t.trialBanner} · <span style={{opacity:.85}}>{days}j restant{days>1?"s":""}</span></>
             }
           </div>
         </div>

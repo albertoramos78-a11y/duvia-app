@@ -68,7 +68,7 @@ const de = {
     notifsTitle:"Benachrichtigungen",unread:"ungelesen",
     cats:["Schule","Gesundheit","Kleidung","Freizeit","Essen","Transport","Aktivitäten","Sonstiges"],
     all:"Alle",
-    trialDays:"Testtage verbleibend",trialExpired:"Testphase abgelaufen",trialBanner:"Test",
+    trialDays:"Testtage verbleibend",trialExpired:"Testphase abgelaufen",trialBanner:"⭐ Kostenloses Premium",
     upgradeCTA:"⭐ Premium werden",upgradeTitle:"Duvia Premium",parrainage:"Empfehlung",refCodeLabel:"Mein Code",refPlaceholder:"Empfehlungscode (optional)",refApplied:"✅ Code verwendet — 15 Tage Premium Trial aktiviert!",refInvalid:"Ungültiger Code",refShareMsg:"Komm zu Duvia 🏡 Code:",refCopied:"✅ Kopiert!",refCount:"Empfohlene Familien",refMonths:"Ersparte Monate",refInviteOther:"Freund einladen",
     refEarnedBadge:"Premium – noch {days} Tage 🎁",refTrialBadge:"Trial Premium – noch {days} Tage",
     refFelicitations:"Glückwunsch!",
