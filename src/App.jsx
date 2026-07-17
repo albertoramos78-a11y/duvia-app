@@ -3640,6 +3640,16 @@ export default function App() {
   const [showInstallModal,setShowInstallModal] = useState(false);
   const [showLicenseModal,setShowLicenseModal] = useState(false);
   const [showPrizesMenu,setShowPrizesMenu] = useState(false);
+  // 🔧 Impeccable critique P1 : ces menus (hamburger, récompenses) n'avaient
+  // aucune fermeture au clavier — un utilisateur clavier/lecteur d'écran ne
+  // pouvait pas les fermer sans souris (pas de piège de focus non plus, mais
+  // Échap couvre déjà le cas le plus attendu par convention).
+  useEffect(()=>{
+    if(!showMenu && !showPrizesMenu) return;
+    const onKey=e=>{ if(e.key==="Escape"){ setShowMenu(false); setShowPrizesMenu(false); } };
+    window.addEventListener("keydown",onKey);
+    return ()=>window.removeEventListener("keydown",onKey);
+  },[showMenu,showPrizesMenu]);
   const [menuHighlightDismissed,setMenuHighlightDismissed] = useState(false);
   const [showOnboardingTip,setShowOnboardingTip] = useState(false);
   const [configStep,setConfigStep] = useState(0);
@@ -5654,6 +5664,7 @@ function LegalDocModal({ C, t, doc, lang, onClose }) {
 function RgpdConsentScreen({C,t,lang,setLang,onAccept,onOpenLegal}) {
   const [checked,setChecked] = useState(false);
   const [showLangMenu,setShowLangMenu] = useState(false);
+  useEffect(()=>{ if(!showLangMenu) return; const onKey=e=>{if(e.key==="Escape")setShowLangMenu(false);}; window.addEventListener("keydown",onKey); return ()=>window.removeEventListener("keydown",onKey); },[showLangMenu]);
   const foundLang = LANGS[lang]||LANGS["fr"];
   const link = {color:C.vio,fontWeight:800,textDecoration:"underline",background:"none",border:"none",padding:0,fontSize:"inherit",fontFamily:"inherit",cursor:"pointer"};
   return (
@@ -5950,6 +5961,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
   const [shakeName,setShakeName]=useState(false);
   function _triggerShakeName(){ setShakeName(true); setTimeout(()=>setShakeName(false),600); }
   const [showLangMenu,setShowLangMenu]=useState(false);
+  useEffect(()=>{ if(!showLangMenu) return; const onKey=e=>{if(e.key==="Escape")setShowLangMenu(false);}; window.addEventListener("keydown",onKey); return ()=>window.removeEventListener("keydown",onKey); },[showLangMenu]);
   const foundLang=LANGS[lang]||LANGS["fr"];
   async function doLogin(){
     if(!email||!pw){ setErr(t.wrongPw); return; }
@@ -6769,7 +6781,9 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
             <style>{`@keyframes loginReviewFade{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}`}</style>
             <div
               onClick={()=>setReviewsOpen(o=>!o)}
+              onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();setReviewsOpen(o=>!o);}}}
               role="button"
+              tabIndex={0}
               aria-expanded={reviewsOpen}
               style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginBottom:reviewsOpen?10:0,cursor:"pointer",userSelect:"none"}}
             >
