@@ -4753,9 +4753,24 @@ export default function App() {
     </div>
   );
 
+  // ── Confirmation modale générique (remplace window.confirm()) ────────────
+  // 🔧 Impeccable critique P1 : window.confirm() casse le style de l'app en
+  // pleine interaction, surtout sur les actions les plus anxiogènes (quitter
+  // une famille, supprimer un backup). Un seul état + une seule modale ici,
+  // exposée via confirmAsync() (retourne une Promise<boolean>, puisqu'une
+  // vraie modale React ne peut pas bloquer l'exécution comme le fait
+  // window.confirm()) — réutilise le style déjà en place pour la confirmation
+  // d'annulation d'abonnement (PremiumTab).
+  const [confirmModal, setConfirmModal] = useState(null); // {message,title,icon,confirmLabel,resolve} | null
+  const confirmAsync = useCallback((message, opts={}) => {
+    return new Promise(resolve => { setConfirmModal({ message, title:opts.title, icon:opts.icon||"⚠️", confirmLabel:opts.confirmLabel, resolve }); });
+  }, []);
+  function closeConfirmModal(result){ confirmModal?.resolve?.(result); setConfirmModal(null); }
+
   // ── Context value ─────────────────────────────────────────────────────────
   const onUpgrade = () => { setMenuTab("premium"); setShowMenu(false); };
   const ctxValue = {
+    confirmAsync,
     C, t, lang, setLang, dark, themeMode, cycleTheme,
     currency, setCurrency, weekStart, setWeekStart,
     cfg, setCfg, sub, setSub, user, users, setUsers,
@@ -4810,6 +4825,26 @@ export default function App() {
           <div style={{fontSize:13.5,color:C.txt,fontWeight:600,lineHeight:1.5,flex:1}}>👋 <b>{inviteLeftNotice}</b> s'est retiré(e) de la famille.</div>
           <button onClick={()=>setInviteLeftNotice(null)} style={{padding:"6px 12px",background:C.vio,color:"#fff",fontSize:12,fontWeight:800,borderRadius:8,flexShrink:0}}>OK</button>
         </div>
+      )}
+
+      {/* ── Confirmation modale générique (remplace window.confirm(), voir confirmAsync) ── */}
+      {confirmModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:10001,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:340,width:"100%",border:`1.5px solid ${C.bor}`,textAlign:"center"}}>
+            <div style={{fontSize:40,marginBottom:10}}>{confirmModal.icon}</div>
+            {confirmModal.title && <div style={{fontSize:16,fontWeight:900,color:C.txt,marginBottom:8}}>{confirmModal.title}</div>}
+            <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:20,whiteSpace:"pre-line"}}>{confirmModal.message}</div>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>closeConfirmModal(false)} style={{flex:1,height:44,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                {t.no||"Non"}
+              </button>
+              <button onClick={()=>closeConfirmModal(true)} style={{flex:1,height:44,background:C.vio,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13,cursor:"pointer"}}>
+                {confirmModal.confirmLabel||t.subCancelYes||"Confirmer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       )}
 
       {ejectedNotice && (
@@ -5092,7 +5127,7 @@ export default function App() {
                     <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>⚙️</span><span style={{flex:1,textAlign:"left"}}>{t.obsPrefsMenu||t.menuPrefs||"Préférences"}</span>
                   </button>
                   <button onClick={async()=>{
-                    if(!window.confirm(t.obsLeaveFamilyConfirm||"Quitter la famille ? Vous n'aurez plus accès au calendrier ni à la messagerie.")) return;
+                    if(!(await confirmAsync(t.obsLeaveFamilyConfirm||"Quitter la famille ? Vous n'aurez plus accès au calendrier ni à la messagerie.", {icon:"🚪"}))) return;
                     const res = await familySync?.leaveFamily?.();
                     if(res?.ok) await addHist(`${user?.name||"Cet observateur"} a quitté la famille`, "", "family");
                     setShowMenu(false);
@@ -5355,7 +5390,7 @@ export default function App() {
                 <div style={{fontSize:44,marginBottom:12}}>🏚️</div>
                 <div style={{fontWeight:900,fontSize:17,color:C.txt,marginBottom:8}}>{t.familyDisbanded||"Cette famille n'a plus de parent actif."}</div>
                 <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:20}}>{t.familyDisbandedObs||"Votre accès est maintenu mais aucun parent ne gère plus cette famille. Vous pouvez quitter."}</div>
-                <button onClick={async()=>{if(!window.confirm(t.leaveFamilyConfirmSimple||"Quitter la famille ?")) return; const res = await familySync?.leaveFamily?.(); if(res?.ok) await addHist(`${user?.name||"Cet observateur"} a quitté la famille`, "", "family"); handleSetUser(null); setTab(0);}}
+                <button onClick={async()=>{if(!(await confirmAsync(t.leaveFamilyConfirmSimple||"Quitter la famille ?", {icon:"🚪"}))) return; const res = await familySync?.leaveFamily?.(); if(res?.ok) await addHist(`${user?.name||"Cet observateur"} a quitté la famille`, "", "family"); handleSetUser(null); setTab(0);}}
                   style={{height:44,padding:"0 24px",background:C.red,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:14,cursor:"pointer"}}>
                   🚪 {t.obsLeaveFamily||"Quitter la famille"}
                 </button>
@@ -6801,7 +6836,7 @@ function BellPanel({onClose}) {
 }
 
 function NotifTab({prem: premProp}) {
-  const {C,t,cfg,setCfg,prem: ctxPrem,onUpgrade,setActivity,user,setTab,setMenuTab,isObs,isChild} = useApp();
+  const {C,t,cfg,setCfg,prem: ctxPrem,onUpgrade,setActivity,user,setTab,setMenuTab,isObs,isChild,confirmAsync} = useApp();
   const prem = premProp !== undefined ? premProp : ctxPrem;
   const allNotifs = cfg.notifs||[];
   // Suppression locale uniquement — chaque parent gère ses propres notifs
@@ -6812,13 +6847,13 @@ function NotifTab({prem: premProp}) {
   // cfg.notifs (partagé) — sinon le badge du menu, qui compte les non-lues
   // dans cfg.notifs sans connaître deletedIds, reste bloqué jusqu'à un
   // "tout marquer lu" séparé alors que la notif a déjà disparu de la liste.
-  function deleteNotif(id){
-    if(!window.confirm(t.deleteNotifConfirm||"Supprimer cette notification ?")) return;
+  async function deleteNotif(id){
+    if(!(await confirmAsync(t.deleteNotifConfirm||"Supprimer cette notification ?", {icon:"🗑️"}))) return;
     setDeletedIds(ids=>[...ids,id]);
     setCfg(c=>({...c,notifs:c.notifs.map(n=>n.id===id?{...n,read:true}:n)}));
   }
-  function deleteAll(){
-    if(!window.confirm((t.deleteAllNotifsConfirm||"Supprimer toutes les notifications ({count}) ?").replace("{count}",notifs.length))) return;
+  async function deleteAll(){
+    if(!(await confirmAsync((t.deleteAllNotifsConfirm||"Supprimer toutes les notifications ({count}) ?").replace("{count}",notifs.length), {icon:"🗑️"}))) return;
     const ids=allNotifs.map(n=>n.id);
     setDeletedIds(prev=>[...prev,...ids]);
     setCfg(c=>({...c,notifs:c.notifs.map(n=>ids.includes(n.id)?{...n,read:true}:n)}));
@@ -7446,10 +7481,10 @@ function PrefsTab() {
         if (!hasMatchingParentEmail(cfg?.parents, parsed?.family?.parents)) {
           throw new Error("parent_email_mismatch");
         }
-        const okOther = window.confirm(t.backupOtherFamilyConfirm || "⚠️ Ce fichier provient d'une AUTRE famille.\n\nContinuer ? Vos données actuelles seront écrasées.");
+        const okOther = await confirmAsync(t.backupOtherFamilyConfirm || "⚠️ Ce fichier provient d'une AUTRE famille.\n\nContinuer ? Vos données actuelles seront écrasées.");
         if (!okOther) { setBackupImporting(false); return; }
       }
-      const okReplace = window.confirm(t.backupReplaceConfirm || "Cette opération va REMPLACER votre configuration famille, calendrier de garde et calendrier scolaire.\n\nUne sauvegarde automatique de vos données actuelles sera téléchargée avant.\n\nContinuer ?");
+      const okReplace = await confirmAsync(t.backupReplaceConfirm || "Cette opération va REMPLACER votre configuration famille, calendrier de garde et calendrier scolaire.\n\nUne sauvegarde automatique de vos données actuelles sera téléchargée avant.\n\nContinuer ?");
       if (!okReplace) { setBackupImporting(false); return; }
       const safety = buildDuviaBackup({ cfg, history, familyId: familySync?.familyId, lang, userEmail: user?.email, userId: user?.id });
       downloadDuviaBackup(safety, makeBackupFilename("duvia-backup-auto-avant-import"));
@@ -8360,7 +8395,7 @@ function ObserverPrefsTab() {
 }
 
 function ConfigTab() {
-  const {C,t,cfg,setCfg,addHist,pushNotif,prem,perms,onUpgrade,apiData,apiLoading,sub,setSub,lang,setLang,msgs,setMsgs,setUsers,user,familySync,configStep:step,setConfigStep:setStep} = useApp();
+  const {C,t,cfg,setCfg,addHist,pushNotif,prem,perms,onUpgrade,apiData,apiLoading,sub,setSub,lang,setLang,msgs,setMsgs,setUsers,user,familySync,configStep:step,setConfigStep:setStep,confirmAsync} = useApp();
   const STEPS=[{i:SETUP_ICONS.family,l:t.stepId},{i:SETUP_ICONS.observers,l:t.stepAccess},{i:SETUP_ICONS.special_dates,l:t.stepDates},{i:SETUP_ICONS.custody_pattern,l:t.stepGarde}];
 
   // ── Invite modal state ─────────────────────────────────────────────────────
@@ -8496,7 +8531,7 @@ function ConfigTab() {
     const msg = isLast
       ? "Vous êtes le dernier parent de cette famille.\n\n⚠️ Tous les documents du coffre-fort, les pièces jointes et les messages seront définitivement supprimés.\n\nConfirmer ?"
       : (t.quitterFamilleConfirm||"Quitter cette famille ?\n\nVous repartirez sur une famille personnelle vierge. Une synthèse de vos données est conservée pour export.");
-    if(!window.confirm(msg)) return;
+    if(!(await confirmAsync(msg, {icon:"🚪"}))) return;
 
     // Supprimer l'avatar — uniquement si ce compte n'est actif dans AUCUNE autre
     // famille : l'avatar est stocké par compte (uid), pas par famille, donc le
@@ -8544,11 +8579,11 @@ function ConfigTab() {
         return;
       }
       // Cas 2 : ancien membre parti (compte supprimé) → nettoyer le slot local
-      if(!window.confirm("Cet invité a quitté la famille (compte supprimé). Retirer sa carte ?")) return;
+      if(!(await confirmAsync("Cet invité a quitté la famille (compte supprimé). Retirer sa carte ?"))) return;
       setCfg(c=>({...c, parents:c.parents.filter((_,j)=>j!==i)}));
       return;
     }
-    if(!window.confirm((t.retirerInviteConfirm||"Retirer {name} de la famille ?\n\nIl repartira sur une famille personnelle vierge. Vous conservez la famille et son code.").replace("{name}",p.name||t.guestLabel||"l'invité"))) return;
+    if(!(await confirmAsync((t.retirerInviteConfirm||"Retirer {name} de la famille ?\n\nIl repartira sur une famille personnelle vierge. Vous conservez la famille et son code.").replace("{name}",p.name||t.guestLabel||"l'invité")))) return;
     const res = await familySync?.removeFamilyMember?.(p.userId);
     if(res?.ok){
       addHist(`${p.name||t.guestLabel||"L'invité"} a été retiré de la famille`, "", "family");
@@ -8838,7 +8873,7 @@ function FamilySyncCard() {
 
 
 function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,removeChild,onShowEmailSim,quitterFamille,retirerInvite}) {
-  const {C,t,cfg,setCfg,prem,perms,onUpgrade,user,sub,familySync,isChild,isObs,addHist} = useApp();
+  const {C,t,cfg,setCfg,prem,perms,onUpgrade,user,sub,familySync,isChild,isObs,addHist,confirmAsync} = useApp();
   const [touched,setTouched] = useState({});
   const [pidActing,setPidActing] = useState(null); // userId en cours de validation/refus
   const [creatingFamily,setCreatingFamily] = useState(false);
@@ -8890,7 +8925,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           <button
             disabled={creatingFamily}
             onClick={async ()=>{
-              if(!window.confirm(t.createNewFamilyConfirm||"Créer une nouvelle famille distincte ? Tu pourras basculer entre tes familles depuis le menu en haut de l'app.")) return;
+              if(!(await confirmAsync(t.createNewFamilyConfirm||"Créer une nouvelle famille distincte ? Tu pourras basculer entre tes familles depuis le menu en haut de l'app."))) return;
               setCreatingFamily(true);
               const myProfile = (typeof user?.parentIdx === "number" ? cfg.parents[user.parentIdx] : null) || {};
               const prefillParent = {
@@ -9018,7 +9053,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
                       {pidActing===m.userId?"⏳…":"✅ Valider"}
                     </button>
                     <button disabled={pidActing===m.userId} onClick={async()=>{
-                      if(!window.confirm(t.rejectRequestConfirm||"Refuser cette demande ?")) return;
+                      if(!(await confirmAsync(t.rejectRequestConfirm||"Refuser cette demande ?"))) return;
                       setPidActing(m.userId);
                       const res=await familySync.rejectMember(m.userId);
                       setPidActing(null);
@@ -9188,7 +9223,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             </div>
             <div style={{display:"flex",alignItems:"center",gap:6}}>
               <span style={{color:C.vio,fontSize:10}}>{expandedChildren.has(i)?"▲":"▼"}</span>
-              {!isChild && <button onClick={e=>{e.stopPropagation();if(!window.confirm((t.removeFromFamilyConfirm||"Retirer {name} de la famille ?").replace("{name}",ch.name.trim()||`${t.childN||"l'enfant"} ${i+1}`))) return;removeChild(i);}} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:8}}>{t.remove}</button>}
+              {!isChild && <button onClick={async e=>{e.stopPropagation();if(!(await confirmAsync((t.removeFromFamilyConfirm||"Retirer {name} de la famille ?").replace("{name}",ch.name.trim()||`${t.childN||"l'enfant"} ${i+1}`)))) return;removeChild(i);}} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:8}}>{t.remove}</button>}
             </div>
           </div>
 
@@ -10775,7 +10810,7 @@ function WeekRow({wk, wkPiCounts, dominantPi, wkColor, wkLabel, hol, det, chGetH
 
 // ─── STEP 4: ACCESS ───────────────────────────────────────────────────────────
 function StepAccess() {
-  const {C,t,cfg,setCfg,pushNotif,prem,perms,onUpgrade,user,familySync,isObs,isChild,addHist} = useApp();
+  const {C,t,cfg,setCfg,pushNotif,prem,perms,onUpgrade,user,familySync,isObs,isChild,addHist,confirmAsync} = useApp();
   const [pendingActionId,setPendingActionId] = useState(null);
   useEffect(()=>{ familySync.refreshPendingMembers(); },[familySync.familyId]);
   const [expandedObs,setExpandedObs] = useState(()=>new Set());
@@ -10918,7 +10953,7 @@ function StepAccess() {
               else { const who = m.displayName || m.email || (m.role==="observer" ? (t.roleObs||"Observateur") : "Parent invité"); addHist(`${who} a rejoint la famille`, "", "family"); }
             }} style={{padding:"7px 12px",background:C.grn,color:"#fff",borderRadius:8,fontSize:12,fontWeight:800,opacity:pendingActionId===m.userId?0.6:1}}>{t.validateRequestBtn||"Valider"}</button>
             <button disabled={pendingActionId===m.userId} onClick={async ()=>{
-              if(!window.confirm(t.rejectRequestConfirm||"Refuser cette demande ?")) return;
+              if(!(await confirmAsync(t.rejectRequestConfirm||"Refuser cette demande ?"))) return;
               setPendingActionId(m.userId);
               const res = await familySync.rejectMember(m.userId);
               setPendingActionId(null);
@@ -11026,7 +11061,7 @@ function StepAccess() {
               <span style={{color:C.vio,fontSize:10}}>{isExpanded?"▲":"▼"}</span>
               <button onClick={async e=>{
                 e.stopPropagation();
-                if(!window.confirm((t.removeFromFamilyConfirm||"Retirer {name} de la famille ?").replace("{name}",o.name||o.email||"cet observateur"))) return;
+                if(!(await confirmAsync((t.removeFromFamilyConfirm||"Retirer {name} de la famille ?").replace("{name}",o.name||o.email||"cet observateur")))) return;
                 // Supprimer de Supabase si l'observateur a un compte (userId)
                 if(o.userId){ await familySync.removeFamilyMember(o.userId); }
                 addHist(`${o.name||o.email||"Cet observateur"} a été retiré de la famille`, "", "family");
@@ -11107,7 +11142,7 @@ function StepAccess() {
                 else { const who = matchingPending.displayName || o.name || matchingPending.email || "Cet observateur"; addHist(`${who} a rejoint la famille`, "", "family"); }
               }} style={{flex:1,height:42,background:C.grn,color:"#fff",fontSize:13,fontWeight:800,borderRadius:10,opacity:pendingActionId===matchingPending.userId?0.6:1}}>{t.obsApprove||"Accepter"}</button>
               <button disabled={pendingActionId===matchingPending.userId} onClick={async()=>{
-                if(!window.confirm(t.rejectRequestConfirm||"Refuser cette demande ?")) return;
+                if(!(await confirmAsync(t.rejectRequestConfirm||"Refuser cette demande ?"))) return;
                 setPendingActionId(matchingPending.userId);
                 const res = await familySync.rejectMember(matchingPending.userId);
                 setPendingActionId(null);
@@ -15050,6 +15085,7 @@ function AccountSubscriptionCard({ C, onChanged }) {
 }
 
 function PremiumSubscribersCard({ C, refreshKey, onChanged }) {
+  const {confirmAsync} = useApp();
   const [subscribers, setSubscribers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -15071,7 +15107,7 @@ function PremiumSubscribersCard({ C, refreshKey, onChanged }) {
   useEffect(load, [refreshKey]);
 
   async function resetToDefault(userId) {
-    if (!window.confirm("Retirer le forçage admin de ce compte et le remettre en état par défaut ?")) return;
+    if (!(await confirmAsync("Retirer le forçage admin de ce compte et le remettre en état par défaut ?"))) return;
     setResetting(userId); setResetErr("");
     try {
       const { data, error } = await supabase.functions.invoke("admin-manage-subscriptions", { body: { action: "reset_user_to_default", user_id: userId } });
@@ -15174,6 +15210,7 @@ function PremiumSubscribersCard({ C, refreshKey, onChanged }) {
 }
 
 function AdminChangeLogCard({ C, onChanged }) {
+  const {confirmAsync} = useApp();
   const [changes, setChanges] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -15198,7 +15235,7 @@ function AdminChangeLogCard({ C, onChanged }) {
   useEffect(() => { load(); }, []);
 
   async function revert(id) {
-    if (!window.confirm("Annuler ce changement et restaurer l'état précédent de ce compte ?")) return;
+    if (!(await confirmAsync("Annuler ce changement et restaurer l'état précédent de ce compte ?"))) return;
     setReverting(id); setErr(""); setMsg("");
     try {
       const { data, error } = await supabase.functions.invoke("admin-manage-subscriptions", { body: { action: "revert_change", log_id: id } });
@@ -15252,7 +15289,7 @@ function AdminChangeLogCard({ C, onChanged }) {
 
 // ─── ADMIN TAB ────────────────────────────────────────────────────────────────
 function AdminTab() {
-  const {C, sub, setSub, setShowResetConfirm, simDate, setSimDate} = useApp();
+  const {C, sub, setSub, setShowResetConfirm, simDate, setSimDate, confirmAsync} = useApp();
   // Clé partagée : incrémentée après tout changement de plan ou annulation,
   // pour que "Abonnés Premium" et l'historique se rechargent automatiquement
   // même si le changement a été fait depuis une autre carte.
@@ -15333,7 +15370,7 @@ function AdminTab() {
   }
 
   async function bmDelete(fullPath) {
-    if (!window.confirm(`Supprimer définitivement ce backup ?\n${fullPath}`)) return;
+    if (!(await confirmAsync(`Supprimer définitivement ce backup ?\n${fullPath}`))) return;
     const d = await bmCall("delete", { path: fullPath });
     if (!d) return;
     setBmMsg("Backup supprimé.");
