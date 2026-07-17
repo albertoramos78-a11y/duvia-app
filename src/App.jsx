@@ -9967,7 +9967,7 @@ function StepDates() {
             <div style={{...fld,flex:1}}>
               <span style={lbl}>{t.month}</span>
               <CustomSelect value={cfg.custody.startMonth} onChange={v=>setCfg(c=>({...c,custody:{...c.custody,startMonth:v}}))}
-                options={t.months.map((m,i)=>({value:pad(i+1),label:m}))} />
+                options={t.months.map((m,i)=>({value:pad(i+1),label:m}))} height={IH} />
             </div>
             <div style={{...fld,flex:1}}>
               <span style={lbl}>{t.year}</span>
@@ -10469,22 +10469,20 @@ function StepDates() {
                 <span style={lbl}>{t.cdEventName||"Nom de l'événement"}</span>
                 <input value={cd.label||""} onChange={e=>updCd("label",e.target.value)} placeholder={t.cdEventPh||"Ex: Vacances ski, Mariage..."} disabled={!prem} style={inp} />
               </div>
-              {/* Date row */}
+              {/* Date row — champ unique (voir aussi date de naissance parent/enfant) */}
               <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:10}}>
                 <div style={{...fld,flex:1}}>
-                  <span style={lbl}>{t.cdDay||"Jour"}</span>
-                  <input type="number" min="1" max="31" value={cd.day||""} onChange={e=>updCd("day",e.target.value)} placeholder={t.dayPlaceholder||"JJ"} disabled={!prem} style={inp} />
-                </div>
-                <div style={{...fld,flex:2}}>
-                  <span style={lbl}>{t.cdMonth||"Mois"}</span>
-                  <select value={cd.month||""} onChange={e=>updCd("month",e.target.value)} disabled={!prem} style={inp}>
-                    <option value="">--</option>
-                    {t.months.map((m,j)=><option key={j} value={pad(j+1)}>{m}</option>)}
-                  </select>
-                </div>
-                <div style={{...fld,flex:1}}>
-                  <span style={lbl}>{t.cdYear||"Année"}</span>
-                  <input type="number" min="2020" max="2099" value={cd.year||""} onChange={e=>updCd("year",e.target.value)} placeholder={cd.yearly?"—":new Date().getFullYear()} disabled={!prem||cd.yearly} style={{...inp,opacity:cd.yearly?0.4:1}} />
+                  <span style={lbl}>{t.cdDate||"Date"}</span>
+                  <input type="date"
+                    min="2020-01-01" max="2099-12-31"
+                    value={cd.day && cd.month ? `${cd.year||new Date().getFullYear()}-${pad(cd.month)}-${pad(cd.day)}` : ""}
+                    onChange={e=>{
+                      const v = e.target.value;
+                      if(!v){ updCd("day",""); updCd("month",""); updCd("year",""); return; }
+                      const [y,m,d] = v.split("-");
+                      updCd("day",d); updCd("month",m); updCd("year",y);
+                    }}
+                    disabled={!prem} style={inp} />
                 </div>
               </div>
               {/* Who has custody */}
