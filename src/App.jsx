@@ -9155,9 +9155,9 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
               bordure de la carte, façon légende de fieldset, au lieu de
               flotter dans le contenu. */}
           <div style={{position:"absolute",top:0,left:16,transform:"translateY(-50%)",display:"flex",gap:6,alignItems:"center"}}>
-            <span style={{fontSize:12,fontWeight:900,background:C.card,color:p.color,border:`1px solid ${p.color}44`,padding:"2.4px 9.6px",borderRadius:9.6,letterSpacing:".04em",textTransform:"uppercase"}}>{i===effectiveCreatorIdx(cfg.parents)?t.creatorLabel:t.guestLabel}</span>
+            <span style={{fontSize:12,fontWeight:900,background:p.color,color:"#fff",border:`1px solid ${p.color}`,padding:"2.4px 9.6px",borderRadius:9.6,letterSpacing:".04em",textTransform:"uppercase"}}>{i===effectiveCreatorIdx(cfg.parents)?t.creatorLabel:t.guestLabel}</span>
             {i===user?.parentIdx && (
-              <span style={{fontSize:12,fontWeight:900,background:C.card,color:C.grn,border:`1px solid ${C.grn}44`,padding:"2.4px 9.6px",borderRadius:9.6,letterSpacing:".04em",textTransform:"uppercase"}}>
+              <span style={{fontSize:12,fontWeight:900,background:C.grn,color:"#fff",border:`1px solid ${C.grn}`,padding:"2.4px 9.6px",borderRadius:9.6,letterSpacing:".04em",textTransform:"uppercase"}}>
                 {t.accountConnected||"Compte connecté"}
               </span>
             )}
