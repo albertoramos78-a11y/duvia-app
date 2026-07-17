@@ -10925,6 +10925,10 @@ function StepAccess() {
   const toggleObs = id => setExpandedObs(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n;});
   const [email,setEmail]=useState("");
   const [phone,setPhone]=useState("");
+  // 🔧 Le bouton ne s'active que sur un email au format VALIDE (pas juste non-vide)
+  // ou un téléphone renseigné — évite de le faire virer bleu sur un email tapé
+  // à moitié (ex: "a@b").
+  const hasValidContact = (email.trim() && isValidEmail(email.trim())) || !!phone.trim();
   const [address,setAddress]=useState("");
   const [role,setRole]=useState("grandparent");
   const [sent,setSent]=useState(false);
@@ -11111,8 +11115,8 @@ function StepAccess() {
             </div>
             {active.length>=(perms?.maxObservers??1)
               ? <button onClick={onUpgrade} style={{width:"100%",height:44,padding:"0 16px",background:`${C.vio}11`,color:C.vio,border:`1.5px dashed ${C.vio}`,borderRadius:12,fontWeight:800,cursor:"pointer"}}>{t.lockObservers||"🔒 Ajouter un observateur — Premium"}</button>
-              : <button onClick={sendInvite} disabled={(!email&&!phone)||genLoading}
-                  style={{width:"100%",height:44,background:((!email&&!phone)||genLoading)?C.bor:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:14,fontWeight:800,borderRadius:12,cursor:((!email&&!phone)||genLoading)?"not-allowed":"pointer",boxShadow:((!email&&!phone)||genLoading)?"none":`0 4px 14px ${C.vio}33`}}>
+              : <button onClick={sendInvite} disabled={!hasValidContact||genLoading}
+                  style={{width:"100%",height:44,background:(!hasValidContact||genLoading)?C.bor:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:14,fontWeight:800,borderRadius:12,cursor:(!hasValidContact||genLoading)?"not-allowed":"pointer",boxShadow:(!hasValidContact||genLoading)?"none":`0 4px 14px ${C.vio}33`}}>
                   {genLoading?"⏳ Génération…":(t.obsInviteGenerate||t.obsInviteSend)}
                 </button>}
             {genErr && <div style={{fontSize:11,color:C.red,marginTop:8,lineHeight:1.4}}>{genErr}</div>}
