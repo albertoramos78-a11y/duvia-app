@@ -1359,10 +1359,14 @@ body{background:${C.bg};color:${C.txt};font-family:'Nunito',sans-serif;min-heigh
 ::-webkit-scrollbar-thumb{background:${C.bor};border-radius:4px;}
 ::-webkit-scrollbar-thumb:hover{background:${C.mut};}
 
-/* ── Form inputs — uniform 44px height, consistent radius & border ── */
+/* ── Form inputs — uniform 44px height, consistent radius & border ──
+   🔧 Direction "moderne mais douce" (branche staging) : bordure allégée au
+   repos (comme .card), légère ombre interne pour donner de la profondeur au
+   lieu d'un simple trait, un état hover pour donner un retour avant le
+   focus. Mêmes couleurs (C.*), aucun changement de comportement. */
 input,select,textarea{
   background:${C.inp};
-  border:1.5px solid ${C.bor}cc;
+  border:1.5px solid ${C.bor}77;
   color:${C.txt};
   border-radius:14px;
   padding:0 14px;
@@ -1371,10 +1375,12 @@ input,select,textarea{
   font-size:14px;
   width:100%;
   outline:none;
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.03);
   transition:border-color .2s, box-shadow .2s;
   line-height:1;
 }
 textarea{height:auto;padding:11px 13px;line-height:1.5;}
+input:hover,select:hover,textarea:hover{border-color:${C.bor}cc;}
 input:focus,select:focus,textarea:focus{
   border-color:${C.vio};
   box-shadow:0 0 0 3px ${C.vio}20;
@@ -9768,7 +9774,7 @@ function CustomSelect({value, onChange, options, style, locked, height=44, label
     <div style={{position:"relative",...style}}>
       {open && <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:199}} />}
       <button onClick={()=>setOpen(v=>!v)}
-        style={{width:"100%",height,padding:"0 13px",background:locked?C.sur:C.card,border:`1.5px solid ${open?C.vio:C.bor}`,borderRadius:10,display:"flex",alignItems:"center",gap:10,fontSize:14,fontWeight:400,color:locked?C.mut:C.txt,cursor:locked?"default":"pointer",boxSizing:"border-box"}}>
+        style={{width:"100%",height,padding:"0 13px",background:locked?C.sur:C.card,border:`1.5px solid ${open?C.vio:`${C.bor}77`}`,borderRadius:14,display:"flex",alignItems:"center",gap:10,fontSize:14,fontWeight:400,color:locked?C.mut:C.txt,cursor:locked?"default":"pointer",boxSizing:"border-box",boxShadow:open?`0 0 0 3px ${C.vio}20`:"inset 0 1px 2px rgba(0,0,0,.03)",transition:"border-color .2s, box-shadow .2s"}}>
         {cur?.icon && <span style={{fontSize:18,flexShrink:0}}>{cur.icon}</span>}
         <span style={{flex:1,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",...labelStyle}}>{cur?.label||""}</span>
         <span style={{fontSize:10,color:C.mut,transition:"transform .2s",display:"inline-block",transform:open?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>▼</span>
@@ -9801,7 +9807,7 @@ function CountryDropdown({value, onChange}) {
     <div style={{position:"relative"}}>
       {open && <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:199}} />}
       <button onClick={()=>setOpen(v=>!v)}
-        style={{width:"100%",height:44,padding:"0 13px",background:C.card,border:`1.5px solid ${open?C.vio:C.bor}`,borderRadius:10,display:"flex",alignItems:"center",gap:10,fontSize:14,fontWeight:400,color:C.txt,cursor:"pointer",boxSizing:"border-box"}}>
+        style={{width:"100%",height:44,padding:"0 13px",background:C.card,border:`1.5px solid ${open?C.vio:`${C.bor}77`}`,borderRadius:14,display:"flex",alignItems:"center",gap:10,fontSize:14,fontWeight:400,color:C.txt,cursor:"pointer",boxSizing:"border-box",boxShadow:open?`0 0 0 3px ${C.vio}20`:"inset 0 1px 2px rgba(0,0,0,.03)",transition:"border-color .2s, box-shadow .2s"}}>
         <span style={{fontSize:18,flexShrink:0}}>{cur.flag}</span>
         <span style={{flex:1,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cur.name}</span>
         <span style={{fontSize:10,color:C.mut,transition:"transform .2s",display:"inline-block",transform:open?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>▼</span>
