@@ -9960,7 +9960,7 @@ function StepDates() {
       )}
 
       {/* Start date */}
-      <div style={{marginBottom:16,border:`1.5px solid ${C.bor}`,borderRadius:14}}>
+      <div style={{marginBottom:16,background:C.card,border:`1px solid ${C.bor}88`,borderRadius:20,boxShadow:"0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.04)"}}>
         <div style={{padding:"14px 14px 10px"}}>
           <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:10}}>{t.startDate}</div>
           <div style={{display:"flex",gap:10,alignItems:"flex-end"}}>
@@ -10011,7 +10011,7 @@ function StepDates() {
           const chOddIdx = sd.oddParentIdx ?? 1;
 
           return (
-            <div style={{marginBottom:16,border:`1.5px solid ${C.bor}`,borderRadius:14}}>
+            <div style={{marginBottom:16,background:C.card,border:`1px solid ${C.bor}88`,borderRadius:20,boxShadow:"0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.04)"}}>
               <div style={{padding:"14px 14px 4px"}}>
 
                 {/* Pays */}
@@ -10242,7 +10242,7 @@ function StepDates() {
         const chOddIdx = chSD.oddParentIdx ?? 1;
 
         return (
-          <div key={chId} style={{marginBottom:16,border:`2px solid ${C.bor}`,borderRadius:16,overflow:"hidden"}}>
+          <div key={chId} style={{marginBottom:16,background:C.card,border:`1px solid ${C.bor}88`,borderRadius:20,boxShadow:"0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.04)",overflow:"hidden"}}>
             {/* Enfant header */}
             <div style={{padding:"10px 14px",background:C.sur,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`}}>
               {(ch.avatar&&ch.avatar.startsWith("http"))?<img src={ch.avatar} alt="" style={{width:18,height:18,borderRadius:"50%",objectFit:"cover",display:"inline-block",verticalAlign:"middle"}}/>:<span style={{fontSize:18}}>{ch.avatar||"🧒"}</span>}
@@ -10415,7 +10415,7 @@ function StepDates() {
       }))}
 
       {/* Custom dates — locked */}
-      <div style={{marginBottom:16,border:`1.5px solid ${C.bor}`,borderRadius:14,overflow:"hidden"}}>
+      <div style={{marginBottom:16,background:C.card,border:`1px solid ${C.bor}88`,borderRadius:20,boxShadow:"0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.04)",overflow:"hidden"}}>
         <div style={{padding:"14px 14px 4px"}}>
         <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
           {t.customDates}
