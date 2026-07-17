@@ -1415,14 +1415,6 @@ button.btn-sm{height:34px;padding:0 12px;font-size:12px;border-radius:11px;}
 /* Icon-only button */
 button.btn-icon{width:44px;height:44px;padding:0;border-radius:14px;}
 
-/* Sélecteur de couleur : masque le "swatch" natif carré du navigateur, le
-   contour est ensuite découpé en forme de cœur par un clip-path SVG (voir
-   duviaHeartClip) posé sur l'input lui-même. */
-input.color-heart{padding:0;border:none;-webkit-appearance:none;appearance:none;}
-input.color-heart::-webkit-color-swatch-wrapper{padding:0;overflow:hidden;}
-input.color-heart::-webkit-color-swatch{border:none;}
-input.color-heart::-moz-color-swatch{border:none;}
-
 /* ── Labels & Fields ── */
 .lbl{
   font-size:11px;
@@ -9232,17 +9224,26 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
               <span style={lbl}>&nbsp;</span>
               <div style={{height:IH,display:"flex",alignItems:"center"}}>
                 <div style={{position:"relative",width:30,height:30}}>
-                  <input type="color" className="color-heart" value={p.color} onChange={e=>setParent(i,"color",e.target.value)}
-                    title={t.color}
-                    style={{width:30,height:30,padding:0,border:"none",cursor:"pointer",overflow:"hidden",background:p.color,
-                      WebkitMaskImage:`url(${coeurHeartMask})`,maskImage:`url(${coeurHeartMask})`,
-                      WebkitMaskSize:"contain",maskSize:"contain",
-                      WebkitMaskRepeat:"no-repeat",maskRepeat:"no-repeat",
-                      WebkitMaskPosition:"center",maskPosition:"center"}} />
+                  {/* 🔧 Le rendu natif de <input type="color"> a quelques pixels
+                      d'inset interne variables selon navigateur/OS (même avec
+                      padding:0 / appearance reset) — la pastille visible ne
+                      remplissait donc pas exactement la même boîte de 30×30 que
+                      le <img> du trait noir par-dessus, d'où un léger décalage.
+                      La couleur est maintenant un <div> classique (boîte CSS
+                      déterministe, identique au <img>), et l'input reste
+                      seulement comme déclencheur invisible du sélecteur natif. */}
+                  <div aria-hidden style={{position:"absolute",inset:0,background:p.color,
+                    WebkitMaskImage:`url(${coeurHeartMask})`,maskImage:`url(${coeurHeartMask})`,
+                    WebkitMaskSize:"contain",maskSize:"contain",
+                    WebkitMaskRepeat:"no-repeat",maskRepeat:"no-repeat",
+                    WebkitMaskPosition:"center",maskPosition:"center"}} />
                   {/* Trait noir du logo Duvia par-dessus la couleur, pour dessiner
                       le détail (les deux pans de toit) au lieu d'un aplat uni. */}
                   <img src={coeurHeartLine} alt="" draggable={false}
                     style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none"}} />
+                  <input type="color" value={p.color} onChange={e=>setParent(i,"color",e.target.value)}
+                    title={t.color}
+                    style={{position:"absolute",inset:0,width:"100%",height:"100%",padding:0,border:"none",cursor:"pointer",opacity:0}} />
                 </div>
               </div>
             </div>
