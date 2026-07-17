@@ -61,7 +61,7 @@ const de = {
     pickupTime:"Abholzeit",dropoffTime:"Rückgabezeit",saveDay:"Speichern",cancel:"Abbrechen",
     inlineTitle:"Sorgerecht ändern:",fullEdit:"✎ Bearbeiten",
     noHistory:"Keine Änderungen",historyTitle:"Verlauf",
-    noExpenses:"Keine Ausgaben",addExpense:"+ Ausgabe hinzufügen",cancelAdd:"× Abbrechen",
+    noExpenses:"Keine Ausgaben",loading:"Lädt…",addExpense:"+ Ausgabe hinzufügen",cancelAdd:"× Abbrechen",
     newExpense:"Neue Ausgabe",description:"Beschreibung",amount:"Betrag (€)",paidBy:"Bezahlt von",
     category:"Kategorie",date:"Datum",total:"Gesamt",even:"Ausgeglichen",
     noNotifs:"Keine Benachrichtigungen",markRead:"Alle als gelesen markieren",newBadge:"Neu",

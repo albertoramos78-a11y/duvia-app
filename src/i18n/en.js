@@ -62,7 +62,7 @@ const en = {
     pickupTime:"Pickup time",dropoffTime:"Drop-off time",saveDay:"Save",cancel:"Cancel",
     inlineTitle:"Change custody:",fullEdit:"✎ Full edit",
     noHistory:"No changes recorded",historyTitle:"History",
-    noExpenses:"No expenses",addExpense:"+ Add expense",cancelAdd:"× Cancel",
+    noExpenses:"No expenses",loading:"Loading…",addExpense:"+ Add expense",cancelAdd:"× Cancel",
     newExpense:"New expense",description:"Description",amount:"Amount (€)",paidBy:"Paid by",
     category:"Category",date:"Date",total:"Total",even:"Even",
     noNotifs:"No notifications",markRead:"Mark all read",newBadge:"New",

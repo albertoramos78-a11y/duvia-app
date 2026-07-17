@@ -3180,6 +3180,7 @@ export default function App() {
   const {
     expenses: allExpenses,
     reimbursements: allReimbursements,
+    loading: expensesLoading,
     addExpense, addExpenses,
     updateExpense, updateExpensesBySeries,
     deleteExpense, deleteExpensesBySeries,
@@ -4814,6 +4815,7 @@ export default function App() {
     // ── Expenses (Sprint 1 — données SQL) ──────────────────────────────────
     expenses: allExpenses,
     reimbursements: allReimbursements,
+    expensesLoading,
     history: historyData,
     expMethods: {
       addExpense, addExpenses,
@@ -12763,7 +12765,7 @@ function HistTab() {
 
 // ─── EXPENSES ─────────────────────────────────────────────────────────────────
 function ExpTab() {
-  const {C,t,cfg,setCfg,addHist,pushNotif,user,prem,perms,st,onUpgrade,isAdm,setActivity,sub,simDate,setExpSubmittedPopup,addRefAction,currency="€",expenses:ctxExpenses,reimbursements:ctxReimbursements,expMethods,history:ctxHistory,familySync,removedUserIds,myUid} = useApp();
+  const {C,t,cfg,setCfg,addHist,pushNotif,user,prem,perms,st,onUpgrade,isAdm,setActivity,sub,simDate,setExpSubmittedPopup,addRefAction,currency="€",expenses:ctxExpenses,reimbursements:ctxReimbursements,expensesLoading,expMethods,history:ctxHistory,familySync,removedUserIds,myUid} = useApp();
   // 🔧 st vient du statut effectif partagé par la famille (effectiveSub), pas
   // du sub individuel — voir CalTab pour la même correction.
   const premFull = st==="premium"; // PDF réservé full premium uniquement
@@ -14206,7 +14208,13 @@ window.addEventListener('message',function(e){
       );})()}
 
       {/* ── Expense list ── */}
-      {allItems.length===0
+      {/* 🔧 Impeccable critique P2 : distingue "encore en train de charger" de
+          "vraiment vide" — sinon un co-parent sur connexion lente pouvait voir
+          "Aucune dépense" juste après qu'une vraie dépense ait été ajoutée par
+          l'autre parent, avant que le premier chargement n'ait fini. */}
+      {expensesLoading
+        ? <div style={{textAlign:"center",padding:40,color:C.mut}}><div style={{fontSize:40,marginBottom:12}}>⏳</div>{t.loading||"Chargement…"}</div>
+        : allItems.length===0
         ? <div style={{textAlign:"center",padding:40,color:C.mut}}><div style={{fontSize:40,marginBottom:12}}>💰</div>{t.noExpenses}</div>
         : allItems.map(item=>{
             if(item._type==="reim"){

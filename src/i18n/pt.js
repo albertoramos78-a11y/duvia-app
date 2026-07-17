@@ -61,7 +61,7 @@ const pt = {
     pickupTime:"Hora recolha",dropoffTime:"Hora entrega",saveDay:"Guardar",cancel:"Cancelar",
     inlineTitle:"Alterar guarda:",fullEdit:"✎ Edição completa",
     noHistory:"Sem alterações",historyTitle:"Histórico",
-    noExpenses:"Sem despesas",addExpense:"+ Adicionar despesa",cancelAdd:"× Cancelar",
+    noExpenses:"Sem despesas",loading:"Carregando…",addExpense:"+ Adicionar despesa",cancelAdd:"× Cancelar",
     newExpense:"Nova despesa",description:"Descrição",amount:"Valor (€)",paidBy:"Pago por",
     category:"Categoria",date:"Data",total:"Total",even:"Equilibrado",
     noNotifs:"Sem notificações",markRead:"Marcar tudo como lido",newBadge:"Novo",
