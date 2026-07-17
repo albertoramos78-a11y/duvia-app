@@ -600,6 +600,7 @@ const de = {
     cdDay:"Tag",
     cdMonth:"Monat",
     cdYear:"Jahr",
+    cdDate:"Datum",
     cdConcerns:"Betrifft",
     cdCustodyAt:"Sorgerecht bei",
     cdRepeatYearly:"Jedes Jahr wiederholen",

@@ -686,6 +686,7 @@ const fr = {
     cdDay:"Jour",
     cdMonth:"Mois",
     cdYear:"Année",
+    cdDate:"Date",
     cdConcerns:"Concerne",
     cdCustodyAt:"Garde chez",
     cdRepeatYearly:"Reconduire tous les ans",

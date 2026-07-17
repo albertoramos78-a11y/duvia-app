@@ -600,6 +600,7 @@ const pt = {
     cdDay:"Dia",
     cdMonth:"Mês",
     cdYear:"Ano",
+    cdDate:"Data",
     cdConcerns:"Diz respeito a",
     cdCustodyAt:"Guarda com",
     cdRepeatYearly:"Repetir todos os anos",

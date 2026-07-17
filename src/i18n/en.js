@@ -631,6 +631,7 @@ const en = {
     cdDay:"Day",
     cdMonth:"Month",
     cdYear:"Year",
+    cdDate:"Date",
     cdConcerns:"Concerns",
     cdCustodyAt:"Custody with",
     cdRepeatYearly:"Repeat every year",

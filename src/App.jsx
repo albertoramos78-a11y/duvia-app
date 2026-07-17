@@ -10464,13 +10464,12 @@ function StepDates() {
               </div>
               {/* Contenu — masqué si réduit */}
               {!isCollapsed && <div style={{padding:"0 12px 12px"}}>
-              {/* Label */}
-              <div style={{...fld,marginBottom:10}}>
-                <span style={lbl}>{t.cdEventName||"Nom de l'événement"}</span>
-                <input value={cd.label||""} onChange={e=>updCd("label",e.target.value)} placeholder={t.cdEventPh||"Ex: Vacances ski, Mariage..."} disabled={!prem} style={inp} />
-              </div>
-              {/* Date row — champ unique (voir aussi date de naissance parent/enfant) */}
+              {/* Label + Date — même ligne */}
               <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:10}}>
+                <div style={{...fld,flex:2}}>
+                  <span style={lbl}>{t.cdEventName||"Nom de l'événement"}</span>
+                  <input value={cd.label||""} onChange={e=>updCd("label",e.target.value)} placeholder={t.cdEventPh||"Ex: Vacances ski, Mariage..."} disabled={!prem} style={inp} />
+                </div>
                 <div style={{...fld,flex:1}}>
                   <span style={lbl}>{t.cdDate||"Date"}</span>
                   <input type="date"
