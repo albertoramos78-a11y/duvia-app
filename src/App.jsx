@@ -7023,7 +7023,11 @@ const PARENT_AVATARS = ["👩","👨","👩‍🦱","👨‍🦱","👩‍🦰",
 // Réactions emoji sur les messages — jeu fixe volontairement limité (pas de
 // sélecteur libre), voir docs/superpowers/specs/2026-07-07-message-reactions-design.md
 const MSG_REACTION_EMOJIS = ["👍","❤️","😂","😮","😢","🙏"];
-const CHILD_AVATARS  = ["🧒","👧","👦","👧‍🦱","👦‍🦱","👧‍🦰","👦‍🦰","👧‍🦳","👦‍🦳","🧑‍🎨","🧑‍🎤","🧑‍🚀","🧑‍💻","👼","🧸","🦄","🐣","⭐"];
+// 🔧 Pas de variantes "cheveux" (👧‍🦱 etc.) : Unicode ne définit ces séquences
+// ZWJ que pour les emoji adultes (👨/👩/🧑 + cheveux) — jamais pour 👧/👦.
+// Ce ne sont pas de vrais emoji : aucune police (Twemoji ou autre) n'a
+// jamais eu d'asset pour ces combinaisons, d'où les icônes cassées.
+const CHILD_AVATARS  = ["🧒","👧","👦","🧑‍🎨","🧑‍🎤","🧑‍🚀","🧑‍💻","👼","🧸","🦄","🐣","⭐"];
 const OBS_AVATARS    = ["👴","👵","🧓","👩‍👦","👨‍👦","👩‍👧","👨‍👧","🧑‍🤝‍🧑","👫","👬","👭","🤶","🎅","🧙‍♀️","🧙","🧝‍♀️","🦸‍♀️","🦸","🤴","👸"];
 
 function Avatar({emoji, color, size=40, onClick, selected=false}) {
