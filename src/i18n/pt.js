@@ -16,7 +16,7 @@ const pt = {
     addParent:"+ Adicionar pai/mãe",addChild:"+ Adicionar filho/a",
     remove:"Remover",parentN:"Pai/Mãe",childN:"Filho/a",
     name:"Nome",gender:"Papel parental",female:"Mãe",male:"Pai",other:"Outro",color:"Cor",
-    birthDay:"Dia nasc.",birthMonth:"Mês nasc.",
+    birthDay:"Dia nasc.",birthMonth:"Mês nasc.",birthDate:"Data de nascimento",
     months:["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"],
     sameGuard:"Mesmo horário para todos os filhos",
     zone:"Zona escolar",noZone:"Nenhuma",schoolYear:"Ano letivo",

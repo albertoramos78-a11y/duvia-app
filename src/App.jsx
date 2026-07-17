@@ -9205,18 +9205,23 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
 
           {/* Lignes identité : naissance, téléphone, email — visibles pour
               les 2 parents mais lecture seule pour l'autre. */}
-          {/* Row 2 : Jour naissance | Mois naissance */}
+          {/* Row 2 : Date de naissance (jour+mois seulement — pas d'année stockée pour un parent) */}
           <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:12,...(isMine?{}:lockStyle)}}>
             <div style={{...fieldBox,flex:1}}>
-              <span style={lbl}>{t.birthDay}</span>
-              <input type="number" min="1" max="31" value={p.birthDay} onChange={e=>setParent(i,"birthDay",e.target.value)} placeholder={t.dayPlaceholder||"JJ"} readOnly={!isMine} style={{...inp,...(isMine?{}:{background:C.sur,color:C.mut,cursor:"default"})}} />
-            </div>
-            <div style={{...fieldBox,flex:2}}>
-              <span style={lbl}>{t.birthMonth}</span>
-              <CustomSelect value={p.birthMonth} onChange={v=>setParent(i,"birthMonth",v)} locked={!isMine} options={[
-                {value:"",label:"--"},
-                ...(t.months||[]).map((m,j)=>({value:pad(j+1),label:m}))
-              ]} />
+              <span style={lbl}>{t.birthDate||"Date de naissance"}</span>
+              <input
+                type="date"
+                value={p.birthDay && p.birthMonth ? `2000-${pad(p.birthMonth)}-${pad(p.birthDay)}` : ""}
+                onChange={e=>{
+                  const v = e.target.value;
+                  if(!v){ setParent(i,"birthDay",""); setParent(i,"birthMonth",""); return; }
+                  const [,m,d] = v.split("-");
+                  setParent(i,"birthDay",d);
+                  setParent(i,"birthMonth",m);
+                }}
+                readOnly={!isMine}
+                style={{...inp,...(isMine?{}:{background:C.sur,color:C.mut,cursor:"default"})}}
+              />
             </div>
           </div>
 
@@ -9306,27 +9311,25 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             </div>
           </div>
 
-          {/* Row 2 : Jour naissance | Mois naissance | Année */}
+          {/* Row 2 : Date de naissance (jour+mois+année) */}
           <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:12}}>
             <div style={{...fieldBox,flex:1}}>
-              <span style={lbl}>{t.birthDay}</span>
-              <input type="number" min="1" max="31" value={ch.birthDay} onChange={e=>setChild(i,"birthDay",e.target.value)} placeholder={t.dayPlaceholder||"JJ"} style={inp} />
-            </div>
-            <div style={{...fieldBox,flex:2}}>
-              <span style={lbl}>{t.birthMonth}</span>
-              <CustomSelect value={ch.birthMonth} onChange={v=>setChild(i,"birthMonth",v)} options={[
-                {value:"",label:"--"},
-                ...(t.months||[]).map((m,j)=>({value:pad(j+1),label:m}))
-              ]} />
-            </div>
-            <div style={{...fieldBox,flex:1}}>
-              <span style={lbl}>{t.childBirthYear||"Année"}</span>
-              <select value={ch.birthYear||""} onChange={e=>setChild(i,"birthYear",e.target.value)} style={{...inp,height:IH}}>
-                <option value="">----</option>
-                {Array.from({length:25},(_,k)=>new Date().getFullYear()-5-k).map(y=>(
-                  <option key={y} value={String(y)}>{y}</option>
-                ))}
-              </select>
+              <span style={lbl}>{t.birthDate||"Date de naissance"}</span>
+              <input
+                type="date"
+                value={ch.birthDay && ch.birthMonth && ch.birthYear ? `${ch.birthYear}-${pad(ch.birthMonth)}-${pad(ch.birthDay)}` : ""}
+                min={`${new Date().getFullYear()-29}-01-01`}
+                max={`${new Date().getFullYear()-5}-12-31`}
+                onChange={e=>{
+                  const v = e.target.value;
+                  if(!v){ setChild(i,"birthDay",""); setChild(i,"birthMonth",""); setChild(i,"birthYear",""); return; }
+                  const [y,m,d] = v.split("-");
+                  setChild(i,"birthDay",d);
+                  setChild(i,"birthMonth",m);
+                  setChild(i,"birthYear",y);
+                }}
+                style={inp}
+              />
             </div>
           </div>
 

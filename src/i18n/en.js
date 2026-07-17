@@ -16,7 +16,7 @@ const en = {
     addParent:"+ Add parent",addChild:"+ Add child",
     remove:"Remove",parentN:"Parent",childN:"Child",
     name:"Name",gender:"Parental role",female:"Mother",male:"Father",other:"Other",color:"Color",
-    birthDay:"Birth day",birthMonth:"Birth month",
+    birthDay:"Birth day",birthMonth:"Birth month",birthDate:"Date of birth",
     months:["January","February","March","April","May","June","July","August","September","October","November","December"],
     sameGuard:"Same schedule for all children",
     zone:"School zone",noZone:"None",schoolYear:"School year",

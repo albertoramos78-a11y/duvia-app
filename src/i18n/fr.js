@@ -16,7 +16,7 @@ const fr = {
     addParent:"+ Ajouter un parent",addChild:"+ Ajouter un enfant",
     remove:"Retirer",parentN:"Parent",childN:"Enfant",
     name:"Nom",gender:"Rôle parental",female:"Mère",male:"Père",other:"Autre",color:"Couleur",
-    birthDay:"Jour naiss.",birthMonth:"Mois naiss.",
+    birthDay:"Jour naiss.",birthMonth:"Mois naiss.",birthDate:"Date de naissance",
     months:["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"],
     sameGuard:"Même garde pour tous les enfants",
     zone:"Zone scolaire",noZone:"Aucune",schoolYear:"Année scolaire",

@@ -16,7 +16,7 @@ const es = {
     addParent:"+ Añadir padre/madre",addChild:"+ Añadir hijo/a",
     remove:"Eliminar",parentN:"Padre/Madre",childN:"Hijo/a",
     name:"Nombre",gender:"Rol parental",female:"Madre",male:"Padre",other:"Otro",color:"Color",
-    birthDay:"Día nacim.",birthMonth:"Mes nacim.",
+    birthDay:"Día nacim.",birthMonth:"Mes nacim.",birthDate:"Fecha de nacimiento",
     months:["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"],
     sameGuard:"Mismo horario para todos los hijos",
     zone:"Zona escolar",noZone:"Ninguna",schoolYear:"Año escolar",

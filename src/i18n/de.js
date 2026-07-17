@@ -16,7 +16,7 @@ const de = {
     addParent:"+ Elternteil hinzufügen",addChild:"+ Kind hinzufügen",
     remove:"Entfernen",parentN:"Elternteil",childN:"Kind",
     name:"Name",gender:"Elternrolle",female:"Mutter",male:"Vater",other:"Andere",color:"Farbe",
-    birthDay:"Geburtstag",birthMonth:"Geburtsmonat",
+    birthDay:"Geburtstag",birthMonth:"Geburtsmonat",birthDate:"Geburtsdatum",
     months:["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"],
     sameGuard:"Gleicher Zeitplan für alle Kinder",
     zone:"Schulzone",noZone:"Keine",schoolYear:"Schuljahr",
