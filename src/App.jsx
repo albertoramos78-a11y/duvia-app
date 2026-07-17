@@ -9,6 +9,7 @@ import iconSendMessage   from "./assets/send_message.png";
 import iconNavLeft       from "./assets/bouton_gauche.png";
 import iconNavRight      from "./assets/bouton_droite.png";
 import coeurHeartMask    from "./assets/coeur_mask.png";
+import coeurHeartLine    from "./assets/coeur.png";
 import posthog from "posthog-js";
 import { supabase } from "./supabaseClient";
 import { initDiagnostics, retryPendingReport, submitBugReport, captureScreenshot, logAction, isDebugMode, setDebugMode } from "./services/diagnostics";
@@ -6996,14 +6997,21 @@ function NotifTab({prem: premProp}) {
 const TWEMOJI_CDN = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@17.0.3/assets/svg/";
 function Emoji({children, size, invert=false, style}) {
   if (typeof children !== "string" || !children) return children;
-  // 🔧 jdecked/twemoji ne publie pas de fichier séparé pour le sélecteur de
-  // variation U+FE0F sur certains emoji (ex: 🗄️ "1f5c4-fe0f" → 404 réel,
-  // constaté en live ; "1f5c4" seul existe) — le glyphe couleur est
-  // identique de toute façon, donc on l'enlève systématiquement.
-  const cp = twemoji.convert.toCodePoint(children).replace(/-fe0f$/, "");
+  const cp = twemoji.convert.toCodePoint(children);
+  // 🔧 jdecked/twemoji omet le fichier avec le sélecteur de variation U+FE0F
+  // pour certains emoji à UN SEUL codepoint (ex: 🗄️ "1f5c4-fe0f" → 404 réel,
+  // "1f5c4" seul existe) — mais le GARDE pour d'autres séquences ZWJ (ex:
+  // 👱‍♀️ "1f471-200d-2640-fe0f", 👩‍⚕️ "1f469-200d-2695-fe0f" → 200, sans
+  // le fe0f → 404). Un retrait systématique (essayé une première fois) cassait
+  // donc ces derniers. On tente d'abord le code tel quel, et on ne retire le
+  // -fe0f qu'en repli, seulement si l'image échoue vraiment à charger.
+  const cpNoVS = cp.replace(/-fe0f$/, "");
   return (
     <img
       src={`${TWEMOJI_CDN}${cp}.svg`}
+      onError={e => {
+        if (cpNoVS !== cp) { e.currentTarget.onerror = null; e.currentTarget.src = `${TWEMOJI_CDN}${cpNoVS}.svg`; }
+      }}
       alt={children}
       draggable={false}
       style={{
@@ -9223,13 +9231,19 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             <div style={{...fieldBox,flexShrink:0,...lockStyle}}>
               <span style={lbl}>&nbsp;</span>
               <div style={{height:IH,display:"flex",alignItems:"center"}}>
-                <input type="color" className="color-heart" value={p.color} onChange={e=>setParent(i,"color",e.target.value)}
-                  title={t.color}
-                  style={{width:30,height:30,padding:0,border:"none",cursor:"pointer",overflow:"hidden",background:p.color,
-                    WebkitMaskImage:`url(${coeurHeartMask})`,maskImage:`url(${coeurHeartMask})`,
-                    WebkitMaskSize:"contain",maskSize:"contain",
-                    WebkitMaskRepeat:"no-repeat",maskRepeat:"no-repeat",
-                    WebkitMaskPosition:"center",maskPosition:"center"}} />
+                <div style={{position:"relative",width:30,height:30}}>
+                  <input type="color" className="color-heart" value={p.color} onChange={e=>setParent(i,"color",e.target.value)}
+                    title={t.color}
+                    style={{width:30,height:30,padding:0,border:"none",cursor:"pointer",overflow:"hidden",background:p.color,
+                      WebkitMaskImage:`url(${coeurHeartMask})`,maskImage:`url(${coeurHeartMask})`,
+                      WebkitMaskSize:"contain",maskSize:"contain",
+                      WebkitMaskRepeat:"no-repeat",maskRepeat:"no-repeat",
+                      WebkitMaskPosition:"center",maskPosition:"center"}} />
+                  {/* Trait noir du logo Duvia par-dessus la couleur, pour dessiner
+                      le détail (les deux pans de toit) au lieu d'un aplat uni. */}
+                  <img src={coeurHeartLine} alt="" draggable={false}
+                    style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none"}} />
+                </div>
               </div>
             </div>
           </div>
@@ -9951,9 +9965,8 @@ function StepDates() {
           <div style={{display:"flex",gap:10,alignItems:"flex-end"}}>
             <div style={{...fld,flex:1}}>
               <span style={lbl}>{t.month}</span>
-              <select value={cfg.custody.startMonth} onChange={e=>setCfg(c=>({...c,custody:{...c.custody,startMonth:e.target.value}}))} style={inp}>
-                {t.months.map((m,i)=><option key={i} value={pad(i+1)}>{m}</option>)}
-              </select>
+              <CustomSelect value={cfg.custody.startMonth} onChange={v=>setCfg(c=>({...c,custody:{...c.custody,startMonth:v}}))}
+                options={t.months.map((m,i)=>({value:pad(i+1),label:m}))} />
             </div>
             <div style={{...fld,flex:1}}>
               <span style={lbl}>{t.year}</span>
