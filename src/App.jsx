@@ -3043,7 +3043,7 @@ function BugReportModal({ C, t, open, screenshot, onClose, getContext }) {
   };
   return (
     <div onClick={close} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:18,maxWidth:420,width:"100%",padding:22,boxShadow:"0 12px 40px rgba(0,0,0,.25)",maxHeight:"90vh",overflowY:"auto"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,maxWidth:420,width:"100%",padding:22,boxShadow:"0 12px 40px rgba(0,0,0,.25)",maxHeight:"90vh",overflowY:"auto"}}>
         <div style={{fontSize:16,fontWeight:900,color:C.txt,textAlign:"center",marginBottom:4}}>🐛 {t.bugReportTitle}</div>
         {status==="ok" ? (
           <>
@@ -3077,7 +3077,7 @@ function BugReportModal({ C, t, open, screenshot, onClose, getContext }) {
 function InstallAppModal({C,t,onClose}) {
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:16,padding:20,maxWidth:400,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,padding:20,maxWidth:400,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <div style={{fontSize:16,fontWeight:900,color:C.txt}}>{t.installAppTitle}</div>
           <button onClick={onClose} style={{width:30,height:30,background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,color:C.mut,fontSize:14,cursor:"pointer"}}>✕</button>
@@ -4869,7 +4869,7 @@ export default function App() {
 
       {ejectedNotice && (
         <div style={{position:"fixed",inset:0,zIndex:10000,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:C.card,borderRadius:18,padding:"24px 22px",maxWidth:420,width:"100%",boxShadow:"0 10px 40px rgba(0,0,0,.3)"}}>
+          <div style={{background:C.card,borderRadius:20,padding:"24px 22px",maxWidth:420,width:"100%",boxShadow:"0 10px 40px rgba(0,0,0,.3)"}}>
             <div style={{fontSize:20,fontWeight:900,color:C.txt,marginBottom:10}}>👋 Vous avez quitté cette famille</div>
             <div style={{fontSize:13.5,color:C.mut,lineHeight:1.6,marginBottom:18}}>
               Vous avez été retiré(e) de la famille par le créateur. Vous repartez sur une famille personnelle vierge. Une synthèse de vos anciennes données (planning, comptes, messages) a été conservée sur cet appareil — l'export PDF sera bientôt disponible.
@@ -4913,7 +4913,7 @@ export default function App() {
         const doReject=()=>{ dbRejectReim(r.id); setPendingReimPopup(null); };
         return (
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-            <div style={{background:C.card,borderRadius:22,padding:"28px 24px",maxWidth:340,width:"100%",border:`1.5px solid ${C.yel}`,boxShadow:"0 16px 48px rgba(0,0,0,.28)",animation:"popIn .35s cubic-bezier(.16,1,.3,1)"}}>
+            <div style={{background:C.card,borderRadius:20,padding:"28px 24px",maxWidth:340,width:"100%",border:`1.5px solid ${C.yel}`,boxShadow:"0 16px 48px rgba(0,0,0,.28)",animation:"popIn .35s cubic-bezier(.16,1,.3,1)"}}>
               <div style={{fontSize:40,textAlign:"center",marginBottom:10}}>💸</div>
               <div style={{fontSize:16,fontWeight:800,marginBottom:6,textAlign:"center",color:C.txt}}>Remboursement reçu</div>
               <div style={{fontSize:13,color:C.mut,marginBottom:20,textAlign:"center",lineHeight:1.6}}>
@@ -4943,7 +4943,7 @@ export default function App() {
         const doRejectE=()=>{ dbRejectExp(e.id); setPendingExpPopup(null); };
         return (
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-            <div style={{background:C.card,borderRadius:22,padding:"28px 24px",maxWidth:340,width:"100%",border:`1.5px solid ${C.yel}`,boxShadow:"0 16px 48px rgba(0,0,0,.28)",animation:"popIn .35s cubic-bezier(.16,1,.3,1)"}}>
+            <div style={{background:C.card,borderRadius:20,padding:"28px 24px",maxWidth:340,width:"100%",border:`1.5px solid ${C.yel}`,boxShadow:"0 16px 48px rgba(0,0,0,.28)",animation:"popIn .35s cubic-bezier(.16,1,.3,1)"}}>
               <div style={{fontSize:40,textAlign:"center",marginBottom:10}}>💰</div>
               <div style={{fontSize:16,fontWeight:800,marginBottom:6,textAlign:"center",color:C.txt}}>{t.expPendingPopupTitle||"Dépense à confirmer"}</div>
               <div style={{fontSize:13,color:C.mut,marginBottom:20,textAlign:"center",lineHeight:1.6}}>
@@ -5239,7 +5239,7 @@ export default function App() {
         const licBlocks = LEGAL_DOCS.license[licLang] || [];
         return (
         <div onClick={()=>setShowLicenseModal(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:16,padding:20,maxWidth:480,width:"100%",maxHeight:"80vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,padding:20,maxWidth:480,width:"100%",maxHeight:"80vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexShrink:0}}>
               <div style={{fontSize:16,fontWeight:900,color:C.txt}}>📄 {licTitle}</div>
               <button onClick={()=>setShowLicenseModal(false)} style={{width:30,height:30,background:C.sur,border:`1px solid ${C.bor}`,borderRadius:8,color:C.mut,fontSize:14,cursor:"pointer"}}>✕</button>
@@ -5391,7 +5391,7 @@ export default function App() {
           /* Cas 1 : obs sans famille active (retiré par un parent) */
           !familySync.familyId ? (
             <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"80vh",padding:20}}>
-              <div style={{background:C.card,borderRadius:18,padding:28,maxWidth:380,textAlign:"center",boxShadow:"0 8px 32px rgba(0,0,0,.1)"}}>
+              <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:380,textAlign:"center",boxShadow:"0 8px 32px rgba(0,0,0,.1)"}}>
                 <div style={{fontSize:48,marginBottom:12}}>👁️</div>
                 <div style={{fontWeight:900,fontSize:17,color:C.txt,marginBottom:8}}>
                   {t.obsNoFamily||"Vous n'êtes pas affecté à une famille."}
@@ -5409,7 +5409,7 @@ export default function App() {
           /* Cas 2 : obs dans famille sans parent actif (famille dissoute) */
           (cfg.parents||[]).filter(pp=>pp&&!pp.left).length===0 ? (
             <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:300,padding:20}}>
-              <div style={{background:C.card,borderRadius:18,padding:28,maxWidth:380,textAlign:"center",boxShadow:"0 8px 32px rgba(0,0,0,.1)"}}>
+              <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:380,textAlign:"center",boxShadow:"0 8px 32px rgba(0,0,0,.1)"}}>
                 <div style={{fontSize:44,marginBottom:12}}>🏚️</div>
                 <div style={{fontWeight:900,fontSize:17,color:C.txt,marginBottom:8}}>{t.familyDisbanded||"Cette famille n'a plus de parent actif."}</div>
                 <div style={{fontSize:13,color:C.mut,lineHeight:1.6,marginBottom:20}}>{t.familyDisbandedObs||"Votre accès est maintenu mais aucun parent ne gère plus cette famille. Vous pouvez quitter."}</div>
@@ -5640,7 +5640,7 @@ function LegalDocModal({ C, t, doc, lang, onClose }) {
   const warning = LEGAL_WARNING[docLang] || LEGAL_WARNING.fr;
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:18,maxWidth:600,width:"100%",padding:"22px 24px",boxShadow:"0 12px 40px rgba(0,0,0,.3)",maxHeight:"88vh",overflowY:"auto",color:C.txt,fontSize:13,lineHeight:1.6}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,maxWidth:600,width:"100%",padding:"22px 24px",boxShadow:"0 12px 40px rgba(0,0,0,.3)",maxHeight:"88vh",overflowY:"auto",color:C.txt,fontSize:13,lineHeight:1.6}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,gap:10}}>
           <div style={{fontSize:17,fontWeight:900}}>{title}</div>
           <button onClick={onClose} style={{width:30,height:30,flexShrink:0,background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:16,cursor:"pointer"}}>✕</button>
@@ -5800,7 +5800,7 @@ function MfaChallengeGate({C, t, factorId, onVerified, onCancel}) {
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div style={{width:"100%",maxWidth:340,background:C.card,borderRadius:18,padding:24,textAlign:"center"}}>
+      <div style={{width:"100%",maxWidth:340,background:C.card,borderRadius:20,padding:24,textAlign:"center"}}>
         <div style={{fontSize:40,marginBottom:10}}>🔐</div>
         <div style={{fontWeight:900,fontSize:17,marginBottom:8,color:C.txt}}>{t.mfaChallengeTitle||"Vérification en deux étapes"}</div>
         {mode==="totp" ? (
@@ -11780,7 +11780,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
       {confirmResetOverrides && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:20}}
           onClick={()=>setConfirmResetOverrides(false)}>
-          <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:16,padding:22,maxWidth:380,width:"100%",border:`1.5px solid ${C.red}44`}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,padding:22,maxWidth:380,width:"100%",border:`1.5px solid ${C.red}44`}}>
             <div style={{fontSize:16,fontWeight:900,color:C.txt,marginBottom:8}}>{t.calResetTitle||"🔄 Reset manual exchanges?"}</div>
             <div style={{fontSize:13,color:C.mut,lineHeight:1.5,marginBottom:16}}>
               {(overridesCount>1?(t.calResetBodyOther||"{n} manual exchanges on the calendar will be deleted. The schedule will revert to the base rule (week A/B, exclusive custody…). This action is irreversible.").replace("{n}",overridesCount):(t.calResetBodyOne||"1 manual exchange on the calendar will be deleted. The schedule will revert to the base rule (week A/B, exclusive custody…). This action is irreversible."))}
@@ -13787,7 +13787,7 @@ window.addEventListener('message',function(e){
               </div>
             </div>
             {viewer.type==='application/pdf'
-              ? <div style={{background:C.card,borderRadius:12,padding:24,textAlign:"center"}}>
+              ? <div style={{background:C.card,borderRadius:20,padding:24,textAlign:"center"}}>
                   <div style={{fontSize:56,marginBottom:12}}>📄</div>
                   <div style={{fontSize:14,color:C.txt,marginBottom:6,fontWeight:700}}>{viewer.name}</div>
                   <div style={{fontSize:12,color:C.mut,marginBottom:14}}>{fmtSize(viewer.size||viewer.compressedSize||viewer.originalSize)}</div>
@@ -14584,7 +14584,7 @@ function ReferralBonusPopup({C, variant, onClose}) {
   const isReferree = variant==="referree";
   return (
     <div style={{position:"fixed",inset:0,zIndex:999,background:"rgba(23,16,58,.6)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      <div style={{background:C.card,borderRadius:24,padding:"32px 28px",maxWidth:340,width:"100%",textAlign:"center",border:`2px solid ${C.vio}44`,boxShadow:`0 20px 60px ${C.vio}33`,animation:"popIn .35s cubic-bezier(.16,1,.3,1)"}}>
+      <div style={{background:C.card,borderRadius:20,padding:"32px 28px",maxWidth:340,width:"100%",textAlign:"center",border:`2px solid ${C.vio}44`,boxShadow:`0 20px 60px ${C.vio}33`,animation:"popIn .35s cubic-bezier(.16,1,.3,1)"}}>
         <div style={{fontSize:52,marginBottom:12}}>{isReferree?"🎉":"🎁"}</div>
         <div style={{fontSize:20,fontWeight:800,marginBottom:8,background:`linear-gradient(90deg,${C.vio},${C.blu})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
           {isReferree?"Bonus débloqué !":"Bonne nouvelle !"}
@@ -14715,7 +14715,7 @@ function ParrainageSection() {
       {/* Popups bonus */}
       {showReferreePopup && (
         <div style={{position:"fixed",inset:0,zIndex:999,background:"rgba(23,16,58,.65)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:C.card,borderRadius:24,padding:"32px 24px",maxWidth:320,width:"100%",textAlign:"center",border:`2px solid ${C.grn}44`,boxShadow:`0 20px 60px ${C.grn}33`}}>
+          <div style={{background:C.card,borderRadius:20,padding:"32px 24px",maxWidth:320,width:"100%",textAlign:"center",border:`2px solid ${C.grn}44`,boxShadow:`0 20px 60px ${C.grn}33`}}>
             <div style={{fontSize:52,marginBottom:10}}>🎉</div>
             <div style={{fontSize:20,fontWeight:900,color:C.grn,marginBottom:8}}>{t.refFelicitations||"Félicitations !"}</div>
             <div style={{fontSize:14,color:C.mut,lineHeight:1.6,marginBottom:20}}>
@@ -14729,7 +14729,7 @@ function ParrainageSection() {
       )}
       {showReferrerPopup && (
         <div style={{position:"fixed",inset:0,zIndex:999,background:"rgba(23,16,58,.65)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:C.card,borderRadius:24,padding:"32px 24px",maxWidth:320,width:"100%",textAlign:"center",border:`2px solid ${C.vio}44`,boxShadow:`0 20px 60px ${C.vio}33`}}>
+          <div style={{background:C.card,borderRadius:20,padding:"32px 24px",maxWidth:320,width:"100%",textAlign:"center",border:`2px solid ${C.vio}44`,boxShadow:`0 20px 60px ${C.vio}33`}}>
             <div style={{fontSize:52,marginBottom:10}}>🎁</div>
             <div style={{fontSize:20,fontWeight:900,color:C.vio,marginBottom:8}}>{t.refBonneNouvelle||"Bonne nouvelle !"}</div>
             <div style={{fontSize:14,color:C.mut,lineHeight:1.6,marginBottom:20}}>
@@ -14917,7 +14917,7 @@ function ParrainageSection() {
       {/* ── Modale démo ─────────────────────────────────────────────────── */}
       {showDemo && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:C.card,borderRadius:18,padding:26,maxWidth:300,width:"100%",textAlign:"center",border:`1.5px solid ${C.bor}`}}>
+          <div style={{background:C.card,borderRadius:20,padding:26,maxWidth:300,width:"100%",textAlign:"center",border:`1.5px solid ${C.bor}`}}>
             {demoStep===1 ? (<>
               <div style={{fontSize:36,marginBottom:10}}>📨</div>
               <div style={{fontSize:15,fontWeight:800,marginBottom:6}}>{t.refDemoValidatingTitle||"Validation en cours…"}</div>
@@ -16899,7 +16899,7 @@ function MessagingTab(){
       {/* Modale confirmation suppression conversation (locale à l'utilisateur) */}
       {deleteConvKey && (
         <div onClick={()=>setDeleteConvKey(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:16,padding:20,maxWidth:340,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,padding:20,maxWidth:340,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
             <div style={{fontSize:15,fontWeight:900,color:C.txt,marginBottom:8}}>{t.msgDeleteConvConfirmTitle||"Supprimer cette conversation ?"}</div>
             <div style={{fontSize:13,color:C.mut,lineHeight:1.5,marginBottom:18}}>{t.msgDeleteConvConfirmBody||"Cette conversation sera supprimée uniquement de ta liste. Elle restera visible pour les autres participants."}</div>
             <div style={{display:"flex",gap:10}}>
@@ -17543,7 +17543,7 @@ function ContactsTab({readOnly,addOnly,prem: premProp}) {
       {/* Confirmation suppression */}
       {confirmDel && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:C.card,borderRadius:16,padding:24,maxWidth:320,width:"100%",textAlign:"center",border:`1.5px solid ${C.bor}`,boxShadow:"0 12px 40px rgba(0,0,0,.3)"}}>
+          <div style={{background:C.card,borderRadius:20,padding:24,maxWidth:320,width:"100%",textAlign:"center",border:`1.5px solid ${C.bor}`,boxShadow:"0 12px 40px rgba(0,0,0,.3)"}}>
             <div style={{fontSize:36,marginBottom:10}}>🗑️</div>
             <div style={{fontSize:15,fontWeight:800,marginBottom:6}}>{t.vaultConfirmDel||"Supprimer ce contact ?"}</div>
             <div style={{fontSize:13,color:C.mut,marginBottom:4}}><strong style={{color:C.txt}}>{confirmDel.name}</strong></div>
@@ -18737,7 +18737,7 @@ function VaultTab() {
         )}
         {confirmDel && (
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-            <div style={{background:C.card,borderRadius:16,padding:24,maxWidth:320,width:"100%",textAlign:"center",border:`1.5px solid ${C.bor}`}}>
+            <div style={{background:C.card,borderRadius:20,padding:24,maxWidth:320,width:"100%",textAlign:"center",border:`1.5px solid ${C.bor}`}}>
               <div style={{fontSize:32,marginBottom:10}}>🗑️</div>
               <div style={{fontSize:15,fontWeight:800,marginBottom:8}}>{t.vaultConfirmDel||"Supprimer ce document ?"}</div>
               <div style={{display:"flex",gap:10,marginTop:18}}>
@@ -19003,7 +19003,7 @@ function VaultTab() {
       {/* Confirm delete modal (main list) */}
       {confirmDel && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div style={{background:C.card,borderRadius:16,padding:24,maxWidth:320,width:"100%",textAlign:"center",border:`1.5px solid ${C.bor}`}}>
+          <div style={{background:C.card,borderRadius:20,padding:24,maxWidth:320,width:"100%",textAlign:"center",border:`1.5px solid ${C.bor}`}}>
             <div style={{fontSize:32,marginBottom:10}}>🗑️</div>
             <div style={{fontSize:15,fontWeight:800,marginBottom:8}}>{t.vaultConfirmDel||"Supprimer ce document ?"}</div>
             <div style={{display:"flex",gap:10,marginTop:18}}>
