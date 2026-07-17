@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, createContext, useContext, Fragment } from "react";
+import twemoji from "twemoji";
 import iconFamily        from "./assets/tab_family.png";
 import iconObservers     from "./assets/tab_observers.png";
 import iconSpecialDates  from "./assets/tab_special_dates.png";
@@ -4975,7 +4976,7 @@ export default function App() {
         {/* Right controls: palette → 🏆 lots → ☰ */}
         <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
           <button onClick={()=>{cycleTheme();setSummerActive(false);setRgActive(false);setWcActive(false);setVideoActive(false);}} title={themeMode==="palette"?"→ Clair":themeMode==="clair"?"→ Sombre":"→ Palette"} style={{height:36,padding:"0 14px",background:`linear-gradient(${themeMode==="palette"&&!summerActive&&!rgActive&&!wcActive?`${C.vio}18`:C.card}, ${themeMode==="palette"&&!summerActive&&!rgActive&&!wcActive?`${C.vio}18`:C.card}), rgba(255,255,255,.5)`,border:`1.5px solid ${themeMode==="palette"&&!summerActive&&!rgActive&&!wcActive?C.vio:C.bor}`,color:themeMode==="palette"&&!summerActive&&!rgActive&&!wcActive?C.vio:C.txt,fontSize:15,fontWeight:700,flexShrink:0,borderRadius:20,display:"flex",alignItems:"center",cursor:"pointer"}}>
-            {themeMode==="sombre"?"🌙":themeMode==="clair"?"☀️":"🎨"}
+            <Emoji size="1.1em">{themeMode==="sombre"?"🌙":themeMode==="clair"?"☀️":"🎨"}</Emoji>
           </button>
           {/* ── Bouton lots gagnés ──────────────────────────────────────── */}
           {(()=>{
@@ -5000,7 +5001,7 @@ export default function App() {
                     border:`1.5px solid ${showPrizesMenu||hasActivatable?C.yel:C.bor}`,
                     color:showPrizesMenu||hasActivatable?C.yel:C.mut,
                     fontSize:16,fontWeight:700,borderRadius:20,display:"flex",alignItems:"center",gap:4,cursor:"pointer",transition:"all .2s"}}>
-                  🏆
+                  <Emoji size="1.1em">🏆</Emoji>
                   {hasActivatable && <span style={{width:7,height:7,borderRadius:"50%",background:C.yel,flexShrink:0}} />}
                 </button>
                 {showPrizesMenu && (
@@ -5363,7 +5364,7 @@ export default function App() {
         <div style={{flexShrink:0,background:headerBG,borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:"0 1px 6px rgba(0,0,0,.05)",padding:"6px 6px"}}>
           {TABS.map((tb,i) => (
             <button key={i} onClick={()=>{ switchTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,margin:"0 2px",padding:"8px 2px",background:tab===i&&!menuTab?C.card:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,border:`1.5px solid ${tab===i&&!menuTab?`${C.vio}55`:"transparent"}`,borderRadius:14,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",boxShadow:tab===i&&!menuTab?"0 2px 8px rgba(0,0,0,.1)":"none",transition:"all .2s cubic-bezier(.16,1,.3,1)"}}>
-              <span style={{lineHeight:1,display:"inline-block",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}>{tb.icon}</span>
+              <span style={{lineHeight:1,display:"inline-block",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}><Emoji size="1.15em">{tb.icon}</Emoji></span>
               {tb.badge>0 && !tb.wobbleOnly && <span style={{position:"absolute",top:2,right:"8%",minWidth:15,height:15,padding:"0 3px",borderRadius:"50%",background:C.red,color:"#fff",fontSize:9,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",border:`2px solid ${C.card}`,boxSizing:"content-box"}}>{tb.badge}</span>}
             </button>
           ))}
@@ -6964,6 +6965,39 @@ function NotifTab({prem: premProp}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONFIG TAB
 // ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── EMOJI CROSS-PLATEFORME (Twemoji) ─────────────────────────────────────────
+// 🔧 Direction "moderne mais douce" (branche staging) : les emoji natifs
+// rendent différemment selon l'OS (Windows/Android/iOS ont chacune leur
+// propre police d'emoji) — Twemoji fige le même rendu (image SVG) partout,
+// et corrige au passage un bug réel : `color:"#fff"` sur un emoji natif ne
+// fait jamais rien (un emoji est une image multicolore, pas un glyphe texte
+// qui respecte le CSS `color`) — voir le bouton d'appel "urgence" dans
+// ContactsTab, qui essayait ça sans effet. Avec `invert`, un twemoji peut
+// enfin être rendu blanc pour de vrai (filter CSS, marche sur une image).
+// Portée de cette 1ère passe : icônes les plus visibles/répétées (barre
+// d'onglets, boutons du header, bouton d'appel urgence) — pas une conversion
+// exhaustive des emoji dans les 18k lignes du fichier.
+const TWEMOJI_CDN = "https://cdn.jsdelivr.net/npm/twemoji@14.0.2/assets/svg/";
+function Emoji({children, size, invert=false, style}) {
+  if (typeof children !== "string" || !children) return children;
+  const cp = twemoji.convert.toCodePoint(children);
+  return (
+    <img
+      src={`${TWEMOJI_CDN}${cp}.svg`}
+      alt={children}
+      draggable={false}
+      style={{
+        height: size || "1em",
+        width: size || "1em",
+        display: "inline-block",
+        verticalAlign: "-0.15em",
+        filter: invert ? "brightness(0) invert(1)" : undefined,
+        ...style,
+      }}
+    />
+  );
+}
 
 // ─── AVATARS ──────────────────────────────────────────────────────────────────
 const PARENT_AVATARS = ["👩","👨","👩‍🦱","👨‍🦱","👩‍🦰","👨‍🦰","👩‍🦳","👨‍🦳","👩‍🦲","👨‍🦲","🧔","👱‍♀️","👱","🧑","👮‍♀️","👮","👩‍⚕️","👨‍⚕️","👩‍🏫","👨‍🏫","🧕","🧑‍🦱","🧑‍🦰","🧑‍🦳"];
@@ -17518,7 +17552,7 @@ function ContactsTab({readOnly,addOnly,prem: premProp}) {
                 <div style={{display:"flex",gap:5,flexShrink:0}}>
                   {contact.phone && (
                     <a href={`tel:${contact.phone.replace(/\s/g,"")}`} style={{display:"flex",alignItems:"center",justifyContent:"center",width:contact.emergency?38:32,height:contact.emergency?38:32,borderRadius:10,background:contact.emergency?C.red:`${C.grn}22`,border:contact.emergency?"none":`1.5px solid ${C.grn}44`,textDecoration:"none",fontSize:14}}>
-                      {contact.emergency?<span style={{color:"#fff",fontWeight:900,fontSize:18}}>📞</span>:"📞"}
+                      {contact.emergency?<Emoji size="1.1em" invert>📞</Emoji>:<Emoji>📞</Emoji>}
                     </a>
                   )}
                   {canEdit && !contact.auto && prem && (
