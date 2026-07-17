@@ -6978,7 +6978,12 @@ function NotifTab({prem: premProp}) {
 // Portée de cette 1ère passe : icônes les plus visibles/répétées (barre
 // d'onglets, boutons du header, bouton d'appel urgence) — pas une conversion
 // exhaustive des emoji dans les 18k lignes du fichier.
-const TWEMOJI_CDN = "https://cdn.jsdelivr.net/npm/twemoji@14.0.2/assets/svg/";
+// 🔧 Le paquet npm "twemoji" (v14+) ne contient plus que le JS de parsing —
+// Twitter a retiré les images SVG du dépôt principal (archivé depuis). On
+// pointe vers jdecked/twemoji, le fork communautaire activement maintenu qui
+// continue de publier les assets, épinglé à une version précise (pas
+// "@latest") pour ne pas revivre ce même genre de rupture silencieuse.
+const TWEMOJI_CDN = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@17.0.3/assets/svg/";
 function Emoji({children, size, invert=false, style}) {
   if (typeof children !== "string" || !children) return children;
   const cp = twemoji.convert.toCodePoint(children);
