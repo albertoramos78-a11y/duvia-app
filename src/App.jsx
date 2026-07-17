@@ -9094,7 +9094,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
 
         // ── Carte "En attente" ─────────────────────────────────────────────
         if(p.inviteStatus==="pending") return (
-          <div key={i} className="card" style={{marginBottom:12,borderColor:p.color,borderStyle:"dashed",position:"relative"}}>
+          <div key={i} className="card" style={{marginBottom:22,borderColor:p.color,borderStyle:"dashed",position:"relative"}}>
             <div style={{position:"absolute",top:0,left:16,transform:"translateY(-50%)"}}>
               <span style={{fontSize:12,fontWeight:900,background:p.color,color:"#fff",border:`1px solid ${p.color}`,padding:"2.4px 9.6px",borderRadius:9.6,letterSpacing:".04em",textTransform:"uppercase"}}>{i===effectiveCreatorIdx(cfg.parents)?t.creatorLabel:t.guestLabel}</span>
             </div>
@@ -9157,7 +9157,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
         );
 
         return (
-        <div key={i} className="card" style={{marginBottom:12,borderColor:pErr?C.red:p.color,position:"relative"}}>
+        <div key={i} className="card" style={{marginBottom:22,borderColor:pErr?C.red:p.color,position:"relative"}}>
           {/* Badges "créateur/invité" + "compte connecté" intégrés à la
               bordure de la carte, façon légende de fieldset, au lieu de
               flotter dans le contenu. */}
