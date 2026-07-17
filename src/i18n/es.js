@@ -61,7 +61,7 @@ const es = {
     pickupTime:"Hora recogida",dropoffTime:"Hora entrega",saveDay:"Guardar",cancel:"Cancelar",
     inlineTitle:"Cambiar custodia:",fullEdit:"✎ Edición completa",
     noHistory:"Sin cambios",historyTitle:"Historial",
-    noExpenses:"Sin gastos",addExpense:"+ Añadir gasto",cancelAdd:"× Cancelar",
+    noExpenses:"Sin gastos",loading:"Cargando…",addExpense:"+ Añadir gasto",cancelAdd:"× Cancelar",
     newExpense:"Nuevo gasto",description:"Descripción",amount:"Importe (€)",paidBy:"Pagado por",
     category:"Categoría",date:"Fecha",total:"Total",even:"Equilibrado",
     noNotifs:"Sin notificaciones",markRead:"Marcar todo como leído",newBadge:"Nuevo",

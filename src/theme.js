@@ -14,13 +14,21 @@ export function isSummerPeriod() { const n=new Date(); return n>=SUMMER_START &&
 // ─── THÈME JEU VIDÉO ──────────────────────────────────────────────────────────
 export const VIDEO = { bg:"#07071a",card:"#0f0f2a",sur:"#181835",bor:"#5b21b6",txt:"#ede9fe",mut:"#7c6fa0",inp:"#0b0b22",vio:"#8b5cf6",blu:"#06b6d4",grn:"#22c55e",yel:"#fbbf24",red:"#f43f5e",ora:"#fb923c",pin:"#ec4899",_video:true };
 // ─── THÈME LICORNE ────────────────────────────────────────────────────────────
-export const LICORNE = { bg:"#fdf2fb",card:"#ffffff",sur:"#fce7f8",bor:"#f0abfc",txt:"#581c62",mut:"#a855c7",inp:"#ffffff",vio:"#c026d3",blu:"#818cf8",grn:"#34d399",yel:"#fbbf24",red:"#fb7185",ora:"#fb923c",pin:"#f472b6",_licorne:true };
+// 🔧 bor et mut assombris (Impeccable critique P2) : contraste vérifié (WCAG)
+// contre card #ffffff — bor #f0abfc→#d466df (1.76:1→3.10:1, seuil non-texte
+// 3:1) ; mut #a855c7→#8a3aa8 (4.38:1→6.46:1, seuil texte 4.5:1). L'original
+// rendait les bordures de carte quasi invisibles et le texte atténué à la
+// limite de l'illisible — un vrai souci puisque Licorne est un thème gagnable/
+// offrable via le menu récompenses du header, pas un réglage caché.
+export const LICORNE = { bg:"#fdf2fb",card:"#ffffff",sur:"#fce7f8",bor:"#d466df",txt:"#581c62",mut:"#8a3aa8",inp:"#ffffff",vio:"#c026d3",blu:"#818cf8",grn:"#34d399",yel:"#fbbf24",red:"#fb7185",ora:"#fb923c",pin:"#f472b6",_licorne:true };
 // ─── BRAND THEME — Thème principal (palette extraite du gradient bleu→rose) ──
-// 🔧 grn assombri (#2DD4A8 → #0C9A73) : l'original, un vert menthe clair, se
-// lisait mal en texte sur les fonds clairs de ce thème (card blanc, bulles à
-// fond blanc translucide) — même souci de contraste que DARK n'a pas puisque
-// son fond, lui, est sombre.
-export const BRAND = { bg:"#F2EDFF",card:"#FFFFFF",sur:"#EAE3FF",bor:"#C6B8EE",txt:"#17103A",mut:"#7269A8",inp:"#FFFFFF",vio:"#7B7CF5",blu:"#5B98F2",grn:"#0C9A73",yel:"#F5B540",red:"#FF4692",ora:"#FF7B60",pin:"#FF6CB8",_brand:true };
+// 🔧 grn assombri (#2DD4A8 → #0C9A73) et red assombri (#FF4692 → #D6236E,
+// Impeccable critique P1) : les deux originaux étaient calibrés pour un fond
+// sombre (mêmes valeurs que DARK) et retombaient sous le seuil de contraste
+// AA (4.5:1) en texte sur les fonds clairs de CE thème (card blanc, bulles à
+// fond blanc translucide) — le plus visible sur les messages d'erreur de
+// LoginScreen, qui rend toujours en BRAND quel que soit le thème du compte.
+export const BRAND = { bg:"#F2EDFF",card:"#FFFFFF",sur:"#EAE3FF",bor:"#C6B8EE",txt:"#17103A",mut:"#7269A8",inp:"#FFFFFF",vio:"#7B7CF5",blu:"#5B98F2",grn:"#0C9A73",yel:"#F5B540",red:"#D6236E",ora:"#FF7B60",pin:"#FF6CB8",_brand:true };
 // Dégradé signature de la marque (bleu→rose) — une seule source pour tous les écrans qui l'affichent en fond (login/consentement/header).
 export const BRAND_GRADIENT = "linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)";
 export const PCOLS = ["#f97316","#06b6d4","#10b981","#f59e0b","#ec4899","#ef4444"];
