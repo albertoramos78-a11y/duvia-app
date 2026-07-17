@@ -9094,9 +9094,11 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
 
         // ── Carte "En attente" ─────────────────────────────────────────────
         if(p.inviteStatus==="pending") return (
-          <div key={i} className="card" style={{marginBottom:12,borderColor:p.color,borderStyle:"dashed"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <span style={{fontSize:10,fontWeight:900,background:`${p.color}18`,color:p.color,border:`1px solid ${p.color}44`,padding:"2px 8px",borderRadius:8,letterSpacing:".04em",textTransform:"uppercase"}}>{i===effectiveCreatorIdx(cfg.parents)?t.creatorLabel:t.guestLabel}</span>
+          <div key={i} className="card" style={{marginBottom:12,borderColor:p.color,borderStyle:"dashed",position:"relative"}}>
+            <div style={{position:"absolute",top:0,left:16,transform:"translateY(-50%)"}}>
+              <span style={{fontSize:12,fontWeight:900,background:p.color,color:"#fff",border:`1px solid ${p.color}`,padding:"2.4px 9.6px",borderRadius:9.6,letterSpacing:".04em",textTransform:"uppercase"}}>{i===effectiveCreatorIdx(cfg.parents)?t.creatorLabel:t.guestLabel}</span>
+            </div>
+            <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",marginBottom:12}}>
               <button onClick={()=>setCfg(c=>({...c,parents:c.parents.filter((_,j)=>j!==i)}))} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.remove}</button>
             </div>
             <div style={{display:"flex",gap:12,alignItems:"center",padding:"8px 0 14px"}}>
