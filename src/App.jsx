@@ -2682,7 +2682,7 @@ function useApp() { return useContext(AppContext); }
 // que l'utilisateur n'a pas cliqué dessus (jamais d'ouverture automatique).
 // Persisté via localStorage par clé+utilisateur.
 // ═══════════════════════════════════════════════════════════════════════════════
-function InfoBubble({C,tipKey,title,children}) {
+function InfoBubble({C,tipKey,title,children,align="right"}) {
   const {t} = useApp();
   const [seen, setSeen] = useState(() => {
     try { return !!window.localStorage.getItem(tipKey); } catch { return false; }
@@ -2708,8 +2708,8 @@ function InfoBubble({C,tipKey,title,children}) {
         👋
       </button>
       {open && (
-        <div onClick={close} style={{position:"absolute",top:36,right:0,zIndex:50,cursor:"pointer",animation:"fadeInDown .35s ease",width:230}}>
-          <div style={{position:"absolute",top:-7,right:8,width:0,height:0,borderLeft:"8px solid transparent",borderRight:"8px solid transparent",borderBottom:`8px solid ${C.vio}`}} />
+        <div onClick={close} style={{position:"absolute",top:36,...(align==="left"?{left:0}:{right:0}),zIndex:50,cursor:"pointer",animation:"fadeInDown .35s ease",width:230}}>
+          <div style={{position:"absolute",top:-7,...(align==="left"?{left:8}:{right:8}),width:0,height:0,borderLeft:"8px solid transparent",borderRight:"8px solid transparent",borderBottom:`8px solid ${C.vio}`}} />
           <div style={{background:C.vio,color:"#fff",borderRadius:14,padding:"12px 16px",boxShadow:"0 8px 28px rgba(0,0,0,.22)",position:"relative"}}>
             <div style={{fontSize:18,marginBottom:6,textAlign:"center"}}>👋</div>
             <div style={{fontSize:13,fontWeight:800,marginBottom:4,lineHeight:1.3,textAlign:"center"}}>
@@ -5313,7 +5313,7 @@ export default function App() {
               labelStyle={{fontSize:13,fontWeight:800,color:C.vio}}
             />
           </div>
-          <InfoBubble C={C} tipKey={`duvia_famtip_${user?.id||"x"}`} title={t.multiFamilyTitle||"Plusieurs familles"}>
+          <InfoBubble C={C} tipKey={`duvia_famtip_${user?.id||"x"}`} title={t.multiFamilyTitle||"Plusieurs familles"} align="left">
             {t.multiFamilyInfo||"Vous appartenez à plusieurs familles. Utilisez ce menu pour basculer de l'une à l'autre."}
           </InfoBubble>
         </div>
@@ -5336,11 +5336,12 @@ export default function App() {
                 {configStep===2 && <StepDatesInfoButton C={C} t={t} user={user} />}
                 {configStep===3 && <StepGardeInfoButton C={C} t={t} user={user} />}
               </div>
-              {/* Onglets étapes */}
-              <div style={{display:"flex"}}>
+              {/* Onglets étapes — même traitement "pastille arrondie" que la barre
+                  de navigation principale, au lieu du soulignement dur. */}
+              <div style={{display:"flex",padding:"6px 6px"}}>
               {STEPS.map((s,i)=>(
                 <button key={i} onClick={()=>setConfigStep(i)}
-                  style={{flex:1,padding:"8px 4px 7px",background:configStep===i?C.sur:"transparent",color:configStep===i?C.vio:C.mut,borderBottom:configStep===i?`2.5px solid ${C.vio}`:"2.5px solid transparent",borderRadius:0,fontSize:16,height:"auto",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,transition:"all .15s",cursor:"pointer"}}>
+                  style={{flex:1,margin:"0 2px",padding:"8px 4px 7px",background:configStep===i?C.card:"transparent",color:configStep===i?C.vio:C.mut,border:`1.5px solid ${configStep===i?`${C.vio}55`:"transparent"}`,borderRadius:14,fontSize:16,height:"auto",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,boxShadow:configStep===i?"0 2px 8px rgba(0,0,0,.1)":"none",transition:"all .2s cubic-bezier(.16,1,.3,1)",cursor:"pointer"}}>
                   <span style={{lineHeight:1,position:"relative",display:"flex",alignItems:"center",justifyContent:"center"}}>
                     <img src={s.i} alt="" style={{width:28,height:28,objectFit:"contain",display:"block",opacity:configStep===i?1:0.55,filter:configStep===i?"none":"grayscale(40%)",transition:"opacity .15s"}} />
                     {s.badge>0&&!s.wobbleOnly&&<span style={{position:"absolute",top:-4,right:-6,width:14,height:14,borderRadius:"50%",background:C.red,color:"#fff",fontSize:8,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{s.badge}</span>}
