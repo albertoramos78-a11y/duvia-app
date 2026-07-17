@@ -8991,7 +8991,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
       {/* ── Mes familles (multi-familles) — parents uniquement ── */}
       {!isObs && !isChild && (
       <>
-      <div className="sec">{t.myFamilies||"Mes familles"}</div>
+      <div className="sec">👪 {t.myFamilies||"Mes familles"}</div>
       <div style={{display:"flex",gap:12,height:80,marginBottom:16}}>
         <div style={{flex:2,minWidth:0,height:80}}>
           <FamilySyncCard />
@@ -9034,7 +9034,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
       )}
       {(isObs || isChild) && <FamilySyncCard />}
 
-      <div className="sec">{t.parents}</div>
+      <div className="sec">👨‍👩‍👧 {t.parents}</div>
       {cfg.parents.map((p,i)=>{
         if(p?.left) {
           // 🔧 Correctif : quand un parent quitte la famille, on affiche UNIQUEMENT
@@ -9085,7 +9085,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
         if(p.inviteStatus==="pending") return (
           <div key={i} className="card" style={{marginBottom:12,borderColor:p.color,borderStyle:"dashed"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <span style={{fontSize:11,fontWeight:800,color:p.color,textTransform:"uppercase",letterSpacing:".06em"}}>{i===effectiveCreatorIdx(cfg.parents)?t.creatorLabel:t.guestLabel}</span>
+              <span style={{fontSize:10,fontWeight:900,background:`${p.color}18`,color:p.color,border:`1px solid ${p.color}44`,padding:"2px 8px",borderRadius:8,letterSpacing:".04em",textTransform:"uppercase"}}>{i===effectiveCreatorIdx(cfg.parents)?t.creatorLabel:t.guestLabel}</span>
               <button onClick={()=>setCfg(c=>({...c,parents:c.parents.filter((_,j)=>j!==i)}))} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.remove}</button>
             </div>
             <div style={{display:"flex",gap:12,alignItems:"center",padding:"8px 0 14px"}}>
@@ -9148,7 +9148,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           {/* Header */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-start",gap:4}}>
-              <span style={{fontSize:11,fontWeight:800,color:p.color,textTransform:"uppercase",letterSpacing:".06em"}}>{i===effectiveCreatorIdx(cfg.parents)?t.creatorLabel:t.guestLabel}</span>
+              <span style={{fontSize:10,fontWeight:900,background:`${p.color}18`,color:p.color,border:`1px solid ${p.color}44`,padding:"2px 8px",borderRadius:8,letterSpacing:".04em",textTransform:"uppercase"}}>{i===effectiveCreatorIdx(cfg.parents)?t.creatorLabel:t.guestLabel}</span>
               {i===user?.parentIdx && (
                 <span style={{fontSize:9,fontWeight:900,background:`${C.grn}22`,color:C.grn,border:`1px solid ${C.grn}44`,padding:"2px 7px",borderRadius:8,letterSpacing:".04em"}}>
                   ✅ {t.accountConnected||"Compte connecté"}
@@ -9291,7 +9291,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
         return <button onClick={addParent} style={{width:"100%",height:44,padding:"0 16px",background:"transparent",color:C.ora,border:`1.5px dashed ${C.ora}`,marginBottom:14}}>{t.addParent}</button>;
       })()}
 
-      <div className="sec">{t.children}</div>
+      <div className="sec">🧒 {t.children}</div>
       {cfg.children.map((ch,i)=>{
         const cKey=`c${i}`; const cErr=touched[cKey]&&!ch.name.trim();
         const isLocked = i >= (perms?.maxChildren ?? 1); // enfant hors limite du plan
