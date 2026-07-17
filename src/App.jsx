@@ -9300,7 +9300,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
             {t.addParent}
           </button>;
         }
-        return <button onClick={addParent} style={{width:"100%",height:44,padding:"0 16px",background:"transparent",color:C.ora,border:`1.5px dashed ${C.ora}`,marginBottom:14}}>{t.addParent}</button>;
+        return <button onClick={addParent} style={{width:"100%",height:44,padding:"0 16px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:20,fontWeight:800,marginBottom:14,boxShadow:`0 4px 14px ${C.vio}33`}}>{t.addParent}</button>;
       })()}
 
       <div className="sec">🧒 {t.children}</div>
