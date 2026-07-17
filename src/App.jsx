@@ -5699,7 +5699,7 @@ function RgpdConsentScreen({C,t,lang,setLang,onAccept,onOpenLegal}) {
             <img src="/logo-nav.png" alt="Duvia" style={{height:28,objectFit:"contain"}} />
             <div style={{position:"relative"}}>
               <button onClick={()=>setShowLangMenu(v=>!v)} style={{height:32,padding:"0 10px",background:showLangMenu?`${C.vio}18`:C.card,border:`1.5px solid ${showLangMenu?C.vio:C.bor}`,color:showLangMenu?C.vio:C.txt,fontSize:12,fontWeight:700,borderRadius:8,display:"flex",alignItems:"center",gap:5,cursor:"pointer"}}>
-                <span>{foundLang.flag}</span>
+                <Emoji size="1em">{foundLang.flag}</Emoji>
                 <span style={{fontSize:11}}>{foundLang.name}</span>
                 <span style={{fontSize:8,opacity:.6}}>{showLangMenu?"▲":"▼"}</span>
               </button>
@@ -5709,7 +5709,7 @@ function RgpdConsentScreen({C,t,lang,setLang,onAccept,onOpenLegal}) {
                 <div style={{position:"absolute",top:"100%",right:0,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:16,minWidth:170,zIndex:300,boxShadow:"0 12px 40px rgba(0,0,0,.2)",overflow:"hidden",marginTop:4}}>
                   {Object.entries(LANGS).map(([k,v])=>(
                     <button key={k} onClick={()=>{setLang(k);setShowLangMenu(false);}} style={{width:"100%",padding:"0 14px",height:40,background:lang===k?`${C.vio}12`:"transparent",color:lang===k?C.vio:C.txt,textAlign:"left",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:12,fontWeight:lang===k?800:600,borderRadius:0,cursor:"pointer"}}>
-                      <span style={{fontSize:17,flexShrink:0}}>{v.flag}</span>
+                      <Emoji size="1.2em" style={{flexShrink:0}}>{v.flag}</Emoji>
                       <span style={{flex:1}}>{v.name}</span>
                       {lang===k && <span style={{color:C.vio,fontSize:13,fontWeight:900}}>✓</span>}
                     </button>
@@ -6563,7 +6563,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
           <div />{/* spacer */}
           <div style={{position:"relative"}}>
             <button onClick={()=>setShowLangMenu(v=>!v)} style={{height:36,padding:"0 12px",background:showLangMenu?`${C.vio}18`:C.card,border:`1.5px solid ${showLangMenu?C.vio:C.bor}`,color:showLangMenu?C.vio:C.txt,fontSize:13,fontWeight:700,borderRadius:8,display:"flex",alignItems:"center",gap:6,cursor:"pointer"}}>
-              <span>{foundLang.flag}</span>
+              <Emoji size="1em">{foundLang.flag}</Emoji>
               <span style={{fontSize:12}}>{foundLang.name}</span>
               <span style={{fontSize:9,opacity:.6}}>{showLangMenu?"▲":"▼"}</span>
             </button>
@@ -6574,7 +6574,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
                 </div>
                 {Object.entries(LANGS).map(([k,v])=>(
                   <button key={k} onClick={()=>{setLang(k);setShowLangMenu(false);}} style={{width:"100%",padding:"0 14px",height:44,background:lang===k?`${C.vio}12`:"transparent",color:lang===k?C.vio:C.txt,textAlign:"left",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:lang===k?800:600,borderRadius:0,cursor:"pointer"}}>
-                    <span style={{fontSize:20,flexShrink:0}}>{v.flag}</span>
+                    <Emoji size="1.4em" style={{flexShrink:0}}>{v.flag}</Emoji>
                     <span style={{flex:1}}>{v.name}</span>
                     {lang===k && <span style={{color:C.vio,fontSize:14,fontWeight:900}}>✓</span>}
                   </button>
@@ -7041,7 +7041,7 @@ function Avatar({emoji, color, size=40, onClick, selected=false}) {
     }}>
       {isPhoto
         ? <img src={emoji} alt="" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:"50%"}} />
-        : emoji}
+        : <Emoji size={`${size*0.5}px`}>{emoji}</Emoji>}
     </div>
   );
 }
@@ -7302,10 +7302,10 @@ function AvatarPicker({current, onSelect, pool, color}) {
             {pool.map((em,i)=>(
               <div key={i} onClick={()=>{onSelect(em);setOpen(false);}} style={{
                 width:40,height:40,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:24,cursor:"pointer",background:current===em?`${swatch}22`:"transparent",
+                cursor:"pointer",background:current===em?`${swatch}22`:"transparent",
                 border:`1.5px solid ${current===em?swatch:"transparent"}`,
-                transition:"all .1s",flexShrink:0,
-              }}>{em}</div>
+                transition:"all .1s",flexShrink:0,overflow:"hidden",
+              }}><Emoji size="22px">{em}</Emoji></div>
             ))}
             {/* Bouton galerie photo */}
             <div onClick={()=>!uploading && fileRef.current?.click()} style={{
@@ -7348,6 +7348,7 @@ function StepLang({lang,setLang}) {
             display:"flex",alignItems:"center",justifyContent:"center",gap:8,
             cursor:"pointer",transition:"all .15s"
           }}>
+            <Emoji size="1.2em">{v.flag}</Emoji>
             <span style={{fontSize:15,fontWeight:700,color:lang===k?C.vio:C.txt}}>{v.name}</span>
             {lang===k&&<span style={{color:C.vio,fontSize:16,fontWeight:900}}>✓</span>}
           </button>
@@ -8889,7 +8890,7 @@ function CountryBadge({country}) {
   if (!found) return null;
   return (
     <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:C.sur,borderRadius:10,marginTop:8}}>
-      <span style={{fontSize:22}}>{found.flag}</span>
+      <Emoji size="1.4em">{found.flag}</Emoji>
       <div>
         <div style={{fontWeight:800,fontSize:14,color:C.txt}}>{found.name}</div>
         <div style={{fontSize:11,color:C.mut}}>
@@ -9813,7 +9814,7 @@ function CountryDropdown({value, onChange}) {
       {open && <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:199}} />}
       <button onClick={()=>setOpen(v=>!v)}
         style={{width:"100%",height:44,padding:"0 13px",background:C.card,border:`1.5px solid ${open?C.vio:`${C.bor}77`}`,borderRadius:14,display:"flex",alignItems:"center",gap:10,fontSize:14,fontWeight:400,color:C.txt,cursor:"pointer",boxSizing:"border-box",boxShadow:open?`0 0 0 3px ${C.vio}20`:"inset 0 1px 2px rgba(0,0,0,.03)",transition:"border-color .2s, box-shadow .2s"}}>
-        <span style={{fontSize:18,flexShrink:0}}>{cur.flag}</span>
+        <Emoji size="1.2em">{cur.flag}</Emoji>
         <span style={{flex:1,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cur.name}</span>
         <span style={{fontSize:10,color:C.mut,transition:"transform .2s",display:"inline-block",transform:open?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>▼</span>
       </button>
@@ -9824,7 +9825,7 @@ function CountryDropdown({value, onChange}) {
             return (
               <button key={c.code} onClick={()=>{onChange(c.code);setOpen(false);}}
                 style={{width:"100%",padding:"0 16px",height:44,background:isActive?`${C.vio}10`:"transparent",color:isActive?C.vio:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:i<sorted.length-1?`1px solid ${C.bor}`:"none",fontSize:14,fontWeight:isActive?700:400,borderRadius:0,cursor:"pointer",boxSizing:"border-box"}}>
-                <span style={{fontSize:18,flexShrink:0}}>{c.flag}</span>
+                <Emoji size="1.2em">{c.flag}</Emoji>
                 <span style={{flex:1,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span>
                 {isActive && <span style={{fontSize:14,color:C.vio,flexShrink:0}}>✓</span>}
               </button>
