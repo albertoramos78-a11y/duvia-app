@@ -9724,9 +9724,20 @@ function NatHolPicker() {
 }
 
 // ─── ZONE DROPDOWN ────────────────────────────────────────────────────────────
-function ZoneDropdown({chCountry, chCurSub, chSubs, chSetZone, noZoneLabel, locked=false}) {
+function ZoneDropdown({chCountry, chCurSub, chSubs, chSetZone, noZoneLabel, locked=false, height=44}) {
   const {C, onUpgrade} = useApp();
   const [open, setOpen] = useState(false);
+  const btnRef = useRef(null);
+  // 🔧 Fait remonter le champ sous le bandeau fixe à l'ouverture, pour que le
+  // menu déroulant (qui s'affiche en dessous) ait toute la place visible au
+  // lieu d'être coupé en bas de l'écran.
+  function toggleOpen() {
+    setOpen(v => {
+      const next = !v;
+      if (next) requestAnimationFrame(() => btnRef.current?.scrollIntoView({behavior:"smooth", block:"start"}));
+      return next;
+    });
+  }
   const isFR = chCountry === "FR";
   const frZoneOptions = isFR ? ["A","B","C"].map(zl => ({
     zl,
@@ -9756,8 +9767,8 @@ function ZoneDropdown({chCountry, chCurSub, chSubs, chSetZone, noZoneLabel, lock
   return (
     <div style={{position:"relative"}}>
       {open && <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:199}} />}
-      <button onClick={()=>setOpen(v=>!v)}
-        style={{width:"100%",height:44,padding:"0 13px",background:C.card,border:`1.5px solid ${open?C.vio:C.bor}`,borderRadius:10,display:"flex",alignItems:"center",gap:10,fontSize:14,fontWeight:400,color:C.txt,cursor:"pointer",boxSizing:"border-box"}}>
+      <button ref={btnRef} onClick={toggleOpen}
+        style={{width:"100%",height,padding:"0 13px",background:C.card,border:`1.5px solid ${open?C.vio:`${C.bor}77`}`,borderRadius:14,display:"flex",alignItems:"center",gap:10,fontSize:14,fontWeight:400,color:C.txt,cursor:"pointer",boxSizing:"border-box",boxShadow:open?`0 0 0 3px ${C.vio}20`:"inset 0 1px 2px rgba(0,0,0,.03)",transition:"border-color .2s, box-shadow .2s"}}>
         <span style={{flex:1,textAlign:"left",color:curValue?C.txt:C.mut,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{curLabel}</span>
         <span style={{fontSize:10,color:C.mut,transition:"transform .2s",display:"inline-block",transform:open?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>▼</span>
       </button>
@@ -9795,12 +9806,20 @@ function Toggle({checked, onChange, disabled}) {
 function CustomSelect({value, onChange, options, style, locked, height=44, labelStyle}) {
   const {C} = useApp();
   const [open, setOpen] = useState(false);
+  const btnRef = useRef(null);
+  function toggleOpen() {
+    setOpen(v => {
+      const next = !v;
+      if (next) requestAnimationFrame(() => btnRef.current?.scrollIntoView({behavior:"smooth", block:"start"}));
+      return next;
+    });
+  }
   const cur = options.find(o=>String(o.value)===String(value)) || options[0];
 
   return (
     <div style={{position:"relative",...style}}>
       {open && <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:199}} />}
-      <button onClick={()=>setOpen(v=>!v)}
+      <button ref={btnRef} onClick={locked?undefined:toggleOpen}
         style={{width:"100%",height,padding:"0 13px",background:locked?C.sur:C.card,border:`1.5px solid ${open?C.vio:`${C.bor}77`}`,borderRadius:14,display:"flex",alignItems:"center",gap:10,fontSize:14,fontWeight:400,color:locked?C.mut:C.txt,cursor:locked?"default":"pointer",boxSizing:"border-box",boxShadow:open?`0 0 0 3px ${C.vio}20`:"inset 0 1px 2px rgba(0,0,0,.03)",transition:"border-color .2s, box-shadow .2s"}}>
         {cur?.icon && <span style={{fontSize:18,flexShrink:0}}>{cur.icon}</span>}
         <span style={{flex:1,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",...labelStyle}}>{cur?.label||""}</span>
@@ -9825,16 +9844,24 @@ function CustomSelect({value, onChange, options, style, locked, height=44, label
   );
 }
 
-function CountryDropdown({value, onChange}) {
+function CountryDropdown({value, onChange, height=44}) {
   const {C} = useApp();
   const [open, setOpen] = useState(false);
+  const btnRef = useRef(null);
+  function toggleOpen() {
+    setOpen(v => {
+      const next = !v;
+      if (next) requestAnimationFrame(() => btnRef.current?.scrollIntoView({behavior:"smooth", block:"start"}));
+      return next;
+    });
+  }
   const sorted = [...COUNTRIES].sort((a,b)=>a.name.localeCompare(b.name,"fr",{sensitivity:"base"}));
   const cur = COUNTRIES.find(c=>c.code===value) || COUNTRIES[0];
   return (
     <div style={{position:"relative"}}>
       {open && <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:199}} />}
-      <button onClick={()=>setOpen(v=>!v)}
-        style={{width:"100%",height:44,padding:"0 13px",background:C.card,border:`1.5px solid ${open?C.vio:`${C.bor}77`}`,borderRadius:14,display:"flex",alignItems:"center",gap:10,fontSize:14,fontWeight:400,color:C.txt,cursor:"pointer",boxSizing:"border-box",boxShadow:open?`0 0 0 3px ${C.vio}20`:"inset 0 1px 2px rgba(0,0,0,.03)",transition:"border-color .2s, box-shadow .2s"}}>
+      <button ref={btnRef} onClick={toggleOpen}
+        style={{width:"100%",height,padding:"0 13px",background:C.card,border:`1.5px solid ${open?C.vio:`${C.bor}77`}`,borderRadius:14,display:"flex",alignItems:"center",gap:10,fontSize:14,fontWeight:400,color:C.txt,cursor:"pointer",boxSizing:"border-box",boxShadow:open?`0 0 0 3px ${C.vio}20`:"inset 0 1px 2px rgba(0,0,0,.03)",transition:"border-color .2s, box-shadow .2s"}}>
         <Emoji size="1.2em">{cur.flag}</Emoji>
         <span style={{flex:1,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cur.name}</span>
         <span style={{fontSize:10,color:C.mut,transition:"transform .2s",display:"inline-block",transform:open?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>▼</span>
@@ -9860,7 +9887,7 @@ function CountryDropdown({value, onChange}) {
 
 // ─── STEP 2: SPECIAL DATES ────────────────────────────────────────────────────
 function StepDates() {
-  const {C,t,cfg,setCfg,prem,perms,onUpgrade,apiData,apiLoading} = useApp();
+  const {C,t,cfg,setCfg,prem,perms,onUpgrade,apiData,apiLoading,confirmAsync} = useApp();
   const sd=cfg.specialDates;
   const [openHol,setOpenHol]=useState(null);
   const [collapsedDates,setCollapsedDates]=useState(()=>new Set((cfg.specialDates?.custom||[]).map((_,i)=>i)));
@@ -10017,7 +10044,7 @@ function StepDates() {
                 {/* Pays */}
                 <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>{t.country}</div>
                 <div style={{marginBottom:12}}>
-                  <CountryDropdown value={chCountry} onChange={v=>{
+                  <CountryDropdown height={IH} value={chCountry} onChange={v=>{
                     setCfg(c=>({...c,country:v,activeNatHols:null,zone:"",subdivisionCode:""}));
                     if(children[0]) setChildCountry(children[0].id, v);
                   }} />
@@ -10027,7 +10054,7 @@ function StepDates() {
                 <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>{t.zone} — {t.schoolYear} {syr}/{syr+1}</div>
                 <div style={{marginBottom:12}}>
                   {chSubs.length > 0 ? (
-                    <ZoneDropdown chCountry={chCountry} chCurSub={chCurSub} chSubs={chSubs} chSetZone={chSetZone} noZoneLabel={t.noZone} locked={!perms?.zoneChoice} />
+                    <ZoneDropdown height={IH} chCountry={chCountry} chCurSub={chCurSub} chSubs={chSubs} chSetZone={chSetZone} noZoneLabel={t.noZone} locked={!perms?.zoneChoice} />
                   ) : (
                     <div style={{fontSize:12,color:C.mut,fontStyle:"italic"}}>{t.noZone} — {chCountry}</div>
                   )}
@@ -10150,13 +10177,13 @@ function StepDates() {
                     <div style={{fontSize:12,color:C.mut,marginBottom:10,lineHeight:1.5}}>{t.childBirthdaysInfo}</div>
                     <div style={{display:"flex",gap:10,alignItems:"flex-end"}}>
                       <div style={{...fld,flex:1,minWidth:0}}><span style={lbl}>{t.evenYears}</span>
-                        <CustomSelect value={chEvenIdx} onChange={v=>updSD("evenParentIdx",+v)} options={[
+                        <CustomSelect height={IH} value={chEvenIdx} onChange={v=>updSD("evenParentIdx",+v)} options={[
                           {value:-1,label:t.allParents},
                           ...cfg.parents.map((p,pi)=>({value:pi,label:p.name||`P${pi+1}`}))
                         ]} />
                       </div>
                       <div style={{...fld,flex:1,minWidth:0}}><span style={lbl}>{t.oddYears}</span>
-                        <CustomSelect value={chOddIdx} onChange={v=>updSD("oddParentIdx",+v)} options={[
+                        <CustomSelect height={IH} value={chOddIdx} onChange={v=>updSD("oddParentIdx",+v)} options={[
                           {value:-1,label:t.allParents},
                           ...cfg.parents.map((p,pi)=>({value:pi,label:p.name||`P${pi+1}`}))
                         ]} />
@@ -10257,7 +10284,7 @@ function StepDates() {
               {/* Pays */}
               <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>{t.country}</div>
               <div style={{marginBottom:12}}>
-                <CountryDropdown value={chCountry} onChange={v=>{
+                <CountryDropdown height={IH} value={chCountry} onChange={v=>{
                   if(multiChild) setChildCountry(chId, v);
                   else setCfg(c=>({...c,country:v,activeNatHols:null,zone:"",subdivisionCode:""}));
                 }} />
@@ -10268,6 +10295,7 @@ function StepDates() {
               <div style={{marginBottom:12}}>
                 {chSubs.length > 0 ? (
                   <ZoneDropdown
+                    height={IH}
                     chCountry={chCountry}
                     chCurSub={chCurSub}
                     chSubs={chSubs}
@@ -10394,14 +10422,14 @@ function StepDates() {
                 <div style={{display:"flex",gap:10,alignItems:"flex-end"}}>
                   <div style={{...fld,flex:1,minWidth:0}}>
                     <span style={lbl}>{t.evenYears}</span>
-                    <CustomSelect value={chEvenIdx} onChange={v=>setChildCB(chId,"evenParentIdx",+v)} options={[
+                    <CustomSelect height={IH} value={chEvenIdx} onChange={v=>setChildCB(chId,"evenParentIdx",+v)} options={[
                       {value:-1,label:t.allParents},
                       ...cfg.parents.map((p,pi)=>({value:pi,label:p.name||`P${pi+1}`}))
                     ]} />
                   </div>
                   <div style={{...fld,flex:1,minWidth:0}}>
                     <span style={lbl}>{t.oddYears}</span>
-                    <CustomSelect value={chOddIdx} onChange={v=>setChildCB(chId,"oddParentIdx",+v)} options={[
+                    <CustomSelect height={IH} value={chOddIdx} onChange={v=>setChildCB(chId,"oddParentIdx",+v)} options={[
                       {value:-1,label:t.allParents},
                       ...cfg.parents.map((p,pi)=>({value:pi,label:p.name||`P${pi+1}`}))
                     ]} />
@@ -10459,7 +10487,7 @@ function StepDates() {
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
                   <span style={{color:C.vio,fontSize:10}}>{isCollapsed?"▼":"▲"}</span>
-                  <button onClick={e=>{e.stopPropagation();if(!prem)return;setCfg(prev=>{const arr=[...(prev.specialDates?.custom||[])];arr.splice(i,1);return {...prev,specialDates:{...prev.specialDates,custom:arr}};});}} style={{width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",padding:0,background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:8,flexShrink:0}}>✕</button>
+                  <button onClick={async e=>{e.stopPropagation();if(!prem)return;if(!(await confirmAsync(t.cdDeleteConfirm||"Supprimer cette date spéciale ?"))) return;setCfg(prev=>{const arr=[...(prev.specialDates?.custom||[])];arr.splice(i,1);return {...prev,specialDates:{...prev.specialDates,custom:arr}};});}} style={{width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",padding:0,background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:8,flexShrink:0}}>✕</button>
                 </div>
               </div>
               {/* Contenu — masqué si réduit */}
@@ -10473,7 +10501,7 @@ function StepDates() {
                 <div style={{...fld,flex:1}}>
                   <span style={lbl}>{t.cdDate||"Date"}</span>
                   <input type="date"
-                    min="2020-01-01" max="2099-12-31"
+                    min="1900-01-01" max="2099-12-31"
                     value={cd.day && cd.month ? `${cd.year||new Date().getFullYear()}-${pad(cd.month)}-${pad(cd.day)}` : ""}
                     onChange={e=>{
                       const v = e.target.value;
@@ -10487,6 +10515,17 @@ function StepDates() {
               {/* Who has custody */}
               <div className="field">
                 <label className="lbl">🧒 {t.cdConcerns||"Concerne"}</label>
+                {children.length <= 1 ? (
+                  // 🔧 Un seul enfant → "Tous" et "l'enfant" sont équivalents,
+                  // pas besoin d'un choix : juste son avatar, non cliquable.
+                  children[0] && (
+                    <div style={{display:"inline-flex",alignItems:"center",gap:4,padding:"6px 14px",background:C.vio,color:"#fff",border:`1.5px solid ${C.vio}`,borderRadius:20,fontSize:12,fontWeight:700}}>
+                      {children[0].avatar&&(typeof children[0].avatar==="string"&&children[0].avatar.startsWith("http")
+                        ? <img src={children[0].avatar} alt="" style={{width:20,height:20,borderRadius:"50%",objectFit:"cover",flexShrink:0}} />
+                        : <span style={{fontSize:16}}>{children[0].avatar}</span>)}{children[0].name||t.childN||"Enfant"}
+                    </div>
+                  )
+                ) : (
                 <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                   <button onClick={()=>updCd("childId","all")} style={{padding:"6px 14px",background:(!cd.childId||cd.childId==="all")?C.vio:C.sur,color:(!cd.childId||cd.childId==="all")?"#fff":C.mut,border:`1.5px solid ${(!cd.childId||cd.childId==="all")?C.vio:C.bor}`,borderRadius:20,fontSize:12,fontWeight:700}}>
                     {t.all||"Tous"}
@@ -10499,6 +10538,7 @@ function StepDates() {
                     </button>
                   ))}
                 </div>
+                )}
               </div>
               {/* Garde chez — sélection multiple : parents + observateurs "peut être gardien" */}
               <div className="field">
@@ -10516,9 +10556,9 @@ function StepDates() {
                           const active = guardIds.includes(opt.key);
                           return (
                             <button key={opt.key} onClick={()=>updCd("guardIds", toggleGuardId(guardIds, opt.key))} style={{flex:1,minWidth:80,padding:"9px",background:active?opt.color:C.sur,color:active?"#fff":C.mut,border:`2px solid ${active?opt.color:C.bor}`,borderRadius:10,fontSize:13,fontWeight:800,display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>
-                              {opt.avatar&&(typeof opt.avatar==="string"&&opt.avatar.startsWith("http")
+                              {(typeof opt.avatar==="string"&&opt.avatar.startsWith("http"))
                                 ? <img src={opt.avatar} alt="" style={{width:22,height:22,borderRadius:"50%",objectFit:"cover",verticalAlign:"middle"}} />
-                                : <span style={{fontSize:18}}>{opt.avatar}</span>)}{opt.name}
+                                : <span style={{fontSize:18}}>{opt.avatar||"👤"}</span>}{opt.name}
                             </button>
                           );
                         })}
