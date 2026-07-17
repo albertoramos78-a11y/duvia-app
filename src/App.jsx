@@ -4905,7 +4905,7 @@ export default function App() {
         const doReject=()=>{ dbRejectReim(r.id); setPendingReimPopup(null); };
         return (
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-            <div style={{background:C.card,borderRadius:22,padding:"28px 24px",maxWidth:340,width:"100%",border:`1.5px solid ${C.yel}`,boxShadow:"0 16px 48px rgba(0,0,0,.28)",animation:"popIn .35s cubic-bezier(.34,1.56,.64,1)"}}>
+            <div style={{background:C.card,borderRadius:22,padding:"28px 24px",maxWidth:340,width:"100%",border:`1.5px solid ${C.yel}`,boxShadow:"0 16px 48px rgba(0,0,0,.28)",animation:"popIn .35s cubic-bezier(.16,1,.3,1)"}}>
               <div style={{fontSize:40,textAlign:"center",marginBottom:10}}>💸</div>
               <div style={{fontSize:16,fontWeight:800,marginBottom:6,textAlign:"center",color:C.txt}}>Remboursement reçu</div>
               <div style={{fontSize:13,color:C.mut,marginBottom:20,textAlign:"center",lineHeight:1.6}}>
@@ -4935,7 +4935,7 @@ export default function App() {
         const doRejectE=()=>{ dbRejectExp(e.id); setPendingExpPopup(null); };
         return (
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-            <div style={{background:C.card,borderRadius:22,padding:"28px 24px",maxWidth:340,width:"100%",border:`1.5px solid ${C.yel}`,boxShadow:"0 16px 48px rgba(0,0,0,.28)",animation:"popIn .35s cubic-bezier(.34,1.56,.64,1)"}}>
+            <div style={{background:C.card,borderRadius:22,padding:"28px 24px",maxWidth:340,width:"100%",border:`1.5px solid ${C.yel}`,boxShadow:"0 16px 48px rgba(0,0,0,.28)",animation:"popIn .35s cubic-bezier(.16,1,.3,1)"}}>
               <div style={{fontSize:40,textAlign:"center",marginBottom:10}}>💰</div>
               <div style={{fontSize:16,fontWeight:800,marginBottom:6,textAlign:"center",color:C.txt}}>{t.expPendingPopupTitle||"Dépense à confirmer"}</div>
               <div style={{fontSize:13,color:C.mut,marginBottom:20,textAlign:"center",lineHeight:1.6}}>
@@ -5486,13 +5486,13 @@ export default function App() {
             {menuTab==="parrainage" && <ParrainageSection />}
             {menuTab==="rating" && <RatingTab />}
             {menuTab==="admin" && isAdm && <AdminTab />}
-            {!menuTab && tab===0 && <div key="t0" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><CalTab readOnly={false} canEdit={st!=="freemium"} /></div>}
-            {!menuTab && tab===1 && <div key="t1" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><ScheduleTab /></div>}
-            {!menuTab && tab===2 && <div key="t2" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><ExpTab /></div>}
-            {!menuTab && tab===3 && <div key="t3" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><ContactsTab /></div>}
-            {!menuTab && tab===4 && <div key="t4" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><VaultTab /></div>}
-            {!menuTab && tab===5 && <div key="t5" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><MessagingTab /></div>}
-            {!menuTab && tab===6 && <div key="t6" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.22,.68,0,1.1) both`}}><GameTab /></div>}
+            {!menuTab && tab===0 && <div key="t0" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1) both`}}><CalTab readOnly={false} canEdit={st!=="freemium"} /></div>}
+            {!menuTab && tab===1 && <div key="t1" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1) both`}}><ScheduleTab /></div>}
+            {!menuTab && tab===2 && <div key="t2" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1) both`}}><ExpTab /></div>}
+            {!menuTab && tab===3 && <div key="t3" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1) both`}}><ContactsTab /></div>}
+            {!menuTab && tab===4 && <div key="t4" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1) both`}}><VaultTab /></div>}
+            {!menuTab && tab===5 && <div key="t5" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1) both`}}><MessagingTab /></div>}
+            {!menuTab && tab===6 && <div key="t6" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1) both`}}><GameTab /></div>}
           </div>
         )}
       </div>
@@ -11908,7 +11908,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
         </div>
       </div>
       {calView==="grid" && (
-        <div style={{animation:`calSlideIn${calViewDir.current==="right"?"Right":"Left"} 0.28s cubic-bezier(.22,.68,0,1.2) both`}}>
+        <div style={{animation:`calSlideIn${calViewDir.current==="right"?"Right":"Left"} 0.28s cubic-bezier(.16,1,.3,1) both`}}>
         <MonthGridCalendar
           y={y} m={m} dc={dc} cfg={cfg} t={t} C={C} apiData={apiData}
           multiChild={multiChild} activeChildId={activeChildId}
@@ -11936,7 +11936,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
         </div>
       )}
       {calView==="list" && (
-        <div style={{animation:`calSlideIn${calViewDir.current==="left"?"Left":"Right"} 0.28s cubic-bezier(.22,.68,0,1.2) both`}}>
+        <div style={{animation:`calSlideIn${calViewDir.current==="left"?"Left":"Right"} 0.28s cubic-bezier(.16,1,.3,1) both`}}>
       <div className="card" style={{padding:0,overflow:"hidden"}}>
         <div style={{display:"grid",gridTemplateColumns:"minmax(20px,28px) minmax(56px,82px) 1.2fr 1fr",background:C.sur,padding:"8px 12px",fontSize:10,color:C.mut,fontWeight:800,letterSpacing:".1em",textTransform:"uppercase",borderBottom:`1.5px solid ${C.bor}`}}>
           <span>{t.wk}</span><span>{t.day}</span><span>{t.info}</span>
@@ -12575,7 +12575,7 @@ function RatingTab() {
   }
 
   if (submitted) return (
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 20px",gap:14,animation:"ratingAppear .45s cubic-bezier(.34,1.56,.64,1) both"}}>
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 20px",gap:14,animation:"ratingAppear .45s cubic-bezier(.16,1,.3,1) both"}}>
       <style>{`@keyframes ratingAppear{from{opacity:0;transform:scale(.88) translateY(12px)}to{opacity:1;transform:none}}`}</style>
       <span style={{fontSize:54}}>🎉</span>
       <div style={{fontSize:18,fontWeight:800,color:C.txt}}>{t.ratingThanks||"Merci pour votre retour !"}</div>
@@ -12603,7 +12603,7 @@ function RatingTab() {
     <div style={{padding:"8px 0"}}>
       <style>{`
         @keyframes ratingAppear{from{opacity:0;transform:scale(.88) translateY(12px)}to{opacity:1;transform:none}}
-        .duvia-star{font-size:40px;cursor:pointer;color:#dde1ec;transition:color .15s,transform .15s cubic-bezier(.34,1.56,.64,1),filter .15s;user-select:none;line-height:1}
+        .duvia-star{font-size:40px;cursor:pointer;color:#dde1ec;transition:color .15s,transform .15s cubic-bezier(.16,1,.3,1),filter .15s;user-select:none;line-height:1}
         .duvia-star.active{color:#FFB800;filter:drop-shadow(0 2px 6px rgba(255,184,0,.45))}
         .duvia-star.picked{transform:scale(1.18)}
         .duvia-textarea:focus{outline:none;border-color:#FFB800 !important;box-shadow:0 0 0 3px rgba(255,184,0,.15)}
@@ -12614,7 +12614,7 @@ function RatingTab() {
           ⭐ <strong style={{color:C.txt}}>{avgStats.avg_stars}/5</strong> · {avgStats.total_count} avis Duvia
         </div>
       )}
-      <div style={{background:C.card,borderRadius:20,padding:"32px 24px 28px",textAlign:"center",boxShadow:`0 4px 24px rgba(0,0,0,.07)`,animation:"ratingAppear .45s cubic-bezier(.34,1.56,.64,1) both"}}>
+      <div style={{background:C.card,borderRadius:20,padding:"32px 24px 28px",textAlign:"center",boxShadow:`0 4px 24px rgba(0,0,0,.07)`,animation:"ratingAppear .45s cubic-bezier(.16,1,.3,1) both"}}>
 
         {existingRating && !submitted && (
           <div style={{background:`${C.grn}12`,border:`1px solid ${C.grn}33`,borderRadius:8,padding:"8px 12px",marginBottom:16,fontSize:12,color:C.grn,textAlign:"left"}}>
@@ -12646,7 +12646,7 @@ function RatingTab() {
 
         {/* Comment textarea — appears after star selection */}
         {selected > 0 && (
-          <div style={{textAlign:"left",marginBottom:20,animation:"ratingAppear .3s cubic-bezier(.34,1.56,.64,1) both"}}>
+          <div style={{textAlign:"left",marginBottom:20,animation:"ratingAppear .3s cubic-bezier(.16,1,.3,1) both"}}>
             <label style={{fontSize:12,fontWeight:700,color:C.mut,display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:".5px"}}>{t.ratingCommentLabel||"Votre commentaire"} <span style={{fontWeight:400,textTransform:"none",letterSpacing:0}}>{t.ratingOptional||"(optionnel)"}</span></label>
             <textarea
               className="duvia-textarea"
@@ -14572,7 +14572,7 @@ function ReferralBonusPopup({C, variant, onClose}) {
   const isReferree = variant==="referree";
   return (
     <div style={{position:"fixed",inset:0,zIndex:999,background:"rgba(23,16,58,.6)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      <div style={{background:C.card,borderRadius:24,padding:"32px 28px",maxWidth:340,width:"100%",textAlign:"center",border:`2px solid ${C.vio}44`,boxShadow:`0 20px 60px ${C.vio}33`,animation:"popIn .35s cubic-bezier(.34,1.56,.64,1)"}}>
+      <div style={{background:C.card,borderRadius:24,padding:"32px 28px",maxWidth:340,width:"100%",textAlign:"center",border:`2px solid ${C.vio}44`,boxShadow:`0 20px 60px ${C.vio}33`,animation:"popIn .35s cubic-bezier(.16,1,.3,1)"}}>
         <div style={{fontSize:52,marginBottom:12}}>{isReferree?"🎉":"🎁"}</div>
         <div style={{fontSize:20,fontWeight:800,marginBottom:8,background:`linear-gradient(90deg,${C.vio},${C.blu})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
           {isReferree?"Bonus débloqué !":"Bonne nouvelle !"}
@@ -17895,7 +17895,7 @@ function WheelGame({ isPremium, isAdmin=false, restrictedRole=false, userId="", 
 
       {/* Result */}
       {showResult && result && (
-        <div style={{background:result.id==="nothing"?C.sur:`${result.color}18`,border:`2.5px solid ${result.color}`,borderRadius:18,padding:"18px 16px",marginBottom:14,animation:"popIn .4s cubic-bezier(.34,1.56,.64,1)"}}>
+        <div style={{background:result.id==="nothing"?C.sur:`${result.color}18`,border:`2.5px solid ${result.color}`,borderRadius:18,padding:"18px 16px",marginBottom:14,animation:"popIn .4s cubic-bezier(.16,1,.3,1)"}}>
           <div style={{fontSize:44,marginBottom:6}}>{result.emoji}</div>
           <div style={{fontSize:20,fontWeight:900,color:result.color,marginBottom:6}}>{t[result.labelKey]||result.label}</div>
           <div style={{fontSize:12,color:C.mut,marginBottom:12,lineHeight:1.5}}>
