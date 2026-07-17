@@ -5309,6 +5309,8 @@ export default function App() {
               value={familySync.familyId || ""}
               onChange={v => familySync.switchFamily(v)}
               options={familySync.families.map(f => ({value:f.id,label:f.label}))}
+              height={34}
+              labelStyle={{fontSize:13,fontWeight:800,color:C.vio}}
             />
           </div>
           <InfoBubble C={C} tipKey={`duvia_famtip_${user?.id||"x"}`} title={t.multiFamilyTitle||"Plusieurs familles"}>
@@ -9748,7 +9750,7 @@ function Toggle({checked, onChange, disabled}) {
   );
 }
 
-function CustomSelect({value, onChange, options, style, locked}) {
+function CustomSelect({value, onChange, options, style, locked, height=44, labelStyle}) {
   const {C} = useApp();
   const [open, setOpen] = useState(false);
   const cur = options.find(o=>String(o.value)===String(value)) || options[0];
@@ -9757,9 +9759,9 @@ function CustomSelect({value, onChange, options, style, locked}) {
     <div style={{position:"relative",...style}}>
       {open && <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:199}} />}
       <button onClick={()=>setOpen(v=>!v)}
-        style={{width:"100%",height:44,padding:"0 13px",background:locked?C.sur:C.card,border:`1.5px solid ${open?C.vio:C.bor}`,borderRadius:10,display:"flex",alignItems:"center",gap:10,fontSize:14,fontWeight:400,color:locked?C.mut:C.txt,cursor:locked?"default":"pointer",boxSizing:"border-box"}}>
+        style={{width:"100%",height,padding:"0 13px",background:locked?C.sur:C.card,border:`1.5px solid ${open?C.vio:C.bor}`,borderRadius:10,display:"flex",alignItems:"center",gap:10,fontSize:14,fontWeight:400,color:locked?C.mut:C.txt,cursor:locked?"default":"pointer",boxSizing:"border-box"}}>
         {cur?.icon && <span style={{fontSize:18,flexShrink:0}}>{cur.icon}</span>}
-        <span style={{flex:1,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cur?.label||""}</span>
+        <span style={{flex:1,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",...labelStyle}}>{cur?.label||""}</span>
         <span style={{fontSize:10,color:C.mut,transition:"transform .2s",display:"inline-block",transform:open?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>▼</span>
       </button>
       {open && (
