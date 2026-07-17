@@ -9150,16 +9150,21 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
         );
 
         return (
-        <div key={i} className="card" style={{marginBottom:12,borderColor:pErr?C.red:p.color}}>
+        <div key={i} className="card" style={{marginBottom:12,borderColor:pErr?C.red:p.color,position:"relative"}}>
+          {/* Badges "créateur/invité" + "compte connecté" intégrés à la
+              bordure de la carte, façon légende de fieldset, au lieu de
+              flotter dans le contenu. */}
+          <div style={{position:"absolute",top:0,left:16,transform:"translateY(-50%)",display:"flex",gap:6,alignItems:"center"}}>
+            <span style={{fontSize:10,fontWeight:900,background:C.card,color:p.color,border:`1px solid ${p.color}44`,padding:"2px 8px",borderRadius:8,letterSpacing:".04em",textTransform:"uppercase"}}>{i===effectiveCreatorIdx(cfg.parents)?t.creatorLabel:t.guestLabel}</span>
+            {i===user?.parentIdx && (
+              <span style={{fontSize:9,fontWeight:900,background:C.card,color:C.grn,border:`1px solid ${C.grn}44`,padding:"2px 7px",borderRadius:8,letterSpacing:".04em"}}>
+                ✅ {t.accountConnected||"Compte connecté"}
+              </span>
+            )}
+          </div>
           {/* Header */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-start",gap:4}}>
-              <span style={{fontSize:10,fontWeight:900,background:`${p.color}18`,color:p.color,border:`1px solid ${p.color}44`,padding:"2px 8px",borderRadius:8,letterSpacing:".04em",textTransform:"uppercase"}}>{i===effectiveCreatorIdx(cfg.parents)?t.creatorLabel:t.guestLabel}</span>
-              {i===user?.parentIdx && (
-                <span style={{fontSize:9,fontWeight:900,background:`${C.grn}22`,color:C.grn,border:`1px solid ${C.grn}44`,padding:"2px 7px",borderRadius:8,letterSpacing:".04em"}}>
-                  ✅ {t.accountConnected||"Compte connecté"}
-                </span>
-              )}
               {sub?.subscriberParentIdx===i && (
                 <span style={{fontSize:9,fontWeight:900,background:`linear-gradient(135deg,${C.yel},${C.ora})`,color:"#fff",padding:"2px 7px",borderRadius:8,letterSpacing:".04em"}}>
                   👑 Souscripteur Premium
