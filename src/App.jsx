@@ -4094,6 +4094,14 @@ export default function App() {
   const cssString = useMemo(() => css(C), [C]); // ✅ ~300 lignes CSS générées une seule fois par thème
   const brandCssString = useMemo(() => css(BRAND), []); // ✅ toujours BRAND pour la page de login
   const headerBG = C._brand ? `linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),${BRAND_GRADIENT}` : C.card;
+  // 🔧 Le scrim blanc à 50% n'a de sens que sur le fond dégradé/photo du thème
+  // BRAND — sur un header plat (tous les autres thèmes), il délave la pastille
+  // teintée en un gris terne, ce qui la rend illisible en particulier sur fond
+  // sombre (texte clair sur pastille éclaircie = contraste trop faible).
+  const pillScrim = C._brand ? ", rgba(255,255,255,.5)" : "";
+  // 🔧 Idem : certains emoji (ex: 📞, glyphe naturellement noir/foncé) restent
+  // lisibles sur fond clair mais disparaissent sur les thèmes à fond très sombre.
+  const isDarkBg = C===DARK || C===VIDEO;
   useEffect(() => {
     // La barre de statut Android/iOS (PWA) suit désormais le thème actif au lieu de rester figée.
     const meta = document.querySelector('meta[name="theme-color"]');
@@ -4997,7 +5005,7 @@ export default function App() {
               <div style={{position:"relative",flexShrink:0}}>
                 <button onClick={()=>setShowPrizesMenu(v=>!v)}
                   style={{height:36,padding:"0 12px",
-                    background:`linear-gradient(${showPrizesMenu?`${C.yel}22`:hasActivatable?`${C.yel}15`:C.card}, ${showPrizesMenu?`${C.yel}22`:hasActivatable?`${C.yel}15`:C.card}), rgba(255,255,255,.5)`,
+                    background:`linear-gradient(${showPrizesMenu?`${C.yel}22`:hasActivatable?`${C.yel}15`:C.card}, ${showPrizesMenu?`${C.yel}22`:hasActivatable?`${C.yel}15`:C.card})${pillScrim}`,
                     border:`1.5px solid ${showPrizesMenu||hasActivatable?C.yel:C.bor}`,
                     color:showPrizesMenu||hasActivatable?C.yel:C.mut,
                     fontSize:16,fontWeight:700,borderRadius:20,display:"flex",alignItems:"center",gap:4,cursor:"pointer",transition:"all .2s"}}>
@@ -5263,7 +5271,7 @@ export default function App() {
       {/* Trial / Premium / Earned bubble — second row */}
       {!isObs && !isChild && st==="trial_premium" && (
         <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>
-          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`linear-gradient(${C.vio}18, ${C.vio}18), rgba(255,255,255,.5)`,border:`1.5px solid ${C.vio}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.vio,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s"}}>
+          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`linear-gradient(${C.vio}18, ${C.vio}18)${pillScrim}`,border:`1.5px solid ${C.vio}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.vio,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s"}}>
             {isBeta()
               ? <>🧪 {t.betaChip||"Bêta — Premium offert"}</>
               : <>{t.trialBanner} · <span style={{opacity:.85}}>{days}j restant{days>1?"s":""}</span></>
@@ -5273,21 +5281,21 @@ export default function App() {
       )}
       {!isObs && !isChild && st==="earned_premium" && (
         <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>
-          <div onClick={()=>{setMenuTab("parrainage");setShowMenu(false);}} style={{background:`linear-gradient(${days<=5?`${C.red}18`:`${C.grn}18`}, ${days<=5?`${C.red}18`:`${C.grn}18`}), rgba(255,255,255,.5)`,border:`1.5px solid ${days<=5?C.red+"66":C.grn+"66"}`,borderRadius:20,padding:"4px 12px",fontSize:11,color:days<=5?C.red:C.grn,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",animation:"pulseFade 2s ease-in-out infinite"}}>
+          <div onClick={()=>{setMenuTab("parrainage");setShowMenu(false);}} style={{background:`linear-gradient(${days<=5?`${C.red}18`:`${C.grn}18`}, ${days<=5?`${C.red}18`:`${C.grn}18`})${pillScrim}`,border:`1.5px solid ${days<=5?C.red+"66":C.grn+"66"}`,borderRadius:20,padding:"4px 12px",fontSize:11,color:days<=5?C.red:C.grn,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",animation:"pulseFade 2s ease-in-out infinite"}}>
             🎁 Premium – {days}j restant{days>1?"s":""}
           </div>
         </div>
       )}
       {!isObs && !isChild && st==="freemium" && (
         <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>
-          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`linear-gradient(${C.red}18, ${C.red}18), rgba(255,255,255,.5)`,border:`1.5px solid ${C.red}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.red,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}>
+          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`linear-gradient(${C.red}18, ${C.red}18)${pillScrim}`,border:`1.5px solid ${C.red}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.red,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}>
             ⚠️ {t.trialExpired}
           </div>
         </div>
       )}
       {!isObs && !isChild && st==="premium" && (
         <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>
-          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`linear-gradient(${C.grn}18, ${C.grn}18), rgba(255,255,255,.5)`,border:`1.5px solid ${C.grn}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.grn,fontWeight:800,display:"inline-flex",alignItems:"center",gap:6,cursor:"pointer"}}>⭐ {familyPremiumFromCoParent ? (t.premHeaderInherited||"Premium hérité") : (t.premHeaderPremium||"Premium")}</div>
+          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`linear-gradient(${C.grn}18, ${C.grn}18)${pillScrim}`,border:`1.5px solid ${C.grn}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.grn,fontWeight:800,display:"inline-flex",alignItems:"center",gap:6,cursor:"pointer"}}>⭐ {familyPremiumFromCoParent ? (t.premHeaderInherited||"Premium hérité") : (t.premHeaderPremium||"Premium")}</div>
         </div>
       )}
       </div>
@@ -5341,7 +5349,7 @@ export default function App() {
               <div style={{display:"flex",padding:"6px 6px"}}>
               {STEPS.map((s,i)=>(
                 <button key={i} onClick={()=>setConfigStep(i)}
-                  style={{flex:1,margin:"0 2px",padding:"8px 4px 7px",background:configStep===i?C.card:"transparent",color:configStep===i?C.vio:C.mut,border:`1.5px solid ${configStep===i?`${C.vio}55`:"transparent"}`,borderRadius:14,fontSize:16,height:"auto",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,boxShadow:configStep===i?"0 2px 8px rgba(0,0,0,.1)":"none",transition:"all .2s cubic-bezier(.16,1,.3,1)",cursor:"pointer"}}>
+                  style={{flex:1,margin:"0 2px",padding:"8px 4px 7px",background:configStep===i?C.sur:"transparent",color:configStep===i?C.vio:C.mut,border:`1.5px solid ${configStep===i?`${C.vio}55`:"transparent"}`,borderRadius:14,fontSize:16,height:"auto",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,boxShadow:configStep===i?"0 2px 8px rgba(0,0,0,.1)":"none",transition:"all .2s cubic-bezier(.16,1,.3,1)",cursor:"pointer"}}>
                   <span style={{lineHeight:1,position:"relative",display:"flex",alignItems:"center",justifyContent:"center"}}>
                     <img src={s.i} alt="" style={{width:28,height:28,objectFit:"contain",display:"block",opacity:configStep===i?1:0.55,filter:configStep===i?"none":"grayscale(40%)",transition:"opacity .15s"}} />
                     {s.badge>0&&!s.wobbleOnly&&<span style={{position:"absolute",top:-4,right:-6,width:14,height:14,borderRadius:"50%",background:C.red,color:"#fff",fontSize:8,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{s.badge}</span>}
@@ -5359,8 +5367,8 @@ export default function App() {
            dur — mêmes couleurs (C.vio/C.mut), juste le traitement visuel. */
         <div style={{flexShrink:0,background:headerBG,borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:"0 1px 6px rgba(0,0,0,.05)",padding:"6px 6px"}}>
           {TABS.map((tb,i) => (
-            <button key={i} onClick={()=>{ switchTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,margin:"0 2px",padding:"8px 2px",background:tab===i&&!menuTab?C.card:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,border:`1.5px solid ${tab===i&&!menuTab?`${C.vio}55`:"transparent"}`,borderRadius:14,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",boxShadow:tab===i&&!menuTab?"0 2px 8px rgba(0,0,0,.1)":"none",transition:"all .2s cubic-bezier(.16,1,.3,1)"}}>
-              <span style={{lineHeight:1,display:"inline-block",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}><Emoji size="1.15em">{tb.icon}</Emoji></span>
+            <button key={i} onClick={()=>{ switchTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,margin:"0 2px",padding:"8px 2px",background:tab===i&&!menuTab?C.sur:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,border:`1.5px solid ${tab===i&&!menuTab?`${C.vio}55`:"transparent"}`,borderRadius:14,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",boxShadow:tab===i&&!menuTab?"0 2px 8px rgba(0,0,0,.1)":"none",transition:"all .2s cubic-bezier(.16,1,.3,1)"}}>
+              <span style={{lineHeight:1,display:"inline-block",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}><Emoji size="1.15em" invert={isDarkBg && tb.icon==="📞"}>{tb.icon}</Emoji></span>
               {tb.badge>0 && !tb.wobbleOnly && <span style={{position:"absolute",top:2,right:"8%",minWidth:15,height:15,padding:"0 3px",borderRadius:"50%",background:C.red,color:"#fff",fontSize:9,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",border:`2px solid ${C.card}`,boxSizing:"content-box"}}>{tb.badge}</span>}
             </button>
           ))}
@@ -11042,14 +11050,14 @@ function StepAccess() {
         {!sent?(
           <>
             <div className="row">
-              <div className="field"><label className="lbl">{t.obsInviteEmail} <span style={{color:C.mut,fontWeight:400}}>({t.optional||"optionnel"})</span></label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="mamie@exemple.fr" /></div>
-              <div className="field"><label className="lbl">📞 {t.obsInvitePhone||"Téléphone"} <span style={{color:C.mut,fontWeight:400}}>({t.optional||"optionnel"})</span></label><input type="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} /></div>
+              <div className="field"><label className="lbl">{t.obsInviteEmail}</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="mamie@exemple.fr" /></div>
+              <div className="field"><label className="lbl">📞 {t.obsInvitePhone||"Téléphone"}</label><input type="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder={t.regPhonePlaceholder||"ex: 06 12 34 56 78"} /></div>
             </div>
             <div style={{fontSize:11,color:C.mut,marginTop:-6,marginBottom:10}}>{t.obsInviteContactHint||"Renseignez au moins un moyen de contact (email ou téléphone)."}</div>
             {/* Adresse postale */}
             <div style={{marginBottom:10}}>
-              <label style={{fontSize:11,fontWeight:700,color:C.mut,textTransform:"uppercase",letterSpacing:".05em",display:"block",marginBottom:6}}>📍 {t.obsAddress||"Adresse postale"}</label>
-              <input value={address} onChange={e=>setAddress(e.target.value)} placeholder={t.obsAddressPh||"Numéro, rue, code postal, ville"} style={{width:"100%",boxSizing:"border-box",padding:"10px 14px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:13,background:C.sur,color:C.txt}} />
+              <label style={{fontSize:11,fontWeight:700,color:C.mut,textTransform:"uppercase",letterSpacing:".05em",display:"block",marginBottom:6}}>{t.obsAddress||"Adresse postale"}</label>
+              <input value={address} onChange={e=>setAddress(e.target.value)} placeholder={t.obsAddressPh||"Numéro, rue, code postal, ville"} />
             </div>
             <div className="field"><label className="lbl">{t.obsInviteType}</label>
               <CustomSelect value={role} onChange={v=>setRole(v)} options={[
