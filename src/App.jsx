@@ -4611,6 +4611,24 @@ export default function App() {
   // retombe sur le premier onglet plutôt que de rendre un écran vide.
   useEffect(()=>{ if(tab>=TABS.length) setTab(0); },[TABS.length]);
 
+  // ── Confirmation modale générique (remplace window.confirm()) ────────────
+  // 🔧 Impeccable critique P1 : window.confirm() casse le style de l'app en
+  // pleine interaction, surtout sur les actions les plus anxiogènes (quitter
+  // une famille, supprimer un backup). Un seul état + une seule modale ici,
+  // exposée via confirmAsync() (retourne une Promise<boolean>, puisqu'une
+  // vraie modale React ne peut pas bloquer l'exécution comme le fait
+  // window.confirm()) — réutilise le style déjà en place pour la confirmation
+  // d'annulation d'abonnement (PremiumTab).
+  // 🔴 DOIT rester ICI, avant les 7 écrans de blocage ci-dessous (pas juste
+  // avant ctxValue/le return final) — sinon nombre de hooks incohérent d'un
+  // rendu à l'autre selon qu'un gate se déclenche ou non → React #300 (bug
+  // constaté en prod 2026-07-17 après un premier merge, corrigé immédiatement).
+  const [confirmModal, setConfirmModal] = useState(null); // {message,title,icon,confirmLabel,resolve} | null
+  const confirmAsync = useCallback((message, opts={}) => {
+    return new Promise(resolve => { setConfirmModal({ message, title:opts.title, icon:opts.icon||"⚠️", confirmLabel:opts.confirmLabel, resolve }); });
+  }, []);
+  function closeConfirmModal(result){ confirmModal?.resolve?.(result); setConfirmModal(null); }
+
   // 🔧 Les 7 écrans de blocage ci-dessous sont volontairement placés APRÈS
   // tous les hooks du composant (dont le useEffect juste au-dessus) : leurs
   // conditions peuvent devenir vraies APRÈS le premier rendu (ex: emailVerified
@@ -4763,20 +4781,6 @@ export default function App() {
       </div>
     </div>
   );
-
-  // ── Confirmation modale générique (remplace window.confirm()) ────────────
-  // 🔧 Impeccable critique P1 : window.confirm() casse le style de l'app en
-  // pleine interaction, surtout sur les actions les plus anxiogènes (quitter
-  // une famille, supprimer un backup). Un seul état + une seule modale ici,
-  // exposée via confirmAsync() (retourne une Promise<boolean>, puisqu'une
-  // vraie modale React ne peut pas bloquer l'exécution comme le fait
-  // window.confirm()) — réutilise le style déjà en place pour la confirmation
-  // d'annulation d'abonnement (PremiumTab).
-  const [confirmModal, setConfirmModal] = useState(null); // {message,title,icon,confirmLabel,resolve} | null
-  const confirmAsync = useCallback((message, opts={}) => {
-    return new Promise(resolve => { setConfirmModal({ message, title:opts.title, icon:opts.icon||"⚠️", confirmLabel:opts.confirmLabel, resolve }); });
-  }, []);
-  function closeConfirmModal(result){ confirmModal?.resolve?.(result); setConfirmModal(null); }
 
   // ── Context value ─────────────────────────────────────────────────────────
   const onUpgrade = () => { setMenuTab("premium"); setShowMenu(false); };
