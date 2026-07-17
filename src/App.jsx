@@ -1361,16 +1361,16 @@ body{background:${C.bg};color:${C.txt};font-family:'Nunito',sans-serif;min-heigh
 /* ── Form inputs — uniform 44px height, consistent radius & border ── */
 input,select,textarea{
   background:${C.inp};
-  border:1.5px solid ${C.bor};
+  border:1.5px solid ${C.bor}cc;
   color:${C.txt};
-  border-radius:10px;
-  padding:0 13px;
+  border-radius:14px;
+  padding:0 14px;
   height:44px;
   font-family:inherit;
   font-size:14px;
   width:100%;
   outline:none;
-  transition:border-color .18s, box-shadow .18s;
+  transition:border-color .2s, box-shadow .2s;
   line-height:1;
 }
 textarea{height:auto;padding:11px 13px;line-height:1.5;}
@@ -1379,7 +1379,7 @@ input:focus,select:focus,textarea:focus{
   box-shadow:0 0 0 3px ${C.vio}20;
 }
 input::placeholder,textarea::placeholder{color:${C.mut};opacity:.7;}
-input[type=color]{padding:3px 4px;height:44px;width:48px;min-width:48px;cursor:pointer;border-radius:10px;}
+input[type=color]{padding:3px 4px;height:44px;width:48px;min-width:48px;cursor:pointer;border-radius:14px;}
 input[type=checkbox]{width:17px;height:17px;accent-color:${C.vio};cursor:pointer;flex-shrink:0;}
 
 /* ── Buttons — uniform 44px touch target, consistent radius ── */
@@ -1387,7 +1387,7 @@ button{
   font-family:inherit;
   cursor:pointer;
   border:none;
-  border-radius:10px;
+  border-radius:14px;
   font-size:14px;
   font-weight:700;
   height:44px;
@@ -1396,16 +1396,16 @@ button{
   align-items:center;
   justify-content:center;
   gap:7px;
-  transition:all .15s;
+  transition:all .2s cubic-bezier(.16,1,.3,1);
   white-space:nowrap;
 }
 button:active{transform:scale(.97);}
 button:disabled{opacity:.5;cursor:not-allowed;}
 
 /* Small button variant */
-button.btn-sm{height:34px;padding:0 12px;font-size:12px;border-radius:8px;}
+button.btn-sm{height:34px;padding:0 12px;font-size:12px;border-radius:11px;}
 /* Icon-only button */
-button.btn-icon{width:44px;height:44px;padding:0;border-radius:10px;}
+button.btn-icon{width:44px;height:44px;padding:0;border-radius:14px;}
 
 /* Sélecteur de couleur : masque le "swatch" natif carré du navigateur, le
    contour est ensuite découpé en forme de cœur par un clip-path SVG (voir
@@ -1420,24 +1420,29 @@ input.color-heart::-moz-color-swatch{border:none;}
   font-size:11px;
   color:${C.mut};
   display:block;
-  margin-bottom:6px;
+  margin-bottom:8px;
   font-weight:800;
   letter-spacing:.07em;
   text-transform:uppercase;
 }
-.field{margin-bottom:16px;}
+.field{margin-bottom:20px;}
 .row{display:flex;gap:12px;align-items:flex-end;}
 .row > *{flex:1;min-width:0;}
 
 /* ── Cards ── */
+/* 🔧 Direction "moderne mais douce" (2026-07-17, branche staging) : coins
+   plus arrondis, bordure allégée (la séparation se fait surtout par
+   l'ombre, plus douce/diffuse en plusieurs couches, plutôt qu'un trait dur),
+   plus de respiration interne. Aucune couleur ne change (mêmes tokens C.*). */
 .card{
   background:${C.card};
-  border:1.5px solid ${C.bor};
-  border-radius:14px;
-  padding:16px;
-  transition:box-shadow .18s;
+  border:1px solid ${C.bor}88;
+  border-radius:20px;
+  padding:20px;
+  box-shadow:0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.04);
+  transition:box-shadow .2s cubic-bezier(.16,1,.3,1), transform .2s cubic-bezier(.16,1,.3,1);
 }
-.card:hover{box-shadow:0 3px 12px rgba(0,0,0,.08);}
+.card:hover{box-shadow:0 2px 4px rgba(0,0,0,.05), 0 10px 28px rgba(0,0,0,.08);}
 
 /* ── Section headers ── */
 .sec{
@@ -1460,7 +1465,7 @@ input.color-heart::-moz-color-swatch{border:none;}
   align-items:center;
   font-size:10px;
   padding:3px 9px;
-  border-radius:6px;
+  border-radius:9px;
   font-weight:800;
   line-height:1;
 }
@@ -5352,9 +5357,12 @@ export default function App() {
           );
         })()
       ) : (
-        <div style={{flexShrink:0,background:headerBG,borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:"0 1px 6px rgba(0,0,0,.05)"}}>
+        /* 🔧 Direction "moderne mais douce" (branche staging) : pastille de
+           fond arrondie derrière l'icône active, au lieu d'un soulignement
+           dur — mêmes couleurs (C.vio/C.mut), juste le traitement visuel. */
+        <div style={{flexShrink:0,background:headerBG,borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:"0 1px 6px rgba(0,0,0,.05)",padding:"6px 6px"}}>
           {TABS.map((tb,i) => (
-            <button key={i} onClick={()=>{ switchTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,padding:"10px 2px",background:tab===i&&!menuTab?C.sur:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,borderBottom:tab===i&&!menuTab?`2.5px solid ${C.vio}`:"2.5px solid transparent",borderRadius:0,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",transition:"all .15s"}}>
+            <button key={i} onClick={()=>{ switchTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,margin:"0 2px",padding:"8px 2px",background:tab===i&&!menuTab?C.card:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,border:`1.5px solid ${tab===i&&!menuTab?`${C.vio}55`:"transparent"}`,borderRadius:14,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",boxShadow:tab===i&&!menuTab?"0 2px 8px rgba(0,0,0,.1)":"none",transition:"all .2s cubic-bezier(.16,1,.3,1)"}}>
               <span style={{lineHeight:1,display:"inline-block",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}>{tb.icon}</span>
               {tb.badge>0 && !tb.wobbleOnly && <span style={{position:"absolute",top:2,right:"8%",minWidth:15,height:15,padding:"0 3px",borderRadius:"50%",background:C.red,color:"#fff",fontSize:9,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",border:`2px solid ${C.card}`,boxSizing:"content-box"}}>{tb.badge}</span>}
             </button>
