@@ -7604,7 +7604,7 @@ function PrefsTab() {
   }
 
   function NotifRow({label,desc,val,onToggle,pushVal,onPushToggle}){
-    const row={display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`,marginBottom:8,gap:12};
+    const row={display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.card,borderRadius:12,border:`1px solid ${C.bor}`,marginBottom:8,gap:12};
     return (
       <div style={row}>
         <div style={{flex:1,minWidth:0}}>
@@ -7666,18 +7666,18 @@ function PrefsTab() {
     return handleExportBackup();
   }
 
-  const row = {display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`,cursor:"pointer",width:"100%",textAlign:"left"};
+  const row = {display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.card,borderRadius:12,border:`1px solid ${C.bor}`,cursor:"pointer",width:"100%",textAlign:"left"};
 
   return (
     <div>
       {/* ── Langue ── */}
-      <div style={{marginBottom:28}}>
+      <div className="card" style={{marginBottom:28}}>
         <StepLang lang={lang} setLang={setLang} />
       </div>
 
       {/* ── Notifications push ── */}
-      <div style={{marginBottom:16}}>
-        <div className="sec">{t.pushSectionTitle||"🔔 Notifications push"}</div>
+      <div className="sec">{t.pushSectionTitle||"🔔 Notifications push"}</div>
+      <div className="card" style={{marginBottom:16}}>
         {pushStatus==="unsupported" && (
           <div style={{fontSize:12,color:C.mut,padding:"10px 12px"}}>{t.pushUnsupported}</div>
         )}
@@ -7694,7 +7694,7 @@ function PrefsTab() {
         )}
         {pushStatus==="subscribed" && (
           <>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.card,borderRadius:12,border:`1px solid ${C.bor}`}}>
               <div style={{fontSize:13,fontWeight:700,color:C.grn}}>{t.pushEnabledStatus}</div>
               <button onClick={pushUnsubscribe} disabled={pushPending} style={{padding:"6px 12px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12,fontWeight:700,cursor:pushPending?"default":"pointer",opacity:pushPending?.6:1}}>
                 {pushPending ? "…" : t.pushDisableBtn}
@@ -7710,8 +7710,8 @@ function PrefsTab() {
       </div>
 
       {/* ── Notifications par type (email + push) ── */}
-      <div style={{marginBottom:28}}>
-        <div className="sec">{t.emailNotifs||"Notifications"}</div>
+      <div className="sec">{t.emailNotifs||"Notifications"}</div>
+      <div className="card" style={{marginBottom:28}}>
         <NotifRow label={t.notifMsg||"Nouveau message reçu"} desc={t.notifMsgDesc||"Email quand l'autre parent vous écrit"}
           val={emailMsg} onToggle={()=>{ const v=!emailMsg; setEmailMsg(v); savePref("email_notifs",v); }}
           pushVal={pushMsg} onPushToggle={()=>{ const v=!pushMsg; setPushMsg(v); savePref("push_notifs",v); }} />
@@ -7727,8 +7727,8 @@ function PrefsTab() {
       </div>
 
       {/* ── Devise ── */}
-      <div style={{marginBottom:28}}>
-        <div className="sec">💰 {t.defaultCurrency||"Devise par défaut"}</div>
+      <div className="sec">💰 {t.defaultCurrency||"Devise par défaut"}</div>
+      <div className="card" style={{marginBottom:28}}>
         <div style={{display:"flex",gap:8}}>
           {["€","$","CHF","£"].map(c=>(
             <button key={c} onClick={()=>{ setCurrency(c); savePref("currency",c); }}
@@ -7740,8 +7740,8 @@ function PrefsTab() {
       </div>
 
       {/* ── Premier jour de la semaine ── */}
-      <div style={{marginBottom:28}}>
-        <div className="sec">📅 {t.weekStart||"Premier jour de la semaine"}</div>
+      <div className="sec">📅 {t.weekStart||"Premier jour de la semaine"}</div>
+      <div className="card" style={{marginBottom:28}}>
         <div style={{display:"flex",gap:8}}>
           {[{k:"lundi",l:"Lundi"},{k:"dimanche",l:"Dimanche"}].map(({k,l})=>(
             <button key={k} onClick={()=>{ setWeekStart(k); savePref("week_start",k); }}
@@ -7780,10 +7780,10 @@ function PrefsTab() {
       </div>
 
       {/* ── Sécurité ── */}
-      <div style={{marginBottom:28}}>
-        <div className="sec">🔒 {t.security||"Sécurité"}</div>
+      <div className="sec">🔒 {t.security||"Sécurité"}</div>
+      <div className="card" style={{marginBottom:28}}>
         {isGoogleUser ? (
-          <div style={{padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`,display:"flex",alignItems:"center",gap:12}}>
+          <div style={{padding:"13px 16px",background:C.card,borderRadius:12,border:`1px solid ${C.bor}`,display:"flex",alignItems:"center",gap:12}}>
             <span style={{fontSize:20}}>🔗</span>
             <div>
               <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{t.googleAccount||"Compte Google"}</div>
@@ -8192,7 +8192,7 @@ function ObserverPrefsTab() {
     setTimeout(()=>setEmailOk(""),8000);
   }
 
-  const row = {display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`,cursor:"pointer",width:"100%",textAlign:"left"};
+  const row = {display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.card,borderRadius:12,border:`1px solid ${C.bor}`,cursor:"pointer",width:"100%",textAlign:"left"};
 
   return (
     <div>
@@ -8204,13 +8204,13 @@ function ObserverPrefsTab() {
       </div>
 
       {/* ── Langue ── */}
-      <div style={{marginBottom:28}}>
+      <div className="card" style={{marginBottom:28}}>
         <StepLang lang={lang} setLang={setLang} />
       </div>
 
       {/* ── Notifications push ── */}
-      <div style={{marginBottom:16}}>
-        <div className="sec">{t.pushSectionTitle||"🔔 Notifications push"}</div>
+      <div className="sec">{t.pushSectionTitle||"🔔 Notifications push"}</div>
+      <div className="card" style={{marginBottom:16}}>
         {pushStatus==="unsupported" && <div style={{fontSize:12,color:C.mut,padding:"10px 12px"}}>{t.pushUnsupported}</div>}
         {pushStatus==="ios-needs-install" && <div style={{fontSize:12,color:C.mut,padding:"10px 12px"}}>{t.pushIosInstall}</div>}
         {pushStatus==="denied" && <div style={{fontSize:12,color:C.red,padding:"10px 12px"}}>{t.pushDenied}</div>}
@@ -8221,7 +8221,7 @@ function ObserverPrefsTab() {
         )}
         {pushStatus==="subscribed" && (
           <>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",background:C.card,borderRadius:12,border:`1px solid ${C.bor}`}}>
               <div style={{fontSize:13,fontWeight:700,color:C.grn}}>{t.pushEnabledStatus}</div>
               <button onClick={pushUnsubscribe} disabled={pushPending} style={{padding:"6px 12px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12,fontWeight:700,cursor:pushPending?"default":"pointer",opacity:pushPending?.6:1}}>
                 {pushPending ? "…" : t.pushDisableBtn}
@@ -8237,9 +8237,9 @@ function ObserverPrefsTab() {
       </div>
 
       {/* ── Notifications email + push : messages uniquement ── */}
-      <div style={{marginBottom:28}}>
-        <div className="sec">{t.emailNotifs||"Notifications"}</div>
-        <div style={{...row,gap:12}}>
+      <div className="sec">{t.emailNotifs||"Notifications"}</div>
+      <div className="card" style={{marginBottom:28}}>
+        <div style={{...row,gap:12,background:"transparent",border:"none",padding:0,cursor:"default"}}>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{t.notifMsg||"Nouveau message reçu"}</div>
             <div style={{fontSize:11,color:C.mut,marginTop:2}}>{t.obsNotifMsgDesc||t.notifMsgDesc||"Email quand vous recevez un nouveau message"}</div>
@@ -8297,10 +8297,10 @@ function ObserverPrefsTab() {
       </div>
 
       {/* ── Sécurité : email + mot de passe ── */}
-      <div style={{marginBottom:28}}>
-        <div className="sec">🔒 {t.security||"Sécurité"}</div>
+      <div className="sec">🔒 {t.security||"Sécurité"}</div>
+      <div className="card" style={{marginBottom:28}}>
         {isGoogleUser ? (
-          <div style={{padding:"13px 16px",background:C.sur,borderRadius:12,border:`1px solid ${C.bor}`,display:"flex",alignItems:"center",gap:12}}>
+          <div style={{padding:"13px 16px",background:C.card,borderRadius:12,border:`1px solid ${C.bor}`,display:"flex",alignItems:"center",gap:12}}>
             <span style={{fontSize:20}}>🔗</span>
             <div>
               <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{t.googleAccount||"Compte Google"}</div>
