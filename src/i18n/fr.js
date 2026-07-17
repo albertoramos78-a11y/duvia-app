@@ -227,6 +227,7 @@ const fr = {
     calExportPDFTitle:"Exporter le planning annuel en PDF",
     calResetBtnTitle:"Réinitialiser tous les échanges manuels du calendrier",
     calResetBtnLabel:"Réinit.",
+    calActionsMenuTitle:"Options du calendrier",
     familySyncTitle:"Synchro Serveur",
     familyCode:"Code famille",
     syncConnecting:"Connexion…",

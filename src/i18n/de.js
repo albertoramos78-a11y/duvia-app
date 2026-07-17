@@ -171,6 +171,7 @@ const de = {
     calExportPDFTitle:"Jahresplan als PDF exportieren",
     calResetBtnTitle:"Alle manuellen Tauschtage im Kalender zurücksetzen",
     calResetBtnLabel:"Reset",
+    calActionsMenuTitle:"Kalenderoptionen",
     familySyncTitle:"Server-Sync",
     familyCode:"Familiencode",
     syncConnecting:"Verbinde…",

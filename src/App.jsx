@@ -1052,7 +1052,7 @@ function makeShareCode() {
 
 function makeCfg() {
   return {
-    parents:[{id:1,name:"",gender:"F",birthDay:"",birthMonth:"",color:PCOLS[0]}],
+    parents:[{id:1,name:"",gender:"F",birthDay:"",birthMonth:"",birthYear:"",color:PCOLS[0]}],
     children:[{id:1,name:"",email:"",birthDay:"",birthMonth:"",birthYear:"",allergy:"",bloodType:"",
       school:"",doctor:"",notes:"",emergencyContacts:""}],
     observers:[],sameGuardAll:true,zone:"",subdivisionCode:"",country:"FR",activeNatHols:null,
@@ -5181,10 +5181,10 @@ export default function App() {
                 const shot = await captureScreenshot();
                 setBugScreenshot(shot);
                 setShowBugModal(true);
-              }} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+              }} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
                 <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🐛</span><span style={{flex:1,textAlign:"left"}}>{t.bugReportMenu}</span>
               </button>
-              <button onClick={()=>{setShowInstallModal(true);setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+              <button onClick={()=>{setShowInstallModal(true);setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
                 <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>📱</span><span style={{flex:1,textAlign:"left"}}>{t.installAppMenu}</span>
               </button>
               <button onClick={()=>{handleSetUser(null);setTab(0);setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.red,display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
@@ -5304,20 +5304,13 @@ export default function App() {
           display:"flex",alignItems:"center",gap:8,
         }}>
           <span style={{fontSize:16,flexShrink:0}}>👨‍👩‍👧</span>
-          <select
-            value={familySync.familyId || ""}
-            onChange={e => familySync.switchFamily(e.target.value)}
-            style={{
-              flex:"0 1 auto",width:"auto",maxWidth:220,height:34,fontSize:13,fontWeight:800,
-              color:C.vio,background:C.card,
-              border:`2px solid ${C.vio}`,borderRadius:12,
-              cursor:"pointer",padding:"0 10px",
-            }}
-          >
-            {familySync.families.map(f => (
-              <option key={f.id} value={f.id} style={{color:C.txt}}>{f.label}</option>
-            ))}
-          </select>
+          <div style={{flexShrink:0,minWidth:140,maxWidth:220}}>
+            <CustomSelect
+              value={familySync.familyId || ""}
+              onChange={v => familySync.switchFamily(v)}
+              options={familySync.families.map(f => ({value:f.id,label:f.label}))}
+            />
+          </div>
           <InfoBubble C={C} tipKey={`duvia_famtip_${user?.id||"x"}`} title={t.multiFamilyTitle||"Plusieurs familles"}>
             {t.multiFamilyInfo||"Vous appartenez à plusieurs familles. Utilisez ce menu pour basculer de l'une à l'autre."}
           </InfoBubble>
@@ -6986,7 +6979,11 @@ function NotifTab({prem: premProp}) {
 const TWEMOJI_CDN = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@17.0.3/assets/svg/";
 function Emoji({children, size, invert=false, style}) {
   if (typeof children !== "string" || !children) return children;
-  const cp = twemoji.convert.toCodePoint(children);
+  // 🔧 jdecked/twemoji ne publie pas de fichier séparé pour le sélecteur de
+  // variation U+FE0F sur certains emoji (ex: 🗄️ "1f5c4-fe0f" → 404 réel,
+  // constaté en live ; "1f5c4" seul existe) — le glyphe couleur est
+  // identique de toute façon, donc on l'enlève systématiquement.
+  const cp = twemoji.convert.toCodePoint(children).replace(/-fe0f$/, "");
   return (
     <img
       src={`${TWEMOJI_CDN}${cp}.svg`}
@@ -9216,13 +9213,15 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
               <span style={lbl}>{t.birthDate||"Date de naissance"}</span>
               <input
                 type="date"
-                value={p.birthDay && p.birthMonth ? `2000-${pad(p.birthMonth)}-${pad(p.birthDay)}` : ""}
+                max={`${new Date().getFullYear()}-12-31`}
+                value={p.birthDay && p.birthMonth ? `${p.birthYear||2000}-${pad(p.birthMonth)}-${pad(p.birthDay)}` : ""}
                 onChange={e=>{
                   const v = e.target.value;
-                  if(!v){ setParent(i,"birthDay",""); setParent(i,"birthMonth",""); return; }
-                  const [,m,d] = v.split("-");
+                  if(!v){ setParent(i,"birthDay",""); setParent(i,"birthMonth",""); setParent(i,"birthYear",""); return; }
+                  const [y,m,d] = v.split("-");
                   setParent(i,"birthDay",d);
                   setParent(i,"birthMonth",m);
+                  setParent(i,"birthYear",y);
                 }}
                 readOnly={!isMine}
                 style={{...inp,...(isMine?{}:{background:C.sur,color:C.mut,cursor:"default"})}}
@@ -9300,7 +9299,7 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
           </div>
 
           {expandedChildren.has(i) && <>
-          {/* Row 1 : Avatar | Nom */}
+          {/* Row 1 : Avatar | Nom | Date de naissance */}
           <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:12}}>
             <div style={{...fieldBox,flexShrink:0}}>
               <span style={lbl}>Avatar</span>
@@ -9314,10 +9313,6 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
                 style={{...inp,borderColor:cErr?C.red:undefined,outline:cErr?`1px solid ${C.red}`:undefined}} />
               {cErr&&<div style={{fontSize:11,color:C.red,marginTop:3}}>{t.nameRequired||"Le nom est obligatoire."}</div>}
             </div>
-          </div>
-
-          {/* Row 2 : Date de naissance (jour+mois+année) */}
-          <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:12}}>
             <div style={{...fieldBox,flex:1}}>
               <span style={lbl}>{t.birthDate||"Date de naissance"}</span>
               <input
@@ -11461,6 +11456,7 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
   const [inlineDs,setInlineDs]=useState(null);
   const [fullDs,setFullDs]=useState(null);
   const [showLegend,setShowLegend]=useState(false);
+  const [showCalActionsMenu,setShowCalActionsMenu]=useState(false);
   const [calView,setCalView]=useLocalStorage("duvia_cal_view","list");
   const calViewDir=useRef("right"); // "right" = list→grid, "left" = grid→list
   function switchCalView(v){ calViewDir.current=v==="grid"?"right":"left"; setCalView(v); }
@@ -11785,26 +11781,38 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
           {!isObs && !isChild && (
-            <>
-              <button onClick={()=>downloadICS(cfg)}
-                title={t.calExportICalTitle||"Export to Google Calendar / Apple Calendar"}
-                style={{display:"flex",alignItems:"center",gap:3,padding:"3px 7px",background:`${C.grn}15`,border:`1px solid ${C.grn}44`,borderRadius:6,cursor:"pointer",transition:"all .15s"}}>
-                <span style={{fontSize:10}}>📅</span>
-                <span style={{fontSize:9,color:C.grn,fontWeight:800}}>iCal</span>
+            <div style={{position:"relative"}}>
+              <button onClick={()=>setShowCalActionsMenu(v=>!v)}
+                title={t.calActionsMenuTitle||"Options du calendrier"}
+                style={{display:"flex",alignItems:"center",justifyContent:"center",width:28,height:28,background:showCalActionsMenu?`${C.vio}15`:"transparent",border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",transition:"all .15s"}}>
+                <span style={{fontSize:15,color:C.mut,lineHeight:1}}>⋯</span>
               </button>
-              <button onClick={()=>{ if(!premFull){ onUpgrade(); return; } generateCalendarPDF(); }}
-                title={premFull ? (t.calExportPDFTitle||"Export the yearly schedule to PDF") : (t.premiumSubscribersOnly||"Reserved for Premium subscribers")}
-                style={{display:"flex",alignItems:"center",gap:3,padding:"3px 7px",background:premFull?`${C.vio}15`:`${C.mut}15`,border:`1px solid ${premFull?C.vio:C.mut}44`,borderRadius:6,cursor:"pointer",transition:"all .15s",opacity:premFull?1:.6}}>
-                <span style={{fontSize:10}}>{premFull?"📄":"🔒"}</span>
-                <span style={{fontSize:9,color:premFull?C.vio:C.mut,fontWeight:800}}>PDF</span>
-              </button>
-              <button onClick={()=>setConfirmResetOverrides(true)} disabled={overridesCount===0}
-                title={t.calResetBtnTitle||"Reset all manual exchanges on the calendar"}
-                style={{display:"flex",alignItems:"center",gap:3,padding:"3px 7px",background:overridesCount?`${C.red}15`:`${C.mut}10`,border:`1px solid ${overridesCount?C.red:C.mut}33`,borderRadius:6,cursor:overridesCount?"pointer":"not-allowed",transition:"all .15s",opacity:overridesCount?1:.5}}>
-                <span style={{fontSize:10}}>🔄</span>
-                <span style={{fontSize:9,color:overridesCount?C.red:C.mut,fontWeight:800}}>{t.calResetBtnLabel||"Reset"}</span>
-              </button>
-            </>
+              {showCalActionsMenu && (
+                <>
+                  <div onClick={()=>setShowCalActionsMenu(false)} style={{position:"fixed",inset:0,zIndex:299}} />
+                  <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:12,minWidth:200,zIndex:300,boxShadow:"0 12px 30px rgba(0,0,0,.18)",overflow:"hidden"}}>
+                    <button onClick={()=>{downloadICS(cfg);setShowCalActionsMenu(false);}}
+                      title={t.calExportICalTitle||"Export to Google Calendar / Apple Calendar"}
+                      style={{width:"100%",padding:"9px 14px",background:"transparent",border:"none",borderBottom:`1px solid ${C.bor}`,display:"flex",alignItems:"center",gap:8,fontSize:12,fontWeight:700,color:C.grn,cursor:"pointer"}}>
+                      <span style={{fontSize:14,width:18,textAlign:"center"}}>📅</span>
+                      <span style={{flex:1,textAlign:"left"}}>iCal</span>
+                    </button>
+                    <button onClick={()=>{ setShowCalActionsMenu(false); if(!premFull){ onUpgrade(); return; } generateCalendarPDF(); }}
+                      title={premFull ? (t.calExportPDFTitle||"Export the yearly schedule to PDF") : (t.premiumSubscribersOnly||"Reserved for Premium subscribers")}
+                      style={{width:"100%",padding:"9px 14px",background:"transparent",border:"none",borderBottom:`1px solid ${C.bor}`,display:"flex",alignItems:"center",gap:8,fontSize:12,fontWeight:700,color:premFull?C.vio:C.mut,cursor:"pointer",opacity:premFull?1:.7}}>
+                      <span style={{fontSize:14,width:18,textAlign:"center"}}>{premFull?"📄":"🔒"}</span>
+                      <span style={{flex:1,textAlign:"left"}}>PDF</span>
+                    </button>
+                    <button onClick={()=>{setShowCalActionsMenu(false); if(overridesCount>0) setConfirmResetOverrides(true);}} disabled={overridesCount===0}
+                      title={t.calResetBtnTitle||"Reset all manual exchanges on the calendar"}
+                      style={{width:"100%",padding:"9px 14px",background:"transparent",border:"none",display:"flex",alignItems:"center",gap:8,fontSize:12,fontWeight:700,color:overridesCount?C.red:C.mut,cursor:overridesCount?"pointer":"not-allowed",opacity:overridesCount?1:.5}}>
+                      <span style={{fontSize:14,width:18,textAlign:"center"}}>🔄</span>
+                      <span style={{flex:1,textAlign:"left"}}>{t.calResetBtnLabel||"Reset"}</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           )}
           <InfoBubble C={C} tipKey={`duvia_caltip_${user?.id||"x"}`} title={t.tabCal||"Calendrier"}>
             {t.calTipBody||"Visualisez et gérez le planning de garde mensuel. Il est visible par tous les membres de la famille."}

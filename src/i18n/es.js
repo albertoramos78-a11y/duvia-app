@@ -171,6 +171,7 @@ const es = {
     calExportPDFTitle:"Exportar el calendario anual en PDF",
     calResetBtnTitle:"Reiniciar todos los intercambios manuales del calendario",
     calResetBtnLabel:"Reiniciar",
+    calActionsMenuTitle:"Opciones del calendario",
     familySyncTitle:"Sincro Servidor",
     familyCode:"Código de familia",
     syncConnecting:"Conectando…",

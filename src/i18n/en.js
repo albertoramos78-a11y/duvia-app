@@ -202,6 +202,7 @@ const en = {
     calExportPDFTitle:"Export the yearly schedule to PDF",
     calResetBtnTitle:"Reset all manual exchanges on the calendar",
     calResetBtnLabel:"Reset",
+    calActionsMenuTitle:"Calendar options",
     familySyncTitle:"Server Sync",
     familyCode:"Family code",
     syncConnecting:"Connecting…",
