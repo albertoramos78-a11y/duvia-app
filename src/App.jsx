@@ -11068,7 +11068,7 @@ function StepAccess() {
                 {value:"other",label:t.otherFamily,icon:"🧑"},
               ]} />
             </div>
-            <div onClick={()=>{if(!prem)return onUpgrade();setCanGuard(v=>!v);}} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",marginBottom:10,background:canGuard?`#f59e0b18`:`${C.sur}`,border:`1.5px solid ${canGuard?"#f59e0b":C.bor}`,borderRadius:10,cursor:"pointer",transition:"all .15s",opacity:prem?1:0.7}}>
+            <div onClick={()=>{if(!prem)return onUpgrade();setCanGuard(v=>!v);}} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",marginBottom:10,background:canGuard?`#f59e0b18`:C.card,border:`1.5px solid ${canGuard?"#f59e0b":C.bor}`,borderRadius:10,cursor:"pointer",transition:"all .15s",opacity:prem?1:0.7}}>
               <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${canGuard?"#f59e0b":C.bor}`,background:canGuard?"#f59e0b":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>
                 {canGuard&&<span style={{color:"#fff",fontSize:13,fontWeight:900}}>✓</span>}
               </div>
