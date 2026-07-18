@@ -754,5 +754,9 @@ const pt = {
     deleteConfirmBtn:"🗑️ Excluir",
     deleting:"Excluindo…",
     weekdaysLabel:"dias úteis",
+    weatherMorning:"Manhã",
+    weatherAfternoon:"Tarde",
+    weatherEvening:"Noite",
+    weatherDetailUnavailable:"Detalhe não disponível para este dia.",
   };
 export default pt;

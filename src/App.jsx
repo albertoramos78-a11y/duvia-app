@@ -23,7 +23,7 @@ import { usePush } from "./hooks/usePush";
 import { getMyLocation, setMyLocation } from "./services/supabase/locationService";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION, APP_VERSION } from './config.js';
-import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact, weatherIconFor, getInitials } from './utils/core.js';
+import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact, weatherIconFor, getInitials, aggregateHourlyPeriods } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, LICORNE, FILLEUL, BRAND, BRAND_GRADIENT, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
 
@@ -675,16 +675,33 @@ const MY_WEATHER_CACHE = {};
 async function fetchMyWeatherForecast(lat, lon) {
   const key = `${Number(lat).toFixed(2)}|${Number(lon).toFixed(2)}`;
   if (MY_WEATHER_CACHE[key]) return MY_WEATHER_CACHE[key];
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=16`;
+  // 🔧 hourly demandé dans la MÊME requête que daily (une seule requête,
+  // pas d'appel Open-Meteo supplémentaire) — alimente le popup météo
+  // détaillée matin/après-midi/soir (clic sur un jour de la bande).
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&hourly=weathercode,temperature_2m,precipitation_probability&timezone=auto&forecast_days=16`;
   const res = await fetch(url);
   if (!res.ok) throw new Error("weather fetch failed");
   const data = await res.json();
-  const days = (data?.daily?.time || []).map((dateStr, idx) => ({
-    date: dateStr,
-    code: data.daily.weathercode[idx],
-    tempMax: data.daily.temperature_2m_max[idx],
-    tempMin: data.daily.temperature_2m_min[idx],
-  }));
+  const hourlyTimes = data?.hourly?.time || [];
+  const days = (data?.daily?.time || []).map((dateStr, idx) => {
+    const dayHours = [];
+    hourlyTimes.forEach((t, hIdx) => {
+      if (!t.startsWith(dateStr)) return;
+      dayHours.push({
+        hour: Number(t.slice(11, 13)),
+        code: data.hourly.weathercode[hIdx],
+        temp: data.hourly.temperature_2m[hIdx],
+        rainChance: data.hourly.precipitation_probability[hIdx],
+      });
+    });
+    return {
+      date: dateStr,
+      code: data.daily.weathercode[idx],
+      tempMax: data.daily.temperature_2m_max[idx],
+      tempMin: data.daily.temperature_2m_min[idx],
+      periods: dayHours.length > 0 ? aggregateHourlyPeriods(dayHours) : null,
+    };
+  });
   MY_WEATHER_CACHE[key] = days;
   return days;
 }
@@ -11638,7 +11655,7 @@ function getSpecialEvents(date, cfg) {
 // CALENDAR TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
-  const {C,t,cfg,setCfg,updateCal: ctxUpdateCal,apiData,setMenuTab,setConfigStep,prem,perms,st,onUpgrade,isObs,isChild,user,sub,addHist,pushNotif,custodyShadow,familySync} = useApp();
+  const {C,t,cfg,setCfg,updateCal: ctxUpdateCal,apiData,setMenuTab,setConfigStep,prem,perms,st,onUpgrade,isObs,isChild,user,sub,addHist,pushNotif,custodyShadow,familySync,lang} = useApp();
   // 🔧 st vient du statut effectif partagé par la famille (effectiveSub), pas
   // du sub individuel — un parent couvert par le Premium de son co-parent doit
   // aussi avoir accès à l'export PDF, pas seulement le payeur réel.
@@ -11679,6 +11696,7 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
   // confidentialité, donc fetch Open-Meteo direct côté client, sans passer par
   // une Edge Function.
   const [myForecast, setMyForecast] = useState([]);
+  const [weatherDetailDay, setWeatherDetailDay] = useState(null);
   useEffect(() => {
     let cancelled = false;
     getMyLocation().then(loc => {
@@ -12144,13 +12162,48 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
             const { emoji } = weatherIconFor(d.code);
             const dowLabel = idx===0 ? (t.today||"Auj.") : new Date(d.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"short",day:"numeric"});
             return (
-              <div key={d.date} style={{flexShrink:0,minWidth:56,textAlign:"center",padding:"6px 4px",borderRadius:10,background:C.sur}}>
+              <div key={d.date} onClick={()=>setWeatherDetailDay(d)} style={{flexShrink:0,minWidth:56,textAlign:"center",padding:"6px 4px",borderRadius:10,background:C.sur,cursor:"pointer"}}>
                 <div style={{fontSize:10,fontWeight:700,color:C.mut,textTransform:"capitalize"}}>{dowLabel}</div>
                 <div style={{fontSize:18}}>{emoji}</div>
                 <div style={{fontSize:11,fontWeight:800,color:C.txt,whiteSpace:"nowrap"}}>{Math.round(d.tempMin)}° / {Math.round(d.tempMax)}°</div>
               </div>
             );
           })}
+        </div>
+      )}
+      {weatherDetailDay && (
+        <div onClick={()=>setWeatherDetailDay(null)} style={{position:"fixed",inset:0,zIndex:999,background:"rgba(23,16,58,.65)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,padding:"24px 20px",maxWidth:340,width:"100%",border:`1.5px solid ${C.bor}`,boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+              <div style={{fontSize:15,fontWeight:900,textTransform:"capitalize"}}>
+                {new Date(weatherDetailDay.date+"T12:00:00").toLocaleDateString(lang,{weekday:"long",day:"numeric",month:"long"})}
+              </div>
+              <button onClick={()=>setWeatherDetailDay(null)} style={{width:28,height:28,borderRadius:"50%",background:C.sur,border:"none",color:C.mut,fontSize:15,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
+            </div>
+            {weatherDetailDay.periods ? (
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {[
+                  {key:"morning", label:t.weatherMorning||"Matin"},
+                  {key:"afternoon", label:t.weatherAfternoon||"Après-midi"},
+                  {key:"evening", label:t.weatherEvening||"Soir"},
+                ].map(({key,label}) => {
+                  const p = weatherDetailDay.periods[key];
+                  if (!p) return null;
+                  const { emoji } = weatherIconFor(p.code);
+                  return (
+                    <div key={key} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 12px",background:C.sur,borderRadius:12}}>
+                      <div style={{fontSize:22,flexShrink:0}}>{emoji}</div>
+                      <div style={{flex:1,fontSize:13,fontWeight:700,color:C.txt}}>{label}</div>
+                      <div style={{fontSize:14,fontWeight:800,color:C.txt}}>{p.temp}°</div>
+                      <div style={{fontSize:12,color:C.blu,fontWeight:700,minWidth:36,textAlign:"right"}}>💧{p.rainChance}%</div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{fontSize:12,color:C.mut,textAlign:"center",padding:"12px 0"}}>{t.weatherDetailUnavailable||"Détail non disponible pour ce jour."}</div>
+            )}
+          </div>
         </div>
       )}
       <div style={{marginBottom:12,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",gap:8,flexWrap:"wrap"}}>

@@ -19,7 +19,7 @@ import {
   containsBadWord, isCleanText,
   upsertMessageById, addReader,
   insertValidatedParent, reconcileOwnParentSlot, placeholderNameFromEmail,
-  weatherIconFor, isWithinForecastWindow,
+  weatherIconFor, isWithinForecastWindow, aggregateHourlyPeriods,
   getInitials,
 } from "./core.js";
 
@@ -782,6 +782,48 @@ test("isWithinForecastWindow : dans 20 jours (au-delà de 16) -> false", () => {
 test("isWithinForecastWindow : fenêtre personnalisée à 3 jours", () => {
   assert.strictEqual(isWithinForecastWindow(daysFromNow(2), 3), true);
   assert.strictEqual(isWithinForecastWindow(daysFromNow(4), 3), false);
+});
+
+// ── aggregateHourlyPeriods (popup météo détaillée matin/après-midi/soir) ─────
+test("aggregateHourlyPeriods : température moyenne arrondie par créneau", () => {
+  const hours = [
+    { hour: 6, code: 0, temp: 10, rainChance: 0 },
+    { hour: 9, code: 0, temp: 12, rainChance: 0 },
+    { hour: 12, code: 1, temp: 20, rainChance: 0 },
+    { hour: 15, code: 1, temp: 22, rainChance: 0 },
+    { hour: 18, code: 2, temp: 16, rainChance: 0 },
+    { hour: 21, code: 2, temp: 14, rainChance: 0 },
+  ];
+  const r = aggregateHourlyPeriods(hours);
+  assert.strictEqual(r.morning.temp, 11);
+  assert.strictEqual(r.afternoon.temp, 21);
+  assert.strictEqual(r.evening.temp, 15);
+});
+test("aggregateHourlyPeriods : icône/risque de pluie pris à l'heure la plus pluvieuse du créneau", () => {
+  const hours = [
+    { hour: 7, code: 0, temp: 10, rainChance: 10 },
+    { hour: 10, code: 61, temp: 11, rainChance: 80 },
+    { hour: 13, code: 2, temp: 18, rainChance: 5 },
+  ];
+  const r = aggregateHourlyPeriods(hours);
+  assert.strictEqual(r.morning.code, 61);
+  assert.strictEqual(r.morning.rainChance, 80);
+  assert.strictEqual(r.afternoon.code, 2);
+});
+test("aggregateHourlyPeriods : égalité de risque de pluie -> heure la plus tôt gagne", () => {
+  const hours = [
+    { hour: 6, code: 1, temp: 10, rainChance: 50 },
+    { hour: 8, code: 61, temp: 11, rainChance: 50 },
+  ];
+  const r = aggregateHourlyPeriods(hours);
+  assert.strictEqual(r.morning.code, 1);
+});
+test("aggregateHourlyPeriods : créneau sans heure correspondante -> null", () => {
+  const hours = [{ hour: 6, code: 0, temp: 10, rainChance: 0 }];
+  const r = aggregateHourlyPeriods(hours);
+  assert.strictEqual(r.morning !== null, true);
+  assert.strictEqual(r.afternoon, null);
+  assert.strictEqual(r.evening, null);
 });
 
 // ── getInitials (badges avatar/légende compacts) ─────────────────────────────

@@ -754,5 +754,9 @@ const de = {
     deleteConfirmBtn:"🗑️ Löschen",
     deleting:"Wird gelöscht…",
     weekdaysLabel:"Wochentage",
+    weatherMorning:"Morgens",
+    weatherAfternoon:"Nachmittags",
+    weatherEvening:"Abends",
+    weatherDetailUnavailable:"Details für diesen Tag nicht verfügbar.",
   };
 export default de;

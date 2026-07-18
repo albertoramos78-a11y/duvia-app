@@ -676,3 +676,24 @@ export function isWithinForecastWindow(dateStr, maxDays = 16) {
   const diffDays = Math.round((target - today) / 86400000);
   return diffDays >= 0 && diffDays < maxDays;
 }
+
+// hours: un jour de données Open-Meteo `hourly`, déjà extrait/aplati en
+// [{hour:0-23, code, temp, rainChance}, ...] (peu importe l'ordre des heures
+// présentes — un jour peut en avoir moins de 24, ex. fenêtre de prévision
+// tronquée). Regroupe en 3 créneaux (matin/après-midi/soir) : température
+// moyenne arrondie, et l'icône/risque de pluie pris à l'heure la PLUS
+// pluvieuse du créneau (cohérent avec le code météo `daily` d'Open-Meteo,
+// déjà un "pire du jour" — même logique appliquée par créneau). Un créneau
+// sans heure correspondante renvoie null plutôt qu'un objet incomplet.
+export function aggregateHourlyPeriods(hours) {
+  const PERIOD_RANGES = { morning: [6, 11], afternoon: [12, 17], evening: [18, 23] };
+  const result = {};
+  for (const [period, [start, end]] of Object.entries(PERIOD_RANGES)) {
+    const slice = hours.filter(h => h.hour >= start && h.hour <= end);
+    if (slice.length === 0) { result[period] = null; continue; }
+    const avgTemp = slice.reduce((sum, h) => sum + h.temp, 0) / slice.length;
+    const worst = slice.reduce((best, h) => (h.rainChance > best.rainChance ? h : best), slice[0]);
+    result[period] = { code: worst.code, temp: Math.round(avgTemp), rainChance: worst.rainChance };
+  }
+  return result;
+}

@@ -786,5 +786,9 @@ const en = {
     deleteConfirmBtn:"🗑️ Delete",
     deleting:"Deleting…",
     weekdaysLabel:"weekdays",
+    weatherMorning:"Morning",
+    weatherAfternoon:"Afternoon",
+    weatherEvening:"Evening",
+    weatherDetailUnavailable:"Detail not available for this day.",
   };
 export default en;
