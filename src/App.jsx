@@ -1775,6 +1775,39 @@ function useFamilySync(cfg, setCfg) {
     return () => { cancelled = true; if (ch) supabase.removeChannel(ch); };
   }, [familyId]);
 
+  // ── Multi-familles : détecter une NOUVELLE adhésion active ailleurs ──────
+  // 🔧 Bug réel trouvé en investiguant le backlog "observateur dans plusieurs
+  // familles" : `refreshFamilies()` (qui alimente le sélecteur de familles)
+  // n'est appelé que sur des actions auto-déclenchées par CET appareil
+  // (créer/rejoindre/quitter une famille) ou au montage — jamais en réaction
+  // à un événement survenant dans une AUTRE famille que celle actuellement
+  // active. Exemple concret : un observateur (ex: un grand-parent suivant 2
+  // familles séparées) déjà actif dans la Famille A accepte une invitation
+  // pour la Famille B → reste "pending" dans B jusqu'à validation par un
+  // parent de B ; l'effet d'éjection ci-dessus n'écoute QUE
+  // `family_id=eq.${familyId}` (la famille A active), donc quand un parent de
+  // B valide enfin cet observateur, rien ne le détecte côté client — la
+  // Famille B n'apparaît dans le sélecteur qu'après un rechargement complet
+  // de l'app. Ce nouvel effet écoute TOUTES les lignes family_members de CE
+  // compte (filtré sur user_id, pas family_id), quelle que soit la famille,
+  // et rafraîchit la liste dès qu'une adhésion change — sans dépendre de
+  // familyId, donc actif même avant qu'une famille "active" soit connue.
+  useEffect(() => {
+    let ch; let cancelled = false;
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      const uid = data?.user?.id;
+      if (!uid || cancelled) return;
+      ch = supabase
+        .channel(`fm_mine_${uid}`)
+        .on("postgres_changes",
+          { event: "*", schema: "public", table: "family_members", filter: `user_id=eq.${uid}` },
+          () => { refreshFamilies(uid); })
+        .subscribe();
+    })();
+    return () => { cancelled = true; if (ch) supabase.removeChannel(ch); };
+  }, []);
+
   // ── Realtime + polling fallback 30s ───────────────────────────────────────
   // Realtime : push instantané quand un obs clique sur son lien (INSERT/UPDATE).
   // Polling 30s + focus/visibilité : filet de sécurité si Realtime est désactivé.
