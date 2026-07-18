@@ -14976,8 +14976,11 @@ function ParrainageSection() {
           <div style={{position:"relative",height:8,borderRadius:99,background:C.sur,overflow:"hidden",marginBottom:8}}>
             <div style={{position:"absolute",inset:0,right:`${100-scorePct}%`,background:`linear-gradient(90deg,${C.vio},${C.blu})`,borderRadius:99,transition:"right .5s cubic-bezier(.4,0,.2,1)"}}/>
           </div>
-          <div style={{fontSize:11,color:C.mut}}>
+          <div style={{fontSize:11,color:C.mut,marginBottom:6}}>
             {(t.refFilleulProgressDesc||"Complète {target} pts ({strong} actions fortes) pour débloquer : Premium – {days}j pour toi + bonus pour ton parrain").replace("{target}",REF_SCORE_TARGET).replace("{strong}",REF_STRONG_MIN).replace("{days}",FILLEUL_BONUS_DAYS)}
+          </div>
+          <div style={{fontSize:10,color:C.mut,fontStyle:"italic"}}>
+            {t.refEngagementPointsExplain||"💸 Une dépense ajoutée, 💬 un message envoyé ou 👤 un contact ajouté compte pour 1 point chacun."}
           </div>
         </div>
       )}
@@ -14992,14 +14995,31 @@ function ParrainageSection() {
       <div className="card" style={{marginBottom:12,padding:"18px 16px"}}>
         <div style={{fontSize:12,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".1em",marginBottom:14}}>{t.refRewardsTitle||"Vos récompenses parrain"}</div>
 
+        {/* Phase Freemium — aucun jour offert, roue uniquement (déjà la règle
+            serveur réelle dans credit_referral_validation(), voir migration
+            0040 : v_referrer_is_freemium → v_bonus_days:=0 ; ce bloc ne fait
+            qu'enfin l'afficher correctement au lieu de laisser croire, via le
+            même tableau que la phase Trial ci-dessous, qu'un parrain Freemium
+            gagne aussi des jours). */}
+        <div style={{fontSize:11,fontWeight:800,color:C.mut,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>
+          <span>{t.refPhaseFreemiumTitle||"🎁 Phase Freemium"}</span>
+        </div>
+        <div style={{borderRadius:10,overflow:"hidden",border:`1px solid ${C.bor}`,marginBottom:14,background:`${C.grn}08`}}>
+          <div style={{display:"flex",alignItems:"center",padding:"10px 12px"}}>
+            <div style={{flex:1,fontSize:12,color:C.txt,fontWeight:600}}>{t.refFreemiumTierLabel||"Chaque filleul"}</div>
+            <div style={{fontSize:11,color:C.yel,fontWeight:700,minWidth:40,textAlign:"right"}}>🎰 ×{SPIN_PER_REF}</div>
+          </div>
+        </div>
+
         {/* Phase Trial / Earned */}
-        <div style={{fontSize:11,fontWeight:800,color:C.blu,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
-          <span>{t.refPhaseTrialTitle||"🎁 Phase Premium sans abonnement"}</span>
+        <div style={{fontSize:11,fontWeight:800,color:C.blu,textTransform:"uppercase",letterSpacing:".07em",marginBottom:2,display:"flex",alignItems:"center",gap:6}}>
+          <span>{t.refPhaseTrialTitle||"🎁 Phase Trial Premium 15j"}</span>
           <span style={{background:`${C.blu}18`,color:C.blu,borderRadius:8,padding:"1px 7px",fontSize:10}}>{(t.refPhaseTrialBadge||"plafond {max}j depuis J0").replace("{max}",TRIAL_MAX_DAYS)}</span>
         </div>
+        <div style={{fontSize:10,color:C.mut,marginBottom:8}}>{t.refPhaseTrialSubtitle||"Obtient jusqu'à 1 mois d'utilisation Trial Premium gratuit"}</div>
         <div style={{borderRadius:10,overflow:"hidden",border:`1px solid ${C.bor}`,marginBottom:14}}>
           {[
-            {rang:t.refTier1Label||"1er filleul validé", jours:`+${REF_TRIAL_PALIERS[1]}j`, upgrade:t.refTier1Upgrade||"→ Premium – x j 🎁", color:C.grn, highlight:true},
+            {rang:t.refTier1Label||"1er filleul validé", jours:`+${REF_TRIAL_PALIERS[1]}j`, upgrade:"", color:C.grn, highlight:true},
             {rang:t.refTier2Label||"2e filleul validé",  jours:`+${REF_TRIAL_PALIERS[2]}j`, upgrade:"",                   color:C.grn, highlight:false},
             {rang:t.refTier3PlusLabel||"3e filleul et +",    jours:"0j",                        upgrade:t.refTierCapReached||"Plafond 30j atteint", color:C.mut, highlight:false},
           ].map((r,i)=>(
