@@ -4136,7 +4136,7 @@ export default function App() {
     : C._filleul ? `linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.2)),url('/theme/filleul/wallpaper-header.jpg') center/cover no-repeat`
     : C._summer ? `linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.2)),url('/theme/summer/wallpaper-header.jpg') center/cover no-repeat`
     : C._licorne ? `linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.2)),url('/theme/licorne/wallpaper-header.jpg') center/cover no-repeat`
-    : C._video ? `linear-gradient(rgba(95,95,100,.75),rgba(95,95,100,.75)),url('/theme/video_game/wallpaper-header.jpg') center/cover no-repeat`
+    : C._video ? `url('/theme/video_game/wallpaper-header.jpg') center/cover no-repeat`
     : C.card;
   // 🔧 Le scrim blanc à 50% n'a de sens que sur un header à fond dégradé/photo
   // (BRAND, FILLEUL, SUMMER, LICORNE) — sur un header plat (tous les autres
