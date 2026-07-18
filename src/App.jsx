@@ -1323,10 +1323,8 @@ button{border-radius:12px!important;}
 ` : '';
   const videoExtras = C._video ? `
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
-body{background:#07071a!important;background-image:linear-gradient(rgba(91,33,182,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(91,33,182,.04) 1px,transparent 1px)!important;background-size:32px 32px!important;min-height:100vh;}
-body::before{content:"🎮";position:fixed;top:14px;right:70px;font-size:22px;animation:gameFloat 2.5s ease-in-out infinite;pointer-events:none;z-index:9999;}
+body{background:linear-gradient(rgba(7,7,26,.75),rgba(7,7,26,.8)),url('/theme/video_game/wallpaper.jpg')!important;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;min-height:100vh;}
 body::after{content:"";position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(139,92,246,.025) 3px,rgba(139,92,246,.025) 4px);pointer-events:none;z-index:0;}
-@keyframes gameFloat{0%,100%{transform:translateY(0) rotate(-8deg)}50%{transform:translateY(-7px) rotate(8deg)}}
 @keyframes neonPulse{0%,100%{box-shadow:0 0 8px rgba(139,92,246,.5),0 0 20px rgba(139,92,246,.2),inset 0 1px 0 rgba(139,92,246,.15)}50%{box-shadow:0 0 18px rgba(139,92,246,.9),0 0 40px rgba(139,92,246,.45),inset 0 1px 0 rgba(139,92,246,.3)}}
 @keyframes neonSlide{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
 @keyframes pixelBlink{0%,49%{opacity:1}50%,100%{opacity:0}}
@@ -4138,6 +4136,7 @@ export default function App() {
     : C._filleul ? `linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.2)),url('/theme/filleul/wallpaper-header.jpg') center/cover no-repeat`
     : C._summer ? `linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.2)),url('/theme/summer/wallpaper-header.jpg') center/cover no-repeat`
     : C._licorne ? `linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.2)),url('/theme/licorne/wallpaper-header.jpg') center/cover no-repeat`
+    : C._video ? `linear-gradient(rgba(7,7,26,.5),rgba(7,7,26,.5)),url('/theme/video_game/wallpaper-header.jpg') center/cover no-repeat`
     : C.card;
   // 🔧 Le scrim blanc à 50% n'a de sens que sur un header à fond dégradé/photo
   // (BRAND, FILLEUL, SUMMER, LICORNE) — sur un header plat (tous les autres
@@ -5064,7 +5063,7 @@ export default function App() {
           et cassait la continuité visuelle à chaque bordure (ex: la tige de
           la pousse ne se prolongeait pas d'une barre à l'autre). */}
       <div style={{background:headerBG}}>
-      <div style={{flexShrink:0,background:"transparent",borderBottom:(C._filleul||C._summer||C._licorne)?"none":`1.5px solid ${C.bor}`,boxShadow:(C._filleul||C._summer||C._licorne)?"none":"0 1px 6px rgba(0,0,0,.06)"}}>
+      <div style={{flexShrink:0,background:"transparent",borderBottom:(C._filleul||C._summer||C._licorne||C._video)?"none":`1.5px solid ${C.bor}`,boxShadow:(C._filleul||C._summer||C._licorne||C._video)?"none":"0 1px 6px rgba(0,0,0,.06)"}}>
       <div style={{padding:"0 14px",display:"flex",alignItems:"center",gap:12,height:58}}>
         <img src="/logo-nav.png" alt="Duvia" style={{width:126,height:126,objectFit:"contain",flexShrink:0,animation:(sub?.pendingSpins||0)>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}} />
         <div style={{display:"flex",flexDirection:"column",justifyContent:"center",minWidth:0,flex:1}}>
@@ -5410,7 +5409,7 @@ export default function App() {
         <div style={{
           flexShrink:0,
           background:"transparent",
-          borderBottom:(C._filleul||C._summer||C._licorne)?"none":`1.5px solid ${C.bor}`,
+          borderBottom:(C._filleul||C._summer||C._licorne||C._video)?"none":`1.5px solid ${C.bor}`,
           padding:"6px 14px",
           display:"flex",alignItems:"center",gap:8,
         }}>
@@ -5468,7 +5467,7 @@ export default function App() {
         /* 🔧 Direction "moderne mais douce" (branche staging) : pastille de
            fond arrondie derrière l'icône active, au lieu d'un soulignement
            dur — mêmes couleurs (C.vio/C.mut), juste le traitement visuel. */
-        <div style={{flexShrink:0,background:(C._filleul||C._summer||C._licorne)?"linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.85) 12px)":"transparent",borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:(C._filleul||C._summer||C._licorne)?"none":"0 1px 6px rgba(0,0,0,.05)",padding:"6px 6px"}}>
+        <div style={{flexShrink:0,background:C._video?"linear-gradient(to bottom, rgba(7,7,26,0), rgba(7,7,26,.85) 12px)":(C._filleul||C._summer||C._licorne)?"linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.85) 12px)":"transparent",borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:(C._filleul||C._summer||C._licorne||C._video)?"none":"0 1px 6px rgba(0,0,0,.05)",padding:"6px 6px"}}>
           {TABS.map((tb,i) => (
             <button key={i} onClick={()=>{ switchTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,margin:"0 2px",padding:"8px 2px",background:tab===i&&!menuTab?C.sur:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,border:`1.5px solid ${tab===i&&!menuTab?`${C.vio}55`:"transparent"}`,borderRadius:14,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",boxShadow:tab===i&&!menuTab?"0 2px 8px rgba(0,0,0,.1)":"none",transition:"all .2s cubic-bezier(.16,1,.3,1)"}}>
               <span style={{lineHeight:1,display:"inline-flex",alignItems:"center",justifyContent:"center",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}>
