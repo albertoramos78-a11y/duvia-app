@@ -11671,6 +11671,19 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
   const [showCalActionsMenu,setShowCalActionsMenu]=useState(false);
   const [calView,setCalView]=useLocalStorage("duvia_cal_view","list");
   const calViewDir=useRef("right"); // "right" = list→grid, "left" = grid→list
+  // 🔧 Balayage tactile (mobile) : glisser à gauche/droite sur le calendrier
+  // (vues Détaillée et Miniature) change de mois, comme les flèches de nav.
+  const swipeStart=useRef(null);
+  const handleCalTouchStart=(e)=>{ swipeStart.current={x:e.touches[0].clientX,y:e.touches[0].clientY}; };
+  const handleCalTouchEnd=(e)=>{
+    if(!swipeStart.current) return;
+    const dx=e.changedTouches[0].clientX-swipeStart.current.x;
+    const dy=e.changedTouches[0].clientY-swipeStart.current.y;
+    swipeStart.current=null;
+    if(Math.abs(dx)<50 || Math.abs(dx)<Math.abs(dy)*1.5) return; // pas assez horizontal
+    if(dx<0) setCur(d=>new Date(d.getFullYear(),d.getMonth()+1,1));
+    else setCur(d=>new Date(d.getFullYear(),d.getMonth()-1,1));
+  };
   function switchCalView(v){ calViewDir.current=v==="grid"?"right":"left"; setCalView(v); }
   const editRef=useRef(null);
 
@@ -12157,56 +12170,61 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
         </div>
       )}
       {perms?.weatherEnabled && myForecast.length > 0 && (
-        <div style={{display:"flex",gap:8,overflowX:"auto",padding:"8px 4px",marginBottom:10}}>
-          {myForecast.map((d,idx) => {
-            const { emoji } = weatherIconFor(d.code);
-            const dowLabel = idx===0 ? (t.today||"Auj.") : new Date(d.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"short",day:"numeric"});
-            return (
-              <div key={d.date} onClick={(e)=>{setWeatherDetailOrigin({x:e.clientX,y:e.clientY});setWeatherDetailDay(d);}} style={{flexShrink:0,minWidth:56,textAlign:"center",padding:"6px 4px",borderRadius:10,background:C.sur,cursor:"pointer"}}>
-                <div style={{fontSize:10,fontWeight:700,color:C.mut,textTransform:"capitalize"}}>{dowLabel}</div>
-                <div style={{fontSize:18}}>{emoji}</div>
-                <div style={{fontSize:11,fontWeight:800,color:C.txt,whiteSpace:"nowrap"}}>{Math.round(d.tempMin)}° / {Math.round(d.tempMax)}°</div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      {weatherDetailDay && (
-        <div onClick={()=>{setWeatherDetailDay(null);setWeatherDetailOrigin(null);}} style={{position:"fixed",inset:0,zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,padding:"24px 20px",maxWidth:340,width:"100%",border:`1.5px solid ${C.bor}`,boxShadow:"0 20px 60px rgba(0,0,0,.3)",
-            transformOrigin: weatherDetailOrigin ? `calc(50% + ${weatherDetailOrigin.x - window.innerWidth/2}px) calc(50% + ${weatherDetailOrigin.y - window.innerHeight/2}px)` : "center",
-            animation:"weatherPopupGrow .22s cubic-bezier(.16,1,.3,1)"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-              <div style={{fontSize:15,fontWeight:900,textTransform:"capitalize"}}>
-                {new Date(weatherDetailDay.date+"T12:00:00").toLocaleDateString(lang,{weekday:"long",day:"numeric",month:"long"})}
-              </div>
-              <button onClick={()=>{setWeatherDetailDay(null);setWeatherDetailOrigin(null);}} style={{width:28,height:28,borderRadius:"50%",background:C.sur,border:"none",color:C.mut,fontSize:15,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
-            </div>
-            {weatherDetailDay.periods ? (
-              <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                {[
-                  {key:"morning", label:t.weatherMorning||"Matin"},
-                  {key:"afternoon", label:t.weatherAfternoon||"Après-midi"},
-                  {key:"evening", label:t.weatherEvening||"Soir"},
-                ].map(({key,label}) => {
-                  const p = weatherDetailDay.periods[key];
-                  if (!p) return null;
-                  const { emoji } = weatherIconFor(p.code);
-                  return (
-                    <div key={key} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 12px",background:C.sur,borderRadius:12}}>
-                      <div style={{fontSize:22,flexShrink:0}}>{emoji}</div>
-                      <div style={{flex:1,fontSize:13,fontWeight:700,color:C.txt}}>{label}</div>
-                      <div style={{fontSize:14,fontWeight:800,color:C.txt}}>{p.temp}°</div>
-                      <div style={{fontSize:12,color:C.blu,fontWeight:700,minWidth:36,textAlign:"right"}}>💧{p.rainChance}%</div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div style={{fontSize:12,color:C.mut,textAlign:"center",padding:"12px 0"}}>{t.weatherDetailUnavailable||"Détail non disponible pour ce jour."}</div>
-            )}
+        <div style={{position:"relative",marginBottom:10}}>
+          <div style={{display:"flex",gap:8,overflowX:"auto",padding:"8px 4px"}}>
+            {myForecast.map((d,idx) => {
+              const { emoji } = weatherIconFor(d.code);
+              const dowLabel = idx===0 ? (t.today||"Auj.") : new Date(d.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"short",day:"numeric"});
+              return (
+                <div key={d.date} onClick={(e)=>{setWeatherDetailOrigin({x:e.clientX,y:e.clientY});setWeatherDetailDay(d);}} style={{flexShrink:0,minWidth:56,textAlign:"center",padding:"6px 4px",borderRadius:10,background:C.sur,cursor:"pointer"}}>
+                  <div style={{fontSize:10,fontWeight:700,color:C.mut,textTransform:"capitalize"}}>{dowLabel}</div>
+                  <div style={{fontSize:18}}>{emoji}</div>
+                  <div style={{fontSize:11,fontWeight:800,color:C.txt,whiteSpace:"nowrap"}}>{Math.round(d.tempMin)}° / {Math.round(d.tempMax)}°</div>
+                </div>
+              );
+            })}
           </div>
-          <style>{`@keyframes weatherPopupGrow{from{transform:scale(.05);opacity:0}to{transform:scale(1);opacity:1}}`}</style>
+          {weatherDetailDay && (
+            <>
+              <div onClick={()=>{setWeatherDetailDay(null);setWeatherDetailOrigin(null);}} style={{position:"fixed",inset:0,zIndex:998}} />
+              <div style={{position:"absolute",top:"100%",left:0,right:0,marginTop:6,zIndex:999,display:"flex",justifyContent:"center"}}>
+                <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,padding:"24px 20px",maxWidth:340,width:"100%",border:`1.5px solid ${C.bor}`,boxShadow:"0 20px 60px rgba(0,0,0,.3)",
+                  transformOrigin: weatherDetailOrigin ? `calc(50% + ${weatherDetailOrigin.x - window.innerWidth/2}px) 0` : "center top",
+                  animation:"weatherPopupGrow .22s cubic-bezier(.16,1,.3,1)"}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+                    <div style={{fontSize:15,fontWeight:900,textTransform:"capitalize"}}>
+                      {new Date(weatherDetailDay.date+"T12:00:00").toLocaleDateString(lang,{weekday:"long",day:"numeric",month:"long"})}
+                    </div>
+                    <button onClick={()=>{setWeatherDetailDay(null);setWeatherDetailOrigin(null);}} style={{width:28,height:28,borderRadius:"50%",background:C.sur,border:"none",color:C.mut,fontSize:15,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
+                  </div>
+                  {weatherDetailDay.periods ? (
+                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                      {[
+                        {key:"morning", label:t.weatherMorning||"Matin"},
+                        {key:"afternoon", label:t.weatherAfternoon||"Après-midi"},
+                        {key:"evening", label:t.weatherEvening||"Soir"},
+                      ].map(({key,label}) => {
+                        const p = weatherDetailDay.periods[key];
+                        if (!p) return null;
+                        const { emoji } = weatherIconFor(p.code);
+                        return (
+                          <div key={key} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 12px",background:C.sur,borderRadius:12}}>
+                            <div style={{fontSize:22,flexShrink:0}}>{emoji}</div>
+                            <div style={{flex:1,fontSize:13,fontWeight:700,color:C.txt}}>{label}</div>
+                            <div style={{fontSize:14,fontWeight:800,color:C.txt}}>{p.temp}°</div>
+                            <div style={{fontSize:12,color:C.blu,fontWeight:700,minWidth:36,textAlign:"right"}}>💧{p.rainChance}%</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{fontSize:12,color:C.mut,textAlign:"center",padding:"12px 0"}}>{t.weatherDetailUnavailable||"Détail non disponible pour ce jour."}</div>
+                  )}
+                </div>
+              </div>
+              <style>{`@keyframes weatherPopupGrow{from{transform:scale(.05);opacity:0}to{transform:scale(1);opacity:1}}`}</style>
+            </>
+          )}
         </div>
       )}
       <div style={{marginBottom:12,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",gap:8,flexWrap:"wrap"}}>
@@ -12221,6 +12239,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
           </button>
         </div>
       </div>
+      <div onTouchStart={handleCalTouchStart} onTouchEnd={handleCalTouchEnd}>
       {calView==="grid" && (
         <div style={{animation:`calSlideIn${calViewDir.current==="right"?"Right":"Left"} 0.28s cubic-bezier(.16,1,.3,1) both`}}>
         <MonthGridCalendar
@@ -12318,6 +12337,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
       </div>
       </div>
       )}
+      </div>
       {fullDs&&!readOnly&&!editBlocked&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setFullDs(null)}><div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto",borderRadius:18}}><EditDay ds={fullDs} onClose={()=>setFullDs(null)} editRef={editRef} /></div></div>)}
     </div>
   );
