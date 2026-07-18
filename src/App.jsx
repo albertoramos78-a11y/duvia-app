@@ -5446,7 +5446,7 @@ export default function App() {
         /* 🔧 Direction "moderne mais douce" (branche staging) : pastille de
            fond arrondie derrière l'icône active, au lieu d'un soulignement
            dur — mêmes couleurs (C.vio/C.mut), juste le traitement visuel. */
-        <div style={{flexShrink:0,background:"transparent",borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:"0 1px 6px rgba(0,0,0,.05)",padding:"6px 6px"}}>
+        <div style={{flexShrink:0,background:C._filleul?"rgba(255,255,255,.45)":"transparent",borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:"0 1px 6px rgba(0,0,0,.05)",padding:"6px 6px"}}>
           {TABS.map((tb,i) => (
             <button key={i} onClick={()=>{ switchTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,margin:"0 2px",padding:"8px 2px",background:tab===i&&!menuTab?C.sur:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,border:`1.5px solid ${tab===i&&!menuTab?`${C.vio}55`:"transparent"}`,borderRadius:14,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",boxShadow:tab===i&&!menuTab?"0 2px 8px rgba(0,0,0,.1)":"none",transition:"all .2s cubic-bezier(.16,1,.3,1)"}}>
               <span style={{lineHeight:1,display:"inline-block",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}><Emoji size="1.15em" invert={isDarkBg && tb.icon==="📞"}>{tb.icon}</Emoji></span>
