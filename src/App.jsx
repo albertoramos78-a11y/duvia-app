@@ -1323,20 +1323,20 @@ button{border-radius:12px!important;}
 ` : '';
   const videoExtras = C._video ? `
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
-body{background:linear-gradient(rgba(7,7,26,.75),rgba(7,7,26,.8)),url('/theme/video_game/wallpaper.jpg')!important;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;min-height:100vh;}
+body{background:linear-gradient(rgba(30,30,40,.75),rgba(30,30,40,.8)),url('/theme/video_game/wallpaper.jpg')!important;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;min-height:100vh;}
 body::after{content:"";position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(139,92,246,.025) 3px,rgba(139,92,246,.025) 4px);pointer-events:none;z-index:0;}
 @keyframes neonPulse{0%,100%{box-shadow:0 0 8px rgba(139,92,246,.5),0 0 20px rgba(139,92,246,.2),inset 0 1px 0 rgba(139,92,246,.15)}50%{box-shadow:0 0 18px rgba(139,92,246,.9),0 0 40px rgba(139,92,246,.45),inset 0 1px 0 rgba(139,92,246,.3)}}
 @keyframes neonSlide{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
 @keyframes pixelBlink{0%,49%{opacity:1}50%,100%{opacity:0}}
-.card{background:linear-gradient(150deg,#0f0f2a 0%,#0b0b20 100%)!important;border:1.5px solid #5b21b6!important;border-radius:10px!important;box-shadow:0 0 14px rgba(139,92,246,.18),inset 0 1px 0 rgba(139,92,246,.12)!important;}
+.card{background:linear-gradient(150deg,#282836 0%,#242430 100%)!important;border:1.5px solid #5b21b6!important;border-radius:10px!important;box-shadow:0 0 14px rgba(139,92,246,.18),inset 0 1px 0 rgba(139,92,246,.12)!important;}
 .card:hover{border-color:#8b5cf6!important;box-shadow:0 0 24px rgba(139,92,246,.38),inset 0 1px 0 rgba(139,92,246,.25)!important;transform:translateY(-1px);}
 .sec{font-family:'Orbitron',sans-serif!important;color:#8b5cf6!important;font-size:10px!important;letter-spacing:.18em!important;text-shadow:0 0 10px rgba(139,92,246,.7)!important;}
 .fi{background:transparent!important;}
-input,select{background:#0b0b22!important;border:1.5px solid #5b21b6!important;border-radius:8px!important;color:#ede9fe!important;height:44px!important;}
+input,select{background:#242430!important;border:1.5px solid #5b21b6!important;border-radius:8px!important;color:#ede9fe!important;height:44px!important;}
 input:focus,select:focus{border-color:#8b5cf6!important;box-shadow:0 0 0 3px rgba(139,92,246,.25),0 0 14px rgba(139,92,246,.35)!important;}
 button{border-radius:8px!important;}
-.nav-tab{background:#0a0a1e!important;}
-.nav-tab.active{background:#181835!important;border-bottom-color:#8b5cf6!important;filter:drop-shadow(0 0 6px rgba(139,92,246,.5));}
+.nav-tab{background:#22222c!important;}
+.nav-tab.active{background:#32323f!important;border-bottom-color:#8b5cf6!important;filter:drop-shadow(0 0 6px rgba(139,92,246,.5));}
 ` : '';
   const brandExtras = C._brand ? `
 body{background:linear-gradient(145deg,#2d2d3a 0%,#1e1e2e 30%,#2a2a3c 60%,#1a1a2a 100%)!important;min-height:100vh;}
@@ -4136,7 +4136,7 @@ export default function App() {
     : C._filleul ? `linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.2)),url('/theme/filleul/wallpaper-header.jpg') center/cover no-repeat`
     : C._summer ? `linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.2)),url('/theme/summer/wallpaper-header.jpg') center/cover no-repeat`
     : C._licorne ? `linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.2)),url('/theme/licorne/wallpaper-header.jpg') center/cover no-repeat`
-    : C._video ? `linear-gradient(rgba(7,7,26,.5),rgba(7,7,26,.5)),url('/theme/video_game/wallpaper-header.jpg') center/cover no-repeat`
+    : C._video ? `linear-gradient(rgba(30,30,40,.5),rgba(30,30,40,.5)),url('/theme/video_game/wallpaper-header.jpg') center/cover no-repeat`
     : C.card;
   // 🔧 Le scrim blanc à 50% n'a de sens que sur un header à fond dégradé/photo
   // (BRAND, FILLEUL, SUMMER, LICORNE) — sur un header plat (tous les autres
@@ -5467,7 +5467,7 @@ export default function App() {
         /* 🔧 Direction "moderne mais douce" (branche staging) : pastille de
            fond arrondie derrière l'icône active, au lieu d'un soulignement
            dur — mêmes couleurs (C.vio/C.mut), juste le traitement visuel. */
-        <div style={{flexShrink:0,background:C._video?"linear-gradient(to bottom, rgba(7,7,26,0), rgba(7,7,26,.85) 12px)":(C._filleul||C._summer||C._licorne)?"linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.85) 12px)":"transparent",borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:(C._filleul||C._summer||C._licorne||C._video)?"none":"0 1px 6px rgba(0,0,0,.05)",padding:"6px 6px"}}>
+        <div style={{flexShrink:0,background:C._video?"linear-gradient(to bottom, rgba(30,30,40,0), rgba(30,30,40,.85) 12px)":(C._filleul||C._summer||C._licorne)?"linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.85) 12px)":"transparent",borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:(C._filleul||C._summer||C._licorne||C._video)?"none":"0 1px 6px rgba(0,0,0,.05)",padding:"6px 6px"}}>
           {TABS.map((tb,i) => (
             <button key={i} onClick={()=>{ switchTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,margin:"0 2px",padding:"8px 2px",background:tab===i&&!menuTab?C.sur:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,border:`1.5px solid ${tab===i&&!menuTab?`${C.vio}55`:"transparent"}`,borderRadius:14,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",boxShadow:tab===i&&!menuTab?"0 2px 8px rgba(0,0,0,.1)":"none",transition:"all .2s cubic-bezier(.16,1,.3,1)"}}>
               <span style={{lineHeight:1,display:"inline-flex",alignItems:"center",justifyContent:"center",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}>

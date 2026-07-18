@@ -12,7 +12,12 @@ export function isWCPeriod() { const n=new Date(); return n>=WC_START && n<=WC_E
 export const SUMMER_START = new Date("2026-06-21"); export const SUMMER_END = new Date("2026-07-23T23:59:59");
 export function isSummerPeriod() { const n=new Date(); return n>=SUMMER_START && n<=SUMMER_END; }
 // ─── THÈME JEU VIDÉO ──────────────────────────────────────────────────────────
-export const VIDEO = { bg:"#07071a",card:"#0f0f2a",sur:"#181835",bor:"#5b21b6",txt:"#ede9fe",mut:"#7c6fa0",inp:"#0b0b22",vio:"#8b5cf6",blu:"#06b6d4",grn:"#22c55e",yel:"#fbbf24",red:"#f43f5e",ora:"#fb923c",pin:"#ec4899",_video:true };
+// 🔧 bg/card/sur/inp éclaircis (gris plus neutre, moins "noir violet profond")
+// suite au retour "trop sombre" ; mut également éclairci en conséquence
+// (contraste vérifié WCAG : mut sur sur le plus clair, sur, = 5.01:1, seuil
+// AA texte 4.5:1 — l'ancien mut #7c6fa0 tombait à 2.79:1 sur ces nouvelles
+// surfaces plus claires).
+export const VIDEO = { bg:"#1e1e28",card:"#282836",sur:"#32323f",bor:"#5b21b6",txt:"#ede9fe",mut:"#a89dc9",inp:"#242430",vio:"#8b5cf6",blu:"#06b6d4",grn:"#22c55e",yel:"#fbbf24",red:"#f43f5e",ora:"#fb923c",pin:"#ec4899",_video:true };
 // ─── THÈME LICORNE ────────────────────────────────────────────────────────────
 // 🔧 bor et mut assombris (Impeccable critique P2) : contraste vérifié (WCAG)
 // contre card #ffffff — bor #f0abfc→#d466df (1.76:1→3.10:1, seuil non-texte
