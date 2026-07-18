@@ -1335,7 +1335,9 @@ body{background:linear-gradient(145deg,#2d2d3a 0%,#1e1e2e 30%,#2a2a3c 60%,#1a1a2
   const filleulExtras = C._filleul ? `
 body{background:linear-gradient(rgba(247,251,240,.82),rgba(237,246,220,.86)),url('/theme/filleul/wallpaper.jpg')!important;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;min-height:100vh;}
 body::after{content:"";position:fixed;bottom:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#6B9A3D,#4D7C0F,#6B9A3D);pointer-events:none;z-index:9998;}
+body::before{content:"🌱";position:fixed;bottom:80px;right:16px;font-size:28px;opacity:.25;pointer-events:none;animation:sproutPulse 2s ease-in-out infinite;z-index:9998;}
 @keyframes sproutGrow{0%,100%{transform:scale(1) translateY(0)}50%{transform:scale(1.14) translateY(-4px)}}
+@keyframes sproutPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
 .card{border-radius:14px!important;border-color:#6B9A3D55!important;border-top:3px solid #4D7C0F!important;box-shadow:0 2px 10px rgba(77,124,15,.1)!important;}
 .card:hover{box-shadow:0 4px 20px rgba(77,124,15,.16)!important;}
 .sec{color:#4D7C0F!important;letter-spacing:.05em!important;}
@@ -5041,7 +5043,7 @@ export default function App() {
           et cassait la continuité visuelle à chaque bordure (ex: la tige de
           la pousse ne se prolongeait pas d'une barre à l'autre). */}
       <div style={{background:headerBG}}>
-      <div style={{flexShrink:0,background:"transparent",borderBottom:C._filleul?"none":`1.5px solid ${C.bor}`,boxShadow:"0 1px 6px rgba(0,0,0,.06)"}}>
+      <div style={{flexShrink:0,background:"transparent",borderBottom:C._filleul?"none":`1.5px solid ${C.bor}`,boxShadow:C._filleul?"none":"0 1px 6px rgba(0,0,0,.06)"}}>
       <div style={{padding:"0 14px",display:"flex",alignItems:"center",gap:12,height:58}}>
         <img src="/logo-nav.png" alt="Duvia" style={{width:126,height:126,objectFit:"contain",flexShrink:0,animation:(sub?.pendingSpins||0)>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}} />
         <div style={{display:"flex",flexDirection:"column",justifyContent:"center",minWidth:0,flex:1}}>
@@ -5446,7 +5448,7 @@ export default function App() {
         /* 🔧 Direction "moderne mais douce" (branche staging) : pastille de
            fond arrondie derrière l'icône active, au lieu d'un soulignement
            dur — mêmes couleurs (C.vio/C.mut), juste le traitement visuel. */
-        <div style={{flexShrink:0,background:C._filleul?"linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.45) 24px)":"transparent",borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:"0 1px 6px rgba(0,0,0,.05)",padding:"6px 6px"}}>
+        <div style={{flexShrink:0,background:C._filleul?"linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.45) 24px)":"transparent",borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:C._filleul?"none":"0 1px 6px rgba(0,0,0,.05)",padding:"6px 6px"}}>
           {TABS.map((tb,i) => (
             <button key={i} onClick={()=>{ switchTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,margin:"0 2px",padding:"8px 2px",background:tab===i&&!menuTab?C.sur:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,border:`1.5px solid ${tab===i&&!menuTab?`${C.vio}55`:"transparent"}`,borderRadius:14,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",boxShadow:tab===i&&!menuTab?"0 2px 8px rgba(0,0,0,.1)":"none",transition:"all .2s cubic-bezier(.16,1,.3,1)"}}>
               <span style={{lineHeight:1,display:"inline-block",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}><Emoji size="1.15em" invert={isDarkBg && tb.icon==="📞"}>{tb.icon}</Emoji></span>
