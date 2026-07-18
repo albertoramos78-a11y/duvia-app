@@ -31,4 +31,11 @@ export const LICORNE = { bg:"#fdf2fb",card:"#ffffff",sur:"#fce7f8",bor:"#d466df"
 export const BRAND = { bg:"#F2EDFF",card:"#FFFFFF",sur:"#EAE3FF",bor:"#C6B8EE",txt:"#17103A",mut:"#7269A8",inp:"#FFFFFF",vio:"#7B7CF5",blu:"#5B98F2",grn:"#0C9A73",yel:"#F5B540",red:"#D6236E",ora:"#FF7B60",pin:"#FF6CB8",_brand:true };
 // Dégradé signature de la marque (bleu→rose) — une seule source pour tous les écrans qui l'affichent en fond (login/consentement/header).
 export const BRAND_GRADIENT = "linear-gradient(145deg,#7BA8F5 0%,#9D8FF0 26%,#F8F2FF 52%,#FF9FD2 76%,#FF6BB5 100%)";
+// ─── THÈME POUSSE — exclusif aux filleuls validés (parrainage) ───────────────
+// 🔧 Palette vérifiée WCAG (même script Node que LICORNE/BRAND ci-dessus) :
+// vio #4D7C0F sur card #FFFFFF = 4.99:1 (texte, seuil AA 4.5:1) ; bor #6B9A3D
+// = 3.33:1 (non-texte, seuil 3:1) ; mut #5C7A3E = 4.87:1 ; txt #1F3A0F =
+// 12.57:1. Concept "nouvelle pousse" — une branche de la famille qui grandit,
+// distinct des autres thèmes gagnables (icône 🌱, inédite parmi eux).
+export const FILLEUL = { bg:"#F7FBF0",card:"#FFFFFF",sur:"#EDF6DC",bor:"#6B9A3D",txt:"#1F3A0F",mut:"#5C7A3E",inp:"#FFFFFF",vio:"#4D7C0F",blu:"#2563eb",grn:"#059669",yel:"#d97706",red:"#dc2626",ora:"#ea580c",pin:"#db2777",_filleul:true };
 export const PCOLS = ["#f97316","#06b6d4","#10b981","#f59e0b","#ec4899","#ef4444"];
