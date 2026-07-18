@@ -1284,10 +1284,8 @@ function obsLabel(o) {
 function css(C) {
   const wcExtras = C._wc ? `
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
-body{background:linear-gradient(160deg,#f0f7ff 0%,#dbeafe 40%,#d1fae5 100%)!important;min-height:100vh;}
-body::after{content:"🏆";position:fixed;bottom:80px;right:16px;font-size:28px;opacity:.25;pointer-events:none;animation:wcPulse 2s ease-in-out infinite;}
+body{background:linear-gradient(rgba(240,247,255,.82),rgba(232,244,255,.86)),url('/theme/world_cup_soccer/wallpaper.jpg')!important;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;min-height:100vh;}
 @keyframes wcBall{0%,100%{transform:rotate(-15deg) translateY(0)}50%{transform:rotate(15deg) translateY(-8px)}}
-@keyframes wcPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
 @keyframes wcShine{0%{left:-100%}100%{left:200%}}
 .card{border-radius:16px!important;border-color:#bfdbfe!important;border-top:3px solid #2563eb!important;box-shadow:0 2px 8px rgba(37,99,235,.08)!important;}
 .card:hover{box-shadow:0 4px 20px rgba(37,99,235,.15)!important;}
@@ -4137,13 +4135,14 @@ export default function App() {
     : C._summer ? `linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.2)),url('/theme/summer/wallpaper-header.jpg') center/cover no-repeat`
     : C._licorne ? `linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.2)),url('/theme/licorne/wallpaper-header.jpg') center/cover no-repeat`
     : C._video ? `url('/theme/video_game/wallpaper-header.jpg') center/cover no-repeat`
+    : C._wc ? `linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.2)),url('/theme/world_cup_soccer/wallpaper-header.jpg') center/cover no-repeat`
     : C.card;
   // 🔧 Le scrim blanc à 50% n'a de sens que sur un header à fond dégradé/photo
   // (BRAND, FILLEUL, SUMMER, LICORNE) — sur un header plat (tous les autres
   // thèmes), il délave la pastille teintée en un gris terne, ce qui la rend
   // illisible en particulier sur fond sombre (texte clair sur pastille
   // éclaircie = contraste trop faible).
-  const pillScrim = (C._brand || C._filleul || C._summer || C._licorne) ? ", rgba(255,255,255,.5)" : "";
+  const pillScrim = (C._brand || C._filleul || C._summer || C._licorne || C._wc) ? ", rgba(255,255,255,.5)" : "";
   // 🔧 Idem : certains emoji (ex: 📞, glyphe naturellement noir/foncé) restent
   // lisibles sur fond clair mais disparaissent sur les thèmes à fond très sombre.
   const isDarkBg = C===DARK || C===VIDEO;
@@ -5063,7 +5062,7 @@ export default function App() {
           et cassait la continuité visuelle à chaque bordure (ex: la tige de
           la pousse ne se prolongeait pas d'une barre à l'autre). */}
       <div style={{background:headerBG}}>
-      <div style={{flexShrink:0,background:"transparent",borderBottom:(C._filleul||C._summer||C._licorne||C._video)?"none":`1.5px solid ${C.bor}`,boxShadow:(C._filleul||C._summer||C._licorne||C._video)?"none":"0 1px 6px rgba(0,0,0,.06)"}}>
+      <div style={{flexShrink:0,background:"transparent",borderBottom:(C._filleul||C._summer||C._licorne||C._video||C._wc)?"none":`1.5px solid ${C.bor}`,boxShadow:(C._filleul||C._summer||C._licorne||C._video||C._wc)?"none":"0 1px 6px rgba(0,0,0,.06)"}}>
       <div style={{padding:"0 14px",display:"flex",alignItems:"center",gap:12,height:58}}>
         <img src="/logo-nav.png" alt="Duvia" style={{width:126,height:126,objectFit:"contain",flexShrink:0,animation:(sub?.pendingSpins||0)>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}} />
         <div style={{display:"flex",flexDirection:"column",justifyContent:"center",minWidth:0,flex:1}}>
@@ -5409,7 +5408,7 @@ export default function App() {
         <div style={{
           flexShrink:0,
           background:"transparent",
-          borderBottom:(C._filleul||C._summer||C._licorne||C._video)?"none":`1.5px solid ${C.bor}`,
+          borderBottom:(C._filleul||C._summer||C._licorne||C._video||C._wc)?"none":`1.5px solid ${C.bor}`,
           padding:"6px 14px",
           display:"flex",alignItems:"center",gap:8,
         }}>
@@ -5467,7 +5466,7 @@ export default function App() {
         /* 🔧 Direction "moderne mais douce" (branche staging) : pastille de
            fond arrondie derrière l'icône active, au lieu d'un soulignement
            dur — mêmes couleurs (C.vio/C.mut), juste le traitement visuel. */
-        <div style={{flexShrink:0,background:C._video?"linear-gradient(to bottom, rgba(95,95,100,0), rgba(95,95,100,.85) 12px)":(C._filleul||C._summer||C._licorne)?"linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.85) 12px)":"transparent",borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:(C._filleul||C._summer||C._licorne||C._video)?"none":"0 1px 6px rgba(0,0,0,.05)",padding:"6px 6px"}}>
+        <div style={{flexShrink:0,background:C._video?"linear-gradient(to bottom, rgba(95,95,100,0), rgba(95,95,100,.85) 12px)":(C._filleul||C._summer||C._licorne||C._wc)?"linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.85) 12px)":"transparent",borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:(C._filleul||C._summer||C._licorne||C._video||C._wc)?"none":"0 1px 6px rgba(0,0,0,.05)",padding:"6px 6px"}}>
           {TABS.map((tb,i) => (
             <button key={i} onClick={()=>{ switchTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,margin:"0 2px",padding:"8px 2px",background:tab===i&&!menuTab?C.sur:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,border:`1.5px solid ${tab===i&&!menuTab?`${C.vio}55`:"transparent"}`,borderRadius:14,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",boxShadow:tab===i&&!menuTab?"0 2px 8px rgba(0,0,0,.1)":"none",transition:"all .2s cubic-bezier(.16,1,.3,1)"}}>
               <span style={{lineHeight:1,display:"inline-flex",alignItems:"center",justifyContent:"center",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}>
