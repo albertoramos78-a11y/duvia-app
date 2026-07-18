@@ -1311,7 +1311,7 @@ button{border-radius:6px!important;}
 ` : '';
   const summerExtras = C._summer ? `
 @import url('https://fonts.googleapis.com/css2?family=Pacifico&family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
-body{background:linear-gradient(160deg,#fff8e7 0%,#fff3cc 40%,#e0f7fa 100%);min-height:100vh;}
+body{background:linear-gradient(rgba(255,248,231,.2),rgba(224,247,250,.2)),url('/theme/summer/wallpaper.jpg')!important;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;min-height:100vh;}
 body::before{content:"☀️";position:fixed;top:14px;right:70px;font-size:28px;animation:sunPulse 3s ease-in-out infinite;pointer-events:none;z-index:9999;}
 body::after{content:"🌊 🌊 🌊";position:fixed;bottom:0;left:0;right:0;font-size:18px;letter-spacing:8px;opacity:.3;pointer-events:none;animation:waveDrift 4s ease-in-out infinite alternate;text-align:center;}
 @keyframes sunPulse{0%,100%{transform:scale(1) rotate(-5deg)}50%{transform:scale(1.1) rotate(5deg)}}
@@ -4131,13 +4131,14 @@ export default function App() {
   const brandCssString = useMemo(() => css(BRAND), []); // ✅ toujours BRAND pour la page de login
   const headerBG = C._brand ? `linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),${BRAND_GRADIENT}`
     : C._filleul ? `linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.2)),url('/theme/filleul/wallpaper-header.jpg') center/cover no-repeat`
+    : C._summer ? `linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.2)),url('/theme/summer/wallpaper-header.jpg') center/cover no-repeat`
     : C.card;
   // 🔧 Le scrim blanc à 50% n'a de sens que sur un header à fond dégradé/photo
-  // (BRAND, FILLEUL) — sur un header plat (tous les autres thèmes), il délave
-  // la pastille teintée en un gris terne, ce qui la rend illisible en
+  // (BRAND, FILLEUL, SUMMER) — sur un header plat (tous les autres thèmes), il
+  // délave la pastille teintée en un gris terne, ce qui la rend illisible en
   // particulier sur fond sombre (texte clair sur pastille éclaircie =
   // contraste trop faible).
-  const pillScrim = (C._brand || C._filleul) ? ", rgba(255,255,255,.5)" : "";
+  const pillScrim = (C._brand || C._filleul || C._summer) ? ", rgba(255,255,255,.5)" : "";
   // 🔧 Idem : certains emoji (ex: 📞, glyphe naturellement noir/foncé) restent
   // lisibles sur fond clair mais disparaissent sur les thèmes à fond très sombre.
   const isDarkBg = C===DARK || C===VIDEO;
@@ -5057,7 +5058,7 @@ export default function App() {
           et cassait la continuité visuelle à chaque bordure (ex: la tige de
           la pousse ne se prolongeait pas d'une barre à l'autre). */}
       <div style={{background:headerBG}}>
-      <div style={{flexShrink:0,background:"transparent",borderBottom:C._filleul?"none":`1.5px solid ${C.bor}`,boxShadow:C._filleul?"none":"0 1px 6px rgba(0,0,0,.06)"}}>
+      <div style={{flexShrink:0,background:"transparent",borderBottom:(C._filleul||C._summer)?"none":`1.5px solid ${C.bor}`,boxShadow:(C._filleul||C._summer)?"none":"0 1px 6px rgba(0,0,0,.06)"}}>
       <div style={{padding:"0 14px",display:"flex",alignItems:"center",gap:12,height:58}}>
         <img src="/logo-nav.png" alt="Duvia" style={{width:126,height:126,objectFit:"contain",flexShrink:0,animation:(sub?.pendingSpins||0)>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}} />
         <div style={{display:"flex",flexDirection:"column",justifyContent:"center",minWidth:0,flex:1}}>
@@ -5403,7 +5404,7 @@ export default function App() {
         <div style={{
           flexShrink:0,
           background:"transparent",
-          borderBottom:C._filleul?"none":`1.5px solid ${C.bor}`,
+          borderBottom:(C._filleul||C._summer)?"none":`1.5px solid ${C.bor}`,
           padding:"6px 14px",
           display:"flex",alignItems:"center",gap:8,
         }}>
@@ -5461,7 +5462,7 @@ export default function App() {
         /* 🔧 Direction "moderne mais douce" (branche staging) : pastille de
            fond arrondie derrière l'icône active, au lieu d'un soulignement
            dur — mêmes couleurs (C.vio/C.mut), juste le traitement visuel. */
-        <div style={{flexShrink:0,background:C._filleul?"linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.6) 24px)":"transparent",borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:C._filleul?"none":"0 1px 6px rgba(0,0,0,.05)",padding:"6px 6px"}}>
+        <div style={{flexShrink:0,background:(C._filleul||C._summer)?"linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.6) 24px)":"transparent",borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:(C._filleul||C._summer)?"none":"0 1px 6px rgba(0,0,0,.05)",padding:"6px 6px"}}>
           {TABS.map((tb,i) => (
             <button key={i} onClick={()=>{ switchTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,margin:"0 2px",padding:"8px 2px",background:tab===i&&!menuTab?C.sur:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,border:`1.5px solid ${tab===i&&!menuTab?`${C.vio}55`:"transparent"}`,borderRadius:14,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",boxShadow:tab===i&&!menuTab?"0 2px 8px rgba(0,0,0,.1)":"none",transition:"all .2s cubic-bezier(.16,1,.3,1)"}}>
               <span style={{lineHeight:1,display:"inline-flex",alignItems:"center",justifyContent:"center",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}>
@@ -11697,6 +11698,7 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
   // une Edge Function.
   const [myForecast, setMyForecast] = useState([]);
   const [weatherDetailDay, setWeatherDetailDay] = useState(null);
+  const [weatherDetailOrigin, setWeatherDetailOrigin] = useState(null);
   useEffect(() => {
     let cancelled = false;
     getMyLocation().then(loc => {
@@ -12162,7 +12164,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
             const { emoji } = weatherIconFor(d.code);
             const dowLabel = idx===0 ? (t.today||"Auj.") : new Date(d.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"short",day:"numeric"});
             return (
-              <div key={d.date} onClick={()=>setWeatherDetailDay(d)} style={{flexShrink:0,minWidth:56,textAlign:"center",padding:"6px 4px",borderRadius:10,background:C.sur,cursor:"pointer"}}>
+              <div key={d.date} onClick={(e)=>{setWeatherDetailOrigin({x:e.clientX,y:e.clientY});setWeatherDetailDay(d);}} style={{flexShrink:0,minWidth:56,textAlign:"center",padding:"6px 4px",borderRadius:10,background:C.sur,cursor:"pointer"}}>
                 <div style={{fontSize:10,fontWeight:700,color:C.mut,textTransform:"capitalize"}}>{dowLabel}</div>
                 <div style={{fontSize:18}}>{emoji}</div>
                 <div style={{fontSize:11,fontWeight:800,color:C.txt,whiteSpace:"nowrap"}}>{Math.round(d.tempMin)}° / {Math.round(d.tempMax)}°</div>
@@ -12172,13 +12174,15 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
         </div>
       )}
       {weatherDetailDay && (
-        <div onClick={()=>setWeatherDetailDay(null)} style={{position:"fixed",inset:0,zIndex:999,background:"rgba(23,16,58,.65)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,padding:"24px 20px",maxWidth:340,width:"100%",border:`1.5px solid ${C.bor}`,boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
+        <div onClick={()=>{setWeatherDetailDay(null);setWeatherDetailOrigin(null);}} style={{position:"fixed",inset:0,zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,padding:"24px 20px",maxWidth:340,width:"100%",border:`1.5px solid ${C.bor}`,boxShadow:"0 20px 60px rgba(0,0,0,.3)",
+            transformOrigin: weatherDetailOrigin ? `calc(50% + ${weatherDetailOrigin.x - window.innerWidth/2}px) calc(50% + ${weatherDetailOrigin.y - window.innerHeight/2}px)` : "center",
+            animation:"weatherPopupGrow .22s cubic-bezier(.16,1,.3,1)"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
               <div style={{fontSize:15,fontWeight:900,textTransform:"capitalize"}}>
                 {new Date(weatherDetailDay.date+"T12:00:00").toLocaleDateString(lang,{weekday:"long",day:"numeric",month:"long"})}
               </div>
-              <button onClick={()=>setWeatherDetailDay(null)} style={{width:28,height:28,borderRadius:"50%",background:C.sur,border:"none",color:C.mut,fontSize:15,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
+              <button onClick={()=>{setWeatherDetailDay(null);setWeatherDetailOrigin(null);}} style={{width:28,height:28,borderRadius:"50%",background:C.sur,border:"none",color:C.mut,fontSize:15,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
             </div>
             {weatherDetailDay.periods ? (
               <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -12204,6 +12208,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
               <div style={{fontSize:12,color:C.mut,textAlign:"center",padding:"12px 0"}}>{t.weatherDetailUnavailable||"Détail non disponible pour ce jour."}</div>
             )}
           </div>
+          <style>{`@keyframes weatherPopupGrow{from{transform:scale(.05);opacity:0}to{transform:scale(1);opacity:1}}`}</style>
         </div>
       )}
       <div style={{marginBottom:12,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",gap:8,flexWrap:"wrap"}}>
