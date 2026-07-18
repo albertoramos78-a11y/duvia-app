@@ -1311,7 +1311,7 @@ button{border-radius:6px!important;}
 ` : '';
   const summerExtras = C._summer ? `
 @import url('https://fonts.googleapis.com/css2?family=Pacifico&family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
-body{background:linear-gradient(rgba(255,248,231,.2),rgba(224,247,250,.2)),url('/theme/summer/wallpaper.jpg')!important;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;min-height:100vh;}
+body{background:linear-gradient(rgba(255,248,231,.82),rgba(224,247,250,.86)),url('/theme/summer/wallpaper.jpg')!important;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;min-height:100vh;}
 body::before{content:"☀️";position:fixed;top:14px;right:70px;font-size:28px;animation:sunPulse 3s ease-in-out infinite;pointer-events:none;z-index:9999;}
 body::after{content:"🌊 🌊 🌊";position:fixed;bottom:0;left:0;right:0;font-size:18px;letter-spacing:8px;opacity:.3;pointer-events:none;animation:waveDrift 4s ease-in-out infinite alternate;text-align:center;}
 @keyframes sunPulse{0%,100%{transform:scale(1) rotate(-5deg)}50%{transform:scale(1.1) rotate(5deg)}}
