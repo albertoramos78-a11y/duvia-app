@@ -4271,9 +4271,18 @@ export default function App() {
         // ligne d'un nouveau compte) ; pending_spins reste nécessaire (la
         // consommation d'un spin, App.jsx:~17606, reste un vrai flux
         // client→serveur, contrairement aux autres champs ci-dessus).
+        // 🔒 2026-07-18 : plan/premium_since/cycle RETIRÉS de ce payload — ces
+        // 3 colonnes déterminent l'accès payant et sont désormais verrouillées
+        // côté serveur (migration 0041, colonnes non modifiables par le client,
+        // uniquement via des RPC SECURITY DEFINER). Un compte quelconque
+        // pouvait auparavant s'auto-attribuer Premium en trafiquant l'état
+        // local `sub` (React DevTools) puis laissant CET upsert l'envoyer tel
+        // quel, ou en appelant directement l'API avec son propre jeton — les
+        // envoyer ici échouerait désormais de toute façon (tout l'upsert,
+        // colonnes légitimes comprises, échoue si UNE colonne référencée est
+        // verrouillée pour l'appelant).
         await supabase.from("subscriptions").upsert({
-          user_id: myUid, plan: sub.plan || "trial_premium",
-          premium_since: sub.premiumSince || null, cycle: sub.cycle || "yearly",
+          user_id: myUid,
           trial_start: sub.trialStart || sub.accountCreatedAt,
           account_created_at: sub.accountCreatedAt,
           ref_code: sub.refCode || null, ref_used: sub.refUsed || null,
@@ -17826,17 +17835,33 @@ const WHEEL_SEG_COLORS = [
 ];
 
 // Tirage pondéré avec prise en compte du rôle et des dates de validité
-function pickSegment(isSubscriber = true) {
+// 🔒 2026-07-18 : `serverMonetary` ('year'|'month'|'none') vient désormais
+// TOUJOURS d'un aller-retour serveur honnête (RPC spin_wheel_check_
+// monetary_prize, App.jsx WheelGame.spin()) avant l'appel à cette fonction —
+// c'est la SEULE façon d'obtenir "year"/"month" ici. Ce Math.random() local
+// ne peut plus jamais produire un lot payant lui-même, seulement les lots
+// cosmétiques (thèmes) qui n'ont aucune valeur monétaire exploitable.
+// Avant ce correctif, "year"/"month" pouvaient être forcés à 100% en
+// trafiquant Math.random() dans le navigateur (ex: outils développeur).
+function pickSegment(isSubscriber = true, serverMonetary = "none") {
+  if(serverMonetary === "year" || serverMonetary === "month") {
+    const prize = WHEEL_PRIZES.find(p=>p.id===serverMonetary);
+    const nothingIdxs = WHEEL_SEGS.reduce((a,s,i)=>{ if(s.id==="nothing") a.push(i); return a; },[]);
+    const segIdx = nothingIdxs[Math.floor(Math.random()*nothingIdxs.length)];
+    return { segIdx, prize };
+  }
+
   const probs = isSubscriber ? PROBS_SUBSCRIBER : PROBS_OTHERS;
 
-  // Redistribue les probabilités des lots hors-période vers "nothing"
-  const active = { ...probs };
+  // Redistribue les probabilités des lots hors-période (+ year/month, déjà
+  // tranchés par le serveur ci-dessus) vers "nothing"
+  const active = { ...probs, year:0, month:0, nothing: probs.nothing + probs.year + probs.month };
   ["theme","rg","wc"].forEach(id=>{
     const p = WHEEL_PRIZES.find(x=>x.id===id);
     if(p && !isPrizeActive(p)) { active.nothing += active[id]; active[id] = 0; }
   });
 
-  // Tirage
+  // Tirage (lots cosmétiques uniquement — aucune valeur monétaire en jeu)
   const r = Math.random(); let cum = 0;
   let prize = WHEEL_PRIZES[7]; // défaut: perdu
   for(const p of WHEEL_PRIZES) {
@@ -17851,8 +17876,6 @@ function pickSegment(isSubscriber = true) {
   if(matchIdxs.length > 0) {
     segIdx = matchIdxs[Math.floor(Math.random()*matchIdxs.length)];
   } else {
-    // year → atterrit visuellement sur un segment "nothing" aléatoire
-    // month → atterrit visuellement sur un segment "nothing" aléatoire
     const nothingIdxs = WHEEL_SEGS.reduce((a,s,i)=>{ if(s.id==="nothing") a.push(i); return a; },[]);
     segIdx = nothingIdxs[Math.floor(Math.random()*nothingIdxs.length)];
   }
@@ -17904,12 +17927,27 @@ function WheelGame({ isPremium, isAdmin=false, restrictedRole=false, userId="", 
   const N = SEGS.length; // 20 segments
   const segDeg = 360/N;
 
-  function spin() {
+  async function spin() {
     if(spinning || (!canSpin && !isAdminSub) || !isPremium) return;
     const usingBonus = !isAdminSub && hasBonusSpin && lastSpin && (now - new Date(lastSpin).getTime()) < cooldownMs;
     setShowResult(false); setResult(null); setParticles([]);
+    setSpinning(true);
 
-    const { segIdx, prize } = pickSegment(isSubscriber);
+    // 🔒 2026-07-18 : "year"/"month" (les 2 seuls lots à valeur monétaire réelle)
+    // ne peuvent plus être décidés localement — un aller-retour serveur honnête
+    // (le random() tourne côté Postgres, pas dans le navigateur) tranche
+    // d'abord la question, pickSegment() ne fait plus que le tirage cosmétique.
+    // Seuls les vrais souscripteurs y sont éligibles (0% sinon côté client de
+    // toute façon) — évite un aller-retour réseau inutile pour tout le monde.
+    let serverMonetary = "none";
+    if(isSubscriber) {
+      try {
+        const { data, error } = await supabase.rpc("spin_wheel_check_monetary_prize");
+        if(!error && data) serverMonetary = data;
+      } catch(e) { console.warn("[Duvia] spin_wheel_check_monetary_prize failed:", e); }
+    }
+
+    const { segIdx, prize } = pickSegment(isSubscriber, serverMonetary);
 
     const segCenter = segIdx * segDeg + segDeg / 2;
     const targetMod = ((-segCenter) % 360 + 360) % 360;
@@ -17917,7 +17955,6 @@ function WheelGame({ isPremium, isAdmin=false, restrictedRole=false, userId="", 
     const delta = (targetMod - currentMod + 360) % 360;
     const target = deg + 360 * 7 + (delta === 0 ? 360 : delta);
 
-    setSpinning(true);
     const start = deg;
     const dur = 4200;
     const t0 = performance.now();
