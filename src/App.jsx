@@ -4428,6 +4428,19 @@ export default function App() {
     // Pas de popup OS ici — le créateur ne voit pas son propre popup
   }, [setCfg]); // ✅ référence stable
 
+  // 🔧 Multi-familles : un compte déjà actif ailleurs qui accepte une NOUVELLE
+  // invitation (observateur ou parent) est désormais connecté normalement au
+  // lieu d'être bloqué sur l'écran "en attente d'approbation" (LoginScreen,
+  // doLoginAndJoin) — ce drapeau, posé juste avant l'appel à onLogin(), lui
+  // signale une fois que sa demande est bien enregistrée et en attente.
+  useEffect(() => {
+    let flagged = false;
+    try { flagged = window.localStorage.getItem("duvia_pending_family_notice") === "1"; } catch {}
+    if (!flagged) return;
+    try { window.localStorage.removeItem("duvia_pending_family_notice"); } catch {}
+    pushNotif(t.pendingFamilyNoticeMsg || "Votre demande pour rejoindre la nouvelle famille a été envoyée — elle apparaîtra dans votre sélecteur de familles une fois approuvée.", "info");
+  }, [pushNotif, t]);
+
   // ── Notifications OS pour l'AUTRE parent (dépenses/actions via cfg.notifs) ──
   const lastNotifIdRef = useRef(null);
   useEffect(() => {
@@ -6629,7 +6642,27 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
       }
       // 🔧 UUID réel depuis signInWithPassword — garantit que matchFn trouve la carte
       onObsJoin({...updatedUser, id:data.user?.id||updatedUser.id, role:obsInviteCode.role||"grandparent", status:"pending", inviteCode:obsInviteCode.code});
-      setMode("obs_waiting"); setErr("");
+      // 🔧 Multi-familles (backlog "observateur dans plusieurs familles") : un
+      // compte DÉJÀ actif dans une autre famille ne doit pas être bloqué sur
+      // l'écran d'attente — sa nouvelle demande observateur reste "pending" en
+      // arrière-plan (apparaîtra dans son sélecteur une fois validée, cf. le
+      // fix temps réel de refreshFamilies) et il continue normalement dans sa
+      // famille déjà active. Contrairement au cas parent ci-dessous, aucune
+      // décision antérieure ne s'y oppose ici — un observateur n'a qu'un rôle
+      // de lecture, pas d'ambiguïté sur "dans quelle famille j'agis".
+      let hasExistingActiveFamily = false;
+      try {
+        const { data: activeRows } = await supabase.from("family_members")
+          .select("family_id").eq("user_id", data.user.id).eq("status", "active");
+        hasExistingActiveFamily = (activeRows?.length || 0) > 0;
+      } catch {}
+      if (hasExistingActiveFamily) {
+        try { window.localStorage.setItem("duvia_pending_family_notice", "1"); } catch {}
+        setShowExistingAccount(false); setErr("");
+        onLogin(updatedUser);
+      } else {
+        setMode("obs_waiting"); setErr("");
+      }
     } else if(isChildInvite && obsInviteCode.isNewChildInvite){
       const { data: cFid, error: cErr } = await supabase.rpc("accept_child_invitation", { p_token: obsInviteCode.code });
       if(cErr){
