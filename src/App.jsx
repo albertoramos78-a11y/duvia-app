@@ -5448,7 +5448,7 @@ export default function App() {
           {TABS.map((tb,i) => (
             <button key={i} onClick={()=>{ switchTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,margin:"0 2px",padding:"8px 2px",background:tab===i&&!menuTab?C.sur:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,border:`1.5px solid ${tab===i&&!menuTab?`${C.vio}55`:"transparent"}`,borderRadius:14,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",boxShadow:tab===i&&!menuTab?"0 2px 8px rgba(0,0,0,.1)":"none",transition:"all .2s cubic-bezier(.16,1,.3,1)"}}>
               <span style={{lineHeight:1,display:"inline-block",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}>
-                {tb.icon==="📅" ? <CalendarDateIcon size={22} lang={lang} /> : <Emoji size="1.15em" invert={isDarkBg && tb.icon==="📞"}>{tb.icon}</Emoji>}
+                {tb.icon==="📅" ? <CalendarDateIcon size="1.15em" lang={lang} /> : <Emoji size="1.15em" invert={isDarkBg && tb.icon==="📞"}>{tb.icon}</Emoji>}
               </span>
               {tb.badge>0 && !tb.wobbleOnly && <span style={{position:"absolute",top:2,right:"8%",minWidth:15,height:15,padding:"0 3px",borderRadius:"50%",background:C.red,color:"#fff",fontSize:9,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",border:`2px solid ${C.card}`,boxSizing:"content-box"}}>{tb.badge}</span>}
             </button>
@@ -7076,14 +7076,19 @@ function NotifTab({prem: premProp}) {
 // icône de l'onglet Calendrier, ça affichait donc une fausse date à
 // l'année longue. Ce composant reproduit le même style visuel (bandeau
 // rouge + numéro du jour) mais avec la vraie date courante.
-function CalendarDateIcon({size=22, lang="fr"}) {
+function CalendarDateIcon({size="1.15em", lang="fr"}) {
   const now = new Date();
   const month = now.toLocaleDateString(lang, {month:"short"}).replace(".","").toUpperCase();
   const day = now.getDate();
+  // 🔧 Dimensionné en em (comme <Emoji size="1.15em">) plutôt qu'en px fixes :
+  // ça reprend exactement le même contexte de taille/alignement que les
+  // icônes emoji voisines dans la barre d'onglets (fontSize du bouton actif
+  // vs inactif), au lieu d'une taille figée qui ne matchait ni leur taille
+  // ni leur centrage vertical dans le bouton flex.
   return (
-    <span style={{display:"inline-flex",flexDirection:"column",width:size,height:size,borderRadius:size*0.22,overflow:"hidden",verticalAlign:"-0.15em",boxShadow:"0 1px 2px rgba(0,0,0,.25)",lineHeight:1,userSelect:"none",flexShrink:0}}>
-      <span style={{background:"#DD2F45",color:"#fff",fontSize:size*0.28,fontWeight:800,textAlign:"center",padding:`${size*0.06}px 0`,letterSpacing:"-.03em"}}>{month}</span>
-      <span style={{flex:1,background:"#F5F8FA",color:"#66757F",fontSize:size*0.5,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}>{day}</span>
+    <span style={{display:"inline-flex",flexDirection:"column",fontSize:size,width:"1em",height:"1em",borderRadius:"22%",overflow:"hidden",verticalAlign:"-0.15em",boxShadow:"0 1px 2px rgba(0,0,0,.25)",lineHeight:1,userSelect:"none",flexShrink:0}}>
+      <span style={{background:"#DD2F45",color:"#fff",fontSize:"0.28em",fontWeight:800,textAlign:"center",padding:"0.06em 0",letterSpacing:"-.03em"}}>{month}</span>
+      <span style={{flex:1,background:"#F5F8FA",color:"#66757F",fontSize:"0.5em",fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}>{day}</span>
     </span>
   );
 }
