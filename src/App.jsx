@@ -4113,12 +4113,15 @@ export default function App() {
   [filleulActive, licorneActive, videoActive, wcActive, rgActive, summerActive, themeMode]); // ✅ recalculé uniquement si le thème change
   const cssString = useMemo(() => css(C), [C]); // ✅ ~300 lignes CSS générées une seule fois par thème
   const brandCssString = useMemo(() => css(BRAND), []); // ✅ toujours BRAND pour la page de login
-  const headerBG = C._brand ? `linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),${BRAND_GRADIENT}` : C.card;
-  // 🔧 Le scrim blanc à 50% n'a de sens que sur le fond dégradé/photo du thème
-  // BRAND — sur un header plat (tous les autres thèmes), il délave la pastille
-  // teintée en un gris terne, ce qui la rend illisible en particulier sur fond
-  // sombre (texte clair sur pastille éclaircie = contraste trop faible).
-  const pillScrim = C._brand ? ", rgba(255,255,255,.5)" : "";
+  const headerBG = C._brand ? `linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),${BRAND_GRADIENT}`
+    : C._filleul ? `linear-gradient(rgba(255,255,255,.55),rgba(255,255,255,.55)),url('/theme/filleul/wallpaper-header.jpg') center/cover no-repeat`
+    : C.card;
+  // 🔧 Le scrim blanc à 50% n'a de sens que sur un header à fond dégradé/photo
+  // (BRAND, FILLEUL) — sur un header plat (tous les autres thèmes), il délave
+  // la pastille teintée en un gris terne, ce qui la rend illisible en
+  // particulier sur fond sombre (texte clair sur pastille éclaircie =
+  // contraste trop faible).
+  const pillScrim = (C._brand || C._filleul) ? ", rgba(255,255,255,.5)" : "";
   // 🔧 Idem : certains emoji (ex: 📞, glyphe naturellement noir/foncé) restent
   // lisibles sur fond clair mais disparaissent sur les thèmes à fond très sombre.
   const isDarkBg = C===DARK || C===VIDEO;
