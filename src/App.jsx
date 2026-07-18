@@ -5030,18 +5030,23 @@ export default function App() {
           {(()=>{
             const myG = sub.giftedPrizes?.[String(user?.id||"")] || {};
             const selfB = {theme:sub.earnedSelf_theme,video:sub.earnedSelf_video,licorne:sub.earnedSelf_licorne,rg:sub.earnedSelf_rg,wc:sub.earnedSelf_wc};
-            const hasAny = sub.earnedBadge||sub.earnedTheme||sub.earnedVideo||sub.earnedLicorne||sub.earnedRG||sub.earnedWC||sub.refValidated
+            // 🔧 Mode admin : accès à tous les thèmes pour prévisualisation/test,
+            // sans avoir besoin de les gagner réellement (roue/parrainage/saison).
+            const hasAny = isAdm || sub.earnedBadge||sub.earnedTheme||sub.earnedVideo||sub.earnedLicorne||sub.earnedRG||sub.earnedWC||sub.refValidated
                            ||myG.theme||myG.video||myG.licorne||myG.rg||myG.wc
                            ||selfB.theme||selfB.video||selfB.licorne||selfB.rg||selfB.wc;
             if(!hasAny) return null;
             // Y a-t-il un lot activable mais pas encore actif ?
-            const hasActivatable =
-              ((sub.earnedTheme||myG.theme||selfB.theme) && !summerActive) ||
-              ((sub.earnedVideo||myG.video||selfB.video) && !videoActive) ||
-              ((sub.earnedLicorne||myG.licorne||selfB.licorne) && !licorneActive) ||
-              ((sub.earnedWC||myG.wc||selfB.wc) && (isWCPeriod()||myG.wc||selfB.wc) && !wcActive) ||
-              ((sub.earnedRG||myG.rg||selfB.rg) && (isRGPeriod()||myG.rg||selfB.rg) && !rgActive) ||
-              (sub.refValidated && !filleulActive);
+            const hasActivatable = isAdm
+              ? (!summerActive||!videoActive||!licorneActive||!wcActive||!rgActive||!filleulActive)
+              : (
+                ((sub.earnedTheme||myG.theme||selfB.theme) && !summerActive) ||
+                ((sub.earnedVideo||myG.video||selfB.video) && !videoActive) ||
+                ((sub.earnedLicorne||myG.licorne||selfB.licorne) && !licorneActive) ||
+                ((sub.earnedWC||myG.wc||selfB.wc) && (isWCPeriod()||myG.wc||selfB.wc) && !wcActive) ||
+                ((sub.earnedRG||myG.rg||selfB.rg) && (isRGPeriod()||myG.rg||selfB.rg) && !rgActive) ||
+                (sub.refValidated && !filleulActive)
+              );
             return (
               <div style={{position:"relative",flexShrink:0}}>
                 <button onClick={()=>setShowPrizesMenu(v=>!v)}
@@ -5067,7 +5072,7 @@ export default function App() {
                           <span style={{background:"#7c6fcd22",color:"#7c6fcd",borderRadius:8,padding:"2px 7px",fontSize:10,fontWeight:800}}>{t.wheelWon.replace(" ✓","")}</span>
                         </div>
                       )}
-                      {(sub.earnedTheme||myG.theme||sub.earnedSelf_theme) && (
+                      {(isAdm||sub.earnedTheme||myG.theme||sub.earnedSelf_theme) && (
                         <button onClick={()=>{setSummerActive(s=>!s);setRgActive(false);setWcActive(false);setVideoActive(false);setLicorneActive(false);setFilleulActive(false);setShowPrizesMenu(false);}}
                           style={{width:"100%",padding:"0 14px",height:40,background:summerActive?"#3ecf8e15":"#3ecf8e08",color:"#3ecf8e",textAlign:"left",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:12,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
                           <span style={{fontSize:16}}>🌴</span>
@@ -5075,7 +5080,7 @@ export default function App() {
                           <span style={{background:summerActive?"#3ecf8e33":"#3ecf8e18",color:"#3ecf8e",borderRadius:8,padding:"2px 7px",fontSize:10,fontWeight:800}}>{summerActive?t.wheelActiveCheck:t.wheelApply}</span>
                         </button>
                       )}
-                      {(sub.earnedVideo||myG.video||sub.earnedSelf_video) && (
+                      {(isAdm||sub.earnedVideo||myG.video||sub.earnedSelf_video) && (
                         <button onClick={()=>{setVideoActive(s=>!s);setSummerActive(false);setRgActive(false);setWcActive(false);setLicorneActive(false);setFilleulActive(false);setShowPrizesMenu(false);}}
                           style={{width:"100%",padding:"0 14px",height:40,background:videoActive?"#8b5cf615":"#8b5cf608",color:"#8b5cf6",textAlign:"left",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:12,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
                           <span style={{fontSize:16}}>🎮</span>
@@ -5083,7 +5088,7 @@ export default function App() {
                           <span style={{background:videoActive?"#8b5cf633":"#8b5cf618",color:"#8b5cf6",borderRadius:8,padding:"2px 7px",fontSize:10,fontWeight:800}}>{videoActive?t.wheelActiveCheck:t.wheelApply}</span>
                         </button>
                       )}
-                      {(sub.earnedLicorne||myG.licorne||sub.earnedSelf_licorne) && (
+                      {(isAdm||sub.earnedLicorne||myG.licorne||sub.earnedSelf_licorne) && (
                         <button onClick={()=>{setLicorneActive(s=>!s);setSummerActive(false);setRgActive(false);setWcActive(false);setVideoActive(false);setFilleulActive(false);setShowPrizesMenu(false);}}
                           style={{width:"100%",padding:"0 14px",height:40,background:licorneActive?"#ec489915":"#ec489908",color:"#ec4899",textAlign:"left",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:12,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
                           <span style={{fontSize:16}}>🦄</span>
@@ -5091,7 +5096,7 @@ export default function App() {
                           <span style={{background:licorneActive?"#ec489933":"#ec489918",color:"#ec4899",borderRadius:8,padding:"2px 7px",fontSize:10,fontWeight:800}}>{licorneActive?t.wheelActiveCheck:t.wheelApply}</span>
                         </button>
                       )}
-                      {(sub.earnedWC||myG.wc||sub.earnedSelf_wc) && (isWCPeriod()||myG.wc||sub.earnedSelf_wc) && (
+                      {(isAdm||sub.earnedWC||myG.wc||sub.earnedSelf_wc) && (isAdm||isWCPeriod()||myG.wc||sub.earnedSelf_wc) && (
                         <button onClick={()=>{setWcActive(s=>!s);setSummerActive(false);setRgActive(false);setVideoActive(false);setLicorneActive(false);setFilleulActive(false);setShowPrizesMenu(false);}}
                           style={{width:"100%",padding:"0 14px",height:40,background:wcActive?"#2563eb15":"#2563eb08",color:"#2563eb",textAlign:"left",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:12,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
                           <span style={{fontSize:16}}>⚽</span>
@@ -5099,7 +5104,7 @@ export default function App() {
                           <span style={{background:wcActive?"#2563eb33":"#2563eb18",color:"#2563eb",borderRadius:8,padding:"2px 7px",fontSize:10,fontWeight:800}}>{wcActive?t.wheelActiveCheck:t.wheelApply}</span>
                         </button>
                       )}
-                      {(sub.earnedRG||myG.rg||sub.earnedSelf_rg) && (isRGPeriod()||myG.rg||sub.earnedSelf_rg) && (
+                      {(isAdm||sub.earnedRG||myG.rg||sub.earnedSelf_rg) && (isAdm||isRGPeriod()||myG.rg||sub.earnedSelf_rg) && (
                         <button onClick={()=>{setRgActive(s=>!s);setSummerActive(false);setWcActive(false);setVideoActive(false);setLicorneActive(false);setFilleulActive(false);setShowPrizesMenu(false);}}
                           style={{width:"100%",padding:"0 14px",height:40,background:rgActive?"#c2745a15":"#c2745a08",color:"#c2745a",textAlign:"left",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:12,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
                           <span style={{fontSize:16}}>🎾</span>
@@ -5107,7 +5112,7 @@ export default function App() {
                           <span style={{background:rgActive?"#c2745a33":"#c2745a18",color:"#c2745a",borderRadius:8,padding:"2px 7px",fontSize:10,fontWeight:800}}>{rgActive?t.wheelActiveCheck:t.wheelApply}</span>
                         </button>
                       )}
-                      {sub.refValidated && (
+                      {(isAdm||sub.refValidated) && (
                         <button onClick={()=>{setFilleulActive(s=>!s);setSummerActive(false);setRgActive(false);setWcActive(false);setVideoActive(false);setLicorneActive(false);setShowPrizesMenu(false);}}
                           style={{width:"100%",padding:"0 14px",height:40,background:filleulActive?"#4D7C0F15":"#4D7C0F08",color:"#4D7C0F",textAlign:"left",display:"flex",alignItems:"center",gap:10,fontSize:12,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
                           <span style={{fontSize:16}}>🌱</span>
