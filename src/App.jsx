@@ -1328,9 +1328,12 @@ button{border-radius:8px!important;}
   const brandExtras = C._brand ? `
 body{background:linear-gradient(145deg,#2d2d3a 0%,#1e1e2e 30%,#2a2a3c 60%,#1a1a2a 100%)!important;min-height:100vh;}
 ` : '';
-  // ─── THÈME FILLEUL — décor CSS uniquement (pas de photo, cf. discussion) ───
+  // ─── THÈME FILLEUL — fond photo (public/theme/filleul/wallpaper.jpg, fourni
+  // par l'utilisateur, généré par IA) + voile clair pour garder le texte
+  // lisible par-dessus (WCAG) ; pas de background-attachment:fixed, connu
+  // pour être saccadé/buggé sur Safari iOS.
   const filleulExtras = C._filleul ? `
-body{background:linear-gradient(160deg,#F7FBF0 0%,#EDF6DC 45%,#E3F0C8 100%)!important;min-height:100vh;}
+body{background:linear-gradient(rgba(247,251,240,.82),rgba(237,246,220,.86)),url('/theme/filleul/wallpaper.jpg')!important;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;min-height:100vh;}
 body::after{content:"";position:fixed;bottom:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#6B9A3D,#4D7C0F,#6B9A3D);pointer-events:none;z-index:9998;}
 @keyframes sproutGrow{0%,100%{transform:scale(1) translateY(0)}50%{transform:scale(1.14) translateY(-4px)}}
 .card{border-radius:14px!important;border-color:#6B9A3D55!important;border-top:3px solid #4D7C0F!important;box-shadow:0 2px 10px rgba(77,124,15,.1)!important;}
