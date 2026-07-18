@@ -5447,7 +5447,7 @@ export default function App() {
         <div style={{flexShrink:0,background:C._filleul?"linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.6) 24px)":"transparent",borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:C._filleul?"none":"0 1px 6px rgba(0,0,0,.05)",padding:"6px 6px"}}>
           {TABS.map((tb,i) => (
             <button key={i} onClick={()=>{ switchTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,margin:"0 2px",padding:"8px 2px",background:tab===i&&!menuTab?C.sur:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,border:`1.5px solid ${tab===i&&!menuTab?`${C.vio}55`:"transparent"}`,borderRadius:14,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",boxShadow:tab===i&&!menuTab?"0 2px 8px rgba(0,0,0,.1)":"none",transition:"all .2s cubic-bezier(.16,1,.3,1)"}}>
-              <span style={{lineHeight:1,display:"inline-block",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}>
+              <span style={{lineHeight:1,display:"inline-flex",alignItems:"center",justifyContent:"center",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}>
                 {tb.icon==="📅" ? <CalendarDateIcon size="1.15em" lang={lang} /> : <Emoji size="1.15em" invert={isDarkBg && tb.icon==="📞"}>{tb.icon}</Emoji>}
               </span>
               {tb.badge>0 && !tb.wobbleOnly && <span style={{position:"absolute",top:2,right:"8%",minWidth:15,height:15,padding:"0 3px",borderRadius:"50%",background:C.red,color:"#fff",fontSize:9,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",border:`2px solid ${C.card}`,boxSizing:"content-box"}}>{tb.badge}</span>}
@@ -7086,7 +7086,7 @@ function CalendarDateIcon({size="1.15em", lang="fr"}) {
   // vs inactif), au lieu d'une taille figée qui ne matchait ni leur taille
   // ni leur centrage vertical dans le bouton flex.
   return (
-    <span style={{display:"inline-flex",flexDirection:"column",fontSize:size,width:"1em",height:"1em",borderRadius:"22%",overflow:"hidden",verticalAlign:"-0.15em",boxShadow:"0 1px 2px rgba(0,0,0,.25)",lineHeight:1,userSelect:"none",flexShrink:0}}>
+    <span style={{display:"inline-flex",flexDirection:"column",fontSize:size,width:"1em",height:"1em",borderRadius:"22%",overflow:"hidden",boxShadow:"0 1px 2px rgba(0,0,0,.25)",lineHeight:1,userSelect:"none",flexShrink:0}}>
       <span style={{background:"#DD2F45",color:"#fff",fontSize:"0.28em",fontWeight:800,textAlign:"center",padding:"0.06em 0",letterSpacing:"-.03em"}}>{month}</span>
       <span style={{flex:1,background:"#F5F8FA",color:"#66757F",fontSize:"0.5em",fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}>{day}</span>
     </span>
