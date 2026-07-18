@@ -5034,7 +5034,14 @@ export default function App() {
       })()}
 
       {/* HEADER */}
-      <div style={{flexShrink:0,background:headerBG,borderBottom:`1.5px solid ${C.bor}`,boxShadow:"0 1px 6px rgba(0,0,0,.06)"}}>
+      {/* 🔧 Un seul contexte background-size:cover pour tout le bloc header
+          (logo, barre famille, barre onglets) : chaque barre appliquait
+          auparavant sa propre copie indépendante de headerBG, ce qui
+          recadrait la photo différemment dans chacune (hauteurs différentes)
+          et cassait la continuité visuelle à chaque bordure (ex: la tige de
+          la pousse ne se prolongeait pas d'une barre à l'autre). */}
+      <div style={{background:headerBG}}>
+      <div style={{flexShrink:0,background:"transparent",borderBottom:`1.5px solid ${C.bor}`,boxShadow:"0 1px 6px rgba(0,0,0,.06)"}}>
       <div style={{padding:"0 14px",display:"flex",alignItems:"center",gap:12,height:58}}>
         <img src="/logo-nav.png" alt="Duvia" style={{width:126,height:126,objectFit:"contain",flexShrink:0,animation:(sub?.pendingSpins||0)>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}} />
         <div style={{display:"flex",flexDirection:"column",justifyContent:"center",minWidth:0,flex:1}}>
@@ -5380,7 +5387,7 @@ export default function App() {
       {familySync.families.length > 1 && !isChild && (
         <div style={{
           flexShrink:0,
-          background:headerBG,
+          background:"transparent",
           borderBottom:`1.5px solid ${C.bor}`,
           padding:"6px 14px",
           display:"flex",alignItems:"center",gap:8,
@@ -5439,7 +5446,7 @@ export default function App() {
         /* 🔧 Direction "moderne mais douce" (branche staging) : pastille de
            fond arrondie derrière l'icône active, au lieu d'un soulignement
            dur — mêmes couleurs (C.vio/C.mut), juste le traitement visuel. */
-        <div style={{flexShrink:0,background:headerBG,borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:"0 1px 6px rgba(0,0,0,.05)",padding:"6px 6px"}}>
+        <div style={{flexShrink:0,background:"transparent",borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:"0 1px 6px rgba(0,0,0,.05)",padding:"6px 6px"}}>
           {TABS.map((tb,i) => (
             <button key={i} onClick={()=>{ switchTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,margin:"0 2px",padding:"8px 2px",background:tab===i&&!menuTab?C.sur:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,border:`1.5px solid ${tab===i&&!menuTab?`${C.vio}55`:"transparent"}`,borderRadius:14,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",boxShadow:tab===i&&!menuTab?"0 2px 8px rgba(0,0,0,.1)":"none",transition:"all .2s cubic-bezier(.16,1,.3,1)"}}>
               <span style={{lineHeight:1,display:"inline-block",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}><Emoji size="1.15em" invert={isDarkBg && tb.icon==="📞"}>{tb.icon}</Emoji></span>
@@ -5448,6 +5455,7 @@ export default function App() {
           ))}
         </div>
       )}
+      </div>
 
       {/* BANNIÈRE BÊTA */}
       {isBeta() && user && !sub._admin && (
