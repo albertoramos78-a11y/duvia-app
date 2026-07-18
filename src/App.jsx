@@ -4114,7 +4114,7 @@ export default function App() {
   const cssString = useMemo(() => css(C), [C]); // ✅ ~300 lignes CSS générées une seule fois par thème
   const brandCssString = useMemo(() => css(BRAND), []); // ✅ toujours BRAND pour la page de login
   const headerBG = C._brand ? `linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),${BRAND_GRADIENT}`
-    : C._filleul ? `linear-gradient(rgba(255,255,255,.55),rgba(255,255,255,.55)),url('/theme/filleul/wallpaper-header.jpg') center/cover no-repeat`
+    : C._filleul ? `linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.2)),url('/theme/filleul/wallpaper-header.jpg') center/cover no-repeat`
     : C.card;
   // 🔧 Le scrim blanc à 50% n'a de sens que sur un header à fond dégradé/photo
   // (BRAND, FILLEUL) — sur un header plat (tous les autres thèmes), il délave
@@ -5041,7 +5041,7 @@ export default function App() {
           et cassait la continuité visuelle à chaque bordure (ex: la tige de
           la pousse ne se prolongeait pas d'une barre à l'autre). */}
       <div style={{background:headerBG}}>
-      <div style={{flexShrink:0,background:"transparent",borderBottom:`1.5px solid ${C.bor}`,boxShadow:"0 1px 6px rgba(0,0,0,.06)"}}>
+      <div style={{flexShrink:0,background:"transparent",borderBottom:C._filleul?"none":`1.5px solid ${C.bor}`,boxShadow:"0 1px 6px rgba(0,0,0,.06)"}}>
       <div style={{padding:"0 14px",display:"flex",alignItems:"center",gap:12,height:58}}>
         <img src="/logo-nav.png" alt="Duvia" style={{width:126,height:126,objectFit:"contain",flexShrink:0,animation:(sub?.pendingSpins||0)>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}} />
         <div style={{display:"flex",flexDirection:"column",justifyContent:"center",minWidth:0,flex:1}}>
@@ -5388,7 +5388,7 @@ export default function App() {
         <div style={{
           flexShrink:0,
           background:"transparent",
-          borderBottom:`1.5px solid ${C.bor}`,
+          borderBottom:C._filleul?"none":`1.5px solid ${C.bor}`,
           padding:"6px 14px",
           display:"flex",alignItems:"center",gap:8,
         }}>
