@@ -1335,9 +1335,6 @@ body{background:linear-gradient(145deg,#2d2d3a 0%,#1e1e2e 30%,#2a2a3c 60%,#1a1a2
   const filleulExtras = C._filleul ? `
 body{background:linear-gradient(rgba(247,251,240,.82),rgba(237,246,220,.86)),url('/theme/filleul/wallpaper.jpg')!important;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;min-height:100vh;}
 body::after{content:"";position:fixed;bottom:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#6B9A3D,#4D7C0F,#6B9A3D);pointer-events:none;z-index:9998;}
-body::before{content:"🌱";position:fixed;bottom:80px;right:16px;font-size:28px;opacity:.25;pointer-events:none;animation:sproutPulse 2s ease-in-out infinite;z-index:9998;}
-@keyframes sproutGrow{0%,100%{transform:scale(1) translateY(0)}50%{transform:scale(1.14) translateY(-4px)}}
-@keyframes sproutPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
 .card{border-radius:14px!important;border-color:#6B9A3D55!important;border-top:3px solid #4D7C0F!important;box-shadow:0 2px 10px rgba(77,124,15,.1)!important;}
 .card:hover{box-shadow:0 4px 20px rgba(77,124,15,.16)!important;}
 .sec{color:#4D7C0F!important;letter-spacing:.05em!important;}
@@ -5048,7 +5045,6 @@ export default function App() {
         <img src="/logo-nav.png" alt="Duvia" style={{width:126,height:126,objectFit:"contain",flexShrink:0,animation:(sub?.pendingSpins||0)>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}} />
         <div style={{display:"flex",flexDirection:"column",justifyContent:"center",minWidth:0,flex:1}}>
           {C._wc && <span style={{fontSize:14,display:"inline-block",animation:"wcBall 3s ease-in-out infinite",transformOrigin:"center"}}>⚽</span>}
-          {C._filleul && <span style={{fontSize:26,display:"inline-block",animation:"sproutGrow 3s ease-in-out infinite",transformOrigin:"center bottom"}}>🌱</span>}
         </div>
         {/* Right controls: palette → 🏆 lots → ☰ */}
         <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
