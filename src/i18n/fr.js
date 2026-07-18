@@ -94,7 +94,7 @@ const fr = {
     refPhasePremiumTitle:"⭐ Phase Premium abonné",refMonthlyResetBadge:"reset mensuel",
     refPremiumTierLabel:"Filleuls 1 à {max} / mois",refPremiumTierDays:"+{n}j chacun",refPremiumTierNote:"max {n}j/mois",
     refPremiumTierPlusLabel:"Filleuls {n}+ / mois",refWheelOnlyNote:"roue uniquement",
-    refWheelFooterNote:"🎰 Tour de roue offert à chaque filleul validé quel que soit le statut. Pool Standard (Trial/Freemium) ou pool Abonnement ⭐ (mois/an gratuit) pour les abonnés.",
+    refWheelFooterNote:"🎰 Tour de roue offert à chaque filleul validé quel que soit le statut. ⭐ pour les abonnés (mois/an gratuit).",
     refHowItWorksTitle:"Comment ça marche ?",
     refStep1Title:"Partagez votre lien",refStep1Desc:"Envoyez votre code ou lien personnalisé par e-mail ou SMS — invitations illimitées.",
     refStep2Title:"Le filleul s'inscrit",refStep2Desc:"Il crée son compte via votre lien et démarre en Trial Premium ({days}j).",

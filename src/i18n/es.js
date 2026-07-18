@@ -93,7 +93,7 @@ const es = {
     refPhasePremiumTitle:"⭐ Fase de suscriptor Premium",refMonthlyResetBadge:"se reinicia cada mes",
     refPremiumTierLabel:"Referidos 1 a {max} / mes",refPremiumTierDays:"+{n} día(s) cada uno",refPremiumTierNote:"máx. {n} días/mes",
     refPremiumTierPlusLabel:"Referidos {n}+ / mes",refWheelOnlyNote:"solo tirada",
-    refWheelFooterNote:"🎰 Se otorga una tirada por cada referido validado, sea cual sea su estado. Pool Estándar (Trial/Freemium) o Pool de Suscriptor ⭐ (mes/año gratis) para suscriptores.",
+    refWheelFooterNote:"🎰 Se otorga una tirada por cada referido validado, sea cual sea su estado. ⭐ para suscriptores (mes/año gratis).",
     refHowItWorksTitle:"Cómo funciona",
     refStep1Title:"Comparte tu enlace",refStep1Desc:"Envía tu código o enlace personalizado por correo o SMS — invitaciones ilimitadas.",
     refStep2Title:"El referido se registra",refStep2Desc:"Crea su cuenta a través de tu enlace y comienza un Trial Premium ({days} días).",

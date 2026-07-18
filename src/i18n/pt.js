@@ -93,7 +93,7 @@ const pt = {
     refPhasePremiumTitle:"⭐ Fase de assinante Premium",refMonthlyResetBadge:"reinicia mensalmente",
     refPremiumTierLabel:"Indicados 1 a {max} / mês",refPremiumTierDays:"+{n} dia(s) cada",refPremiumTierNote:"máx. {n} dias/mês",
     refPremiumTierPlusLabel:"Indicados {n}+ / mês",refWheelOnlyNote:"apenas giro",
-    refWheelFooterNote:"🎰 Um giro é atribuído a cada indicado validado, seja qual for o estado. Pool Padrão (Trial/Freemium) ou Pool de Assinante ⭐ (mês/ano grátis) para assinantes.",
+    refWheelFooterNote:"🎰 Um giro é atribuído a cada indicado validado, seja qual for o estado. ⭐ para assinantes (mês/ano grátis).",
     refHowItWorksTitle:"Como funciona",
     refStep1Title:"Partilha o teu link",refStep1Desc:"Envia o teu código ou link personalizado por e-mail ou SMS — convites ilimitados.",
     refStep2Title:"O indicado regista-se",refStep2Desc:"Cria a conta através do teu link e começa um Trial Premium ({days} dias).",

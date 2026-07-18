@@ -94,7 +94,7 @@ const en = {
     refPhasePremiumTitle:"⭐ Premium subscriber phase",refMonthlyResetBadge:"resets monthly",
     refPremiumTierLabel:"Referees 1 to {max} / month",refPremiumTierDays:"+{n}d each",refPremiumTierNote:"max {n}d/month",
     refPremiumTierPlusLabel:"Referees {n}+ / month",refWheelOnlyNote:"spin only",
-    refWheelFooterNote:"🎰 A spin is awarded for every validated referee regardless of status. Standard pool (Trial/Freemium) or Subscriber pool ⭐ (free month/year) for subscribers.",
+    refWheelFooterNote:"🎰 A spin is awarded for every validated referee regardless of status. ⭐ for subscribers (free month/year).",
     refHowItWorksTitle:"How it works",
     refStep1Title:"Share your link",refStep1Desc:"Send your code or personalized link by email or text — unlimited invites.",
     refStep2Title:"The referee signs up",refStep2Desc:"They create their account via your link and start a Trial Premium ({days}d).",

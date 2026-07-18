@@ -93,7 +93,7 @@ const de = {
     refPhasePremiumTitle:"⭐ Premium-Abonnenten-Phase",refMonthlyResetBadge:"monatlich zurückgesetzt",
     refPremiumTierLabel:"Empfohlene 1 bis {max} / Monat",refPremiumTierDays:"+{n} Tag(e) je",refPremiumTierNote:"max. {n} Tage/Monat",
     refPremiumTierPlusLabel:"Empfohlene {n}+ / Monat",refWheelOnlyNote:"nur Drehung",
-    refWheelFooterNote:"🎰 Bei jedem bestätigten Empfohlenen gibt es unabhängig vom Status eine Drehung. Standard-Pool (Trial/Freemium) oder Abo-Pool ⭐ (Gratismonat/-jahr) für Abonnenten.",
+    refWheelFooterNote:"🎰 Bei jedem bestätigten Empfohlenen gibt es unabhängig vom Status eine Drehung. ⭐ für Abonnenten (Gratismonat/-jahr).",
     refHowItWorksTitle:"So funktioniert's",
     refStep1Title:"Teile deinen Link",refStep1Desc:"Sende deinen Code oder personalisierten Link per E-Mail oder SMS — unbegrenzte Einladungen.",
     refStep2Title:"Der Empfohlene registriert sich",refStep2Desc:"Er erstellt sein Konto über deinen Link und startet ein Trial Premium ({days} Tage).",
