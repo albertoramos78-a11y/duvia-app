@@ -1357,6 +1357,12 @@ input,select{border-radius:10px!important;border-color:#6B9A3D55!important;heigh
 input:focus,select:focus{border-color:#4D7C0F!important;box-shadow:0 0 0 3px rgba(77,124,15,.15)!important;}
 button{border-radius:10px!important;}
 ` : '';
+  // ─── THÈME LICORNE — fond photo (public/theme/licorne/wallpaper.jpg,
+  // fourni par l'utilisateur), même traitement que Filleul/Été : voile
+  // clair (WCAG) pour la lisibilité, pas de background-attachment:fixed.
+  const licorneExtras = C._licorne ? `
+body{background:linear-gradient(rgba(253,242,251,.82),rgba(252,231,248,.86)),url('/theme/licorne/wallpaper.jpg')!important;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;min-height:100vh;}
+` : '';
   return `
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
 ${wcExtras}
@@ -1365,6 +1371,7 @@ ${summerExtras}
 ${videoExtras}
 ${brandExtras}
 ${filleulExtras}
+${licorneExtras}
 
 /* ── Reset & Base ── */
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -4130,13 +4137,14 @@ export default function App() {
   const headerBG = C._brand ? `linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),${BRAND_GRADIENT}`
     : C._filleul ? `linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.2)),url('/theme/filleul/wallpaper-header.jpg') center/cover no-repeat`
     : C._summer ? `linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.2)),url('/theme/summer/wallpaper-header.jpg') center/cover no-repeat`
+    : C._licorne ? `linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.2)),url('/theme/licorne/wallpaper-header.jpg') center/cover no-repeat`
     : C.card;
   // 🔧 Le scrim blanc à 50% n'a de sens que sur un header à fond dégradé/photo
-  // (BRAND, FILLEUL, SUMMER) — sur un header plat (tous les autres thèmes), il
-  // délave la pastille teintée en un gris terne, ce qui la rend illisible en
-  // particulier sur fond sombre (texte clair sur pastille éclaircie =
-  // contraste trop faible).
-  const pillScrim = (C._brand || C._filleul || C._summer) ? ", rgba(255,255,255,.5)" : "";
+  // (BRAND, FILLEUL, SUMMER, LICORNE) — sur un header plat (tous les autres
+  // thèmes), il délave la pastille teintée en un gris terne, ce qui la rend
+  // illisible en particulier sur fond sombre (texte clair sur pastille
+  // éclaircie = contraste trop faible).
+  const pillScrim = (C._brand || C._filleul || C._summer || C._licorne) ? ", rgba(255,255,255,.5)" : "";
   // 🔧 Idem : certains emoji (ex: 📞, glyphe naturellement noir/foncé) restent
   // lisibles sur fond clair mais disparaissent sur les thèmes à fond très sombre.
   const isDarkBg = C===DARK || C===VIDEO;
@@ -5056,7 +5064,7 @@ export default function App() {
           et cassait la continuité visuelle à chaque bordure (ex: la tige de
           la pousse ne se prolongeait pas d'une barre à l'autre). */}
       <div style={{background:headerBG}}>
-      <div style={{flexShrink:0,background:"transparent",borderBottom:(C._filleul||C._summer)?"none":`1.5px solid ${C.bor}`,boxShadow:(C._filleul||C._summer)?"none":"0 1px 6px rgba(0,0,0,.06)"}}>
+      <div style={{flexShrink:0,background:"transparent",borderBottom:(C._filleul||C._summer||C._licorne)?"none":`1.5px solid ${C.bor}`,boxShadow:(C._filleul||C._summer||C._licorne)?"none":"0 1px 6px rgba(0,0,0,.06)"}}>
       <div style={{padding:"0 14px",display:"flex",alignItems:"center",gap:12,height:58}}>
         <img src="/logo-nav.png" alt="Duvia" style={{width:126,height:126,objectFit:"contain",flexShrink:0,animation:(sub?.pendingSpins||0)>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}} />
         <div style={{display:"flex",flexDirection:"column",justifyContent:"center",minWidth:0,flex:1}}>
@@ -5402,7 +5410,7 @@ export default function App() {
         <div style={{
           flexShrink:0,
           background:"transparent",
-          borderBottom:(C._filleul||C._summer)?"none":`1.5px solid ${C.bor}`,
+          borderBottom:(C._filleul||C._summer||C._licorne)?"none":`1.5px solid ${C.bor}`,
           padding:"6px 14px",
           display:"flex",alignItems:"center",gap:8,
         }}>
@@ -5460,7 +5468,7 @@ export default function App() {
         /* 🔧 Direction "moderne mais douce" (branche staging) : pastille de
            fond arrondie derrière l'icône active, au lieu d'un soulignement
            dur — mêmes couleurs (C.vio/C.mut), juste le traitement visuel. */
-        <div style={{flexShrink:0,background:(C._filleul||C._summer)?"linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.6) 24px)":"transparent",borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:(C._filleul||C._summer)?"none":"0 1px 6px rgba(0,0,0,.05)",padding:"6px 6px"}}>
+        <div style={{flexShrink:0,background:(C._filleul||C._summer||C._licorne)?"linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.6) 24px)":"transparent",borderBottom:`1.5px solid ${C.bor}`,display:"flex",boxShadow:(C._filleul||C._summer||C._licorne)?"none":"0 1px 6px rgba(0,0,0,.05)",padding:"6px 6px"}}>
           {TABS.map((tb,i) => (
             <button key={i} onClick={()=>{ switchTab(i); setShowMenu(false); setMenuTab(null); }} style={{flex:1,margin:"0 2px",padding:"8px 2px",background:tab===i&&!menuTab?C.sur:"transparent",color:tab===i&&!menuTab?C.vio:C.mut,border:`1.5px solid ${tab===i&&!menuTab?`${C.vio}55`:"transparent"}`,borderRadius:14,fontSize:tab===i&&!menuTab?22:20,height:"auto",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",boxShadow:tab===i&&!menuTab?"0 2px 8px rgba(0,0,0,.1)":"none",transition:"all .2s cubic-bezier(.16,1,.3,1)"}}>
               <span style={{lineHeight:1,display:"inline-flex",alignItems:"center",justifyContent:"center",animation:tb.badge>0?"navWobble 2.2s ease-in-out 0.4s infinite":undefined,transformOrigin:"center bottom"}}>
