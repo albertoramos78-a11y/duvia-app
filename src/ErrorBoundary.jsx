@@ -21,6 +21,16 @@
 import { Component } from "react";
 import { logError, submitBugReport } from "./services/diagnostics";
 
+// 🔧 2026-07-19 : la plupart des plantages ne sont jamais signalés — l'écran
+// de secours ne les envoyait à bug_reports que si l'utilisateur pensait à
+// cliquer "Signaler ce problème" pendant qu'il vient de subir un plantage
+// (cas réel constaté : un crash intermittent à la déconnexion est resté sans
+// aucune trace exploitable). logError() seul ne suffit pas : son buffer est
+// en mémoire, perdu au prochain rechargement (justement ce que fait le
+// bouton "Recharger l'application" juste à côté). L'envoi automatique
+// ci-dessous capture le message + la stack trace sans dépendre de l'action
+// de l'utilisateur ; le bouton manuel reste utile pour ajouter un commentaire.
+
 const STYLES = {
   wrap: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "#f5f5f5", fontFamily: "-apple-system, sans-serif" },
   card: { maxWidth: 360, width: "100%", textAlign: "center", background: "#fff", borderRadius: 16, padding: 28, boxShadow: "0 4px 24px rgba(0,0,0,.08)" },
@@ -49,6 +59,13 @@ class ErrorBoundary extends Component {
 
   componentDidCatch(error, errorInfo) {
     logError(error?.message || "Erreur de rendu", error?.stack, { componentStack: errorInfo?.componentStack });
+    let email = null;
+    try { email = JSON.parse(window.localStorage.getItem("duvia_session") || "null"); } catch { /* noop */ }
+    submitBugReport({
+      comment: `[Plantage auto-capturé] ${error?.message || "Erreur inconnue"}${email ? " — compte: " + email : ""}\n\n${error?.stack || ""}`,
+      screenshot: null,
+      context: { userId: null, familyId: null, screen: "crash", appState: { componentStack: errorInfo?.componentStack || null } },
+    }).catch(() => { /* best-effort : ne doit jamais faire échouer l'écran de secours */ });
   }
 
   handleReload = () => {
