@@ -11291,6 +11291,9 @@ function StepAccess() {
 
   const [genLoading, setGenLoading] = useState(false);
   const [genErr, setGenErr]         = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSent, setEmailSent]       = useState(false);
+  const [emailErr, setEmailErr]         = useState("");
 
   // 🆕 Génération Supabase-backed (token + URL ?oinv=)
   async function sendInvite(){
@@ -11334,13 +11337,16 @@ function StepAccess() {
   const inviteMsg = (url) =>
     `Bonjour 👋\n${(cfg.parents?.[0]?.name)||""} t'invite à rejoindre la famille sur Duvia en tant qu'observateur.\nCrée ton compte ici :\n${url}`;
 
-  function handleSendEmail(){
-    if(!sent) return;
-    const subject = encodeURIComponent("Rejoins notre famille sur Duvia 👨‍👩‍👧");
-    const body    = encodeURIComponent(inviteMsg(sent));
-    const a = document.createElement("a");
-    a.href = `mailto:${email||""}?subject=${subject}&body=${body}`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  async function handleSendEmail(){
+    if(!sent || !email) return;
+    setEmailSending(true); setEmailErr(""); setEmailSent(false);
+    const subject = (t.observerInviteEmailSubject || "Rejoins notre famille sur Duvia 👨‍👩‍👧");
+    const body = (t.observerInviteEmailBody || "Bonjour 👋\n{parentName} t'invite à rejoindre la famille sur Duvia en tant qu'observateur.\nCrée ton compte ici :\n{link}")
+      .replace("{parentName}", (cfg.parents?.[0]?.name)||"").replace("{link}", sent);
+    const res = await sendInviteEmail({ type: "observer", to: email, subject, body });
+    setEmailSending(false);
+    if (res.ok) setEmailSent(true);
+    else setEmailErr(inviteEmailErrorMessage(t, res.error));
   }
 
   function handleSendSMS(){
@@ -11577,11 +11583,14 @@ function StepAccess() {
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                 <button onClick={handleSendSMS} disabled={!o.phone} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:o.phone?"pointer":"not-allowed",opacity:o.phone?1:.4,background:"#25D36618",color:"#128C7E",border:"1.5px solid #25D36644"}}>💬 SMS</button>
                 <button onClick={handleSendWhatsApp} disabled={!o.phone} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:o.phone?"pointer":"not-allowed",opacity:o.phone?1:.4,background:"#25D36618",color:"#25D366",border:"1.5px solid #25D36644"}}><span style={{fontSize:14}}>📱</span> WhatsApp</button>
-                <button onClick={handleSendEmail} disabled={!o.email} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:o.email?"pointer":"not-allowed",opacity:o.email?1:.4,background:`${C.vio}18`,color:C.vio,border:`1.5px solid ${C.vio}44`}}>✉️ Email</button>
+                <button onClick={handleSendEmail} disabled={!o.email || emailSending} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:(o.email&&!emailSending)?"pointer":"not-allowed",opacity:o.email?1:.4,background:`${C.vio}18`,color:C.vio,border:`1.5px solid ${C.vio}44`}}>
+                  {emailSending ? `⏳ ${t.inviteEmailSending||"Envoi…"}` : emailSent ? (t.inviteEmailSent||"✅ Email envoyé") : "✉️ Email"}
+                </button>
                 <button onClick={copyInvite} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:copied?`${C.grn}18`:C.sur,color:copied?C.grn:C.mut,border:`1.5px solid ${C.bor}`}}>
                   {copied ? `✅ ${t.copied||"Copié"} !` : `📋 ${t.copy||"Copier"}`}
                 </button>
               </div>
+              {emailErr && <div style={{fontSize:11,color:C.red,marginTop:8}}>{emailErr}</div>}
             </div>
           )}
           {/* Valider / Refuser l'observateur (sur sa fiche) */}
