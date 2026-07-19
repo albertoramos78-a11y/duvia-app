@@ -15628,6 +15628,22 @@ function AccountSubscriptionCard({ C, onChanged }) {
     }
   }
 
+  async function toggleAi(enabled) {
+    if (!account) return;
+    setApplying("ai_toggle"); setErr(""); setMsg("");
+    try {
+      await call({ action: "set_ai_enabled", user_id: account.user_id, enabled });
+      setMsg(`✅ IA ${enabled ? "activée" : "désactivée"}.`);
+      const refreshed = await call({ action: "lookup_user", user_id: account.user_id });
+      setAccount(refreshed);
+      onChanged?.();
+    } catch (ex) {
+      setErr(String(ex?.message || ex));
+    } finally {
+      setApplying("");
+    }
+  }
+
   return (
     <div className="card" style={{borderColor:`${C.vio}44`,background:`${C.vio}06`}}>
       <div style={{fontSize:11,fontWeight:800,color:C.vio,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>👤 Gérer l'abonnement d'un compte</div>
@@ -15683,6 +15699,15 @@ function AccountSubscriptionCard({ C, onChanged }) {
                 {applying==="premium"?"…":"⭐ Premium"}
               </button>
             </div>
+          </div>
+
+          {/* Bulle 4 : interrupteur IA (Premium+IA, admin-only pour l'instant) */}
+          <div style={{padding:12,background:C.sur,borderRadius:10,border:`1px solid ${C.bor}`,marginBottom:12}}>
+            <div style={{fontSize:10,fontWeight:800,color:C.mut,letterSpacing:".08em",textTransform:"uppercase",marginBottom:10}}>🤖 Premium+IA (bêta admin)</div>
+            <button onClick={()=>toggleAi(!account.sub?.ai_enabled)} disabled={!!applying}
+              style={{width:"100%",height:38,background:account.sub?.ai_enabled?C.grn:C.bor,color:account.sub?.ai_enabled?"#fff":C.txt,border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+              {applying==="ai_toggle" ? "…" : (account.sub?.ai_enabled ? "🤖 IA activée (cliquer pour désactiver)" : "🤖 Activer l'IA pour ce compte")}
+            </button>
           </div>
         </>
       )}

@@ -295,5 +295,14 @@ serve(async (req) => {
     }
   }
 
+  if (action === "set_ai_enabled") {
+    const userId = String(payload?.user_id || "");
+    const enabled = !!payload?.enabled;
+    if (!userId) return jsonResponse({ error: "missing_user_id" }, 400);
+    const { error } = await admin.from("subscriptions").upsert({ user_id: userId, ai_enabled: enabled }, { onConflict: "user_id" });
+    if (error) return jsonResponse({ error: error.message }, 500);
+    return jsonResponse({ ok: true });
+  }
+
   return jsonResponse({ error: "unknown_action" }, 400);
 });
