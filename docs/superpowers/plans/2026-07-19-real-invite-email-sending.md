@@ -900,11 +900,14 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
 - [ ] **Step 4: Print deployment instructions for the user**
 
-This feature needs 2 manual steps outside this repo before it works in production, in this order:
-1. Run `supabase/migrations/0042_invite_email_log.sql` in the Supabase SQL Editor (production project).
-2. Create a new Edge Function named exactly `send-invite-email` in the Supabase dashboard (Edge Functions → Create a new function), paste the full contents of `supabase/functions/send-invite-email/index.ts` (written in Task 2), deploy. Confirm `RESEND_API_KEY` is available to it (project-level secret, shared with `notify-bug-report`/`notify-rating` — should already be there).
+⚠️ **Updated during Task 2's fix round**: a second migration (`0043_check_and_log_invite_email.sql`) was added mid-development to close a TOCTOU race in the rate-limiting logic — the deployed function calls this RPC and does not work without it. This step's original 2-item list (written before that fix) is wrong if followed literally; use this corrected 3-item list instead.
 
-Print the full current contents of both files (migration + function) in the final report so the user can copy-paste them directly, per this project's standing convention for Edge Function deployment instructions.
+This feature needs 3 manual steps outside this repo before it works in production, **in this exact order** (0043 depends on 0042's table; the function depends on 0043's RPC existing):
+1. Run `supabase/migrations/0042_invite_email_log.sql` in the Supabase SQL Editor (production project).
+2. Run `supabase/migrations/0043_check_and_log_invite_email.sql` in the same SQL Editor.
+3. Create a new Edge Function named exactly `send-invite-email` in the Supabase dashboard (Edge Functions → Create a new function), paste the full contents of `supabase/functions/send-invite-email/index.ts` (written in Task 2, revised in its fix rounds), deploy. Confirm `RESEND_API_KEY` is available to it (project-level secret, shared with `notify-bug-report`/`notify-rating` — should already be there).
+
+Print the full current contents of all three files (both migrations + function) in the final report so the user can copy-paste them directly, per this project's standing convention for Edge Function deployment instructions.
 
 ## Self-Review Notes (for the plan author, not a task)
 
