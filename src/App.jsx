@@ -9737,9 +9737,17 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
 async function sendInviteEmail({ type, to, subject, body }) {
   try {
     const { data, error } = await supabase.functions.invoke("send-invite-email", { body: { type, to, subject, body } });
-    if (error) return { ok: false, error: "generic" };
-    if (data?.error === "daily_limit_reached") return { ok: false, error: "daily" };
-    if (data?.error === "recipient_limit_reached") return { ok: false, error: "recipient" };
+    if (error) {
+      // 🔧 invoke() renvoie data:null sur toute réponse non-2xx — le vrai
+      // corps d'erreur (ex: {error:"daily_limit_reached"}) ne vit que sur
+      // error.context (Response brute), jamais sur `data` (voir la propre
+      // JSDoc de @supabase/functions-js : "await error.context.json()").
+      let code = null;
+      try { code = (await error.context.json())?.error; } catch { /* réponse non-JSON ou déjà consommée */ }
+      if (code === "daily_limit_reached") return { ok: false, error: "daily" };
+      if (code === "recipient_limit_reached") return { ok: false, error: "recipient" };
+      return { ok: false, error: "generic" };
+    }
     if (data?.error) return { ok: false, error: "generic" };
     return { ok: true };
   } catch {
