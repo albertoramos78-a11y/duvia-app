@@ -3452,9 +3452,25 @@ export default function App() {
     const activeParent = user || pendingUser;
     if (!activeParent || activeParent.role !== "parent") return;
     let cancelled = false;
-    supabase.rpc("is_parent_email_verified").then(({ data }) => {
+    (async () => {
+      // 🔧 Un compte connecté via Google a déjà prouvé la propriété de son
+      // email à Google (OAuth) — plus fort qu'un lien cliqué dans un email.
+      // On saute la vérification maison (jeton + Edge Function) pour ces
+      // comptes : le listener OAuth "SIGNED_IN" (plus haut dans ce fichier)
+      // ne déclenche jamais son envoi, donc is_parent_email_verified()
+      // renvoyait toujours false et bloquait ces comptes indéfiniment sur
+      // EmailVerifyGate, sans aucun moyen d'en sortir (bug constaté en
+      // prod 2026-07-19 — un nouveau compte Google recevait bien la
+      // notification "nouvelle connexion" mais jamais l'email de
+      // vérification, qui n'était en fait jamais envoyé).
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData?.user?.app_metadata?.provider === "google") {
+        if (!cancelled) setEmailVerified(true);
+        return;
+      }
+      const { data } = await supabase.rpc("is_parent_email_verified");
       if (!cancelled) setEmailVerified(!!data);
-    });
+    })();
     return () => { cancelled = true; };
   }, [user?.id, user?.role, pendingUser?.id, pendingUser?.role]);
   // 🔒 Backlog 17d (suite) : un observateur au-delà du quota du plan de sa
