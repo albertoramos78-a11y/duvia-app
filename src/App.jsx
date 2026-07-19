@@ -5475,9 +5475,11 @@ export default function App() {
               labelStyle={{fontSize:13,fontWeight:800,color:C.vio}}
             />
           </div>
-          <InfoBubble C={C} tipKey={`duvia_famtip_${user?.id||"x"}`} title={t.multiFamilyTitle||"Plusieurs familles"} align="right">
-            {t.multiFamilyInfo||"Vous appartenez à plusieurs familles. Utilisez ce menu pour basculer de l'une à l'autre."}
-          </InfoBubble>
+          <div style={{marginLeft:"auto",flexShrink:0}}>
+            <InfoBubble C={C} tipKey={`duvia_famtip_${user?.id||"x"}`} title={t.multiFamilyTitle||"Plusieurs familles"} align="right">
+              {t.multiFamilyInfo||"Vous appartenez à plusieurs familles. Utilisez ce menu pour basculer de l'une à l'autre."}
+            </InfoBubble>
+          </div>
         </div>
       )}
 
