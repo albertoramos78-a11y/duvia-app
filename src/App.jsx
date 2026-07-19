@@ -1712,7 +1712,27 @@ function useFamilySync(cfg, setCfg) {
   // les champs texte à saisie longue, où la fenêtre de frappe dépasse le délai).
   const lastSavedUpdatedAtRef = useRef(null);
 
-  function setFamilyIdBoth(id){ familyIdRef.current = id; setFamilyIdState(id); }
+  // 🔧 Mémorise la dernière famille active PAR COMPTE (uid), pas juste la
+  // note globale `duvia_family_id` (partagée par tout compte utilisant cet
+  // appareil, et effacée à la déconnexion pour éviter qu'un AUTRE compte
+  // l'hérite — voir handleSetUser). Ici, la clé est le uid du compte, donc
+  // aucun risque qu'un compte hérite de la famille d'un autre : au pire, un
+  // compte qui n'a jamais utilisé cet appareil retombe simplement sur le
+  // choix par défaut (actives[0]) de la résolution ci-dessous.
+  function rememberLastFamilyForAccount(uid, id) {
+    if (!uid || !id) return;
+    try {
+      const raw = window.localStorage.getItem("duvia_last_family_by_account");
+      const map = raw ? JSON.parse(raw) : {};
+      map[uid] = id;
+      window.localStorage.setItem("duvia_last_family_by_account", JSON.stringify(map));
+    } catch {}
+  }
+  function setFamilyIdBoth(id){
+    familyIdRef.current = id;
+    setFamilyIdState(id);
+    rememberLastFamilyForAccount(uidRef.current, id);
+  }
 
   // ── Éjection INSTANTANÉE ──────────────────────────────────────────────────
   // Si mon adhésion à la famille active passe à un statut ≠ 'active' (retiré par
@@ -1861,6 +1881,7 @@ function useFamilySync(cfg, setCfg) {
         const { data: userData } = await supabase.auth.getUser();
         const uid = userData?.user?.id;
         if (!uid) throw new Error("no-uid");
+        uidRef.current = uid;
 
         // 2. 🔧 Le serveur fait toujours autorité : on vérifie d'abord si ce
         // compte appartient déjà à une famille connue, AVANT de faire
@@ -1881,15 +1902,24 @@ function useFamilySync(cfg, setCfg) {
             .eq("user_id", uid);
           if (memErr) throw memErr;
           const actives = (memberships || []).filter(m => m.status === "active");
-          // 🔧 Multi-familles : si plusieurs familles actives, préférer celle
-          // notée localement (duvia_family_id) — typiquement celle rejointe via
+          // 🔧 Multi-familles : priorité (1) la dernière famille active DE CE
+          // COMPTE avant sa dernière déconnexion (duvia_last_family_by_account,
+          // par uid — backlog "mémoriser la dernière famille active") ; sinon
+          // (2) la note globale duvia_family_id — typiquement celle rejointe via
           // un lien d'invitation — plutôt que « la première venue » (qui pouvait
           // être une famille vierge laissée par un départ précédent).
           let active = null;
           try {
-            const noted = window.localStorage.getItem("duvia_family_id");
-            if (noted) active = actives.find(m => m.family_id === noted) || null;
+            const raw = window.localStorage.getItem("duvia_last_family_by_account");
+            const remembered = raw ? JSON.parse(raw)[uid] : null;
+            if (remembered) active = actives.find(m => m.family_id === remembered) || null;
           } catch {}
+          if (!active) {
+            try {
+              const noted = window.localStorage.getItem("duvia_family_id");
+              if (noted) active = actives.find(m => m.family_id === noted) || null;
+            } catch {}
+          }
           if (!active) active = actives[0] || null;
           if (active?.family_id) {
             familyId = active.family_id;
@@ -2257,6 +2287,7 @@ function useFamilySync(cfg, setCfg) {
       setSyncStatus("connecting");
       const { data: userData } = await supabase.auth.getUser();
       const uid = userData?.user?.id;
+      uidRef.current = uid;
       const { data: foundId, error: rpcErr } = await supabase.rpc("find_family_by_share_code", { p_code: cleanCode });
       if (rpcErr) throw rpcErr;
       if (!foundId) { setSyncStatus("synced"); return { ok: false, error: "notfound" }; }
@@ -2415,6 +2446,7 @@ function useFamilySync(cfg, setCfg) {
       const { data: userData } = await supabase.auth.getUser();
       const uid = userData?.user?.id;
       if (!uid) return { ok: false, error: "no-uid" };
+      uidRef.current = uid;
       const newId = crypto.randomUUID();
       const base = makeCfg();
       const blankCfg = {
