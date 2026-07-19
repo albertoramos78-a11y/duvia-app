@@ -2773,21 +2773,28 @@ function InfoBubble({C,tipKey,title,children,align="right"}) {
         👋
       </button>
       {open && (
-        <div onClick={close} style={{position:"absolute",top:36,...(align==="left"?{left:0}:{right:0}),zIndex:50,cursor:"pointer",animation:"fadeInDown .35s ease",width:230}}>
-          <div style={{position:"absolute",top:-7,...(align==="left"?{left:8}:{right:8}),width:0,height:0,borderLeft:"8px solid transparent",borderRight:"8px solid transparent",borderBottom:`8px solid ${C.vio}`}} />
-          <div style={{background:C.vio,color:"#fff",borderRadius:14,padding:"12px 16px",boxShadow:"0 8px 28px rgba(0,0,0,.22)",position:"relative"}}>
-            <div style={{fontSize:18,marginBottom:6,textAlign:"center"}}>👋</div>
-            <div style={{fontSize:13,fontWeight:800,marginBottom:4,lineHeight:1.3,textAlign:"center"}}>
-              {title}
-            </div>
-            <div style={{fontSize:12,opacity:.92,lineHeight:1.45}}>
-              {children}
-            </div>
-            <div style={{fontSize:10,opacity:.7,marginTop:8,textAlign:"right"}}>
-              {t.tapToClose||"Appuyer pour fermer"}
+        <>
+          {/* 🔧 Fond invisible plein écran, même mécanisme que CustomSelect :
+              sans lui, ouvrir un AUTRE menu (ex: le sélecteur de famille juste
+              à côté) ne fermait pas cette bulle — les deux restaient affichés
+              en même temps, se chevauchant. */}
+          <div onClick={close} style={{position:"fixed",inset:0,zIndex:40}} />
+          <div onClick={close} style={{position:"absolute",top:36,...(align==="left"?{left:0}:{right:0}),zIndex:50,cursor:"pointer",animation:"fadeInDown .35s ease",width:230}}>
+            <div style={{position:"absolute",top:-7,...(align==="left"?{left:8}:{right:8}),width:0,height:0,borderLeft:"8px solid transparent",borderRight:"8px solid transparent",borderBottom:`8px solid ${C.vio}`}} />
+            <div style={{background:C.vio,color:"#fff",borderRadius:14,padding:"12px 16px",boxShadow:"0 8px 28px rgba(0,0,0,.22)",position:"relative"}}>
+              <div style={{fontSize:18,marginBottom:6,textAlign:"center"}}>👋</div>
+              <div style={{fontSize:13,fontWeight:800,marginBottom:4,lineHeight:1.3,textAlign:"center"}}>
+                {title}
+              </div>
+              <div style={{fontSize:12,opacity:.92,lineHeight:1.45}}>
+                {children}
+              </div>
+              <div style={{fontSize:10,opacity:.7,marginTop:8,textAlign:"right"}}>
+                {t.tapToClose||"Appuyer pour fermer"}
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
@@ -5468,7 +5475,7 @@ export default function App() {
               labelStyle={{fontSize:13,fontWeight:800,color:C.vio}}
             />
           </div>
-          <InfoBubble C={C} tipKey={`duvia_famtip_${user?.id||"x"}`} title={t.multiFamilyTitle||"Plusieurs familles"} align="left">
+          <InfoBubble C={C} tipKey={`duvia_famtip_${user?.id||"x"}`} title={t.multiFamilyTitle||"Plusieurs familles"} align="right">
             {t.multiFamilyInfo||"Vous appartenez à plusieurs familles. Utilisez ce menu pour basculer de l'une à l'autre."}
           </InfoBubble>
         </div>
