@@ -15150,6 +15150,10 @@ function ParrainageSection() {
   const [showInvite,setShowInvite] = useState(false);
   const [showDemo,setShowDemo]     = useState(false);
   const [demoStep,setDemoStep]     = useState(0);
+  const [refSendEmail,setRefSendEmail] = useState("");
+  const [refSending,setRefSending]     = useState(false);
+  const [refSent,setRefSent]           = useState(false);
+  const [refSendErr,setRefSendErr]     = useState("");
 
   const code             = sub.refCode || user?.refCode || "—";
   const inviteLink       = `${APP_URL}?ref=${code}`;
@@ -15181,6 +15185,16 @@ function ParrainageSection() {
   function shareViaSMS(){
     const body=encodeURIComponent((t.refShareSmsBody||"Rejoins-moi sur Duvia 🏡 {link}").replace("{link}",inviteLink));
     window.open(`sms:?body=${body}`);
+  }
+  async function sendReferralEmail(){
+    if(!refSendEmail.trim() || !isValidEmail(refSendEmail.trim())) return;
+    setRefSending(true); setRefSendErr(""); setRefSent(false);
+    const subject = (t.refShareEmailSubject||"Rejoins-moi sur Duvia 🏡");
+    const body = (t.refShareEmailBody||"Salut !\n\nJe t'invite sur Duvia, l'app qui simplifie la coparentalité.\n\nTélécharge l'app et crée ton compte via ce lien : {link}\n\nÀ bientôt sur Duvia !").replace("{link}",inviteLink);
+    const res = await sendInviteEmail({ type: "referral", to: refSendEmail.trim(), subject, body });
+    setRefSending(false);
+    if (res.ok) { setRefSent(true); setRefSendEmail(""); }
+    else setRefSendErr(inviteEmailErrorMessage(t, res.error));
   }
 
   function simulateReferral(){
@@ -15422,7 +15436,7 @@ function ParrainageSection() {
               <div style={{fontSize:10,fontWeight:800,color:C.mut,textTransform:"uppercase",marginBottom:6}}>{t.refInviteLinkLabel||"Lien d'invitation"}</div>
               <div style={{fontSize:12,color:C.vio,fontFamily:"monospace",wordBreak:"break-all",fontWeight:700}}>{inviteLink}</div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}>
               {[
                 {icon:copiedLink?"✅":"📋", label:copiedLink?(t.refCopied||"Copié !"):(t.refCopyLinkBtn||"Copier le lien"), action:copyLink, active:copiedLink},
                 {icon:"✉️", label:t.refByEmail||"Par e-mail", action:shareViaEmail, active:false},
@@ -15433,6 +15447,23 @@ function ParrainageSection() {
                   {btn.label}
                 </button>
               ))}
+            </div>
+            <div style={{marginBottom:14,paddingTop:14,borderTop:`1px solid ${C.bor}`}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:8}}>{t.refSendEmailLabel||"Ou envoyer directement à un email"}</div>
+              <div style={{display:"flex",gap:8}}>
+                <input type="email" value={refSendEmail} onChange={e=>{setRefSendEmail(e.target.value);setRefSent(false);setRefSendErr("");}}
+                  placeholder={t.refSendEmailPlaceholder||"email@exemple.fr"}
+                  style={{flex:1,height:40,padding:"0 12px",borderRadius:10,border:`1.5px solid ${C.bor}`,fontSize:13,background:C.sur,color:C.txt}} />
+                <button onClick={sendReferralEmail} disabled={refSending || !refSendEmail.trim() || !isValidEmail(refSendEmail.trim())}
+                  style={{height:40,padding:"0 16px",borderRadius:10,border:"none",fontSize:13,fontWeight:700,
+                    cursor:(refSending||!refSendEmail.trim()||!isValidEmail(refSendEmail.trim()))?"not-allowed":"pointer",
+                    background:(refSending||!refSendEmail.trim()||!isValidEmail(refSendEmail.trim()))?C.bor:`linear-gradient(135deg,${C.vio},${C.pin})`,
+                    color:"#fff"}}>
+                  {refSending ? (t.inviteEmailSending||"Envoi…") : (t.refSendEmailBtn||"Envoyer")}
+                </button>
+              </div>
+              {refSent && <div style={{fontSize:11,color:C.grn,marginTop:6}}>{t.refSendEmailSentMsg||"✅ Invitation envoyée !"}</div>}
+              {refSendErr && <div style={{fontSize:11,color:C.red,marginTop:6}}>{refSendErr}</div>}
             </div>
             <button onClick={()=>setShowInvite(false)} style={{width:"100%",padding:12,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:12,fontSize:14,fontWeight:700,cursor:"pointer"}}>
               {t.refCloseBtn||"Fermer"}
