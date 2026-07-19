@@ -9729,19 +9729,46 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
   );
 }
 
+// ─── ENVOI RÉEL D'EMAIL D'INVITATION (parent/observateur/enfant/parrainage) ──
+// Helper partagé — voir docs/superpowers/specs/2026-07-19-real-invite-email-sending-design.md.
+// Le sujet/corps sont déjà construits côté client (via t.xxx, dans la langue
+// actuelle de l'expéditeur) — la fonction serveur ne fait qu'valider/anti-abus/
+// envoyer, jamais de traduction côté serveur.
+async function sendInviteEmail({ type, to, subject, body }) {
+  try {
+    const { data, error } = await supabase.functions.invoke("send-invite-email", { body: { type, to, subject, body } });
+    if (error) return { ok: false, error: "generic" };
+    if (data?.error === "daily_limit_reached") return { ok: false, error: "daily" };
+    if (data?.error === "recipient_limit_reached") return { ok: false, error: "recipient" };
+    if (data?.error) return { ok: false, error: "generic" };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "generic" };
+  }
+}
+
+function inviteEmailErrorMessage(t, errCode) {
+  if (errCode === "daily") return t.inviteEmailErrorDailyLimit || "⚠️ Trop d'invitations envoyées aujourd'hui. Réessaie demain.";
+  if (errCode === "recipient") return t.inviteEmailErrorRecipientLimit || "⚠️ Trop d'invitations envoyées à cette adresse récemment. Réessaie plus tard.";
+  return t.inviteEmailErrorGeneric || "⚠️ Échec de l'envoi. Réessaie.";
+}
+
 // ─── PARENT INVITE SHARE BUTTONS ─────────────────────────────────────────────
 function ParentInviteShareBtns({ C, parent, familyName }) {
   const { t } = useApp();
-  const msg = `Bonjour 👋\n${familyName} t'invite à rejoindre la famille sur Duvia.\nCrée ton compte ici :\n${parent.inviteUrl}`;
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [err, setErr] = useState("");
 
-  function handleEmail() {
-    const subject = encodeURIComponent(`Rejoins notre famille sur Duvia 👨‍👩‍👧`);
-    const href = `mailto:${parent.inviteEmail||""}?subject=${subject}&body=${encodeURIComponent(msg)}`;
-    const a = document.createElement("a");
-    a.href = href;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  async function handleEmail() {
+    setSending(true); setErr(""); setSent(false);
+    const link = parent.inviteUrl || "";
+    const subject = (t.parentInviteEmailSubject || "Rejoins notre famille sur Duvia 👨‍👩‍👧");
+    const body = (t.parentInviteEmailBody || "Bonjour 👋\nTu es invité(e) à rejoindre une famille sur Duvia.\nCrée ton compte ici :\n{link}").replace("{link}", link);
+    const res = await sendInviteEmail({ type: "parent", to: parent.inviteEmail || "", subject, body });
+    setSending(false);
+    if (res.ok) setSent(true);
+    else setErr(inviteEmailErrorMessage(t, res.error));
   }
 
   return (
@@ -9750,11 +9777,12 @@ function ParentInviteShareBtns({ C, parent, familyName }) {
         {t.sendInviteLink}
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <button onClick={handleEmail} style={{
-          padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",
+        <button onClick={handleEmail} disabled={sending} style={{
+          padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:sending?"wait":"pointer",
           background:`${C.vio}12`,color:C.vio,border:`1.5px solid ${C.vio}44`,
-        }}>✉️ Email</button>
+        }}>{sending ? `⏳ ${t.inviteEmailSending||"Envoi…"}` : sent ? `${t.inviteEmailSent||"✅ Email envoyé"}` : "✉️ Email"}</button>
       </div>
+      {err && <div style={{fontSize:11,color:C.red,marginTop:6}}>{err}</div>}
     </div>
   );
 }
