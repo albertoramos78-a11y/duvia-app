@@ -16756,7 +16756,7 @@ function formatFileSize(bytes){
 
 // ─── MESSAGING TAB ────────────────────────────────────────────────────────────
 function MessagingTab(){
-  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,reactToCloudMessage,deleteCloudMessage,myUid,uidToLocal,localToUid,emailToUid,familySync,isChild,isObs,hiddenConvs,hideConversation,prem,onUpgrade}=useApp();
+  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,reactToCloudMessage,deleteCloudMessage,myUid,uidToLocal,localToUid,emailToUid,familySync,isChild,isObs,hiddenConvs,hideConversation,prem,onUpgrade,sub}=useApp();
   const [view,setView]=useState("list");
   const [convId,setConvId]=useState(null);
   const [draft,setDraft]=useState("");
@@ -16770,6 +16770,9 @@ function MessagingTab(){
   const convLongPressTimer=useRef(null);
   const convLongPressFired=useRef(false);
   const [shakeDraft,setShakeDraft]=useState(false);
+  const [rephrasing,setRephrasing]=useState(false);
+  const [rephraseSuggestion,setRephraseSuggestion]=useState("");
+  const [rephraseErr,setRephraseErr]=useState("");
   // Épinglage de messages — par compte (localStorage)
   const [pinnedMsgIds,setPinnedMsgIds]=useLocalStorage(`duvia_pinned_msgs_${user?.id||"x"}`,[]); 
   function toggleMsgPin(id){setPinnedMsgIds(ids=>ids.includes(id)?ids.filter(x=>x!==id):[...ids,id]);}
@@ -17027,8 +17030,15 @@ function MessagingTab(){
     }
   }
 
-  async function sendMsg(toIds){
-    const content=draft.trim();
+  async function sendMsg(toIds, overrideContent){
+    // 🔧 overrideContent permet au bouton "Envoyer celle-ci" (suggestion IA)
+    // d'envoyer un texte précis sans dépendre de l'état `draft` — un simple
+    // setDraft(suggestion) suivi d'un sendMsg(toIds) dans le même clic
+    // enverrait encore l'ANCIEN draft, React ne rafraîchissant l'état
+    // qu'au rendu suivant. Tous les appels existants ne passent qu'un seul
+    // argument, donc overrideContent reste undefined et le comportement est
+    // inchangé partout ailleurs.
+    const content=(overrideContent!==undefined?overrideContent:draft).trim();
     if((!content&&!pendingFile)||!toIds.length)return;
     // ── Validations sécurité ────────────────────────────────────────
     if(content.length > LIMITS.MSG_MAX){
@@ -17072,6 +17082,22 @@ function MessagingTab(){
     sendCloudMessage(myName, toIds, safeContent).then(()=>{
       _afterSend(toIds);
     }).catch(e=>alert("⚠️ Erreur d'envoi : "+(e?.message||e)));
+  }
+
+  async function handleRephrase() {
+    if (!draft.trim()) return;
+    setRephrasing(true); setRephraseErr(""); setRephraseSuggestion("");
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-rephrase-message", { body: { text: draft } });
+      if (error) throw new Error("generic");
+      if (data?.error === "daily_limit_reached") throw new Error("daily");
+      if (data?.error) throw new Error("generic");
+      setRephraseSuggestion(data?.rephrased || "");
+    } catch (e) {
+      setRephraseErr(e.message === "daily" ? (t.aiRephraseDailyLimitError||"⚠️ Limite quotidienne de reformulations atteinte. Réessaie demain.") : (t.aiRephraseError||"⚠️ Échec de la reformulation. Réessaie."));
+    } finally {
+      setRephrasing(false);
+    }
   }
 
   function convName(ids){
@@ -17410,6 +17436,29 @@ function MessagingTab(){
               <div style={{fontSize:10,color:C.mut}}>{formatFileSize(pendingFile.size)}</div>
             </div>
             <button onClick={clearPendingFile} disabled={uploadingFile} style={{width:26,height:26,borderRadius:"50%",border:"none",background:`${C.red}18`,color:C.red,fontSize:13,fontWeight:900,flexShrink:0,cursor:"pointer"}}>✕</button>
+          </div>
+        )}
+        {sub?.aiEnabled && (
+          <div style={{marginBottom:8,flexShrink:0}}>
+            {rephraseSuggestion ? (
+              <div style={{padding:"10px 12px",background:`${C.vio}08`,border:`1.5px solid ${C.vio}33`,borderRadius:14,marginBottom:8}}>
+                <div style={{fontSize:10,fontWeight:800,color:C.vio,textTransform:"uppercase",letterSpacing:".05em",marginBottom:6}}>✨ {t.aiRephraseSuggestionLabel||"Suggestion reformulée"}</div>
+                <div style={{fontSize:13,color:C.txt,lineHeight:1.5,marginBottom:10,whiteSpace:"pre-wrap"}}>{rephraseSuggestion}</div>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={()=>{ sendMsg(otherIds, rephraseSuggestion); setRephraseSuggestion(""); }} style={{flex:1,height:36,background:`linear-gradient(135deg,${C.vio},${C.pin})`,color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                    {t.aiRephraseUseBtn||"Envoyer celle-ci"}
+                  </button>
+                  <button onClick={()=>setRephraseSuggestion("")} style={{flex:1,height:36,background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:10,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                    {t.aiRephraseKeepBtn||"Garder mon texte original"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={handleRephrase} disabled={!draft.trim() || rephrasing} style={{padding:"6px 14px",background:`${C.vio}12`,color:C.vio,border:`1.5px solid ${C.vio}44`,borderRadius:20,fontSize:12,fontWeight:700,cursor:(!draft.trim()||rephrasing)?"not-allowed":"pointer",opacity:draft.trim()?1:.5}}>
+                {rephrasing ? `⏳ ${t.aiRephraseLoading||"Reformulation…"}` : (t.aiRephraseBtn||"✨ Reformuler")}
+              </button>
+            )}
+            {rephraseErr && <div style={{fontSize:11,color:C.red,marginTop:6}}>{rephraseErr}</div>}
           </div>
         )}
         {/* Input */}
