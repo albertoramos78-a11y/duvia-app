@@ -4653,6 +4653,18 @@ export default function App() {
     setDeletingAccount(true);
     setDeleteAccountError("");
 
+    // 🔧 Backlog 8a : sans ça, un membre qui supprime son compte disparaît de
+    // la famille sans laisser de trace pour ceux qui restent (contrairement à
+    // "quitter la famille", déjà journalisé plus haut dans ce fichier). Doit
+    // s'écrire AVANT l'appel à l'Edge Function delete-account ci-dessous :
+    // une fois celle-ci passée, family_members (et potentiellement le compte
+    // auth lui-même) n'existe plus, et l'écriture RLS échouerait.
+    if (familySync.familyId) {
+      try {
+        await addHist(`${cfg.parents?.[user.parentIdx]?.name || myName || "Un membre"} a supprimé son compte`, "", "family");
+      } catch(e){ console.warn("[Duvia] deleteAccount: journalisation historique", e); }
+    }
+
     // ── 1. Suppression réelle en base via Edge Function Supabase ──────────────
     if(myUid){
       try {
