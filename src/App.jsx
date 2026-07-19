@@ -17089,8 +17089,17 @@ function MessagingTab(){
     setRephrasing(true); setRephraseErr(""); setRephraseSuggestion("");
     try {
       const { data, error } = await supabase.functions.invoke("ai-rephrase-message", { body: { text: draft } });
-      if (error) throw new Error("generic");
-      if (data?.error === "daily_limit_reached") throw new Error("daily");
+      if (error) {
+        // 🔧 invoke() renvoie data:null sur toute réponse non-2xx (429 pour
+        // le plafond quotidien inclus) — le vrai code d'erreur ne vit que sur
+        // error.context (Response brute), jamais sur `data` (même bug déjà
+        // rencontré et corrigé sur sendInviteEmail, voir plus haut dans ce
+        // fichier — "await error.context.json()" est le pattern documenté
+        // par @supabase/functions-js lui-même).
+        let code = null;
+        try { code = (await error.context.json())?.error; } catch { /* réponse non-JSON ou déjà consommée */ }
+        throw new Error(code === "daily_limit_reached" ? "daily" : "generic");
+      }
       if (data?.error) throw new Error("generic");
       setRephraseSuggestion(data?.rephrased || "");
     } catch (e) {

@@ -9,7 +9,22 @@
 -- n'existe encore, la vraie facturation Stripe est bloquée sur le SIRET) —
 -- activé/désactivé uniquement depuis le panneau admin (admin-manage-
 -- subscriptions), jamais par le client lui-même.
+--
+-- 🔒 Verrouillée au niveau colonne, même mécanisme que 0041_lock_
+-- subscriptions_paid_columns.sql pour plan/premium_since/cycle : les
+-- policies RLS de `subscriptions` ne restreignent QUE la ligne (la sienne),
+-- pas les valeurs — et le client a déjà le droit d'upserter sa propre ligne
+-- (effet "Sync sub → table subscriptions", App.jsx). Sans ce REVOKE,
+-- n'importe quel compte authentifié pourrait s'auto-accorder l'accès IA en
+-- appelant directement l'API REST avec son propre jeton
+-- (supabase.from("subscriptions").upsert({ai_enabled:true})), même si
+-- l'app elle-même n'envoie jamais ce champ. Les fonctions SECURITY DEFINER
+-- (dont l'Edge Function service-role) ne sont pas affectées : le
+-- propriétaire de la table garde toujours tous les privilèges sur ses
+-- propres colonnes.
 alter table public.subscriptions add column if not exists ai_enabled boolean not null default false;
+revoke update (ai_enabled) on public.subscriptions from public;
+revoke insert (ai_enabled) on public.subscriptions from public;
 
 -- ai_usage_log : partagée par les 4 futures fonctionnalités IA (reformulation
 -- de message aujourd'hui, dépenses/calendrier/météo plus tard), chacune son

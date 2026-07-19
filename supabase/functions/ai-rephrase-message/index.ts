@@ -78,6 +78,13 @@ serve(async (req) => {
         model: "claude-sonnet-5",
         max_tokens: 500,
         system: SYSTEM_PROMPT,
+        // 🔧 Thinking désactivé explicitement : ce modèle réfléchit par défaut
+        // (adaptive thinking), ce qui insère un bloc "thinking" AVANT le bloc
+        // "text" dans la réponse — content[0] devient alors ce bloc vide, pas
+        // le texte reformulé. Une tâche de reformulation pure n'a besoin
+        // d'aucun raisonnement, donc autant le désactiver plutôt que de
+        // dépendre de la position du bloc dans le tableau.
+        thinking: { type: "disabled" },
         messages: [{ role: "user", content: text }],
       }),
     });
@@ -87,7 +94,11 @@ serve(async (req) => {
       return jsonResponse({ error: "rephrase_failed" }, 500);
     }
     const data = await res.json();
-    const rephrased = String(data?.content?.[0]?.text || "").trim();
+    // 🔧 Cherche le bloc "text" par type plutôt que de supposer content[0] —
+    // robuste même si un futur changement de modèle/paramètres réintroduit
+    // un bloc "thinking" ou autre avant le texte.
+    const textBlock = Array.isArray(data?.content) ? data.content.find((b: any) => b?.type === "text") : null;
+    const rephrased = String(textBlock?.text || "").trim();
     if (!rephrased) return jsonResponse({ error: "rephrase_failed" }, 500);
 
     // Loggé uniquement après un succès réel — pas de réservation à compenser
