@@ -9769,11 +9769,12 @@ function ParentInviteShareBtns({ C, parent, familyName }) {
   const [err, setErr] = useState("");
 
   async function handleEmail() {
+    if (!parent.inviteEmail) return;
     setSending(true); setErr(""); setSent(false);
     const link = parent.inviteUrl || "";
     const subject = (t.parentInviteEmailSubject || "Rejoins notre famille sur Duvia 👨‍👩‍👧");
     const body = (t.parentInviteEmailBody || "Bonjour 👋\nTu es invité(e) à rejoindre une famille sur Duvia.\nCrée ton compte ici :\n{link}").replace("{link}", link);
-    const res = await sendInviteEmail({ type: "parent", to: parent.inviteEmail || "", subject, body });
+    const res = await sendInviteEmail({ type: "parent", to: parent.inviteEmail, subject, body });
     setSending(false);
     if (res.ok) setSent(true);
     else setErr(inviteEmailErrorMessage(t, res.error));
@@ -9785,8 +9786,8 @@ function ParentInviteShareBtns({ C, parent, familyName }) {
         {t.sendInviteLink}
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <button onClick={handleEmail} disabled={sending} style={{
-          padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:sending?"wait":"pointer",
+        <button onClick={handleEmail} disabled={sending || !parent.inviteEmail} style={{
+          padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:(sending||!parent.inviteEmail)?"not-allowed":"pointer",opacity:parent.inviteEmail?1:.4,
           background:`${C.vio}12`,color:C.vio,border:`1.5px solid ${C.vio}44`,
         }}>{sending ? `⏳ ${t.inviteEmailSending||"Envoi…"}` : sent ? `${t.inviteEmailSent||"✅ Email envoyé"}` : "✉️ Email"}</button>
       </div>
