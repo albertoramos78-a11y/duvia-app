@@ -16,6 +16,22 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...CORS } });
 }
 
+// 🔧 auth.users n'est pas exposé via l'API REST (PostgREST), même au service
+// role — d'où l'API Admin dédiée (GoTrue) plutôt qu'un simple .from("users").
+// Paginée : listUsers() plafonne à perPage résultats par appel.
+async function listAllAnonymousUserIds(admin: ReturnType<typeof createClient>): Promise<string[]> {
+  const ids: string[] = [];
+  const perPage = 1000;
+  for (let page = 1; ; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
+    if (error) throw error;
+    const users = data?.users || [];
+    for (const u of users) if ((u as any).is_anonymous) ids.push(u.id);
+    if (users.length < perPage) break;
+  }
+  return ids;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
@@ -211,6 +227,72 @@ serve(async (req) => {
     });
 
     return jsonResponse({ ok: true });
+  }
+
+  if (action === "cleanup_anonymous_accounts") {
+    // Version "bouton admin", rejouable, de la même logique que la migration
+    // ponctuelle 0033_cleanup_anonymous_families.sql (comptes/familles
+    // "anonymes" créés par l'ancien mécanisme de badge invisible, retiré le
+    // 2026-07-11) — pour rattraper d'éventuels résidus sans repasser par
+    // l'éditeur SQL Supabase. Contrairement au script SQL original (une
+    // seule requête atomique via des CTE), ceci enchaîne plusieurs appels —
+    // acceptable pour une action admin ponctuelle et à faible fréquence, pas
+    // une frontière de sécurité sensible à une petite fenêtre de course.
+    try {
+      const anonIds = await listAllAnonymousUserIds(admin);
+      if (anonIds.length === 0) {
+        return jsonResponse({ ok: true, adhesions_supprimees: 0, familles_supprimees: 0, comptes_supprimes: 0 });
+      }
+
+      const { data: touchedMemberships, error: memErr } = await admin
+        .from("family_members")
+        .select("family_id")
+        .in("user_id", anonIds);
+      if (memErr) return jsonResponse({ error: memErr.message }, 500);
+      const touchedFamilyIds = [...new Set((touchedMemberships || []).map((m: any) => m.family_id))];
+
+      // Familles dont TOUS les membres actuels sont anonymes (même critère
+      // que la CTE anon_only_families de la migration 0033).
+      const anonOnlyFamilyIds: string[] = [];
+      for (const familyId of touchedFamilyIds) {
+        const { data: allMembers, error: allErr } = await admin
+          .from("family_members").select("user_id").eq("family_id", familyId);
+        if (allErr) continue;
+        if ((allMembers || []).length > 0 && (allMembers || []).every((m: any) => anonIds.includes(m.user_id))) {
+          anonOnlyFamilyIds.push(familyId);
+        }
+      }
+
+      const { error: delMemErr, count: memCount } = await admin
+        .from("family_members").delete({ count: "exact" }).in("user_id", anonIds);
+      if (delMemErr) return jsonResponse({ error: delMemErr.message }, 500);
+
+      let familyCount = 0;
+      if (anonOnlyFamilyIds.length > 0) {
+        const { error: delFamErr, count } = await admin
+          .from("families").delete({ count: "exact" }).in("id", anonOnlyFamilyIds);
+        if (delFamErr) return jsonResponse({ error: delFamErr.message }, 500);
+        familyCount = count || 0;
+      }
+
+      // Comptes eux-mêmes — via l'API Admin (pas de DELETE SQL direct sur
+      // auth.users possible depuis un client, contrairement au script SQL
+      // ponctuel d'origine exécuté dans l'éditeur Supabase).
+      let deletedUsers = 0;
+      for (const uid of anonIds) {
+        const { error: delUserErr } = await admin.auth.admin.deleteUser(uid);
+        if (!delUserErr) deletedUsers++;
+      }
+
+      return jsonResponse({
+        ok: true,
+        adhesions_supprimees: memCount || 0,
+        familles_supprimees: familyCount,
+        comptes_supprimes: deletedUsers,
+      });
+    } catch (e) {
+      return jsonResponse({ error: e instanceof Error ? e.message : "cleanup_failed" }, 500);
+    }
   }
 
   return jsonResponse({ error: "unknown_action" }, 400);

@@ -15779,6 +15779,51 @@ function AdminChangeLogCard({ C, onChanged }) {
   );
 }
 
+// 🔧 Version "bouton admin", rejouable, de la migration ponctuelle
+// 0033_cleanup_anonymous_families.sql — rattrape d'éventuels comptes/familles
+// "anonymes" résiduels (ancien mécanisme de badge invisible, retiré le
+// 2026-07-11) sans repasser par l'éditeur SQL Supabase à chaque fois.
+function AnonymousCleanupCard({ C }) {
+  const {confirmAsync} = useApp();
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState(null);
+  const [err, setErr] = useState("");
+
+  async function run() {
+    if (!(await confirmAsync("Supprimer les comptes anonymes résiduels et les familles qui n'ont plus qu'eux comme membres ? Action irréversible.", {icon:"🧹"}))) return;
+    setRunning(true); setErr(""); setResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-manage-subscriptions", { body: { action: "cleanup_anonymous_accounts" } });
+      if (error) throw new Error(error.message || "invoke_failed");
+      if (data?.error) throw new Error(data.error);
+      setResult(data);
+    } catch (e) {
+      setErr(String(e?.message || e));
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="card" style={{marginBottom:14,borderColor:`${C.mut}44`,background:`${C.mut}08`}}>
+      <div style={{fontSize:11,fontWeight:800,color:C.mut,letterSpacing:".1em",textTransform:"uppercase",marginBottom:12}}>🧹 Nettoyage comptes anonymes</div>
+      <div style={{fontSize:12,color:C.mut,marginBottom:12,lineHeight:1.5}}>
+        Supprime les comptes Supabase anonymes résiduels (ancien mécanisme retiré le 2026-07-11) et les familles qui n'ont plus qu'eux comme membres. Sans effet si rien à nettoyer — peut être relancé sans risque.
+      </div>
+      <button onClick={run} disabled={running}
+        style={{padding:"8px 18px",background:`${C.mut}18`,color:C.mut,border:`1.5px solid ${C.mut}55`,borderRadius:10,fontSize:12,fontWeight:800,cursor:running?"default":"pointer"}}>
+        {running ? "Nettoyage…" : "🧹 Lancer le nettoyage"}
+      </button>
+      {result && (
+        <div style={{marginTop:10,fontSize:12,color:C.grn}}>
+          ✅ {result.comptes_supprimes} compte(s), {result.familles_supprimees} famille(s) et {result.adhesions_supprimees} adhésion(s) supprimés.
+        </div>
+      )}
+      {err && <div style={{marginTop:10,fontSize:11,color:C.red}}>⚠️ {err}</div>}
+    </div>
+  );
+}
+
 // ─── ADMIN TAB ────────────────────────────────────────────────────────────────
 function AdminTab() {
   const {C, sub, setSub, setShowResetConfirm, simDate, setSimDate, confirmAsync} = useApp();
@@ -16071,6 +16116,9 @@ function AdminTab() {
       {/* ── Abonnés Premium + historique des modifications admin ──────── */}
       <PremiumSubscribersCard C={C} refreshKey={subsRefreshKey} onChanged={()=>setSubsRefreshKey(k=>k+1)} />
       <AdminChangeLogCard C={C} onChanged={()=>setSubsRefreshKey(k=>k+1)} />
+
+      {/* ── Nettoyage comptes anonymes résiduels ────────────────────────── */}
+      <AnonymousCleanupCard C={C} />
     </div>
   );
 }
