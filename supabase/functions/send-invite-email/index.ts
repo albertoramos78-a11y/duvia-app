@@ -8,9 +8,6 @@ const RESEND_API_KEY   = Deno.env.get("RESEND_API_KEY")!;
 const FROM_EMAIL       = "notifications@duvia.fr";
 const APP_URL          = "https://app.duvia.fr";
 
-const DAILY_LIMIT_PER_SENDER = 10;
-const WEEKLY_LIMIT_PER_RECIPIENT = 3;
-
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info",
@@ -69,28 +66,23 @@ serve(async (req) => {
   if (!EMAIL_RE.test(to)) return jsonResponse({ error: "invalid_email" }, 400);
   if (!subject || !bodyText) return jsonResponse({ error: "missing_content" }, 400);
 
-  // ── Anti-abus : appliqué AVANT l'envoi Resend, jamais après ────────────────
-  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { count: dailyCount, error: dailyErr } = await admin
-    .from("invite_email_log")
-    .select("*", { count: "exact", head: true })
-    .eq("sender_user_id", senderId)
-    .gte("sent_at", since24h);
-  if (dailyErr) return jsonResponse({ error: dailyErr.message }, 500);
-  if ((dailyCount || 0) >= DAILY_LIMIT_PER_SENDER) {
-    return jsonResponse({ error: "daily_limit_reached" }, 429);
-  }
-
-  const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const { count: recipientCount, error: recipientErr } = await admin
-    .from("invite_email_log")
-    .select("*", { count: "exact", head: true })
-    .eq("recipient_email", to)
-    .gte("sent_at", since7d);
-  if (recipientErr) return jsonResponse({ error: recipientErr.message }, 500);
-  if ((recipientCount || 0) >= WEEKLY_LIMIT_PER_RECIPIENT) {
-    return jsonResponse({ error: "recipient_limit_reached" }, 429);
-  }
+  // ── Anti-abus : vérification ET enregistrement atomiques dans une seule
+  // transaction Postgres (RPC check_and_log_invite_email, migration 0043) —
+  // corrige une course TOCTOU trouvée en revue où 2 SELECT count() séparés
+  // suivis d'un INSERT plus tard permettaient à une rafale de requêtes
+  // concurrentes de toutes passer le contrôle avant qu'aucun INSERT n'ait
+  // eu lieu. La ligne est déjà insérée à ce stade si status==="ok" — voir
+  // la compensation après un échec Resend plus bas.
+  const { data: rpcRows, error: rpcErr } = await admin.rpc("check_and_log_invite_email", {
+    p_sender_user_id: senderId,
+    p_recipient_email: to,
+    p_invite_type: type,
+  });
+  if (rpcErr) return jsonResponse({ error: rpcErr.message }, 500);
+  const rpcResult = Array.isArray(rpcRows) ? rpcRows[0] : rpcRows;
+  if (rpcResult?.status === "daily_limit_reached") return jsonResponse({ error: "daily_limit_reached" }, 429);
+  if (rpcResult?.status === "recipient_limit_reached") return jsonResponse({ error: "recipient_limit_reached" }, 429);
+  const logId = rpcResult?.log_id;
 
   // ── Email (même charte visuelle que notify-rating) ─────────────────────────
   const safeSubject = escapeHtml(subject);
@@ -129,20 +121,16 @@ serve(async (req) => {
     if (!res.ok) {
       const errBody = await res.text();
       console.error("send-invite-email: Resend error", errBody);
+      // Compense la réservation : un échec Resend ne doit jamais consommer
+      // le plafond anti-abus de l'utilisateur.
+      if (logId) await admin.from("invite_email_log").delete().eq("id", logId);
       return jsonResponse({ error: "send_failed" }, 500);
     }
   } catch (e) {
     console.error("send-invite-email: Resend send failed", e);
+    if (logId) await admin.from("invite_email_log").delete().eq("id", logId);
     return jsonResponse({ error: "send_failed" }, 500);
   }
-
-  // Enregistré APRÈS un envoi réussi seulement — un échec Resend ne doit
-  // jamais consommer le plafond anti-abus de l'utilisateur.
-  await admin.from("invite_email_log").insert({
-    sender_user_id: senderId,
-    recipient_email: to,
-    invite_type: type,
-  });
 
   return jsonResponse({ ok: true });
 });
