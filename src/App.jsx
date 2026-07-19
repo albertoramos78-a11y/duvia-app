@@ -5465,8 +5465,10 @@ export default function App() {
           padding:"6px 14px",
           display:"flex",alignItems:"center",gap:8,
         }}>
-          <span style={{fontSize:16,flexShrink:0}}>👨‍👩‍👧</span>
-          <div style={{flexShrink:0,minWidth:140,maxWidth:220}}>
+          <InfoBubble C={C} tipKey={`duvia_famtip_${user?.id||"x"}`} title={t.multiFamilyTitle||"Plusieurs familles"} align="left">
+            {t.multiFamilyInfo||"Vous appartenez à plusieurs familles. Utilisez ce menu pour basculer de l'une à l'autre."}
+          </InfoBubble>
+          <div style={{flex:"0 1 auto",minWidth:0}}>
             <CustomSelect
               value={familySync.familyId || ""}
               onChange={v => familySync.switchFamily(v)}
@@ -5474,11 +5476,6 @@ export default function App() {
               height={34}
               labelStyle={{fontSize:13,fontWeight:800,color:C.vio}}
             />
-          </div>
-          <div style={{marginLeft:"auto",flexShrink:0}}>
-            <InfoBubble C={C} tipKey={`duvia_famtip_${user?.id||"x"}`} title={t.multiFamilyTitle||"Plusieurs familles"} align="right">
-              {t.multiFamilyInfo||"Vous appartenez à plusieurs familles. Utilisez ce menu pour basculer de l'une à l'autre."}
-            </InfoBubble>
           </div>
         </div>
       )}
