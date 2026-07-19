@@ -3613,7 +3613,7 @@ export default function App() {
       try {
         const { data: subRow } = await supabase
           .from("subscriptions")
-          .select("plan, premium_since, cycle, trial_start, trial_extension_days, beta_end, ref_count, validated_ref_count, ref_months, pending_spins, monthly_ref_month, monthly_ref_count")
+          .select("plan, premium_since, cycle, trial_start, trial_extension_days, beta_end, ref_count, validated_ref_count, ref_months, pending_spins, monthly_ref_month, monthly_ref_count, ai_enabled")
           .eq("user_id", myUid)
           .maybeSingle();
         if (!subRow) return;
@@ -3641,6 +3641,11 @@ export default function App() {
           // côté serveur par credit_referral_validation(), jamais réécrit par
           // le client (pas dans le payload de l'effet "Sync sub → subscriptions").
           refValidated:    subRow.ref_validated          ?? s.refValidated,
+          // 🔧 Interrupteur admin-only (Premium+IA, migration 0044) — jamais
+          // écrit par le client (absent du payload de l'effet "Sync sub →
+          // table subscriptions" plus bas dans ce fichier, exactement comme
+          // plan/premium_since/cycle).
+          aiEnabled:       subRow.ai_enabled              ?? s.aiEnabled,
         }));
       } catch (e) {
         console.error("[Duvia] Erreur vérification plan:", e);
@@ -6273,6 +6278,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
           refMonths: subRow.ref_months || 0, pendingSpins: subRow.pending_spins || 0,
           monthlyRefMonth: subRow.monthly_ref_month, monthlyRefCount: subRow.monthly_ref_count || 0,
           refValidated: subRow.ref_validated || false,
+          aiEnabled: subRow.ai_enabled || false,
         };
       }
     } catch (e) { console.warn("[Duvia] restauration sub depuis subscriptions échouée:", e); }
