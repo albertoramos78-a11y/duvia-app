@@ -9812,6 +9812,9 @@ function ChildInviteBtn({ childIdx, childName, childPhone, childEmail, childBirt
   const [loading, setLoading]     = useState(false);
   const [copied, setCopied]       = useState(false);
   const [errMsg, setErrMsg]       = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSent, setEmailSent]       = useState(false);
+  const [emailErr, setEmailErr]         = useState("");
   const [showConsent, setShowConsent] = useState(false);
   const [consented, setConsented]     = useState(false);
   const childAge = calcChildAge(childBirthYear, childBirthMonth, childBirthDay);
@@ -9870,9 +9873,15 @@ function ChildInviteBtn({ childIdx, childName, childPhone, childEmail, childBirt
 
   async function handleEmail() {
     const url = await getOrGenUrl(); if (!url) return;
-    const subject = encodeURIComponent(`Rejoins notre famille sur Duvia 👨‍👩‍👧`);
-    const to = childEmail ? encodeURIComponent(childEmail) : "";
-    window.open(`mailto:${to}?subject=${subject}&body=${encodeURIComponent(msgText(url))}`, "_blank");
+    if (!childEmail) return;
+    setEmailSending(true); setEmailErr(""); setEmailSent(false);
+    const subject = (t.childInviteEmailSubject || "Rejoins notre famille sur Duvia 👨‍👩‍👧");
+    const body = (t.childInviteEmailBody || "Bonjour {childName} 👋\nRejoins notre famille sur Duvia !\nClique ici pour créer ton compte :\n{link}")
+      .replace("{childName}", childName || "").replace("{link}", url);
+    const res = await sendInviteEmail({ type: "child", to: childEmail, subject, body });
+    setEmailSending(false);
+    if (res.ok) setEmailSent(true);
+    else setEmailErr(inviteEmailErrorMessage(t, res.error));
   }
 
   async function handleCopy() {
@@ -9927,11 +9936,14 @@ function ChildInviteBtn({ childIdx, childName, childPhone, childEmail, childBirt
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:6}}>
             <button onClick={handleSMS} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:"#25D36618",color:"#128C7E",border:"1.5px solid #25D36644"}}>💬 SMS</button>
             <button onClick={handleWhatsApp} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:"#25D36618",color:"#25D366",border:"1.5px solid #25D36644"}}><span style={{fontSize:14}}>📱</span> WhatsApp</button>
-            <button onClick={handleEmail} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:`${C.vio}18`,color:C.vio,border:`1.5px solid ${C.vio}44`}}>✉️ Email</button>
+            <button onClick={handleEmail} disabled={emailSending || !childEmail} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:(emailSending||!childEmail)?"not-allowed":"pointer",opacity:childEmail?1:.4,background:`${C.vio}18`,color:C.vio,border:`1.5px solid ${C.vio}44`}}>
+              {emailSending ? `⏳ ${t.inviteEmailSending||"Envoi…"}` : emailSent ? (t.inviteEmailSent||"✅ Email envoyé") : "✉️ Email"}
+            </button>
             <button onClick={handleCopy} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",background:copied?`${C.grn}18`:C.sur,color:copied?C.grn:C.mut,border:`1.5px solid ${C.bor}`}}>
               {copied ? "✅ Copié !" : "📋 Copier"}
             </button>
           </div>
+          {emailErr && <div style={{fontSize:11,color:C.red,marginBottom:6}}>{emailErr}</div>}
           <button onClick={()=>setInviteUrl("")} style={{fontSize:11,color:C.mut,background:"none",border:"none",cursor:"pointer",textDecoration:"underline",padding:0}}>↩️ Regénérer un lien</button>
         </>
       )}
