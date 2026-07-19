@@ -16,6 +16,12 @@
 -- vrai risque de deadlock à gérer) — accepté comme risque résiduel mineur,
 -- beaucoup plus dur à exploiter qu'un simple script mono-compte.
 --
+-- Autre risque résiduel mineur, du côté de la Edge Function (pas de cette
+-- RPC) : si le process qui l'appelle plante entre cette réservation et
+-- l'envoi Resend réel (ou la compensation en cas d'échec), le créneau reste
+-- consommé pour un email jamais envoyé — auto-limité à 1 crédit par
+-- occurrence, pas un contournement exploitable à volonté.
+--
 -- p_sender_user_id est passé explicitement (pas auth.uid()) : cette RPC est
 -- appelée par la Edge Function via son client service-role, qui ne porte pas
 -- le JWT de l'appelant d'origine — send-invite-email a déjà vérifié ce JWT

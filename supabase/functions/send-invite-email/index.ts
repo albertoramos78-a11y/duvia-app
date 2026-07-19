@@ -123,12 +123,18 @@ serve(async (req) => {
       console.error("send-invite-email: Resend error", errBody);
       // Compense la réservation : un échec Resend ne doit jamais consommer
       // le plafond anti-abus de l'utilisateur.
-      if (logId) await admin.from("invite_email_log").delete().eq("id", logId);
+      if (logId) {
+        const { error: cleanupErr } = await admin.from("invite_email_log").delete().eq("id", logId);
+        if (cleanupErr) console.error("send-invite-email: failed to release quota reservation", logId, cleanupErr);
+      }
       return jsonResponse({ error: "send_failed" }, 500);
     }
   } catch (e) {
     console.error("send-invite-email: Resend send failed", e);
-    if (logId) await admin.from("invite_email_log").delete().eq("id", logId);
+    if (logId) {
+      const { error: cleanupErr } = await admin.from("invite_email_log").delete().eq("id", logId);
+      if (cleanupErr) console.error("send-invite-email: failed to release quota reservation", logId, cleanupErr);
+    }
     return jsonResponse({ error: "send_failed" }, 500);
   }
 
