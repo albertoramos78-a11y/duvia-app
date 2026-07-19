@@ -10029,14 +10029,20 @@ function CustomSelect({value, onChange, options, style, locked, height=44, label
         <span style={{fontSize:10,color:C.mut,transition:"transform .2s",display:"inline-block",transform:open?"rotate(180deg)":"rotate(0deg)",flexShrink:0}}>▼</span>
       </button>
       {open && (
-        <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,right:0,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:16,zIndex:300,boxShadow:"0 12px 40px rgba(0,0,0,.2)",overflow:"hidden",maxHeight:Math.min(280,options.length*44+2),overflowY:"auto"}}>
+        // 🔧 Largeur indépendante du bouton fermé (qui, lui, ne montre que la
+        // VALEUR ACTUELLE et peut donc être étroit) : minWidth:100% garantit
+        // au moins la largeur du bouton, width:max-content laisse grandir
+        // pour la PLUS LONGUE option, plafonné pour ne pas déborder l'écran —
+        // sans ça, une option plus longue que la valeur sélectionnée se
+        // faisait couper net par l'overflow:hidden de ce conteneur.
+        <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,minWidth:"100%",width:"max-content",maxWidth:"min(320px, 90vw)",background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:16,zIndex:300,boxShadow:"0 12px 40px rgba(0,0,0,.2)",overflow:"hidden",maxHeight:Math.min(280,options.length*44+2),overflowY:"auto"}}>
           {options.map((o,i)=>{
             const isActive = String(o.value)===String(value);
             return (
               <button key={o.value} onClick={()=>{onChange(o.value);setOpen(false);}}
                 style={{width:"100%",padding:"0 16px",height:44,background:isActive?`${C.vio}10`:"transparent",color:isActive?C.vio:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:i<options.length-1?`1px solid ${C.bor}`:"none",fontSize:14,fontWeight:isActive?700:400,borderRadius:0,cursor:"pointer",boxSizing:"border-box"}}>
                 {o.icon && <span style={{fontSize:18,flexShrink:0}}>{o.icon}</span>}
-                <span style={{flex:1,textAlign:"left"}}>{o.label}</span>
+                <span style={{flex:1,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{o.label}</span>
                 {isActive && <span style={{fontSize:14,color:C.vio,flexShrink:0}}>✓</span>}
               </button>
             );
