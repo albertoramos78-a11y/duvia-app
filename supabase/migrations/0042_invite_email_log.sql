@@ -16,7 +16,7 @@
 -- (invariant appliqué en code, pas par une contrainte SQL — un seul
 -- écrivain possible : le client service-role de la fonction).
 
-create table invite_email_log (
+create table if not exists public.invite_email_log (
   id uuid primary key default gen_random_uuid(),
   sender_user_id uuid not null references auth.users(id) on delete cascade,
   recipient_email text not null,
@@ -24,7 +24,7 @@ create table invite_email_log (
   sent_at timestamptz not null default now()
 );
 
-create index idx_invite_email_log_sender_sent on invite_email_log(sender_user_id, sent_at);
-create index idx_invite_email_log_recipient_sent on invite_email_log(recipient_email, sent_at);
+create index if not exists idx_invite_email_log_sender_sent on public.invite_email_log(sender_user_id, sent_at);
+create index if not exists idx_invite_email_log_recipient_sent on public.invite_email_log(recipient_email, sent_at);
 
-alter table invite_email_log enable row level security;
+alter table public.invite_email_log enable row level security;
