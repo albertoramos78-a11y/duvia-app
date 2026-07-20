@@ -18,11 +18,13 @@ import { useMessages } from "./hooks/useMessages";
 import { useCustody } from "./hooks/useCustody";
 import { useIdLinks } from "./hooks/useIdLinks";
 import { useExpenses } from "./hooks/useExpenses";
+import { usePension } from "./hooks/usePension";
 import { useHistory } from "./hooks/useHistory";
 import { usePush } from "./hooks/usePush";
 import { getMyLocation, setMyLocation } from "./services/supabase/locationService";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION, APP_VERSION } from './config.js';
+import { nextPensionDueDate } from './utils/core.js';
 import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact, weatherIconFor, getInitials, aggregateHourlyPeriods } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, LICORNE, FILLEUL, BRAND, BRAND_GRADIENT, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
@@ -3306,6 +3308,11 @@ export default function App() {
     addReimbursement, updateReimbursement, deleteReimbursement,
     confirmReim: dbConfirmReim, rejectReim: dbRejectReim,
   } = useExpenses(familySync.familyId);
+  const {
+    pensionConfigs, pensionPayments, pensionLoading,
+    proposePensionConfig, confirmPensionConfig,
+    markPensionPaymentPaid, confirmPensionPayment, contestPensionPayment,
+  } = usePension(familySync.familyId);
   const { history: historyData, addHistEntry } = useHistory(familySync.familyId);
   // Vérification admin côté serveur — résiste à la manipulation du localStorage
   const [adminVerified, setAdminVerified] = useState(false);
@@ -5040,6 +5047,14 @@ export default function App() {
     expenses: allExpenses,
     reimbursements: allReimbursements,
     expensesLoading,
+    // ── Pension alimentaire (séparée du solde des dépenses partagées) ───────
+    pensionConfigs,
+    pensionPayments,
+    pensionLoading,
+    pensionMethods: {
+      proposePensionConfig, confirmPensionConfig,
+      markPensionPaymentPaid, confirmPensionPayment, contestPensionPayment,
+    },
     history: historyData,
     expMethods: {
       addExpense, addExpenses,
@@ -13326,6 +13341,232 @@ function HistTab() {
   );
 }
 
+function PensionSection() {
+  const { C, t, cfg, user, myUid, familySync, currency = "€",
+          pensionConfigs, pensionPayments, pensionLoading, pensionMethods } = useApp();
+  const {
+    proposePensionConfig, confirmPensionConfig,
+    markPensionPaymentPaid, confirmPensionPayment, contestPensionPayment,
+  } = pensionMethods;
+
+  const myIdx = user?.role === "parent" && user?.parentIdx !== undefined ? user.parentIdx : 0;
+
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ payerIdx: myIdx, amount: "", dayOfMonth: "5", startDate: toStr(new Date()) });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [contestingId, setContestingId] = useState(null);
+  const [contestNote, setContestNote] = useState("");
+
+  if (cfg.parents.length < 2) return null;
+
+  const activeConfig = pensionConfigs.find((c) => c.status === "active");
+  const proposedConfig = pensionConfigs.find((c) => c.status === "proposed");
+  const iAmProposer = proposedConfig && myUid === proposedConfig.createdByUserId;
+  const currentPeriod = new Date().toISOString().slice(0, 7);
+  const currentPayment = activeConfig ? pensionPayments.find((p) => p.configId === activeConfig.id && p.period === currentPeriod) : null;
+  const pastPayments = activeConfig ? pensionPayments.filter((p) => p.configId === activeConfig.id && p.period !== currentPeriod) : [];
+
+  async function submitProposal() {
+    const amount = Number(form.amount);
+    const dayOfMonth = Number(form.dayOfMonth);
+    if (!amount || amount <= 0) { setErr(t.pensionErrAmount || "Montant invalide"); return; }
+    if (!dayOfMonth || dayOfMonth < 1 || dayOfMonth > 28) { setErr(t.pensionErrDay || "Jour du mois invalide (1-28)"); return; }
+    setBusy(true); setErr("");
+    try {
+      const payerIdx = Number(form.payerIdx);
+      const recipientIdx = payerIdx === 0 ? 1 : 0;
+      await proposePensionConfig({
+        familyId: familySync.familyId,
+        fromParent: payerIdx,
+        fromUserId: cfg.parents[payerIdx]?.userId,
+        toParent: recipientIdx,
+        toUserId: cfg.parents[recipientIdx]?.userId,
+        amount,
+        dayOfMonth,
+        startDate: form.startDate,
+      });
+      setShowForm(false);
+    } catch (e) {
+      setErr(t.pensionErrGeneric || "Une erreur est survenue.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleConfirmConfig() {
+    setBusy(true); setErr("");
+    try {
+      await confirmPensionConfig(proposedConfig.id);
+    } catch (e) {
+      setErr(t.pensionErrGeneric || "Une erreur est survenue.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleMarkPaid(paymentId) {
+    setBusy(true);
+    try { await markPensionPaymentPaid(paymentId); }
+    catch (e) { setErr(t.pensionErrGeneric || "Une erreur est survenue."); }
+    finally { setBusy(false); }
+  }
+
+  async function handleConfirmPayment(paymentId) {
+    setBusy(true);
+    try { await confirmPensionPayment(paymentId); }
+    catch (e) { setErr(t.pensionErrGeneric || "Une erreur est survenue."); }
+    finally { setBusy(false); }
+  }
+
+  async function handleContestSubmit() {
+    setBusy(true);
+    try {
+      await contestPensionPayment(contestingId, contestNote);
+      setContestingId(null);
+      setContestNote("");
+    } catch (e) {
+      setErr(t.pensionErrGeneric || "Une erreur est survenue.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const statusLabel = {
+    pending: t.pensionStatusPending || "En attente",
+    marked_paid: t.pensionStatusMarkedPaid || "Marqué payé — en attente de confirmation",
+    confirmed: t.pensionStatusConfirmed || "Confirmé",
+    contested: t.pensionStatusContested || "Contesté",
+  };
+  const statusColor = { pending: C.mut, marked_paid: C.yel, confirmed: C.grn, contested: C.red };
+
+  return (
+    <div className="card" style={{padding:14,marginBottom:14,border:`1.5px solid ${C.vio}33`}}>
+      <div style={{fontSize:13,fontWeight:900,color:C.vio,marginBottom:10}}>💶 {t.pensionTabTitle || "Pension alimentaire"}</div>
+
+      {err && <div style={{fontSize:11,color:C.red,marginBottom:8}}>{err}</div>}
+
+      {!activeConfig && !proposedConfig && !showForm && (
+        <button onClick={() => setShowForm(true)} style={{padding:"8px 14px",background:C.vio,color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+          {t.pensionConfigureBtn || "Configurer la pension"}
+        </button>
+      )}
+
+      {showForm && (
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <label style={{fontSize:11,color:C.mut,fontWeight:700}}>{t.pensionFormPayerLabel || "Qui paie la pension ?"}</label>
+          <select value={form.payerIdx} onChange={(e) => setForm((f) => ({...f, payerIdx: e.target.value}))} style={{height:38,borderRadius:8,border:`1px solid ${C.bor}`,padding:"0 8px"}}>
+            {cfg.parents.map((p, i) => <option key={i} value={i}>{p.name || `P${i+1}`}</option>)}
+          </select>
+          <label style={{fontSize:11,color:C.mut,fontWeight:700}}>{t.pensionFormAmountLabel || "Montant mensuel"}</label>
+          <input type="number" value={form.amount} onChange={(e) => setForm((f) => ({...f, amount: e.target.value}))} style={{height:38,borderRadius:8,border:`1px solid ${C.bor}`,padding:"0 10px"}} />
+          <label style={{fontSize:11,color:C.mut,fontWeight:700}}>{t.pensionFormDayLabel || "Jour d'échéance dans le mois (1-28)"}</label>
+          <input type="number" min={1} max={28} value={form.dayOfMonth} onChange={(e) => setForm((f) => ({...f, dayOfMonth: e.target.value}))} style={{height:38,borderRadius:8,border:`1px solid ${C.bor}`,padding:"0 10px"}} />
+          <label style={{fontSize:11,color:C.mut,fontWeight:700}}>{t.pensionFormStartLabel || "Date de début"}</label>
+          <input type="date" value={form.startDate} onChange={(e) => setForm((f) => ({...f, startDate: e.target.value}))} style={{height:38,borderRadius:8,border:`1px solid ${C.bor}`,padding:"0 10px"}} />
+          {form.amount && form.dayOfMonth && Number(form.dayOfMonth) >= 1 && Number(form.dayOfMonth) <= 28 && (
+            <div style={{fontSize:11,color:C.mut,fontStyle:"italic"}}>
+              {t.pensionNextDuePreview || "Prochaine échéance"} : {nextPensionDueDate(Number(form.dayOfMonth))}
+            </div>
+          )}
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={submitProposal} disabled={busy} style={{flex:1,height:38,background:C.vio,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer",opacity:busy?.6:1}}>
+              {t.pensionFormSubmitBtn || "Proposer"}
+            </button>
+            <button onClick={() => setShowForm(false)} disabled={busy} style={{flex:1,height:38,background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+              {t.pensionFormCancelBtn || "Annuler"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {proposedConfig && !iAmProposer && (
+        <div style={{padding:"10px 12px",background:`${C.vio}10`,border:`1.5px solid ${C.vio}44`,borderRadius:10}}>
+          <div style={{fontSize:12,color:C.txt,marginBottom:8}}>
+            {(t.pensionProposedBanner || "{name} propose une pension de {amount}{currency}/mois, versée le {day} de chaque mois, à partir du {date}.")
+              .replace("{name}", cfg.parents[proposedConfig.fromParent]?.name || "")
+              .replace("{amount}", proposedConfig.amount)
+              .replace("{currency}", currency)
+              .replace("{day}", proposedConfig.dayOfMonth)
+              .replace("{date}", proposedConfig.startDate)}
+          </div>
+          <button onClick={handleConfirmConfig} disabled={busy} style={{padding:"7px 14px",background:C.grn,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer",marginRight:8}}>
+            {t.pensionConfirmBtn || "Confirmer"}
+          </button>
+        </div>
+      )}
+      {proposedConfig && iAmProposer && (
+        <div style={{fontSize:12,color:C.mut,fontStyle:"italic"}}>
+          {t.pensionAwaitingOtherParent || "En attente de confirmation par l'autre parent."}
+        </div>
+      )}
+
+      {activeConfig && (
+        <>
+          <div style={{fontSize:11,color:C.mut,marginBottom:8}}>
+            {(cfg.parents[activeConfig.fromParent]?.name || "P1")} → {(cfg.parents[activeConfig.toParent]?.name || "P2")} · {activeConfig.amount}{currency}/mois · {t.pensionDayOfMonthShort || "le"} {activeConfig.dayOfMonth}
+          </div>
+
+          {currentPayment && (
+            <div style={{padding:"10px 12px",background:C.sur,borderRadius:10,marginBottom:8}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:800,color:C.txt}}>{t.pensionCurrentDue || "Échéance du mois"} — {currentPayment.dueDate}</div>
+                  <div style={{fontSize:11,fontWeight:700,color:statusColor[currentPayment.status]}}>{statusLabel[currentPayment.status]}</div>
+                </div>
+                <div style={{fontSize:16,fontWeight:900,color:C.vio}}>{currentPayment.amount}{currency}</div>
+              </div>
+              {currentPayment.status === "pending" && myUid === activeConfig.fromUserId && (
+                <button onClick={() => handleMarkPaid(currentPayment.id)} disabled={busy} style={{marginTop:8,padding:"7px 14px",background:C.vio,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                  {t.pensionMarkPaidBtn || "Marquer payé"}
+                </button>
+              )}
+              {currentPayment.status === "marked_paid" && myUid === activeConfig.toUserId && contestingId !== currentPayment.id && (
+                <div style={{display:"flex",gap:8,marginTop:8}}>
+                  <button onClick={() => handleConfirmPayment(currentPayment.id)} disabled={busy} style={{flex:1,height:36,background:C.grn,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                    {t.pensionConfirmPaymentBtn || "Confirmer"}
+                  </button>
+                  <button onClick={() => setContestingId(currentPayment.id)} disabled={busy} style={{flex:1,height:36,background:C.sur,color:C.red,border:`1px solid ${C.red}44`,borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                    {t.pensionContestBtn || "Contester"}
+                  </button>
+                </div>
+              )}
+              {contestingId === currentPayment.id && (
+                <div style={{marginTop:8}}>
+                  <textarea value={contestNote} onChange={(e) => setContestNote(e.target.value)} placeholder={t.pensionContestNotePlaceholder || "Pourquoi contestes-tu ce versement ?"} style={{width:"100%",minHeight:60,borderRadius:8,border:`1px solid ${C.bor}`,padding:8,fontSize:12}} />
+                  <button onClick={handleContestSubmit} disabled={busy} style={{marginTop:6,padding:"7px 14px",background:C.red,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                    {t.pensionContestSubmitBtn || "Envoyer la contestation"}
+                  </button>
+                </div>
+              )}
+              {currentPayment.status === "contested" && currentPayment.note && (
+                <div style={{marginTop:8,fontSize:11,color:C.red,fontStyle:"italic"}}>{currentPayment.note}</div>
+              )}
+            </div>
+          )}
+
+          {pastPayments.length > 0 && (
+            <div style={{marginTop:8}}>
+              <div style={{fontSize:11,fontWeight:800,color:C.mut,marginBottom:6}}>{t.pensionHistoryTitle || "Historique"}</div>
+              {pastPayments.map((p) => (
+                <div key={p.id} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.bor}`,fontSize:12}}>
+                  <span>{p.dueDate}</span>
+                  <span style={{color:statusColor[p.status]}}>{statusLabel[p.status]}</span>
+                  <span>{p.amount}{currency}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {!pensionLoading && !activeConfig && !proposedConfig && !showForm && (
+        <div style={{fontSize:12,color:C.mut,marginTop:8}}>{t.pensionNoConfig || "Aucune pension configurée pour l'instant."}</div>
+      )}
+    </div>
+  );
+}
+
 // ─── EXPENSES ─────────────────────────────────────────────────────────────────
 function ExpTab() {
   const {C,t,cfg,setCfg,addHist,pushNotif,user,prem,perms,st,onUpgrade,isAdm,setActivity,sub,simDate,setExpSubmittedPopup,addRefAction,currency="€",expenses:ctxExpenses,reimbursements:ctxReimbursements,expensesLoading,expMethods,history:ctxHistory,familySync,removedUserIds,myUid} = useApp();
@@ -14525,6 +14766,7 @@ window.addEventListener('message',function(e){
           </div>
         );
       })()}
+      <PensionSection />
       <div style={{display:"flex",gap:8,marginBottom:12}}>
         <button onClick={()=>{if(showAdd&&!editId){cancelForm();setShowReim(false);}else if(!showAdd){setShowAdd(true);setShowReim(false);}else{cancelForm();setShowReim(false);}}}
           style={{flex:2,height:44,background:showAdd?C.sur:C.vio,color:showAdd?C.mut:"#fff",border:showAdd?`1.5px solid ${C.bor}`:"none",borderRadius:10}}>
