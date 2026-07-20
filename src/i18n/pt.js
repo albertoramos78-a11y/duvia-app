@@ -536,7 +536,7 @@ const pt = {
     copyInviteLink:"📋 Copiar link",
     doneBtn:"Concluído",
     sendInviteLink:"📨 Enviar link de convite",
-    aiRephraseBtn:"✨ Reformular",
+    aiRephraseBtn:"Reformular",
     aiRephraseLoading:"Reformulando…",
     aiRephraseSuggestionLabel:"Sugestão reformulada",
     aiRephraseUseBtn:"Enviar esta",

@@ -576,7 +576,7 @@ const en = {
     copyInviteLink:"📋 Copy link",
     doneBtn:"Done",
     sendInviteLink:"📨 Send invitation link",
-    aiRephraseBtn:"✨ Rephrase",
+    aiRephraseBtn:"Rephrase",
     aiRephraseLoading:"Rephrasing…",
     aiRephraseSuggestionLabel:"Rephrased suggestion",
     aiRephraseUseBtn:"Send this one",

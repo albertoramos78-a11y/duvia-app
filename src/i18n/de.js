@@ -536,7 +536,7 @@ const de = {
     copyInviteLink:"📋 Link kopieren",
     doneBtn:"Fertig",
     sendInviteLink:"📨 Einladungslink senden",
-    aiRephraseBtn:"✨ Umformulieren",
+    aiRephraseBtn:"Umformulieren",
     aiRephraseLoading:"Wird umformuliert…",
     aiRephraseSuggestionLabel:"Umformulierter Vorschlag",
     aiRephraseUseBtn:"Diese Version senden",

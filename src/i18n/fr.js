@@ -627,7 +627,7 @@ const fr = {
     copyInviteLink:"📋 Copier le lien",
     doneBtn:"Terminé",
     sendInviteLink:"📨 Envoyer le lien d'invitation",
-    aiRephraseBtn:"✨ Reformuler",
+    aiRephraseBtn:"Reformuler",
     aiRephraseLoading:"Reformulation…",
     aiRephraseSuggestionLabel:"Suggestion reformulée",
     aiRephraseUseBtn:"Envoyer celle-ci",

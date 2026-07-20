@@ -17756,7 +17756,10 @@ function MessagingTab(){
           <div style={{marginBottom:8,flexShrink:0}}>
             {rephraseSuggestion ? (
               <div style={{padding:"10px 12px",background:`${C.vio}08`,border:`1.5px solid ${C.vio}33`,borderRadius:14,marginBottom:8}}>
-                <div style={{fontSize:10,fontWeight:800,color:C.vio,textTransform:"uppercase",letterSpacing:".05em",marginBottom:6}}>✨ {t.aiRephraseSuggestionLabel||"Suggestion reformulée"}</div>
+                <div style={{fontSize:10,fontWeight:800,color:C.vio,textTransform:"uppercase",letterSpacing:".05em",marginBottom:6,display:"flex",alignItems:"center",gap:4}}>
+                  <img src="/mascot/wave-bubble.png" alt="" style={{width:17,height:14,objectFit:"contain"}} />
+                  {t.aiRephraseSuggestionLabel||"Suggestion reformulée"}
+                </div>
                 <div style={{fontSize:13,color:C.txt,lineHeight:1.5,marginBottom:10,whiteSpace:"pre-wrap"}}>{rephraseSuggestion}</div>
                 <div style={{display:"flex",gap:8}}>
                   <button onClick={()=>{ sendMsg(otherIds, rephraseSuggestion); setRephraseSuggestion(""); }} style={{flex:1,height:36,background:`linear-gradient(135deg,${C.vio},${C.pin})`,color:"#fff",border:"none",borderRadius:10,fontWeight:700,fontSize:12,cursor:"pointer"}}>
@@ -17768,8 +17771,13 @@ function MessagingTab(){
                 </div>
               </div>
             ) : (
-              <button onClick={handleRephrase} disabled={!draft.trim() || rephrasing} style={{padding:"6px 14px",background:`${C.vio}12`,color:C.vio,border:`1.5px solid ${C.vio}44`,borderRadius:20,fontSize:12,fontWeight:700,cursor:(!draft.trim()||rephrasing)?"not-allowed":"pointer",opacity:draft.trim()?1:.5}}>
-                {rephrasing ? `⏳ ${t.aiRephraseLoading||"Reformulation…"}` : (t.aiRephraseBtn||"✨ Reformuler")}
+              <button onClick={handleRephrase} disabled={!draft.trim() || rephrasing} style={{padding:"6px 14px",background:`${C.vio}12`,color:C.vio,border:`1.5px solid ${C.vio}44`,borderRadius:20,fontSize:12,fontWeight:700,cursor:(!draft.trim()||rephrasing)?"not-allowed":"pointer",opacity:draft.trim()?1:.5,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                {rephrasing ? `⏳ ${t.aiRephraseLoading||"Reformulation…"}` : (
+                  <>
+                    <img src="/mascot/wave-bubble.png" alt="" style={{width:18,height:15,objectFit:"contain"}} />
+                    {t.aiRephraseBtn||"Reformuler"}
+                  </>
+                )}
               </button>
             )}
             {rephraseErr && <div style={{fontSize:11,color:C.red,marginTop:6}}>{rephraseErr}</div>}
