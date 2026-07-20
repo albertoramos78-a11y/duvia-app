@@ -16534,7 +16534,7 @@ function ChatbotBubble() {
             )}
             {messages.map((m,i)=>(
               <div key={i} style={{alignSelf:m.role==="user"?"flex-end":"flex-start",maxWidth:"85%",padding:"8px 12px",borderRadius:12,fontSize:13,lineHeight:1.4,whiteSpace:"pre-wrap",background:m.role==="user"?C.vio:C.sur,color:m.role==="user"?"#fff":C.txt}}>
-                {m.content}
+                {renderLegalInline(m.content)}
               </div>
             ))}
             {sending && <div style={{alignSelf:"flex-start",fontSize:12,color:C.mut}}>{t.chatbotThinking||"Réflexion…"}</div>}
