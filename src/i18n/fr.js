@@ -152,7 +152,6 @@ const fr = {
     premFeatExportSchedule:"Export PDF planning d'activité enfant",
     premFeatAiRephrase:"Assistant IA — reformulation de message",
     premAiActiveLabel:"Premium+IA Actif 🤖",
-    premAiIndependentHint:"Indépendant du palier Premium — limites Freemium pour le reste.",
     premHeaderPremium:"Premium",premHeaderInherited:"Premium hérité",
     lockParents:"🔒 Ajouter un parent — Premium",lockChildren:"🔒 Ajouter un enfant — Premium",
     lockObservers:"🔒 Ajouter un observateur — Premium",

@@ -293,11 +293,6 @@ function refBonusDaysFor(n, isPF) { return isPF ? refBonusDaysPremium(n) : refBo
 function makeAdminSub() { return { plan:"premium", premiumSince:new Date().toISOString(), cycle:"yearly", earnedTheme:true, earnedBadge:true, earnedRG:true, earnedWC:true, earnedVideo:true, earnedLicorne:true, lastSpinByUser:{}, giftedPrizes:{}, _admin:true }; }
 function subStatus(sub) {
   if(sub._admin) return "premium";
-  // 🔧 Premium+IA : statut réel forcé admin, INDÉPENDANT de l'échelle
-  // Freemium/Trial/Premium (décision explicite : ne pas hériter des
-  // avantages Premium juste parce que l'IA est activée) — voir getPerms()
-  // ci-dessous où isFree traite ce statut comme Freemium pour tout sauf l'IA.
-  if(sub.plan==="premium_ai") return "premium_ai";
   if(sub.plan==="premium") {
     // Vérifie l'expiration de l'abonnement payant
     if(sub.premiumSince && sub.cycle) {
@@ -339,11 +334,7 @@ function isPrem(sub) { const st=subStatus(sub); return st==="premium"||st==="tri
 function isFreemiumPlan(sub) { return subStatus(sub)==="freemium"; }
 function getPerms(sub) {
   const st=subStatus(sub);
-  // 🔧 premium_ai est INDÉPENDANT de Premium (voir subStatus()) — traité ici
-  // comme Freemium pour toutes les limites de palier, afin qu'aucune ne
-  // "tombe" accidentellement sur la branche Premium par défaut de ces
-  // chaînes de ternaires (isFree ? ... : isTrial ? ... : <suppose Premium>).
-  const isFree    = st==="freemium"||st==="premium_ai";
+  const isFree    = st==="freemium";
   const isTrial   = st==="trial_premium"||st==="earned_premium"; // inclut la bêta
   const isPremium = st==="premium"||sub._admin;
   return {
@@ -5523,17 +5514,13 @@ export default function App() {
       )}
       {!isObs && !isChild && st==="premium" && (
         <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>
-          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`linear-gradient(${C.grn}18, ${C.grn}18)${pillScrim}`,border:`1.5px solid ${C.grn}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.grn,fontWeight:800,display:"inline-flex",alignItems:"center",gap:6,cursor:"pointer"}}>⭐ {familyPremiumFromCoParent ? (t.premHeaderInherited||"Premium hérité") : (t.premHeaderPremium||"Premium")}</div>
-        </div>
-      )}
-      {/* 🔧 premium_ai n'a pas de branche dédiée dans ce switch depuis l'ajout du
-          statut : sans elle, aucune pastille ne s'affiche (tombe entre toutes
-          les conditions ci-dessus), ce qui masquait aussi le fait qu'un vieux
-          bundle JS en cache (sans ce statut du tout) retombait sur la logique
-          d'essai/bêta ci-dessus et affichait à tort "Bêta". */}
-      {!isObs && !isChild && st==="premium_ai" && (
-        <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>
-          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`linear-gradient(${C.blu}18, ${C.blu}18)${pillScrim}`,border:`1.5px solid ${C.blu}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.blu,fontWeight:800,display:"inline-flex",alignItems:"center",gap:6,cursor:"pointer"}}>{t.premAiActiveLabel||"Premium+IA Actif 🤖"}</div>
+          {/* Premium+IA n'est plus un statut à part (voir subStatus()) : c'est
+              un compte Premium normal avec sub.aiEnabled=true en plus — donc
+              simple variante d'affichage de CETTE MÊME pastille, pas une
+              branche séparée. */}
+          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`linear-gradient(${sub.aiEnabled?C.blu:C.grn}18, ${sub.aiEnabled?C.blu:C.grn}18)${pillScrim}`,border:`1.5px solid ${sub.aiEnabled?C.blu:C.grn}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:sub.aiEnabled?C.blu:C.grn,fontWeight:800,display:"inline-flex",alignItems:"center",gap:6,cursor:"pointer"}}>
+            {sub.aiEnabled ? (t.premAiActiveLabel||"Premium+IA Actif 🤖") : <>⭐ {familyPremiumFromCoParent ? (t.premHeaderInherited||"Premium hérité") : (t.premHeaderPremium||"Premium")}</>}
+          </div>
         </div>
       )}
       </div>
@@ -15640,7 +15627,7 @@ function AccountSubscriptionCard({ C, onChanged }) {
     setApplying(plan); setErr(""); setMsg("");
     try {
       const body = { action: "set_user_plan", user_id: account.user_id, plan };
-      if (plan === "premium") body.premium_cycle = premiumCycle;
+      if (plan === "premium" || plan === "premium_ai") body.premium_cycle = premiumCycle;
       await call(body);
       setMsg(`✅ Compte mis à jour : ${plan}.`);
       const refreshed = await call({ action: "lookup_user", user_id: account.user_id });
@@ -15672,7 +15659,7 @@ function AccountSubscriptionCard({ C, onChanged }) {
           <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.bor}`}}>
             <div style={{fontWeight:800,fontSize:13,color:C.txt}}>{account.name || account.email}</div>
             <div style={{fontSize:11,color:C.mut}}>{account.email}</div>
-            <div style={{fontSize:11,color:C.mut,marginTop:4}}>Plan actuel : <strong>{account.sub?.plan || "—"}</strong></div>
+            <div style={{fontSize:11,color:C.mut,marginTop:4}}>Plan actuel : <strong>{account.sub?.plan || "—"}</strong>{account.sub?.ai_enabled?" + IA 🤖":""}</div>
           </div>
         )}
       </div>
@@ -15710,13 +15697,14 @@ function AccountSubscriptionCard({ C, onChanged }) {
             </div>
           </div>
 
-          {/* Bulle 4 : Premium+IA — statut à part entière, INDÉPENDANT de
-              Premium (limites Freemium partout sauf l'IA, voir getPerms()) */}
+          {/* Bulle 4 : Premium+IA — raccourci qui pose plan="premium" (cycle
+              sélectionné dans la Bulle 3 ci-dessus) + ai_enabled=true en un
+              clic, plutôt que Premium puis un 2e toggle IA séparé. */}
           <div style={{padding:12,background:C.sur,borderRadius:10,border:`1px solid ${C.bor}`,marginBottom:12}}>
-            <div style={{fontSize:10,fontWeight:800,color:C.mut,letterSpacing:".08em",textTransform:"uppercase",marginBottom:10}}>🤖 Premium+IA (bêta admin, indépendant de Premium)</div>
+            <div style={{fontSize:10,fontWeight:800,color:C.mut,letterSpacing:".08em",textTransform:"uppercase",marginBottom:10}}>🤖 Premium+IA (Premium + accès IA)</div>
             <button onClick={()=>applyPlan("premium_ai")} disabled={!!applying}
               style={{width:"100%",height:38,background:C.blu,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
-              {applying==="premium_ai"?"…":"🤖 Premium+IA"}
+              {applying==="premium_ai"?"…":`🤖 Premium+IA (${premiumCycle==="yearly"?"annuel":"mensuel"})`}
             </button>
           </div>
         </>
@@ -15804,8 +15792,10 @@ function PremiumSubscribersCard({ C, refreshKey, onChanged }) {
             </thead>
             <tbody>
               {rows.map((r,i)=>{
-                const planColor = r.plan==="premium"?C.vio:r.plan==="trial_premium"?C.blu:r.plan==="premium_ai"?C.blu:C.mut;
-                const planLabel = r.plan==="premium" ? (r.cycle==="yearly"?"Premium annuel":"Premium mensuel") : r.plan==="trial_premium" ? "Trial Premium" : r.plan==="premium_ai" ? "🤖 Premium+IA" : "Freemium";
+                // Premium+IA = plan "premium" + ai_enabled=true (pas une valeur de plan à part, voir set_user_plan) —
+                // "premium_ai" littéral n'est conservé ici que pour d'éventuelles lignes écrites avant ce changement.
+                const planColor = r.plan==="premium"?(r.ai_enabled?C.blu:C.vio):r.plan==="trial_premium"?C.blu:r.plan==="premium_ai"?C.blu:C.mut;
+                const planLabel = r.plan==="premium" ? (r.cycle==="yearly"?"Premium annuel":"Premium mensuel")+(r.ai_enabled?" + IA 🤖":"") : r.plan==="trial_premium" ? "Trial Premium" : r.plan==="premium_ai" ? "🤖 Premium+IA (legacy)" : "Freemium";
                 return (
                 <tr key={r.user_id} style={{borderBottom:`1px solid ${C.bor}`,background:i%2===0?"transparent":C.sur}}>
                   <td style={{padding:"8px",fontWeight:700,color:C.txt}}>
@@ -16282,10 +16272,10 @@ function AdminTab() {
 // Rang des paliers pour le sélecteur "Fonctionnalités incluses" de PremiumTab —
 // une fonctionnalité taguée badge:X s'allume dès que TIER_RANK[X] <= le palier
 // actuellement sélectionné par l'utilisateur (clic sur un des 4 boutons).
-// 🔧 premium_ai n'est PAS dans cette échelle croissante : il est INDÉPENDANT
-// de Premium (limites Freemium partout, IA en plus) — traité à part dans le
-// calcul de `active`/`displayValue` plus bas, pas via un rang comparable.
-const TIER_RANK = {free:0, trial:1, premium:2};
+// premium_ai = Premium + accès IA (voir subStatus()/getPerms(), revu
+// 2026-07-20) : c'est bien le palier le plus élevé de l'échelle, pas un
+// statut indépendant à part.
+const TIER_RANK = {free:0, trial:1, premium:2, premium_ai:3};
 
 function PremiumTab() {
   const {C,t,sub,setSub,st,days,perms,setMenuTab,setShowMenu,users,user,familyPremiumFromCoParent,familyBestSub} = useApp();
@@ -16298,10 +16288,9 @@ function PremiumTab() {
   const [tierPreview, setTierPreview] = useState("free");
   const [confirmCancelSub,setConfirmCancelSub] = useState(false);
   const isPremium=st==="premium"||sub._admin;
-  // 🔧 premium_ai est indépendant de Premium — statut à part, jamais fusionné
-  // avec isPremium (sinon on réintroduirait par erreur les avantages Premium
-  // dans l'affichage, alors que getPerms() les refuse déjà côté logique).
-  const isPremiumAi=st==="premium_ai";
+  // Premium+IA = Premium + sub.aiEnabled — pas un statut subStatus() à part
+  // (revu 2026-07-20), donc implique toujours isPremium.
+  const isPremiumAi=isPremium&&!!sub.aiEnabled;
   // Résout l'email du co-parent payeur uniquement quand le statut affiché
   // vient effectivement de lui (jamais un appel réseau pour rien).
   const [coparentEmail, setCoparentEmail] = useState("");
@@ -16358,33 +16347,30 @@ function PremiumTab() {
       return { name: u.name, email: u.email, since, cycle, expiry, isActive, daysLeft };
     });
   })() : [];
-  // badge: palier minimum où la fonctionnalité s'allume (aussi utilisé pour le
-  // premier palier affiché dans values, s'il y en a un). "premium_ai" comme
-  // badge est un cas à part : ne s'allume QUE pour l'aperçu Premium+IA lui-
-  // même (pas une échelle croissante, voir le calcul de `active` plus bas).
+  // badge: palier minimum où la fonctionnalité s'allume — échelle croissante
+  // free < trial < premium < premium_ai (voir TIER_RANK), premium_ai étant
+  // Premium + accès IA, donc le palier le plus élevé.
   // value: valeur fixe affichée en pastille, identique à tous les paliers.
   // values: valeur qui change selon le palier sélectionné (ex. quota) — une
-  // seule ligne par fonctionnalité au lieu d'une ligne par palier. Premium+IA
-  // n'a pas sa propre entrée : indépendant de Premium, il affiche toujours la
-  // valeur Freemium (voir displayValue plus bas), sauf pour la ligne IA.
+  // seule ligne par fonctionnalité au lieu d'une ligne par palier.
   // soon: fonctionnalité pas encore construite, affichée avec un marqueur "Bientôt"
   const unlimited = t.premUnlimited||"Illimité";
   const items=[
     {icon:"👥", label:t.premFeatParents||"Parents",                                 value:"2", badge:"free"},
-    {icon:"🧒", label:t.premFeatChildren||"Enfants",                                 values:{free:"1",trial:"2",premium:"5"}, badge:"free"},
-    {icon:"👁️", label:t.premFeatObservers||"Observateurs",                         values:{free:"0",trial:"2",premium:"5"}, badge:"trial"},
+    {icon:"🧒", label:t.premFeatChildren||"Enfants",                                 values:{free:"1",trial:"2",premium:"5",premium_ai:"5"}, badge:"free"},
+    {icon:"👁️", label:t.premFeatObservers||"Observateurs",                         values:{free:"0",trial:"2",premium:"5",premium_ai:"5"}, badge:"trial"},
     {icon:"📅", label:t.premFeatCalendar||"Calendrier de garde",                     badge:"free"},
     {icon:"🌍", label:t.premFeatHolidays||"Jours fériés 15+ pays",                  badge:"free"},
     {icon:"🌤️", label:t.premFeatWeather||"Météo sur le calendrier",                badge:"trial"},
     {icon:"🌸", label:t.premFeatMotherFatherDay||"Fête des mères / des pères",      badge:"trial"},
     {icon:"🎂", label:t.premFeatBirthdays||"Anniversaires parents & enfants",        badge:"trial"},
-    {icon:"🗓️", label:t.premFeatCustomDates||"Dates personnalisées",                values:{free:"0",trial:"2",premium:unlimited}, badge:"trial"},
+    {icon:"🗓️", label:t.premFeatCustomDates||"Dates personnalisées",                values:{free:"0",trial:"2",premium:unlimited,premium_ai:unlimited}, badge:"trial"},
     {icon:"🎒", label:t.premFeatSchedule||"Emploi du temps des enfants",             badge:"trial"},
     {icon:"💰", label:t.premFeatExpenses||"Dépenses & remboursements",               badge:"free"},
     {icon:"📊", label:t.premFeatExpenseBalance||"Dépenses : Balance & soldes visibles", badge:"trial"},
     {icon:"📞", label:t.premFeatContactsView||"Répertoire (sans ajout de numéros)",  badge:"free"},
     {icon:"📞", label:t.premFeatContactsAdd||"Répertoire des contacts : ajout de numéros", badge:"trial"},
-    {icon:"🔐", label:t.premFeatVault||"Coffre-fort",                               values:{free:"0 Mo",trial:"50 Mo",premium:"200 Mo"}, badge:"trial"},
+    {icon:"🔐", label:t.premFeatVault||"Coffre-fort",                               values:{free:"0 Mo",trial:"50 Mo",premium:"200 Mo",premium_ai:"200 Mo"}, badge:"trial"},
     {icon:"💬", label:t.premFeatMessaging||"Messagerie famille",                     badge:"trial"},
     {icon:"🎡", label:t.premFeatWheel||"Roue Duvia — jeu & récompenses",            badge:"trial"},
     {icon:"🌐", label:t.premFeatLanguages||"5 langues (FR · EN · DE · ES · PT)",    badge:"free"},
@@ -16414,8 +16400,9 @@ function PremiumTab() {
         </div>
       )}
 
-      {/* Card statut — cachée pendant bêta si trial (la card bêta suffit) */}
-      {(!isBeta() || isPremium || isPremiumAi || sub._admin) && (
+      {/* Card statut — cachée pendant bêta si trial (la card bêta suffit).
+          isPremiumAi implique toujours isPremium, inutile de le tester à part. */}
+      {(!isBeta() || isPremium || sub._admin) && (
         <div className="card" style={{marginBottom:14,borderColor:sub._admin?"#FFD700":isPremiumAi?C.blu:isPremium?C.vio:st==="trial_premium"?C.yel:C.red,textAlign:"center",padding:"24px 18px"}}>
           <div style={{fontSize:42,marginBottom:8}}>{sub._admin?"👑":isPremiumAi?"🤖":isPremium?"⭐":st==="trial_premium"?"⏳":"🔓"}</div>
           <div style={{fontSize:19,fontWeight:900,marginBottom:5,color:sub._admin?"#FFD700":isPremiumAi?C.blu:isPremium?C.vio:st==="trial_premium"?C.yel:C.mut}}>
@@ -16425,7 +16412,6 @@ function PremiumTab() {
           {familyPremiumFromCoParent&&<div style={{fontSize:12,color:C.vio,fontWeight:700,marginTop:6}}>{t.premFamilyBanner||"👨‍👩‍👧 Premium via votre famille"}{coparentEmail?(t.premFamilyBannerSuffix||" : {email} y a souscrit").replace("{email}",coparentEmail):""}</div>}
           {st==="trial_premium"&&<div style={{fontSize:12,color:C.mut,marginTop:4}}>{t.premTrialUpgradeHint||"Passez à Premium pour un accès illimité"}</div>}
           {st==="freemium"&&<div style={{fontSize:12,color:C.mut,marginTop:4}}>{t.premFreemiumHint||"Compte gratuit permanent — fonctions limitées"}</div>}
-          {isPremiumAi&&<div style={{fontSize:12,color:C.mut,marginTop:4}}>{t.premAiIndependentHint||"Indépendant du palier Premium — limites Freemium pour le reste."}</div>}
         </div>
       )}
 
@@ -16522,16 +16508,9 @@ function PremiumTab() {
           ))}
         </div>
         {items.map((f,i)=>{
-          // 🔧 Premium+IA est indépendant de Premium (limites Freemium + IA
-          // en plus, pas une échelle croissante) — traité à part : une ligne
-          // badge:"premium_ai" ne s'allume QUE pour cet aperçu précis, et les
-          // lignes normales (badge free/trial/premium) s'allument seulement
-          // si elles sont déjà incluses en Freemium (badge:"free").
-          const active = tierPreview==="premium_ai"
-            ? (f.badge==="free" || f.badge==="premium_ai")
-            : TIER_RANK[f.badge] <= TIER_RANK[tierPreview];
+          const active = TIER_RANK[f.badge] <= TIER_RANK[tierPreview];
           const tierColor = TIERS.find(t=>t.key===tierPreview)?.color || C.mut;
-          const displayValue = f.values ? (tierPreview==="premium_ai" ? f.values.free : f.values[tierPreview]) : f.value;
+          const displayValue = f.values ? f.values[tierPreview] : f.value;
           return (
             <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:i<items.length-1?`1px solid ${C.bor}`:"none",opacity:active?1:.35,transition:"opacity .2s"}}>
               <div style={{width:30,height:30,borderRadius:8,background:active?`${tierColor}18`:C.sur,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0,filter:active?"none":"grayscale(1)"}}>{f.icon}</div>

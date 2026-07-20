@@ -153,7 +153,6 @@ const en = {
     premFeatExportSchedule:"Child activity schedule PDF export",
     premFeatAiRephrase:"AI assistant — message rephrasing",
     premAiActiveLabel:"Premium+AI Active 🤖",
-    premAiIndependentHint:"Independent from the Premium tier — Freemium limits apply to everything else.",
     premHeaderPremium:"Premium",premHeaderInherited:"Inherited Premium",
     lockParents:"🔒 Add parent — Premium",lockChildren:"🔒 Add child — Premium",
     lockSection:"Premium Feature",lockDesc:"Available with a Premium subscription.",

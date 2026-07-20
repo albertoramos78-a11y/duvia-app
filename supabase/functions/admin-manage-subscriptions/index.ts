@@ -76,17 +76,24 @@ serve(async (req) => {
 
   if (action === "set_user_plan") {
     const userId = String(payload?.user_id || "");
-    const plan = String(payload?.plan || "");
-    if (!userId || !["freemium", "beta", "trial_premium", "premium", "premium_ai"].includes(plan)) {
+    const rawPlan = String(payload?.plan || "");
+    // 🔧 "premium_ai" n'est PAS une valeur de colonne `plan` distincte (revu
+    // 2026-07-20 : Premium+IA = Premium + accès IA, le palier le plus élevé,
+    // pas un statut indépendant à limites Freemium comme d'abord conçu) —
+    // c'est un raccourci d'admin qui pose plan="premium" + ai_enabled=true en
+    // un clic. Voir aussi subStatus()/getPerms() côté client, qui n'ont plus
+    // aucune notion de "premium_ai" : un compte ainsi forcé est un compte
+    // Premium normal aux yeux de tout le reste de l'app.
+    const isPremiumAiShortcut = rawPlan === "premium_ai";
+    const plan = isPremiumAiShortcut ? "premium" : rawPlan;
+    if (!userId || !["freemium", "beta", "trial_premium", "premium"].includes(plan)) {
       return jsonResponse({ error: "invalid_params" }, 400);
     }
-    // 🔧 ai_enabled est désormais dérivé du statut lui-même, pas d'un
-    // interrupteur séparé (voir set_ai_enabled, retiré) : un seul système de
-    // statut clair, comme demandé. Choisir "Premium+IA" active l'IA ; choisir
-    // n'importe quel autre statut la désactive explicitement (sinon un compte
-    // déjà passé par premium_ai garderait l'IA active après un changement de
-    // plan, ce qui recréerait deux réglages qui se chevauchent).
-    let update: Record<string, unknown> = { plan, ai_enabled: plan === "premium_ai" };
+    // ai_enabled : activé uniquement via le raccourci Premium+IA ; tout autre
+    // choix (y compris "premium" seul) le désactive explicitement, sinon un
+    // compte déjà passé par Premium+IA garderait l'IA active après un
+    // changement de statut qui ne le redemande pas.
+    let update: Record<string, unknown> = { plan, ai_enabled: isPremiumAiShortcut };
     if (plan === "beta") {
       const betaEnd = payload?.beta_end;
       if (!betaEnd) return jsonResponse({ error: "missing_beta_end" }, 400);
@@ -111,7 +118,7 @@ serve(async (req) => {
       admin_id: callerData.user.id,
       target_user_id: userId,
       previous_state: previousRow || null,
-      new_plan: plan,
+      new_plan: rawPlan, // garde "premium_ai" lisible dans l'historique admin même si la colonne plan stocke "premium"
     });
 
     return jsonResponse({ ok: true });
@@ -128,9 +135,12 @@ serve(async (req) => {
   if (action === "list_premium_users") {
     // Ne liste que les comptes déjà modifiés depuis CE panneau admin (voir
     // admin_subscription_log) — jamais les vrais abonnés Stripe/organiques
-    // qui n'ont jamais été touchés ici. Couvre les 4 statuts forçables :
-    // freemium / trial_premium / premium / premium_ai (la bêta par compte a
-    // été retirée de l'UI, voir AccountSubscriptionCard côté client).
+    // qui n'ont jamais été touchés ici. Couvre les statuts forçables :
+    // freemium / trial_premium / premium (Premium+IA est un compte "premium"
+    // avec ai_enabled=true, pas une valeur de plan à part — voir set_user_plan
+    // ci-dessus). "premium_ai" reste dans le filtre uniquement pour les lignes
+    // historiques écrites avant ce changement (2026-07-20) qui l'ont encore
+    // littéralement en colonne plan.
     const { data: logRows, error: logErr } = await admin.from("admin_subscription_log").select("target_user_id");
     if (logErr) return jsonResponse({ error: logErr.message }, 500);
     const targetIds = [...new Set((logRows || []).map((r) => r.target_user_id))];
@@ -138,7 +148,7 @@ serve(async (req) => {
 
     const { data: rows, error } = await admin
       .from("subscriptions")
-      .select("user_id, plan, premium_since, cycle, trial_start")
+      .select("user_id, plan, premium_since, cycle, trial_start, ai_enabled")
       .in("user_id", targetIds)
       .in("plan", ["freemium", "trial_premium", "premium", "premium_ai"]);
     if (error) return jsonResponse({ error: error.message }, 500);
@@ -155,6 +165,7 @@ serve(async (req) => {
         premium_since: row.premium_since,
         cycle: row.cycle,
         trial_start: row.trial_start,
+        ai_enabled: !!row.ai_enabled,
       });
     }
     return jsonResponse({ subscribers: results });
