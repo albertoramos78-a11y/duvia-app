@@ -16391,24 +16391,75 @@ function MascotStage({ scale = 1 }) {
   );
 }
 
+function renderChatbotInlineBold(text, keyPrefix) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.startsWith("**") && part.endsWith("**")
+      ? <strong key={`${keyPrefix}-${i}`}>{part.slice(2, -2)}</strong>
+      : <Fragment key={`${keyPrefix}-${i}`}>{part}</Fragment>
+  );
+}
+function isChatbotTableRow(line) {
+  const t = line.trim();
+  return t.startsWith("|") && t.endsWith("|") && t.length > 1;
+}
+function isChatbotTableSeparator(line) {
+  const t = line.trim();
+  return t.includes("-") && /^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?$/.test(t);
+}
+function splitChatbotTableRow(line) {
+  const t = line.trim();
+  return t.slice(1, -1).split("|").map(c => c.trim());
+}
+
 // Mise en forme légère des réponses du chatbot : **gras** (même convention
-// que renderLegalInline) + lignes commençant par "## " (titres façon
-// markdown) affichées soulignées, préfixe retiré — plutôt qu'affichés tels
-// quels, illisibles pour l'utilisateur.
+// que renderLegalInline), lignes "## titre" affichées soulignées (préfixe
+// retiré), et tableaux markdown (| a | b |\n|---|---|\n| c | d |) rendus en
+// vraie balise <table> — plutôt qu'affichés tels quels, illisibles pour
+// l'utilisateur.
 function renderChatbotMarkdown(text) {
   const lines = text.split("\n");
-  return lines.map((line, li) => {
-    const heading = line.match(/^##\s+(.*)$/);
-    const content = heading ? heading[1] : line;
-    const boldParts = content.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-      part.startsWith("**") && part.endsWith("**")
-        ? <strong key={i}>{part.slice(2, -2)}</strong>
-        : <Fragment key={i}>{part}</Fragment>
-    );
+  const blocks = [];
+  let i = 0;
+  while (i < lines.length) {
+    if (isChatbotTableRow(lines[i]) && i + 1 < lines.length && isChatbotTableSeparator(lines[i + 1])) {
+      const header = splitChatbotTableRow(lines[i]);
+      let j = i + 2;
+      const rows = [];
+      while (j < lines.length && isChatbotTableRow(lines[j])) {
+        rows.push(splitChatbotTableRow(lines[j]));
+        j++;
+      }
+      blocks.push({ type: "table", header, rows });
+      i = j;
+    } else {
+      const heading = lines[i].match(/^##\s+(.*)$/);
+      blocks.push({ type: "line", heading: !!heading, content: heading ? heading[1] : lines[i] });
+      i++;
+    }
+  }
+
+  return blocks.map((b, bi) => {
+    if (b.type === "table") {
+      return (
+        <div key={bi} style={{overflowX:"auto",margin:"6px 0"}}>
+          <table style={{borderCollapse:"collapse",fontSize:12}}>
+            <thead>
+              <tr>{b.header.map((cell, ci) => <th key={ci} style={{border:"1px solid currentColor",padding:"4px 6px",textAlign:"left",opacity:.8}}>{renderChatbotInlineBold(cell, `h${bi}-${ci}`)}</th>)}</tr>
+            </thead>
+            <tbody>
+              {b.rows.map((row, ri) => (
+                <tr key={ri}>{row.map((cell, ci) => <td key={ci} style={{border:"1px solid currentColor",padding:"4px 6px",opacity:.85}}>{renderChatbotInlineBold(cell, `r${bi}-${ri}-${ci}`)}</td>)}</tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+    const prevWasLine = bi > 0 && blocks[bi - 1].type === "line";
     return (
-      <Fragment key={li}>
-        {li > 0 && "\n"}
-        {heading ? <span style={{textDecoration:"underline"}}>{boldParts}</span> : boldParts}
+      <Fragment key={bi}>
+        {prevWasLine && "\n"}
+        {b.heading ? <span style={{textDecoration:"underline"}}>{renderChatbotInlineBold(b.content, `l${bi}`)}</span> : renderChatbotInlineBold(b.content, `l${bi}`)}
       </Fragment>
     );
   });
