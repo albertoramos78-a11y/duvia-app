@@ -5526,6 +5526,7 @@ export default function App() {
       </div>
 
       {bell && <BellPanel onClose={()=>setBell(false)} />}
+      <ChatbotBubble />
 
       {/* BARRE FAMILLE — visible uniquement si plusieurs familles */}
       {familySync.families.length > 1 && !isChild && (
@@ -16276,6 +16277,80 @@ function AdminTab() {
 // 2026-07-20) : c'est bien le palier le plus élevé de l'échelle, pas un
 // statut indépendant à part.
 const TIER_RANK = {free:0, trial:1, premium:2, premium_ai:3};
+
+function ChatbotBubble() {
+  const { C, t, sub, familySync } = useApp();
+  const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState([]); // {role:"user"|"assistant", content:string}
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState("");
+
+  // 🔧 ChatbotBubble reste monté en permanence (jamais démonté) — sans ça,
+  // basculer d'une famille à l'autre (cas multi-famille observateur) laisserait
+  // l'historique de conversation de l'ANCIENNE famille affiché après le
+  // changement, alors que le prochain message interrogerait la NOUVELLE
+  // famille (family_id envoyé à chaque appel). Réinitialise la conversation à
+  // chaque changement de famille active.
+  useEffect(() => { setMessages([]); setErr(""); }, [familySync?.familyId]);
+
+  if (!sub?.aiEnabled || !familySync?.familyId) return null;
+
+  async function send() {
+    const question = input.trim();
+    if (!question || sending) return;
+    setSending(true); setErr("");
+    const nextMessages = [...messages, { role: "user", content: question }];
+    setMessages(nextMessages);
+    setInput("");
+    try {
+      const history = messages.map(m => ({ role: m.role, content: m.content }));
+      const { data, error } = await supabase.functions.invoke("ai-chatbot", {
+        body: { question, family_id: familySync.familyId, history },
+      });
+      if (error) throw new Error("generic");
+      if (data?.error === "daily_limit_reached") throw new Error("daily");
+      if (data?.error) throw new Error("generic");
+      setMessages([...nextMessages, { role: "assistant", content: data?.answer || "" }]);
+    } catch (e) {
+      setErr(e.message === "daily" ? (t.chatbotDailyLimitError||"⚠️ Limite quotidienne de questions atteinte. Réessaie demain.") : (t.chatbotError||"⚠️ Une erreur est survenue. Réessaie."));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <>
+      <button onClick={()=>setOpen(o=>!o)} style={{position:"fixed",bottom:20,right:20,width:56,height:56,borderRadius:"50%",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",fontSize:24,cursor:"pointer",boxShadow:"0 4px 16px rgba(0,0,0,.25)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        {open ? "✕" : "🤖"}
+      </button>
+      {open && (
+        <div style={{position:"fixed",bottom:86,right:20,width:340,maxWidth:"calc(100vw - 40px)",height:460,maxHeight:"calc(100vh - 140px)",background:C.card,borderRadius:16,boxShadow:"0 8px 32px rgba(0,0,0,.3)",display:"flex",flexDirection:"column",zIndex:900,overflow:"hidden"}}>
+          <div style={{padding:"12px 14px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontWeight:800,fontSize:14}}>
+            🤖 {t.chatbotTitle||"Assistant Duvia"}
+          </div>
+          <div style={{flex:1,overflowY:"auto",padding:12,display:"flex",flexDirection:"column",gap:8}}>
+            {messages.length===0 && <div style={{fontSize:12,color:C.mut,textAlign:"center",marginTop:20}}>{t.chatbotEmptyState||"Pose-moi une question sur ta famille ou sur l'utilisation de Duvia."}</div>}
+            {messages.map((m,i)=>(
+              <div key={i} style={{alignSelf:m.role==="user"?"flex-end":"flex-start",maxWidth:"85%",padding:"8px 12px",borderRadius:12,fontSize:13,lineHeight:1.4,whiteSpace:"pre-wrap",background:m.role==="user"?C.vio:C.sur,color:m.role==="user"?"#fff":C.txt}}>
+                {m.content}
+              </div>
+            ))}
+            {sending && <div style={{alignSelf:"flex-start",fontSize:12,color:C.mut}}>{t.chatbotThinking||"Réflexion…"}</div>}
+          </div>
+          {err && <div style={{padding:"0 12px 8px",fontSize:11,color:C.red}}>{err}</div>}
+          <div style={{display:"flex",gap:8,padding:12,borderTop:`1px solid ${C.bor}`}}>
+            <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")send();}}
+              placeholder={t.chatbotPlaceholder||"Écris ta question…"} disabled={sending}
+              style={{flex:1,height:38,padding:"0 12px",border:`1px solid ${C.bor}`,borderRadius:8,fontSize:13}} />
+            <button onClick={send} disabled={sending||!input.trim()}
+              style={{width:38,height:38,background:C.vio,color:"#fff",border:"none",borderRadius:8,cursor:"pointer",opacity:(sending||!input.trim())?.5:1}}>➤</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 function PremiumTab() {
   const {C,t,sub,setSub,st,days,perms,setMenuTab,setShowMenu,users,user,familyPremiumFromCoParent,familyBestSub} = useApp();
