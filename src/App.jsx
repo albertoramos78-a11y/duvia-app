@@ -1371,7 +1371,7 @@ ${licorneExtras}
 
 /* ── Reset & Base ── */
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:${C.bg};color:${C.txt};font-family:'Nunito',sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;}
+body{background:${C.bg};color:${C.txt};font-family:'Nunito',sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;overscroll-behavior-y:contain;}
 /* 🔒 Corrige le 100vh mobile (calculé avant que la barre d'adresse ne se
    réduise après un rafraîchissement, ce qui rendait le body plus grand que
    l'écran visible et faisait apparaître une barre de défilement pleine
@@ -1383,6 +1383,17 @@ body{background:${C.bg};color:${C.txt};font-family:'Nunito',sans-serif;min-heigh
    gardent alors le 100vh existant.
 */
 .duvia-app-root{height:100vh;height:100dvh;}
+/* 🔧 2026-07-20 : le commentaire ci-dessus préservait délibérément le
+   "tirer pour actualiser" — mais ce geste déclenche un rechargement natif
+   du WebView Android qui recalcule mal la zone de la barre de statut
+   (contenu qui glisse dessous), reproductible à volonté et jamais présent
+   sur une réouverture normale de l'app. L'app a déjà son propre mécanisme
+   de mise à jour (bannière "Nouvelle version disponible", voir main.jsx),
+   donc le geste n'est plus nécessaire — overscroll-behavior-y:contain
+   l'empêche de se déclencher (sur body + la zone de défilement principale
+   ci-dessous) sans toucher au défilement normal.
+*/
+#duvia-scroll{overscroll-behavior-y:contain;}
 
 /* ── Jour actuel (vue mois) : clignotement doux au lieu d'une vibration ── */
 @keyframes todayPulse{0%,100%{opacity:1}50%{opacity:0.4}}
