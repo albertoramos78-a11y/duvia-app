@@ -156,6 +156,7 @@ const fr = {
     chatbotEmptyState:"Pose-moi une question sur ta famille ou sur l'utilisation de Duvia.",
     chatbotPlaceholder:"Écris ta question…",
     chatbotThinking:"Réflexion…",
+    chatbotDisclaimer:"L'IA peut générer des erreurs. Vérifie les informations importantes.",
     chatbotError:"⚠️ Une erreur est survenue. Réessaie.",
     chatbotDailyLimitError:"⚠️ Limite quotidienne de questions atteinte. Réessaie demain.",
     premHeaderPremium:"Premium",premHeaderInherited:"Premium hérité",

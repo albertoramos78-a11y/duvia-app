@@ -157,6 +157,7 @@ const en = {
     chatbotEmptyState:"Ask me a question about your family or about using Duvia.",
     chatbotPlaceholder:"Type your question…",
     chatbotThinking:"Thinking…",
+    chatbotDisclaimer:"AI can make mistakes. Check important information.",
     chatbotError:"⚠️ Something went wrong. Try again.",
     chatbotDailyLimitError:"⚠️ Daily question limit reached. Try again tomorrow.",
     premHeaderPremium:"Premium",premHeaderInherited:"Inherited Premium",

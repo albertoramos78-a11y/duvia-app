@@ -785,6 +785,7 @@ const es = {
     chatbotEmptyState:"Hazme una pregunta sobre tu familia o sobre el uso de Duvia.",
     chatbotPlaceholder:"Escribe tu pregunta…",
     chatbotThinking:"Pensando…",
+    chatbotDisclaimer:"La IA puede cometer errores. Comprueba la información importante.",
     chatbotError:"⚠️ Algo salió mal. Inténtalo de nuevo.",
     chatbotDailyLimitError:"⚠️ Límite diario de preguntas alcanzado. Inténtalo mañana.",
   };

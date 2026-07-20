@@ -16644,6 +16644,9 @@ function ChatbotBubble() {
             <button onClick={send} disabled={sending||!input.trim()}
               style={{width:38,height:38,background:C.vio,color:"#fff",border:"none",borderRadius:8,cursor:"pointer",opacity:(sending||!input.trim())?.5:1}}>➤</button>
           </div>
+          <div style={{padding:"0 12px 10px",fontSize:10,color:C.mut,textAlign:"center"}}>
+            {t.chatbotDisclaimer||"L'IA peut générer des erreurs. Vérifie les informations importantes."}
+          </div>
         </div>
       )}
     </>
