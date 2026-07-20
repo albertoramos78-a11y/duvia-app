@@ -16280,15 +16280,16 @@ const TIER_RANK = {free:0, trial:1, premium:2, premium_ai:3};
 
 const CHATBOT_BTN_SIZE = 56;
 const CHATBOT_MARGIN = 10;
-// Dimensions natives du visuel mascotte (voir MascotStage) — les mêmes
-// ratios servent à cadrer le visage dans le bouton rond ci-dessous.
+// Dimensions natives du visuel mascotte (voir MascotStage) — même ratio
+// utilisé pour centrer le regard qui suit la souris.
 const MASCOT_W = 530, MASCOT_H = 416;
 const MASCOT_EYES_CX_RATIO = 0.483, MASCOT_EYES_CY_RATIO = 0.283;
-const CHATBOT_FACE_SCALE = 0.28;
-const CHATBOT_FACE_STAGE_W = MASCOT_W * CHATBOT_FACE_SCALE;
-const CHATBOT_FACE_STAGE_H = MASCOT_H * CHATBOT_FACE_SCALE;
-const CHATBOT_FACE_OFFSET_LEFT = CHATBOT_BTN_SIZE / 2 - MASCOT_W * MASCOT_EYES_CX_RATIO * CHATBOT_FACE_SCALE;
-const CHATBOT_FACE_OFFSET_TOP = CHATBOT_BTN_SIZE / 2 - MASCOT_H * MASCOT_EYES_CY_RATIO * CHATBOT_FACE_SCALE;
+// 🔧 body.png a un fond transparent et EST la silhouette en forme de cœur
+// (voir public/mascot/body.png) — pas besoin de clip-path/cercle, l'afficher
+// tel quel à cette échelle donne directement une "bulle" en forme de cœur.
+const CHATBOT_HEART_SCALE = Math.min(CHATBOT_BTN_SIZE / MASCOT_W, CHATBOT_BTN_SIZE / MASCOT_H);
+const CHATBOT_HEART_W = MASCOT_W * CHATBOT_HEART_SCALE;
+const CHATBOT_HEART_H = MASCOT_H * CHATBOT_HEART_SCALE;
 
 function clampChatbotPos(top, left) {
   const maxTop = Math.max(CHATBOT_MARGIN, window.innerHeight - CHATBOT_BTN_SIZE - CHATBOT_MARGIN);
@@ -16499,11 +16500,10 @@ function ChatbotBubble() {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
-        style={{position:"fixed",top:pos.top,left:pos.left,width:CHATBOT_BTN_SIZE,height:CHATBOT_BTN_SIZE,borderRadius:"50%",background:open?`linear-gradient(135deg,${C.vio},${C.blu})`:"#fff",color:"#fff",border:"none",fontSize:24,cursor:"grab",boxShadow:"0 4px 16px rgba(0,0,0,.25)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none",userSelect:"none",WebkitUserSelect:"none",overflow:"hidden"}}>
-        {open ? "✕" : (
-          <div style={{position:"absolute",left:CHATBOT_FACE_OFFSET_LEFT,top:CHATBOT_FACE_OFFSET_TOP,width:CHATBOT_FACE_STAGE_W,height:CHATBOT_FACE_STAGE_H,pointerEvents:"none"}}>
-            <MascotStage scale={CHATBOT_FACE_SCALE} />
-          </div>
+        style={{position:"fixed",top:pos.top,left:pos.left,width:CHATBOT_BTN_SIZE,height:CHATBOT_BTN_SIZE,background:"transparent",border:"none",cursor:"grab",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none",userSelect:"none",WebkitUserSelect:"none"}}>
+        <img src="/mascot/body.png" alt="" style={{width:CHATBOT_HEART_W,height:CHATBOT_HEART_H,filter:"drop-shadow(0 4px 10px rgba(0,0,0,.3))",pointerEvents:"none"}} />
+        {open && (
+          <div style={{position:"absolute",top:-2,right:-2,width:20,height:20,borderRadius:"50%",background:C.txt,color:"#fff",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 6px rgba(0,0,0,.3)"}}>✕</div>
         )}
       </button>
       {open && (
