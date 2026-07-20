@@ -5526,6 +5526,16 @@ export default function App() {
           <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`linear-gradient(${C.grn}18, ${C.grn}18)${pillScrim}`,border:`1.5px solid ${C.grn}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.grn,fontWeight:800,display:"inline-flex",alignItems:"center",gap:6,cursor:"pointer"}}>⭐ {familyPremiumFromCoParent ? (t.premHeaderInherited||"Premium hérité") : (t.premHeaderPremium||"Premium")}</div>
         </div>
       )}
+      {/* 🔧 premium_ai n'a pas de branche dédiée dans ce switch depuis l'ajout du
+          statut : sans elle, aucune pastille ne s'affiche (tombe entre toutes
+          les conditions ci-dessus), ce qui masquait aussi le fait qu'un vieux
+          bundle JS en cache (sans ce statut du tout) retombait sur la logique
+          d'essai/bêta ci-dessus et affichait à tort "Bêta". */}
+      {!isObs && !isChild && st==="premium_ai" && (
+        <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>
+          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`linear-gradient(${C.blu}18, ${C.blu}18)${pillScrim}`,border:`1.5px solid ${C.blu}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:C.blu,fontWeight:800,display:"inline-flex",alignItems:"center",gap:6,cursor:"pointer"}}>{t.premAiActiveLabel||"Premium+IA Actif 🤖"}</div>
+        </div>
+      )}
       </div>
 
       {bell && <BellPanel onClose={()=>setBell(false)} />}

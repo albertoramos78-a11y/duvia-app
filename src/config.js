@@ -10,7 +10,7 @@ export const APP_URL = "https://app.duvia.fr";
 // rafraîchissement ("Nouvelle version disponible") — sans ce changement d'octets
 // dans sw.js, la mise à jour de l'app peut rester invisible indéfiniment pour un
 // utilisateur qui ne ferme jamais complètement l'appli.
-export const APP_VERSION = "2.64";
+export const APP_VERSION = "2.65";
 
 // ── Liens légaux ─────────────────────────────────────────────────────────────
 // CGU/CGV/Politique de confidentialité sont affichées directement dans l'app
