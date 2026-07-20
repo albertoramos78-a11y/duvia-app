@@ -12,6 +12,8 @@ Backlog item 19 ("Palier Premium+IA"), 2e cas d'usage après la reformulation de
 
 Contrairement à la reformulation de message (texte en entrée/sortie, aucune donnée métier à agréger), ce cas d'usage nécessite d'aller chercher des données réelles côté serveur — d'où une architecture plus riche (function calling / outils).
 
+**Extension du périmètre (2026-07-20)** : à partir d'un document de vision plus large ("Copilote IA de Duvia", 12 fonctionnalités), 6 items s'intègrent naturellement dans CE chatbot sans nouvelle infrastructure lourde et sont désormais inclus dans ce document : aide/conseils d'organisation étendus (déjà couvert), résumé intelligent des conversations/décisions/accords, gestion des dépenses (solde calculé, remboursements oubliés, résumé mensuel), assistant enfant partiel (emploi du temps scolaire), traduction automatique, et une version conversationnelle du coach de communication (coller un brouillon dans le chat pour le faire reformuler/expliquer). Les 6 autres items du document de vision (calendrier intelligent, coffre-fort intelligent/RAG documentaire, checklists de transition, assistant événements proactif, tableau de bord dédié, base de connaissances juridique) sont explicitement exclus de cette itération — voir Non-objectifs pour le détail et la justification de chacun.
+
 ## Contexte technique
 
 - Infrastructure déjà posée par la reformulation de message (`docs/superpowers/specs/2026-07-19-ai-message-rephrasing-design.md`) et réutilisée telle quelle ici : `ai_enabled` sur `subscriptions` (désormais dérivé du statut Premium+IA — un compte `plan="premium"` avec `ai_enabled=true`, voir la décision du 2026-07-20 faisant de Premium+IA le palier le plus élevé), table partagée `ai_usage_log` (`feature` distinguant chaque usage), pattern Edge-Function-JWT-authentifiée-plafond-quotidien, clé `ANTHROPIC_API_KEY` déjà configurée comme secret Supabase.
@@ -20,6 +22,8 @@ Contrairement à la reformulation de message (texte en entrée/sortie, aucune do
 - RLS existante confirmée pour les dépenses (`0017_expenses.sql`) : tout membre actif de la famille (parent/observateur/enfant, sans distinction) peut lire `expenses`/`reimbursements` — aucune logique de permission par rôle à reproduire manuellement côté outil.
 - Météo : déjà fetchée côté client directement depuis Open-Meteo (API publique, sans clé), à partir des coordonnées enregistrées par chaque parent (`parent_locations`, migration `0035_parent_locations.sql`) — le même appel peut se faire côté serveur avec les mêmes coordonnées.
 - Messagerie : un concept de conversations avec visibilité par utilisateur existe déjà (`0028_hidden_conversations.sql`) — la RLS exacte des `messages` n'a pas besoin d'être comprise en détail ici, puisque l'outil interroge avec le JWT de l'appelant : quelle que soit la portée réelle (famille entière ou conversations spécifiques), elle s'applique automatiquement.
+- Emploi du temps scolaire ("Emploi du temps des enfants", `App.jsx:~17705`) : matières/salles/horaires par enfant, visible par tous les membres sauf les observateurs. Encore stocké dans `cfg` (`families.data`), pas dans une table dédiée — lisible par `get_family_config` sans migration supplémentaire.
+- Calcul du solde entre parents (`ExpensesTab`, `App.jsx:~13760`) : `balance[i] = totals[i] - owed[i] + reimSent[i] - reimReceived[i]` par parent `i`. Cette formule doit être reproduite TELLE QUELLE côté Edge Function (pas laissée au calcul de Claude, sujet aux erreurs arithmétiques d'un LLM) pour que "qui doit combien" soit fiable.
 
 ## Approche retenue
 
@@ -45,10 +49,12 @@ JWT-authentifiée, boucle de function-calling :
 
 ### Outils exposés à Claude
 
-- **`get_expenses(from_date?, to_date?)`** — lit `expenses`/`reimbursements` de la famille de l'appelant sur la période demandée (par défaut : les 3 derniers mois). Retourne une liste compacte (libellé, montant, catégorie, date, statut), pas le schéma DB brut.
+- **`get_expenses(from_date?, to_date?)`** — lit `expenses`/`reimbursements` de la famille de l'appelant sur la période demandée (par défaut : les 3 derniers mois). Retourne une liste compacte (libellé, montant, catégorie, date, statut) **plus un objet `balance` déjà calculé par parent** (reproduisant exactement la formule de `ExpensesTab`, voir Contexte technique — jamais laissé au calcul de Claude), **une liste des remboursements `status="pending"` de plus de 14 jours** (remboursements oubliés), et **les dépenses `recurring=true` à échéance dans les 30 prochains jours** (dépenses importantes à venir). Pas le schéma DB brut.
 - **`get_weather(days?)`** — lit `parent_locations` de la famille de l'appelant, appelle Open-Meteo pour chaque ville configurée (même endpoint que le client, voir `fetchMyWeatherForecast` dans `App.jsx`), retourne les prévisions résumées par jour.
-- **`get_family_config()`** — lit une projection NON sensible de la configuration famille : prénoms/âges des enfants, structure parentale (nombre de parents, pas leurs emails), dates personnalisées configurées. N'inclut jamais d'email, d'identifiant de compte, ni de contenu du coffre-fort.
-- **`get_messages(from_date?, to_date?, limit?)`** — lit la messagerie familiale visible par l'appelant (RLS existante, quelle que soit sa portée exacte) sur la période/quantité demandée (par défaut : les 30 derniers messages).
+- **`get_family_config()`** — lit une projection NON sensible de la configuration famille : prénoms/âges des enfants, structure parentale (nombre de parents, pas leurs emails), dates personnalisées configurées, **et l'emploi du temps scolaire par enfant** (matières/salles/horaires, voir Contexte technique). N'inclut jamais d'email, d'identifiant de compte, ni de contenu du coffre-fort.
+- **`get_messages(from_date?, to_date?, limit?)`** — lit la messagerie familiale visible par l'appelant (RLS existante, quelle que soit sa portée exacte) sur la période/quantité demandée (par défaut : les 30 derniers messages). Sert de base à la fois aux questions ponctuelles ET aux demandes de résumé ("résume mes échanges avec l'autre parent ce mois-ci", "quelles décisions avons-nous prises sur les vacances ?") — la synthèse elle-même est faite par Claude, l'outil ne fait que fournir les messages bruts.
+
+**Pas de nouvel outil pour la traduction ni le coach de communication conversationnel** : la traduction est une capacité native de Claude (aucune donnée à aller chercher) ; "reformule ce brouillon"/"ce message est-il trop dur ?" réutilise le même raisonnement que `ai-rephrase-message` mais directement dans la conversation, sans appel d'outil ni fonction dédiée — seul le prompt système (ci-dessous) a besoin de le mentionner explicitement.
 
 Chaque outil est une fonction TypeScript pure côté Edge Function qui construit une requête avec le client JWT-scopé et retourne un JSON compact.
 
@@ -59,19 +65,31 @@ Tu es l'assistant IA de Duvia, une application de coparentalité partagée
 entre deux foyers ("Deux maisons. Une famille."). Tu réponds aux questions
 des parents, observateurs et enfants utilisant l'application.
 
-Tu peux répondre à deux types de questions :
-1. Aide sur l'utilisation de l'application (comment inviter quelqu'un, où
-   trouver telle fonctionnalité, etc.) — réponds directement, sans outil.
-2. Questions sur les données de LEUR PROPRE famille (dépenses, météo,
-   informations de configuration, messages) — utilise les outils fournis
-   pour aller chercher les données réelles avant de répondre. Ne devine
-   JAMAIS un chiffre ou une information que tu pourrais vérifier avec un
-   outil.
+Tu peux :
+1. Aider sur l'utilisation de l'application (comment inviter quelqu'un, où
+   trouver telle fonctionnalité, etc.) et donner des conseils généraux
+   d'organisation de la coparentalité — réponds directement, sans outil.
+2. Répondre à des questions sur les données de LEUR PROPRE famille
+   (dépenses, solde entre parents, météo, configuration, emploi du temps
+   scolaire, messages) — utilise les outils fournis pour aller chercher les
+   données réelles avant de répondre. Ne devine JAMAIS un chiffre ou une
+   information que tu pourrais vérifier avec un outil, et ne recalcule
+   JAMAIS toi-même un solde déjà fourni par l'outil.
+3. Résumer des conversations, décisions ou accords à partir des messages
+   récupérés via l'outil de messagerie, sur demande.
+4. Reformuler un message que l'utilisateur colle dans la conversation s'il
+   te semble agressif, accusateur ou conflictuel, et expliquer brièvement
+   en quoi la reformulation est plus constructive — dans le même esprit que
+   le bouton "Reformuler" de la messagerie, mais ici en conversation libre.
+5. Traduire du texte à la demande, dans n'importe quelle langue.
 
 Tu ne réponds JAMAIS à des questions d'ordre juridique (garde, pension
 alimentaire, droits parentaux, procédures judiciaires, litiges) — dans ce
 cas, explique poliment que tu ne peux pas conseiller sur ces sujets et
-recommande de consulter un avocat ou un professionnel qualifié.
+recommande de consulter un avocat ou un professionnel qualifié. Tu peux
+donner des conseils GÉNÉRAUX d'organisation, de communication ou de
+médiation, mais jamais d'interprétation de la loi ni d'affirmation sur les
+droits d'un parent.
 
 Reste neutre, factuel et bienveillant — le contexte familial est souvent
 sensible. Réponds dans la langue de la question. Si une information
@@ -94,10 +112,17 @@ Plafond 20 questions/jour par compte (`ai_usage_log`, nouvelle valeur `feature='
 
 ## Non-objectifs
 
-- **Pas d'outil calendrier** dans cette itération (voir Contexte technique) — à reconsidérer une fois la Phase 4 de bascule de lecture des tables `custody_*` faite, ou via un mécanisme dédié à brainstormer séparément.
 - Pas d'historique de conversation persistant — perdu au rechargement, par choix explicite (voir UI).
-- Aucune réponse à caractère juridique, quelle que soit la question posée.
+- Aucune réponse à caractère juridique, quelle que soit la question posée — y compris les questions générales sur les "droits des parents" (décision explicite du 2026-07-20 : rester sur du conseil général non-juridique).
 - Ne construit pas de nouveau système de palier ou de facturation — réutilise `ai_enabled`/Premium+IA tel quel.
+
+**Items du document de vision "Copilote IA de Duvia" explicitement exclus de cette itération** (chacun nécessiterait son propre brainstorm/sous-projet) :
+
+- **Calendrier intelligent** (proposer un échange de garde, détecter un conflit d'agenda) — même contrainte que ci-dessus (voir Contexte technique) : le planning de garde n'est pas interrogeable en base tant que la Phase 4 (bascule de lecture des tables `custody_*`) n'est pas faite.
+- **Coffre-fort intelligent** (chercher/résumer des documents : "trouve le jugement", "résume ce document") — nécessite une architecture RAG complète (extraction de texte des PDF/images, recherche ou embeddings), pas un simple outil de plus ; touche aussi des documents parfois juridiques, à traiter avec prudence vu la limite ci-dessus.
+- **Checklists de transition** (doudou, médicaments, vêtements de sport avant un changement de domicile) — aucune donnée structurée n'existe pour ça (pas de champ "objets à emporter" par enfant) ; sans elle, l'IA ne produirait que des suggestions génériques.
+- **Assistant événements proactif** (rappels de vaccins, rendez-vous médicaux, réunions scolaires) — implique des notifications programmées (cron), pas des réponses à une question posée — mécanisme différent d'un chatbot réactif ; et aucune donnée santé/rendez-vous n'existe dans le schéma actuel.
+- **Tableau de bord intelligent dédié** — couvrable en posant directement la question au chatbot une fois construit ("fais-moi un résumé complet de ma situation") avec les outils déjà prévus ; pas besoin d'une UI séparée pour cette itération, à reconsidérer si l'usage le justifie.
 
 ## Déploiement (manuel, hors repo)
 
@@ -109,8 +134,13 @@ Plafond 20 questions/jour par compte (`ai_usage_log`, nouvelle valeur `feature='
 
 Aucun test automatisé possible pour l'appel API réel — vérification live :
 - Poser une question générale ("comment inviter un observateur ?") → réponse pertinente, sans appel d'outil.
-- Poser une question sur les dépenses réelles d'un compte de test → vérifier l'exactitude des chiffres renvoyés contre l'onglet Dépenses.
+- Poser une question sur les dépenses réelles d'un compte de test ("qui doit combien ?") → vérifier que le solde renvoyé correspond exactement à celui affiché dans l'onglet Dépenses (même formule).
+- Demander un résumé mensuel des dépenses et un rappel des remboursements en attente depuis plus de 14 jours → vérifier l'exactitude contre les données réelles.
 - Poser une question météo → vérifier la cohérence avec la météo affichée dans l'app pour la même ville.
-- Poser une question sur le planning de garde → vérifier que le chatbot indique clairement ne pas pouvoir y répondre (pas d'invention).
+- Poser une question sur l'emploi du temps scolaire d'un enfant ("quand est son prochain cours ?") → vérifier l'exactitude contre l'onglet Emploi du temps.
+- Demander un résumé d'une conversation existante → vérifier que le résumé reflète fidèlement les messages réels (pas d'invention).
+- Coller un message au ton conflictuel et demander une reformulation → vérifier une reformulation neutre + une explication brève, cohérente avec le comportement du bouton "Reformuler" existant.
+- Demander une traduction d'un texte → vérifier l'exactitude.
+- Poser une question sur le planning de garde (calendrier) → vérifier que le chatbot indique clairement ne pas pouvoir y répondre (pas d'invention).
 - Poser une question juridique (ex. "quels sont mes droits de garde ?") → vérifier le refus poli et la redirection vers un professionnel.
 - Tester le plafond (21e question dans la même journée doit être refusée).
