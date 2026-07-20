@@ -16278,6 +16278,18 @@ function AdminTab() {
 // statut indépendant à part.
 const TIER_RANK = {free:0, trial:1, premium:2, premium_ai:3};
 
+const CHATBOT_BTN_SIZE = 56;
+const CHATBOT_MARGIN = 10;
+
+function clampChatbotPos(top, left) {
+  const maxTop = Math.max(CHATBOT_MARGIN, window.innerHeight - CHATBOT_BTN_SIZE - CHATBOT_MARGIN);
+  const maxLeft = Math.max(CHATBOT_MARGIN, window.innerWidth - CHATBOT_BTN_SIZE - CHATBOT_MARGIN);
+  return {
+    top: Math.min(Math.max(top, CHATBOT_MARGIN), maxTop),
+    left: Math.min(Math.max(left, CHATBOT_MARGIN), maxLeft),
+  };
+}
+
 function ChatbotBubble() {
   const { C, t, sub, familySync } = useApp();
   const [open, setOpen] = useState(false);
@@ -16285,6 +16297,14 @@ function ChatbotBubble() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
+  // Position du bouton flottant en pixels (top/left) — permet de le faire
+  // glisser librement à l'écran plutôt que de rester bloqué dans un coin.
+  // Initialisée au coin bas-droit historique.
+  const [pos, setPos] = useState(() => ({
+    top: window.innerHeight - CHATBOT_BTN_SIZE - 20,
+    left: window.innerWidth - CHATBOT_BTN_SIZE - 20,
+  }));
+  const drag = useRef({ dragging: false, moved: false, startX: 0, startY: 0, startTop: 0, startLeft: 0 });
 
   // 🔧 ChatbotBubble reste monté en permanence (jamais démonté) — sans ça,
   // basculer d'une famille à l'autre (cas multi-famille observateur) laisserait
@@ -16293,6 +16313,40 @@ function ChatbotBubble() {
   // famille (family_id envoyé à chaque appel). Réinitialise la conversation à
   // chaque changement de famille active.
   useEffect(() => { setMessages([]); setErr(""); }, [familySync?.familyId]);
+
+  // 🔧 pos est en pixels absolus (top/left), pas en bottom/right relatif au
+  // viewport comme avant le drag — sans ce recalage, une rotation d'écran ou
+  // un redimensionnement pourrait laisser le bouton hors champ, inatteignable.
+  useEffect(() => {
+    function onResize() {
+      setPos(p => clampChatbotPos(p.top, p.left));
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  function onPointerDown(e) {
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    drag.current = { dragging: true, moved: false, startX: e.clientX, startY: e.clientY, startTop: pos.top, startLeft: pos.left };
+  }
+  function onPointerMove(e) {
+    if (!drag.current.dragging) return;
+    const dx = e.clientX - drag.current.startX;
+    const dy = e.clientY - drag.current.startY;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) drag.current.moved = true;
+    if (drag.current.moved) {
+      setPos(clampChatbotPos(drag.current.startTop + dy, drag.current.startLeft + dx));
+    }
+  }
+  function onPointerUp() {
+    if (!drag.current.dragging) return;
+    const wasMoved = drag.current.moved;
+    drag.current.dragging = false;
+    if (!wasMoved) setOpen(o => !o);
+  }
+  function onPointerCancel() {
+    drag.current.dragging = false;
+  }
 
   if (!sub?.aiEnabled || !familySync?.familyId) return null;
 
@@ -16337,13 +16391,33 @@ function ChatbotBubble() {
     }
   }
 
+  // La fenêtre de chat s'ouvre du côté où il y a le plus de place autour du
+  // bouton (au-dessus par défaut, en-dessous s'il est trop haut à l'écran),
+  // alignée sur son bord droit — pour rester visible où que le bouton ait
+  // été déplacé, plutôt que figée dans le coin bas-droit d'origine.
+  const winW = 340, winH = 460, winGap = 10;
+  const openBelow = pos.top < window.innerHeight / 2;
+  const winTop = Math.min(
+    Math.max(openBelow ? pos.top + CHATBOT_BTN_SIZE + winGap : pos.top - winH - winGap, CHATBOT_MARGIN),
+    Math.max(CHATBOT_MARGIN, window.innerHeight - winH - CHATBOT_MARGIN)
+  );
+  const winLeft = Math.min(
+    Math.max(pos.left + CHATBOT_BTN_SIZE - winW, CHATBOT_MARGIN),
+    Math.max(CHATBOT_MARGIN, window.innerWidth - winW - CHATBOT_MARGIN)
+  );
+
   return (
     <>
-      <button onClick={()=>setOpen(o=>!o)} style={{position:"fixed",bottom:20,right:20,width:56,height:56,borderRadius:"50%",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",fontSize:24,cursor:"pointer",boxShadow:"0 4px 16px rgba(0,0,0,.25)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <button
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
+        style={{position:"fixed",top:pos.top,left:pos.left,width:CHATBOT_BTN_SIZE,height:CHATBOT_BTN_SIZE,borderRadius:"50%",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",fontSize:24,cursor:"grab",boxShadow:"0 4px 16px rgba(0,0,0,.25)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none",userSelect:"none",WebkitUserSelect:"none"}}>
         {open ? "✕" : "🤖"}
       </button>
       {open && (
-        <div style={{position:"fixed",bottom:86,right:20,width:340,maxWidth:"calc(100vw - 40px)",height:460,maxHeight:"calc(100vh - 140px)",background:C.card,borderRadius:16,boxShadow:"0 8px 32px rgba(0,0,0,.3)",display:"flex",flexDirection:"column",zIndex:900,overflow:"hidden"}}>
+        <div style={{position:"fixed",top:winTop,left:winLeft,width:winW,maxWidth:"calc(100vw - 20px)",height:winH,maxHeight:"calc(100vh - 20px)",background:C.card,borderRadius:16,boxShadow:"0 8px 32px rgba(0,0,0,.3)",display:"flex",flexDirection:"column",zIndex:900,overflow:"hidden"}}>
           <div style={{padding:"12px 14px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontWeight:800,fontSize:14}}>
             🤖 {t.chatbotTitle||"Assistant Duvia"}
           </div>
