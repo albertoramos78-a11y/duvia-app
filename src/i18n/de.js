@@ -781,5 +781,11 @@ const de = {
     weatherAfternoon:"Nachmittags",
     weatherEvening:"Abends",
     weatherDetailUnavailable:"Details für diesen Tag nicht verfügbar.",
+    chatbotTitle:"Duvia-Assistent",
+    chatbotEmptyState:"Stelle mir eine Frage zu deiner Familie oder zur Nutzung von Duvia.",
+    chatbotPlaceholder:"Schreibe deine Frage…",
+    chatbotThinking:"Denke nach…",
+    chatbotError:"⚠️ Etwas ist schiefgelaufen. Versuche es erneut.",
+    chatbotDailyLimitError:"⚠️ Tägliches Fragenlimit erreicht. Versuche es morgen erneut.",
   };
 export default de;
