@@ -15794,8 +15794,8 @@ function PremiumSubscribersCard({ C, refreshKey, onChanged }) {
             </thead>
             <tbody>
               {rows.map((r,i)=>{
-                const planColor = r.plan==="premium"?C.vio:r.plan==="trial_premium"?C.blu:C.mut;
-                const planLabel = r.plan==="premium" ? (r.cycle==="yearly"?"Premium annuel":"Premium mensuel") : r.plan==="trial_premium" ? "Trial Premium" : "Freemium";
+                const planColor = r.plan==="premium"?C.vio:r.plan==="trial_premium"?C.blu:r.plan==="premium_ai"?C.blu:C.mut;
+                const planLabel = r.plan==="premium" ? (r.cycle==="yearly"?"Premium annuel":"Premium mensuel") : r.plan==="trial_premium" ? "Trial Premium" : r.plan==="premium_ai" ? "🤖 Premium+IA" : "Freemium";
                 return (
                 <tr key={r.user_id} style={{borderBottom:`1px solid ${C.bor}`,background:i%2===0?"transparent":C.sur}}>
                   <td style={{padding:"8px",fontWeight:700,color:C.txt}}>
@@ -15819,6 +15819,9 @@ function PremiumSubscribersCard({ C, refreshKey, onChanged }) {
                   <td style={{padding:"8px"}}>
                     {r.plan==="freemium" ? (
                       <span style={{background:`${C.mut}22`,color:C.mut,padding:"2px 8px",borderRadius:6,fontWeight:800,fontSize:11,whiteSpace:"nowrap"}}>🔓 Freemium</span>
+                    ) : r.plan==="premium_ai" ? (
+                      // Pas d'échéance (aucun premium_since/trial_start posé pour ce plan) — toujours "Actif", comme Freemium.
+                      <span style={{background:`${C.blu}22`,color:C.blu,padding:"2px 8px",borderRadius:6,fontWeight:800,fontSize:11,whiteSpace:"nowrap"}}>🤖 Actif</span>
                     ) : (
                       <span style={{background:r.isActive?`${C.grn}22`:`${C.red}22`,color:r.isActive?C.grn:C.red,padding:"2px 8px",borderRadius:6,fontWeight:800,fontSize:11,whiteSpace:"nowrap"}}>
                         {r.isActive?"✅ Actif":"❌ Expiré"}

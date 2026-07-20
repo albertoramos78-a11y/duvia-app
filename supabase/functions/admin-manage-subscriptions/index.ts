@@ -128,9 +128,9 @@ serve(async (req) => {
   if (action === "list_premium_users") {
     // Ne liste que les comptes déjà modifiés depuis CE panneau admin (voir
     // admin_subscription_log) — jamais les vrais abonnés Stripe/organiques
-    // qui n'ont jamais été touchés ici. Couvre les 3 statuts forçables :
-    // freemium / trial_premium / premium (la bêta par compte a été retirée
-    // de l'UI, voir AccountSubscriptionCard côté client).
+    // qui n'ont jamais été touchés ici. Couvre les 4 statuts forçables :
+    // freemium / trial_premium / premium / premium_ai (la bêta par compte a
+    // été retirée de l'UI, voir AccountSubscriptionCard côté client).
     const { data: logRows, error: logErr } = await admin.from("admin_subscription_log").select("target_user_id");
     if (logErr) return jsonResponse({ error: logErr.message }, 500);
     const targetIds = [...new Set((logRows || []).map((r) => r.target_user_id))];
@@ -140,7 +140,7 @@ serve(async (req) => {
       .from("subscriptions")
       .select("user_id, plan, premium_since, cycle, trial_start")
       .in("user_id", targetIds)
-      .in("plan", ["freemium", "trial_premium", "premium"]);
+      .in("plan", ["freemium", "trial_premium", "premium", "premium_ai"]);
     if (error) return jsonResponse({ error: error.message }, 500);
     const results = [];
     for (const row of rows || []) {
