@@ -348,9 +348,11 @@ begin
     where status = 'active' and start_date <= current_date
   loop
     v_due_date := date_trunc('month', current_date)::date + (cfg.day_of_month - 1);
-    insert into public.pension_payments (family_id, config_id, period, amount, due_date, status)
-    values (cfg.family_id, cfg.id, v_period, cfg.amount, v_due_date, 'pending')
-    on conflict (config_id, period) do nothing;
+    if v_due_date >= cfg.start_date then
+      insert into public.pension_payments (family_id, config_id, period, amount, due_date, status)
+      values (cfg.family_id, cfg.id, v_period, cfg.amount, v_due_date, 'pending')
+      on conflict (config_id, period) do nothing;
+    end if;
   end loop;
 end;
 $$;
