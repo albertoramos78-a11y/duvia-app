@@ -21,6 +21,7 @@ import {
   insertValidatedParent, reconcileOwnParentSlot, placeholderNameFromEmail,
   weatherIconFor, isWithinForecastWindow, aggregateHourlyPeriods,
   getInitials,
+  nextPensionDueDate,
 } from "./core.js";
 
 // ── B1 — validatePassword (majuscule + caractère spécial désormais requis) ────
@@ -845,4 +846,25 @@ test("getInitials : chaîne vide ou absente -> chaîne vide", () => {
 });
 test("getInitials : minuscules -> initiales majuscules", () => {
   assert.strictEqual(getInitials("alberto gomez"), "AG");
+});
+
+// ── nextPensionDueDate (pension alimentaire : prochaine échéance) ────────────
+test("nextPensionDueDate : jour pas encore atteint ce mois -> échéance ce mois-ci", () => {
+  assert.equal(nextPensionDueDate(15, new Date(2026, 6, 10)), "2026-07-15");
+});
+
+test("nextPensionDueDate : jour déjà dépassé ce mois -> échéance le mois prochain", () => {
+  assert.equal(nextPensionDueDate(5, new Date(2026, 6, 10)), "2026-08-05");
+});
+
+test("nextPensionDueDate : jour d'échéance = aujourd'hui -> échéance ce mois-ci", () => {
+  assert.equal(nextPensionDueDate(10, new Date(2026, 6, 10)), "2026-07-10");
+});
+
+test("nextPensionDueDate : passage d'année (décembre -> janvier)", () => {
+  assert.equal(nextPensionDueDate(5, new Date(2026, 11, 10)), "2027-01-05");
+});
+
+test("nextPensionDueDate : jour 28 en février (mois court) reste valide", () => {
+  assert.equal(nextPensionDueDate(28, new Date(2026, 1, 1)), "2026-02-28");
 });

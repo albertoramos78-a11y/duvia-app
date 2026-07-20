@@ -22,6 +22,17 @@ export function toStr(d) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// ── Pension alimentaire : prochaine échéance ─────────────────────────────────
+// dayOfMonth est toujours 1-28 (imposé côté serveur, voir migration 0046) —
+// donc jamais besoin de recaler sur un mois plus court (février).
+export function nextPensionDueDate(dayOfMonth, fromDate = new Date()) {
+  const y = fromDate.getFullYear();
+  const m = fromDate.getMonth();
+  const day = fromDate.getDate();
+  const targetMonth = day <= dayOfMonth ? m : m + 1;
+  return toStr(new Date(y, targetMonth, dayOfMonth));
+}
+
 // ── Nettoyage texte ──────────────────────────────────────────────────────────
 export function sanitize(str) {
   if (typeof str !== "string") return "";
