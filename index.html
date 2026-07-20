@@ -7,7 +7,15 @@
     <link rel="manifest" href="/manifest.json" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Duvia" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- 🔧 Pas de "viewport-fit=cover" : ça demande au navigateur de dessiner
+         le contenu en plein écran SOUS la barre de statut/l'encoche, à charge
+         de l'appli de recréer l'espace via env(safe-area-inset-*) — ce qui a
+         été tenté (App.jsx, .duvia-app-root) mais s'est avéré insuffisant sur
+         Android (env(safe-area-inset-top) n'y reflète pas la barre de statut
+         de la même façon que sur iOS). Sans "cover", l'OS réserve lui-même
+         cet espace des deux côtés (iOS et Android), ce qui règle le
+         chevauchement sans dépendre de env(). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#7B7CF5" />
     <title>Duvia — Two homes. One family.</title>
   </head>
