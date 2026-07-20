@@ -5045,7 +5045,7 @@ export default function App() {
 
   return (
     <AppContext.Provider value={ctxValue}>
-    <div className="duvia-app-root" style={{display:"flex",flexDirection:"column",maxWidth:940,margin:"0 auto",overflow:"hidden",width:"100%"}}>
+    <div className="duvia-app-root" style={{display:"flex",flexDirection:"column",maxWidth:940,margin:"0 auto",overflow:"hidden",width:"100%",paddingTop:"env(safe-area-inset-top)",paddingBottom:"env(safe-area-inset-bottom)"}}>
       <style>{cssString}</style>
 
       {inviteLeftNotice && (
