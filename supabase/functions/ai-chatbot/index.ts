@@ -139,10 +139,10 @@ async function toolGetWeather(
   // service-role, mais ne renvoyer QUE les champs dérivés (code/température)
   // — jamais lat/lon/ville, même à Claude.
   const { data: membership } = await userClient
-    .from("family_members").select("user_id").eq("family_id", familyId).eq("status", "active").maybeSingle();
+    .from("family_members").select("user_id").eq("family_id", familyId).eq("user_id", callerUserId).eq("status", "active").maybeSingle();
   if (!membership) return { error: "not_a_family_member" };
 
-  const { data: parents } = await admin
+  const { data: parents } = await userClient
     .from("family_members").select("user_id").eq("family_id", familyId).eq("role", "parent").eq("status", "active");
 
   const days = Math.min(Math.max(Number(args?.days) || 7, 1), 16);
