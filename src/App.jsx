@@ -16308,10 +16308,28 @@ function ChatbotBubble() {
       const { data, error } = await supabase.functions.invoke("ai-chatbot", {
         body: { question, family_id: familySync.familyId, history },
       });
-      if (error) throw new Error("generic");
-      if (data?.error === "daily_limit_reached") throw new Error("daily");
+      if (error) {
+        // 🔧 invoke() renvoie data:null sur toute réponse non-2xx (429 pour
+        // le plafond quotidien inclus) — le vrai code d'erreur ne vit que sur
+        // error.context (Response brute), jamais sur `data` (même bug déjà
+        // rencontré et corrigé sur handleRephrase/sendInviteEmail, voir plus
+        // haut dans ce fichier — "await error.context.json()" est le pattern
+        // documenté par @supabase/functions-js lui-même).
+        let code = null;
+        try { code = (await error.context.json())?.error; } catch { /* réponse non-JSON ou déjà consommée */ }
+        throw new Error(code === "daily_limit_reached" ? "daily" : "generic");
+      }
       if (data?.error) throw new Error("generic");
-      setMessages([...nextMessages, { role: "assistant", content: data?.answer || "" }]);
+      // 🔧 Le serveur renvoie déjà l'historique plafonné (20 derniers tours,
+      // voir ai-chatbot/index.ts) prêt à être renvoyé tel quel au prochain
+      // appel — l'utiliser directement évite de faire grandir l'historique
+      // local sans limite sur une longue session. Fallback sur l'ajout
+      // manuel si absent/malformé (ancienne réponse serveur, etc.).
+      if (Array.isArray(data?.history)) {
+        setMessages(data.history);
+      } else {
+        setMessages([...nextMessages, { role: "assistant", content: data?.answer || "" }]);
+      }
     } catch (e) {
       setErr(e.message === "daily" ? (t.chatbotDailyLimitError||"⚠️ Limite quotidienne de questions atteinte. Réessaie demain.") : (t.chatbotError||"⚠️ Une erreur est survenue. Réessaie."));
     } finally {
