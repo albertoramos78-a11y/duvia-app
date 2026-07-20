@@ -94,7 +94,7 @@ export function usePension(familyId: string | null) {
   /** Propose une nouvelle configuration (statut "proposed"). */
   const proposePensionConfig = useCallback(async (params: Parameters<typeof proposePensionConfigApi>[0]) => {
     const created = await proposePensionConfigApi(params);
-    setConfigs((prev) => [created, ...prev]);
+    setConfigs((prev) => (prev.some((c) => c.id === created.id) ? prev : [created, ...prev]));
     return created;
   }, []);
 
