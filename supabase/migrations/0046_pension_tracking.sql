@@ -114,6 +114,17 @@ begin
   ) then
     raise exception 'not_a_parent';
   end if;
+  if p_from_user_id = p_to_user_id then
+    raise exception 'from_and_to_must_differ';
+  end if;
+  if not exists (
+    select 1 from public.family_members fm
+    where fm.family_id = p_family_id
+      and fm.user_id = case when auth.uid() = p_from_user_id then p_to_user_id else p_from_user_id end
+      and fm.role = 'parent'
+  ) then
+    raise exception 'counterparty_not_a_parent';
+  end if;
   if p_day_of_month < 1 or p_day_of_month > 28 then
     raise exception 'invalid_day_of_month';
   end if;
