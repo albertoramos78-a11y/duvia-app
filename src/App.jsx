@@ -16295,12 +16295,15 @@ const CHATBOT_MARGIN = 10;
 // utilisé pour centrer le regard qui suit la souris.
 const MASCOT_W = 530, MASCOT_H = 416;
 const MASCOT_EYES_CX_RATIO = 0.483, MASCOT_EYES_CY_RATIO = 0.283;
-// 🔧 body.png a un fond transparent et EST la silhouette en forme de cœur
-// (voir public/mascot/body.png) — pas besoin de clip-path/cercle, l'afficher
+// 🔧 body-laptop.png (pose "au clavier", fond transparent) EST la silhouette
+// en forme de cœur du bouton — pas besoin de clip-path/cercle, l'afficher
 // tel quel à cette échelle donne directement une "bulle" en forme de cœur.
-const CHATBOT_HEART_SCALE = Math.min(CHATBOT_BTN_SIZE / MASCOT_W, CHATBOT_BTN_SIZE / MASCOT_H);
-const CHATBOT_HEART_W = MASCOT_W * CHATBOT_HEART_SCALE;
-const CHATBOT_HEART_H = MASCOT_H * CHATBOT_HEART_SCALE;
+// Dimensions natives propres à cette image (différentes de MASCOT_W/H
+// ci-dessus, qui décrivent la pose "salut" utilisée par MascotStage).
+const CHATBOT_BTN_IMG_W = 232, CHATBOT_BTN_IMG_H = 206;
+const CHATBOT_HEART_SCALE = Math.min(CHATBOT_BTN_SIZE / CHATBOT_BTN_IMG_W, CHATBOT_BTN_SIZE / CHATBOT_BTN_IMG_H);
+const CHATBOT_HEART_W = CHATBOT_BTN_IMG_W * CHATBOT_HEART_SCALE;
+const CHATBOT_HEART_H = CHATBOT_BTN_IMG_H * CHATBOT_HEART_SCALE;
 
 function clampChatbotPos(top, left) {
   const maxTop = Math.max(CHATBOT_MARGIN, window.innerHeight - CHATBOT_BTN_SIZE - CHATBOT_MARGIN);
@@ -16512,7 +16515,7 @@ function ChatbotBubble() {
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
         style={{position:"fixed",top:pos.top,left:pos.left,width:CHATBOT_BTN_SIZE,height:CHATBOT_BTN_SIZE,background:"transparent",border:"none",cursor:"grab",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none",userSelect:"none",WebkitUserSelect:"none"}}>
-        <img src="/mascot/body.png" alt="" style={{width:CHATBOT_HEART_W,height:CHATBOT_HEART_H,filter:"drop-shadow(0 4px 10px rgba(0,0,0,.3))",pointerEvents:"none"}} />
+        <img src="/mascot/body-laptop.png" alt="" style={{width:CHATBOT_HEART_W,height:CHATBOT_HEART_H,filter:"drop-shadow(0 4px 10px rgba(0,0,0,.3))",pointerEvents:"none"}} />
         {open && (
           <div style={{position:"absolute",top:-2,right:-2,width:20,height:20,borderRadius:"50%",background:C.txt,color:"#fff",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 6px rgba(0,0,0,.3)"}}>✕</div>
         )}
