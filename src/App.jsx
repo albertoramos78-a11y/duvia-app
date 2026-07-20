@@ -5304,9 +5304,15 @@ export default function App() {
             <span>☰</span>
             {!isObs && !isChild && unread>0 && <span style={{position:"absolute",top:-4,right:-4,background:C.red,borderRadius:"50%",width:16,height:16,fontSize:9,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,color:"#fff",border:`2px solid ${C.card}`}}>{unread}</span>}
           </button>
-          {/* ── Bulle d'onboarding première connexion ── */}
+          {/* ── Bulle d'onboarding première connexion ──
+               🔧 position:"absolute" ancrée au wrapper du bouton ☰ (position:
+               "relative" juste au-dessus), pas "fixed" avec un offset codé en
+               dur — un "top" fixe par rapport au viewport se désynchronisait
+               du bouton dès que la mise en page au-dessus bougeait (barre de
+               statut mobile, bandeaux, etc.), laissant la bulle/flèche
+               décalées par rapport au bouton qu'elle est censée désigner. */}
           {showOnboardingTip && (
-            <div onClick={()=>setShowOnboardingTip(false)} style={{position:"fixed",top:66,right:14,zIndex:400,cursor:"pointer",animation:"fadeInDown .35s ease"}}>
+            <div onClick={()=>setShowOnboardingTip(false)} style={{position:"absolute",top:44,right:0,zIndex:400,cursor:"pointer",animation:"fadeInDown .35s ease"}}>
               {/* flèche pointant vers le bouton ☰ */}
               <div style={{position:"absolute",top:-7,right:18,width:0,height:0,borderLeft:"8px solid transparent",borderRight:"8px solid transparent",borderBottom:`8px solid ${C.vio}`}} />
               <div style={{background:C.vio,color:"#fff",borderRadius:14,padding:"12px 16px",maxWidth:230,boxShadow:"0 8px 28px rgba(0,0,0,.22)",position:"relative"}}>
