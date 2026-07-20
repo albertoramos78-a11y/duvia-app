@@ -663,6 +663,7 @@ const fr = {
     pensionHistoryTitle: "Historique",
     pensionNextDuePreview: "Prochaine échéance",
     pensionNoConfig: "Aucune pension configurée pour l'instant.",
+    pensionEditAmountBtn: "Modifier le montant",
     parentInviteEmailSubject:"Rejoins notre famille sur Duvia 👨‍👩‍👧",
     parentInviteEmailBody:"Bonjour 👋\nTu es invité(e) à rejoindre une famille sur Duvia.\nCrée ton compte ici :\n{link}",
     childInviteEmailSubject:"Rejoins notre famille sur Duvia 👨‍👩‍👧",

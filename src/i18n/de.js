@@ -571,6 +571,7 @@ const de = {
     pensionHistoryTitle: "Verlauf",
     pensionNextDuePreview: "Nächste Fälligkeit",
     pensionNoConfig: "Noch kein Unterhalt eingerichtet.",
+    pensionEditAmountBtn: "Betrag ändern",
     parentInviteEmailSubject:"Tritt unserer Familie auf Duvia bei 👨‍👩‍👧",
     parentInviteEmailBody:"Hallo 👋\nDu bist eingeladen, einer Familie auf Duvia beizutreten.\nErstelle hier dein Konto:\n{link}",
     childInviteEmailSubject:"Tritt unserer Familie auf Duvia bei 👨‍👩‍👧",

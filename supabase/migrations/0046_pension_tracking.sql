@@ -131,9 +131,14 @@ begin
   if p_amount <= 0 then
     raise exception 'invalid_amount';
   end if;
+  -- Only blocks a second SIMULTANEOUS proposal. An existing 'active' config is
+  -- deliberately allowed here: proposing a new one against it is exactly how
+  -- "changer le montant" works (see design doc's "Approche retenue" section) —
+  -- the old 'active' row is only marked 'superseded' once this new one is
+  -- confirmed, in confirm_pension_config below, never before.
   if exists (
     select 1 from public.pension_configs
-    where family_id = p_family_id and status in ('proposed','active')
+    where family_id = p_family_id and status = 'proposed'
   ) then
     raise exception 'pension_already_configured';
   end if;

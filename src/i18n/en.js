@@ -612,6 +612,7 @@ const en = {
     pensionHistoryTitle: "History",
     pensionNextDuePreview: "Next due date",
     pensionNoConfig: "No child support set up yet.",
+    pensionEditAmountBtn: "Change the amount",
     parentInviteEmailSubject:"Join our family on Duvia 👨‍👩‍👧",
     parentInviteEmailBody:"Hello 👋\nYou're invited to join a family on Duvia.\nCreate your account here:\n{link}",
     childInviteEmailSubject:"Join our family on Duvia 👨‍👩‍👧",

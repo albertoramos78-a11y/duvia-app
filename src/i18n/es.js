@@ -571,6 +571,7 @@ const es = {
     pensionHistoryTitle: "Historial",
     pensionNextDuePreview: "Próximo vencimiento",
     pensionNoConfig: "Todavía no hay ninguna pensión configurada.",
+    pensionEditAmountBtn: "Modificar el importe",
     parentInviteEmailSubject:"Únete a nuestra familia en Duvia 👨‍👩‍👧",
     parentInviteEmailBody:"Hola 👋\nEstás invitado/a a unirte a una familia en Duvia.\nCrea tu cuenta aquí:\n{link}",
     childInviteEmailSubject:"Únete a nuestra familia en Duvia 👨‍👩‍👧",

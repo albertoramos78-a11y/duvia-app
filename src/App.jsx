@@ -13363,6 +13363,7 @@ function PensionSection() {
   const activeConfig = pensionConfigs.find((c) => c.status === "active");
   const proposedConfig = pensionConfigs.find((c) => c.status === "proposed");
   const iAmProposer = proposedConfig && myUid === proposedConfig.createdByUserId;
+  const isPartyToProposal = proposedConfig && (myUid === proposedConfig.fromUserId || myUid === proposedConfig.toUserId);
   const currentPeriod = new Date().toISOString().slice(0, 7);
   const currentPayment = activeConfig ? pensionPayments.find((p) => p.configId === activeConfig.id && p.period === currentPeriod) : null;
   const pastPayments = activeConfig ? pensionPayments.filter((p) => p.configId === activeConfig.id && p.period !== currentPeriod) : [];
@@ -13480,7 +13481,7 @@ function PensionSection() {
         </div>
       )}
 
-      {proposedConfig && !iAmProposer && (
+      {proposedConfig && isPartyToProposal && !iAmProposer && (
         <div style={{padding:"10px 12px",background:`${C.vio}10`,border:`1.5px solid ${C.vio}44`,borderRadius:10}}>
           <div style={{fontSize:12,color:C.txt,marginBottom:8}}>
             {(t.pensionProposedBanner || "{name} propose une pension de {amount}{currency}/mois, versée le {day} de chaque mois, à partir du {date}.")
@@ -13503,8 +13504,23 @@ function PensionSection() {
 
       {activeConfig && (
         <>
-          <div style={{fontSize:11,color:C.mut,marginBottom:8}}>
-            {(cfg.parents[activeConfig.fromParent]?.name || "P1")} → {(cfg.parents[activeConfig.toParent]?.name || "P2")} · {activeConfig.amount}{currency}/mois · {t.pensionDayOfMonthShort || "le"} {activeConfig.dayOfMonth}
+          <div style={{fontSize:11,color:C.mut,marginBottom:8,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            <span>{(cfg.parents[activeConfig.fromParent]?.name || "P1")} → {(cfg.parents[activeConfig.toParent]?.name || "P2")} · {activeConfig.amount}{currency}/mois · {t.pensionDayOfMonthShort || "le"} {activeConfig.dayOfMonth}</span>
+            {!proposedConfig && !showForm && (
+              <button
+                onClick={() => {
+                  setForm({
+                    payerIdx: activeConfig.fromParent,
+                    amount: String(activeConfig.amount),
+                    dayOfMonth: String(activeConfig.dayOfMonth),
+                    startDate: toStr(new Date()),
+                  });
+                  setShowForm(true);
+                }}
+                style={{padding:"4px 10px",background:"transparent",color:C.vio,border:`1px solid ${C.vio}66`,borderRadius:8,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                {t.pensionEditAmountBtn || "Modifier le montant"}
+              </button>
+            )}
           </div>
 
           {currentPayment && (
