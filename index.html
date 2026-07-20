@@ -7,15 +7,17 @@
     <link rel="manifest" href="/manifest.json" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Duvia" />
-    <!-- 🔧 Pas de "viewport-fit=cover" : ça demande au navigateur de dessiner
-         le contenu en plein écran SOUS la barre de statut/l'encoche, à charge
-         de l'appli de recréer l'espace via env(safe-area-inset-*) — ce qui a
-         été tenté (App.jsx, .duvia-app-root) mais s'est avéré insuffisant sur
-         Android (env(safe-area-inset-top) n'y reflète pas la barre de statut
-         de la même façon que sur iOS). Sans "cover", l'OS réserve lui-même
-         cet espace des deux côtés (iOS et Android), ce qui règle le
-         chevauchement sans dépendre de env(). -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 🔧 2026-07-20 : viewport-fit=cover retiré puis reposé le même jour.
+         Le retirer devait laisser l'OS réserver lui-même l'espace de la barre
+         de statut — en pratique, sur le téléphone Android de test, ça n'a
+         PAS réglé le chevauchement en haut et a en plus fait apparaître une
+         zone noire en bas (probablement le WebView qui ne redimensionne pas
+         correctement sans "cover" sur cet appareil). Remis en l'état pour ne
+         pas empirer les choses pendant qu'on cherche une vraie piste — voir
+         .duvia-app-root dans App.jsx pour le padding env(safe-area-inset-*)
+         qui l'accompagne (lui aussi insuffisant seul, mais laissé en place,
+         sans effet néfaste connu). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#7B7CF5" />
     <title>Duvia — Two homes. One family.</title>
   </head>
