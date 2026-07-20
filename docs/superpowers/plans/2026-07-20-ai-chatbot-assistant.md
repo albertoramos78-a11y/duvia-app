@@ -449,6 +449,14 @@ function ChatbotBubble() {
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
 
+  // 🔧 ChatbotBubble reste monté en permanence (jamais démonté) — sans ça,
+  // basculer d'une famille à l'autre (cas multi-famille observateur) laisserait
+  // l'historique de conversation de l'ANCIENNE famille affiché après le
+  // changement, alors que le prochain message interrogerait la NOUVELLE
+  // famille (family_id envoyé à chaque appel). Réinitialise la conversation à
+  // chaque changement de famille active.
+  useEffect(() => { setMessages([]); setErr(""); }, [familySync?.familyId]);
+
   if (!sub?.aiEnabled || !familySync?.familyId) return null;
 
   async function send() {
@@ -684,3 +692,4 @@ Also remind the user of the manual/live verification checklist from the spec's "
 - **Type consistency**: `history` shape (`Array<{role:"user"|"assistant", content:string}>`) is identical across Task 2's Edge Function contract (both request `history` and response `history`) and Task 3's `ChatbotBubble` (`messages` state maps to exactly this shape before sending, and the response's `history`/`answer` are consumed the same way). `family_id` is sent by the client (Task 3, `familySync.familyId`) and read the same way server-side (Task 2, `payload.family_id`).
 - **Formula fidelity check**: `computeExpenseBalance` in Task 2 was transcribed field-by-field from the live `ExpensesTab` code (`App.jsx:13744-13760`) during spec/plan research, not reconstructed from memory — same variable roles (`totals`/`owed`/`reimSent`/`reimReceived`/`balance`), same split-percentage convention (`split_pct` always expresses parent-index-1's share, regardless of who paid).
 - **Weather privacy check**: `toolGetWeather` was deliberately modeled on the ALREADY-SHIPPED `get-family-weather` function's exact security pattern (service-role read of `parent_locations`, membership verified via the caller's own JWT-scoped client first, only derived forecast fields ever returned) rather than a naive "just use the JWT-scoped client for everything" approach — `parent_locations` has no family-wide RLS policy by deliberate design (migration 0035), confirmed by reading that migration directly, not assumed.
+- **Multi-family reset check (found during pre-flight review, fixed in the plan before dispatch)**: `ChatbotBubble` is mounted unconditionally at the app root and never unmounts, so its `messages` state would otherwise survive a family switch (the observer multi-family scenario already documented elsewhere in this project) — the previously-active family's figures would stay visible on screen while the next message actually queries the newly-active family (`family_id` is read fresh from `familySync.familyId` on every send). Added a `useEffect` keyed on `familySync?.familyId` that clears `messages`/`err` on every family change, declared before the component's early-return gate (respects this project's established "hooks before any gate" rule).
