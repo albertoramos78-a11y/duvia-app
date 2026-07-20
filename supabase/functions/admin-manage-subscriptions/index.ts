@@ -77,10 +77,16 @@ serve(async (req) => {
   if (action === "set_user_plan") {
     const userId = String(payload?.user_id || "");
     const plan = String(payload?.plan || "");
-    if (!userId || !["freemium", "beta", "trial_premium", "premium"].includes(plan)) {
+    if (!userId || !["freemium", "beta", "trial_premium", "premium", "premium_ai"].includes(plan)) {
       return jsonResponse({ error: "invalid_params" }, 400);
     }
-    let update: Record<string, unknown> = { plan };
+    // 🔧 ai_enabled est désormais dérivé du statut lui-même, pas d'un
+    // interrupteur séparé (voir set_ai_enabled, retiré) : un seul système de
+    // statut clair, comme demandé. Choisir "Premium+IA" active l'IA ; choisir
+    // n'importe quel autre statut la désactive explicitement (sinon un compte
+    // déjà passé par premium_ai garderait l'IA active après un changement de
+    // plan, ce qui recréerait deux réglages qui se chevauchent).
+    let update: Record<string, unknown> = { plan, ai_enabled: plan === "premium_ai" };
     if (plan === "beta") {
       const betaEnd = payload?.beta_end;
       if (!betaEnd) return jsonResponse({ error: "missing_beta_end" }, 400);
@@ -293,15 +299,6 @@ serve(async (req) => {
     } catch (e) {
       return jsonResponse({ error: e instanceof Error ? e.message : "cleanup_failed" }, 500);
     }
-  }
-
-  if (action === "set_ai_enabled") {
-    const userId = String(payload?.user_id || "");
-    const enabled = !!payload?.enabled;
-    if (!userId) return jsonResponse({ error: "missing_user_id" }, 400);
-    const { error } = await admin.from("subscriptions").upsert({ user_id: userId, ai_enabled: enabled }, { onConflict: "user_id" });
-    if (error) return jsonResponse({ error: error.message }, 500);
-    return jsonResponse({ ok: true });
   }
 
   return jsonResponse({ error: "unknown_action" }, 400);
