@@ -59,10 +59,13 @@ Deno.serve(async (req: Request) => {
         tag: "pension-reminder",
         url: "/",
       });
-      await supabase
+      const { error: payerUpdateErr } = await supabase
         .from("pension_payments")
         .update({ payer_reminder_sent_at: new Date().toISOString() })
         .eq("id", payment.id);
+      if (payerUpdateErr) {
+        console.error("payer_reminder_sent_at update error:", payerUpdateErr);
+      }
       reminded++;
     }
   }
@@ -87,10 +90,13 @@ Deno.serve(async (req: Request) => {
         tag: "pension-overdue",
         url: "/",
       });
-      await supabase
+      const { error: overdueUpdateErr } = await supabase
         .from("pension_payments")
         .update({ overdue_alert_sent_at: new Date().toISOString() })
         .eq("id", payment.id);
+      if (overdueUpdateErr) {
+        console.error("overdue_alert_sent_at update error:", overdueUpdateErr);
+      }
       alerted++;
     }
   }
