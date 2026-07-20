@@ -16391,6 +16391,29 @@ function MascotStage({ scale = 1 }) {
   );
 }
 
+// Mise en forme légère des réponses du chatbot : **gras** (même convention
+// que renderLegalInline) + lignes commençant par "## " (titres façon
+// markdown) affichées soulignées, préfixe retiré — plutôt qu'affichés tels
+// quels, illisibles pour l'utilisateur.
+function renderChatbotMarkdown(text) {
+  const lines = text.split("\n");
+  return lines.map((line, li) => {
+    const heading = line.match(/^##\s+(.*)$/);
+    const content = heading ? heading[1] : line;
+    const boldParts = content.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+      part.startsWith("**") && part.endsWith("**")
+        ? <strong key={i}>{part.slice(2, -2)}</strong>
+        : <Fragment key={i}>{part}</Fragment>
+    );
+    return (
+      <Fragment key={li}>
+        {li > 0 && "\n"}
+        {heading ? <span style={{textDecoration:"underline"}}>{boldParts}</span> : boldParts}
+      </Fragment>
+    );
+  });
+}
+
 function ChatbotBubble() {
   const { C, t, sub, familySync } = useApp();
   const [open, setOpen] = useState(false);
@@ -16534,7 +16557,7 @@ function ChatbotBubble() {
             )}
             {messages.map((m,i)=>(
               <div key={i} style={{alignSelf:m.role==="user"?"flex-end":"flex-start",maxWidth:"85%",padding:"8px 12px",borderRadius:12,fontSize:13,lineHeight:1.4,whiteSpace:"pre-wrap",background:m.role==="user"?C.vio:C.sur,color:m.role==="user"?"#fff":C.txt}}>
-                {renderLegalInline(m.content)}
+                {renderChatbotMarkdown(m.content)}
               </div>
             ))}
             {sending && <div style={{alignSelf:"flex-start",fontSize:12,color:C.mut}}>{t.chatbotThinking||"Réflexion…"}</div>}
