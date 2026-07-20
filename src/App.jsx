@@ -16280,6 +16280,15 @@ const TIER_RANK = {free:0, trial:1, premium:2, premium_ai:3};
 
 const CHATBOT_BTN_SIZE = 56;
 const CHATBOT_MARGIN = 10;
+// Dimensions natives du visuel mascotte (voir MascotStage) — les mêmes
+// ratios servent à cadrer le visage dans le bouton rond ci-dessous.
+const MASCOT_W = 530, MASCOT_H = 416;
+const MASCOT_EYES_CX_RATIO = 0.483, MASCOT_EYES_CY_RATIO = 0.283;
+const CHATBOT_FACE_SCALE = 0.28;
+const CHATBOT_FACE_STAGE_W = MASCOT_W * CHATBOT_FACE_SCALE;
+const CHATBOT_FACE_STAGE_H = MASCOT_H * CHATBOT_FACE_SCALE;
+const CHATBOT_FACE_OFFSET_LEFT = CHATBOT_BTN_SIZE / 2 - MASCOT_W * MASCOT_EYES_CX_RATIO * CHATBOT_FACE_SCALE;
+const CHATBOT_FACE_OFFSET_TOP = CHATBOT_BTN_SIZE / 2 - MASCOT_H * MASCOT_EYES_CY_RATIO * CHATBOT_FACE_SCALE;
 
 function clampChatbotPos(top, left) {
   const maxTop = Math.max(CHATBOT_MARGIN, window.innerHeight - CHATBOT_BTN_SIZE - CHATBOT_MARGIN);
@@ -16288,6 +16297,83 @@ function clampChatbotPos(top, left) {
     top: Math.min(Math.max(top, CHATBOT_MARGIN), maxTop),
     left: Math.min(Math.max(left, CHATBOT_MARGIN), maxLeft),
   };
+}
+
+// Mascotte cœur du chatbot : silhouette à taille native 530×416, réutilisée
+// à deux échelles (visage recadré dans le bouton flottant, illustration
+// complète dans l'état vide de la fenêtre de chat). Les yeux suivent le
+// curseur (repos après 4s d'inactivité), le bras droit salue en boucle.
+function MascotStage({ scale = 1 }) {
+  const stageRef = useRef(null);
+  const [eye, setEye] = useState({ px: 0, py: 0, following: false });
+  const rafRef = useRef(null);
+  const idleRef = useRef(null);
+
+  useEffect(() => {
+    function onMove(e) {
+      if (rafRef.current) return;
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        const el = stageRef.current;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        const cx = r.left + r.width * MASCOT_EYES_CX_RATIO, cy = r.top + r.height * MASCOT_EYES_CY_RATIO;
+        const dx = e.clientX - cx, dy = e.clientY - cy;
+        const d = Math.hypot(dx, dy) || 1, m = Math.min(d, 7 * scale);
+        setEye({ px: (dx / d) * m, py: (dy / d) * m, following: true });
+        clearTimeout(idleRef.current);
+        idleRef.current = setTimeout(() => setEye({ px: 0, py: 0, following: false }), 4000);
+      });
+    }
+    window.addEventListener("mousemove", onMove);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      clearTimeout(idleRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [scale]);
+
+  const lookAnim = eye.following ? "none" : "mascotEyelook 9s ease-in-out infinite";
+  const px = eye.following ? eye.px : 0;
+  const py = eye.following ? eye.py : 0;
+  const W = MASCOT_W * scale, H = MASCOT_H * scale;
+  const EYES = [
+    { left: 163, top: 91, size: 60, pupil: 37, blinkDelay: 0 },
+    { left: 281, top: 92, size: 58, pupil: 36, blinkDelay: 0.05 },
+  ];
+
+  return (
+    <div ref={stageRef} style={{position:"relative",width:W,height:H,transformOrigin:"50% 100%",animation:"mascotBreathe 3.4s ease-in-out infinite"}}>
+      <img src="/mascot/body.png" alt="" style={{position:"absolute",left:0,top:-1*scale,width:W,height:H}} />
+      <img src="/mascot/hand-left.png" alt="" style={{position:"absolute",left:10*scale,top:158*scale,width:130*scale,height:145*scale}} />
+      <img src="/mascot/foot-left.png" alt="" style={{position:"absolute",left:148*scale,top:349*scale,width:102*scale,height:66*scale}} />
+      <img src="/mascot/foot-right.png" alt="" style={{position:"absolute",left:260*scale,top:349*scale,width:104*scale,height:66*scale}} />
+      <img src="/mascot/hand-right-wave.png" alt="" style={{position:"absolute",left:396*scale,top:20*scale,width:134*scale,height:180*scale,transformOrigin:`${14*scale}px ${165*scale}px`,animation:"mascotWaveR 5s ease-in-out infinite"}} />
+      <div style={{position:"absolute",left:474*scale,top:26*scale,width:56*scale,height:56*scale,animation:"mascotWaveLines 5s ease-in-out infinite",transformOrigin:"0% 100%"}}>
+        <div style={{position:"absolute",left:6*scale,top:14*scale,width:30*scale,height:30*scale,border:`${Math.max(1,5*scale)}px solid transparent`,borderTopColor:"#9f8df2",borderRadius:"50%",transform:"rotate(38deg)"}} />
+        <div style={{position:"absolute",left:18*scale,top:4*scale,width:38*scale,height:38*scale,border:`${Math.max(1,5*scale)}px solid transparent`,borderTopColor:"#b7a9f6",borderRadius:"50%",transform:"rotate(38deg)"}} />
+      </div>
+      {EYES.map((eCfg,i)=>(
+        <div key={i} style={{position:"absolute",left:eCfg.left*scale,top:eCfg.top*scale,width:eCfg.size*scale,height:eCfg.size*scale,borderRadius:"50%",background:"#fff"}}>
+          <div style={{position:"absolute",inset:7*scale,borderRadius:"50%",background:"#fff"}} />
+          <div style={{position:"absolute",inset:7*scale,display:"flex",alignItems:"center",justifyContent:"center",animation:lookAnim,transform:`translate(${px}px,${py}px)`}}>
+            <div style={{position:"relative",width:eCfg.pupil*scale,height:eCfg.pupil*scale,borderRadius:"50%",background:"radial-gradient(circle at 40% 35%,#1c3a80,#13235f 70%)"}}>
+              <div style={{position:"absolute",left:7*scale,top:6*scale,width:11*scale,height:11*scale,borderRadius:"50%",background:"#fff"}} />
+              <div style={{position:"absolute",right:8*scale,bottom:8*scale,width:5*scale,height:5*scale,borderRadius:"50%",background:"rgba(255,255,255,.85)"}} />
+            </div>
+          </div>
+          <div style={{position:"absolute",inset:5*scale,borderRadius:"50%",background:"#fdfdfe",transform:"scaleY(0)",transformOrigin:"50% 0%",animation:`mascotBlink 4.4s ease-in-out infinite ${eCfg.blinkDelay}s`}} />
+        </div>
+      ))}
+      <style>{`
+        @keyframes mascotBreathe{0%,100%{transform:scaleY(1)}50%{transform:scaleY(1.018) scaleX(0.997)}}
+        @keyframes mascotWaveR{0%{transform:rotate(0deg)}8%{transform:rotate(-18deg)}16%{transform:rotate(-2deg)}24%{transform:rotate(-16deg)}32%,100%{transform:rotate(0deg)}}
+        @keyframes mascotWaveLines{0%,40%,100%{opacity:0;transform:scale(.7)}8%,30%{opacity:1;transform:scale(1)}}
+        @keyframes mascotBlink{0%,92%,100%{transform:scaleY(0)}95%,97%{transform:scaleY(1)}}
+        @keyframes mascotEyelook{0%,18%,46%,74%,100%{transform:translate(0,0)}24%,40%{transform:translate(-6px,2px)}52%,68%{transform:translate(6px,-1px)}}
+      `}</style>
+    </div>
+  );
 }
 
 function ChatbotBubble() {
@@ -16413,8 +16499,12 @@ function ChatbotBubble() {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
-        style={{position:"fixed",top:pos.top,left:pos.left,width:CHATBOT_BTN_SIZE,height:CHATBOT_BTN_SIZE,borderRadius:"50%",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",fontSize:24,cursor:"grab",boxShadow:"0 4px 16px rgba(0,0,0,.25)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none",userSelect:"none",WebkitUserSelect:"none"}}>
-        {open ? "✕" : "🤖"}
+        style={{position:"fixed",top:pos.top,left:pos.left,width:CHATBOT_BTN_SIZE,height:CHATBOT_BTN_SIZE,borderRadius:"50%",background:open?`linear-gradient(135deg,${C.vio},${C.blu})`:"#fff",color:"#fff",border:"none",fontSize:24,cursor:"grab",boxShadow:"0 4px 16px rgba(0,0,0,.25)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none",userSelect:"none",WebkitUserSelect:"none",overflow:"hidden"}}>
+        {open ? "✕" : (
+          <div style={{position:"absolute",left:CHATBOT_FACE_OFFSET_LEFT,top:CHATBOT_FACE_OFFSET_TOP,width:CHATBOT_FACE_STAGE_W,height:CHATBOT_FACE_STAGE_H,pointerEvents:"none"}}>
+            <MascotStage scale={CHATBOT_FACE_SCALE} />
+          </div>
+        )}
       </button>
       {open && (
         <div style={{position:"fixed",top:winTop,left:winLeft,width:winW,maxWidth:"calc(100vw - 20px)",height:winH,maxHeight:"calc(100vh - 20px)",background:C.card,borderRadius:16,boxShadow:"0 8px 32px rgba(0,0,0,.3)",display:"flex",flexDirection:"column",zIndex:900,overflow:"hidden"}}>
@@ -16422,7 +16512,12 @@ function ChatbotBubble() {
             🤖 {t.chatbotTitle||"Assistant Duvia"}
           </div>
           <div style={{flex:1,overflowY:"auto",padding:12,display:"flex",flexDirection:"column",gap:8}}>
-            {messages.length===0 && <div style={{fontSize:12,color:C.mut,textAlign:"center",marginTop:20}}>{t.chatbotEmptyState||"Pose-moi une question sur ta famille ou sur l'utilisation de Duvia."}</div>}
+            {messages.length===0 && (
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,marginTop:4}}>
+                <MascotStage scale={0.34} />
+                <div style={{fontSize:12,color:C.mut,textAlign:"center",padding:"0 8px"}}>{t.chatbotEmptyState||"Pose-moi une question sur ta famille ou sur l'utilisation de Duvia."}</div>
+              </div>
+            )}
             {messages.map((m,i)=>(
               <div key={i} style={{alignSelf:m.role==="user"?"flex-end":"flex-start",maxWidth:"85%",padding:"8px 12px",borderRadius:12,fontSize:13,lineHeight:1.4,whiteSpace:"pre-wrap",background:m.role==="user"?C.vio:C.sur,color:m.role==="user"?"#fff":C.txt}}>
                 {m.content}
