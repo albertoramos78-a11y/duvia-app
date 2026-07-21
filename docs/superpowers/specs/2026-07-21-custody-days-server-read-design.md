@@ -16,11 +16,11 @@ En creusant, il existe déjà 5 tables dédiées à la garde (`custody_rules`, `
 - Schéma réel des 5 tables (aucune n'existe dans une migration de ce repo — créées uniquement via le dashboard Supabase, confirmé par `information_schema.columns`, voir conversation) :
   - `custody_rules(id, family_id, child_id, type, start_month, start_year, week_alt_even_idx, exclusive_main_idx, exclusive_we_idx, exclusive_parity, confirmed, created_at, updated_at)` — équivalent de `cfg.custody`/`cfg.custodyPerChild[childId]` (hors le tableau `pattern`).
   - `custody_pattern_days(id, rule_id, day_index, parent_idx, time_type, start_time, end_time, location)` — équivalent du tableau `pattern` pour le motif `custom`.
-  - `custody_overrides(id, family_id, child_id, override_date, parent_idx, obs_id, obs_name, time_type, source, holiday_name, start_time, end_time, location, note, created_by, created_at)` — couvre à la fois les overrides manuels (`source='manual'`) ET, à confirmer pendant le plan, les assignations de vacances scolaires (`source` + `holiday_name` suggèrent que oui) — plus simple/unifié que la structure JSON (`cfg.overrides` + `cfg.specialDates.schoolHolDetails` séparés).
+  - `custody_overrides(id, family_id, child_id, override_date, parent_idx, obs_id, obs_name, time_type, source, holiday_name, start_time, end_time, location, note, created_by, created_at)` — **confirmé** (audit de `src/services/supabase/custodyService.ts`) : ne stocke QUE les overrides manuels — `source: "manual"` est codé en dur dans les trois fonctions d'écriture (`upsertCustodyOverride`, `clearAllManualOverrides`, `deleteCustodyOverride`). Les assignations de vacances scolaires (`cfg.specialDates.schoolHolDetails`/`schoolHolDetailsPerChild`) ne sont PAS mirrorées dans cette table — elles restent lisibles uniquement depuis `families.data`, comme les champs listés ci-dessous. `holiday_name` existe en colonne mais n'est actuellement jamais écrit par le code client.
   - `custody_special_dates(id, family_id, child_id, mother_day_enabled, father_day_enabled, parent_births jsonb, child_births jsonb, even_parent_idx, odd_parent_idx, updated_at)`.
-  - `custody_custom_dates(id, family_id, label, day, month, year, yearly, parent_id, created_at)`.
-- Ce qui **manque** dans ces 5 tables et reste à lire depuis `families.data` (aucune migration nécessaire, déjà accessible) : dates de naissance et genre des parents/enfants, pays de la famille (`cfg.country`), et le réglage `cfg.sameGuardAll`. L'outil existant `get_family_config` (`ai-chatbot/index.ts`) lit déjà `families.data` et en extrait une partie (enfants avec dates de naissance) — à étendre légèrement en interne (pas nécessairement dans sa réponse publique) pour ce nouvel usage.
-- RLS des 5 tables de garde : inconnue à ce jour (pas de migration = pas de policy visible dans le repo). `custodyService.ts` écrit avec le client standard (clé anon + JWT utilisateur, pas service-role), ce qui implique une policy INSERT/UPDATE au moins — la policy SELECT doit être confirmée pendant le plan (requête `information_schema` ou test direct). Si SELECT manque pour les autres membres de la famille, il faudra soit l'ajouter (migration RLS, cohérent avec le reste du projet), soit lire ces tables avec le client service-role comme exception documentée (même modèle que `get_weather`/`parent_locations`) — décision à trancher avec les faits en main pendant le plan, pas ici par supposition.
+  - `custody_custom_dates(id, family_id, label, day, month, year, yearly, parent_id, created_at)` — non utilisée par `resolveGuard`/la résolution de garde (dates personnalisées à part, hors périmètre de cet outil).
+- Ce qui **manque** dans ces 5 tables et reste à lire depuis `families.data` (aucune migration nécessaire, déjà accessible) : dates de naissance et genre des parents/enfants, pays de la famille (`cfg.country`), le réglage `cfg.sameGuardAll`, et — découvert ci-dessus — le détail des vacances scolaires (`schoolHolDetails`/`schoolHolDetailsPerChild`). La lecture hybride décrite plus bas doit donc combiner CES tables avec CETTE tranche précise du blob JSON, pas seulement les identités/dates de naissance comme envisagé initialement.
+- RLS des 5 tables de garde : **confirmée** (requête directe sur `pg_policies`). Chaque table a une policy `_select` (SELECT, tout membre actif de la famille — parent, observateur, enfant) et une policy `_write` (ALL, réservée aux parents actifs). Le JWT-scopé de l'appelant suffit donc pour l'outil du chatbot — **aucune exception service-role nécessaire ici**, contrairement à `get_weather`/`parent_locations`. Ces policies bloquent en revanche un JWT normal de lire une AUTRE famille, ce qui est exactement pourquoi l'action admin de vérification (qui doit lire toutes les familles) utilise le client service-role.
 
 ## Approche retenue
 
@@ -67,11 +67,10 @@ Nouvelle action `verify_custody_parity` sur l'Edge Function existante `admin-man
 
 ## Déploiement (manuel, hors repo)
 
-1. Confirmer les policies RLS réelles des 5 tables de garde (requête `information_schema` ou test direct) avant d'écrire le plan — détermine si une migration RLS est nécessaire.
-2. Mettre à jour l'Edge Function `ai-chatbot` (nouvel outil + prompt système).
-3. Mettre à jour l'Edge Function `admin-manage-subscriptions` (nouvelle action `verify_custody_parity`).
-4. Nouvelle carte dans `AdminTab` côté client.
-5. Aucune migration de données requise (lecture seule des tables existantes) — sauf si l'étape 1 révèle un manque de policy RLS SELECT.
+1. Mettre à jour l'Edge Function `ai-chatbot` (nouvel outil + prompt système).
+2. Mettre à jour l'Edge Function `admin-manage-subscriptions` (nouvelle action `verify_custody_parity`).
+3. Nouvelle carte dans `AdminTab` côté client.
+4. Aucune migration de données ni RLS requise (RLS déjà en place, confirmée ci-dessus ; lecture seule des tables existantes).
 
 ## Test / vérification
 
