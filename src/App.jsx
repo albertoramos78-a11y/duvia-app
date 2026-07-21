@@ -13466,16 +13466,30 @@ function PensionSection() {
 
       {showForm && (
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          <label style={{fontSize:11,color:C.mut,fontWeight:700}}>{t.pensionFormPayerLabel || "Qui paie la pension ?"}</label>
-          <select value={form.payerIdx} onChange={(e) => setForm((f) => ({...f, payerIdx: e.target.value}))} style={{height:38,borderRadius:8,border:`1px solid ${C.bor}`,padding:"0 8px"}}>
-            {cfg.parents.map((p, i) => <option key={i} value={i}>{p.name || `P${i+1}`}</option>)}
-          </select>
-          <label style={{fontSize:11,color:C.mut,fontWeight:700}}>{t.pensionFormAmountLabel || "Montant mensuel"}</label>
-          <input type="number" value={form.amount} onChange={(e) => setForm((f) => ({...f, amount: e.target.value}))} style={{height:38,borderRadius:8,border:`1px solid ${C.bor}`,padding:"0 10px"}} />
-          <label style={{fontSize:11,color:C.mut,fontWeight:700}}>{t.pensionFormDayLabel || "Jour d'échéance dans le mois (1-28)"}</label>
-          <input type="number" min={1} max={28} value={form.dayOfMonth} onChange={(e) => setForm((f) => ({...f, dayOfMonth: e.target.value}))} style={{height:38,borderRadius:8,border:`1px solid ${C.bor}`,padding:"0 10px"}} />
-          <label style={{fontSize:11,color:C.mut,fontWeight:700}}>{t.pensionFormStartLabel || "Date de début"}</label>
-          <input type="date" value={form.startDate} onChange={(e) => setForm((f) => ({...f, startDate: e.target.value}))} style={{height:38,borderRadius:8,border:`1px solid ${C.bor}`,padding:"0 10px"}} />
+          <div style={{display:"flex",gap:8}}>
+            <div style={{flex:1,display:"flex",flexDirection:"column",gap:4}}>
+              <label style={{fontSize:11,color:C.mut,fontWeight:700}}>{t.pensionFormPayerLabel || "Qui paie la pension ?"}</label>
+              <select value={form.payerIdx} onChange={(e) => setForm((f) => ({...f, payerIdx: e.target.value}))} style={{height:38,borderRadius:8,border:`1px solid ${C.bor}`,padding:"0 8px"}}>
+                {cfg.parents.map((p, i) => <option key={i} value={i}>{p.name || `P${i+1}`}</option>)}
+              </select>
+            </div>
+            <div style={{flex:1,display:"flex",flexDirection:"column",gap:4}}>
+              <label style={{fontSize:11,color:C.mut,fontWeight:700}}>{t.pensionFormAmountLabel || "Montant mensuel"}</label>
+              <input type="number" value={form.amount} onChange={(e) => setForm((f) => ({...f, amount: e.target.value}))} style={{height:38,borderRadius:8,border:`1px solid ${C.bor}`,padding:"0 10px"}} />
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <div style={{flex:1,display:"flex",flexDirection:"column",gap:4}}>
+              <label style={{fontSize:11,color:C.mut,fontWeight:700}}>{t.pensionFormDayLabel || "Jour d'échéance dans le mois (1-28)"}</label>
+              <select value={form.dayOfMonth} onChange={(e) => setForm((f) => ({...f, dayOfMonth: e.target.value}))} style={{height:38,borderRadius:8,border:`1px solid ${C.bor}`,padding:"0 8px"}}>
+                {Array.from({length:28},(_,i)=>i+1).map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+            <div style={{flex:1,display:"flex",flexDirection:"column",gap:4}}>
+              <label style={{fontSize:11,color:C.mut,fontWeight:700}}>{t.pensionFormStartLabel || "Date de début"}</label>
+              <input type="date" value={form.startDate} onChange={(e) => setForm((f) => ({...f, startDate: e.target.value}))} style={{height:38,borderRadius:8,border:`1px solid ${C.bor}`,padding:"0 10px"}} />
+            </div>
+          </div>
           {form.amount && form.dayOfMonth && Number(form.dayOfMonth) >= 1 && Number(form.dayOfMonth) <= 28 && (
             <div style={{fontSize:11,color:C.mut,fontStyle:"italic"}}>
               {t.pensionNextDuePreview || "Prochaine échéance"} : {nextPensionDueDate(Number(form.dayOfMonth))}
@@ -16919,14 +16933,12 @@ function ChatbotBubble() {
         onPointerCancel={onPointerCancel}
         style={{position:"fixed",top:pos.top,left:pos.left,width:CHATBOT_BTN_SIZE,height:CHATBOT_BTN_SIZE,background:"transparent",border:"none",cursor:"grab",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none",userSelect:"none",WebkitUserSelect:"none"}}>
         <img src="/mascot/body-laptop.png" alt="" style={{width:CHATBOT_HEART_W,height:CHATBOT_HEART_H,filter:"drop-shadow(0 4px 10px rgba(0,0,0,.3))",pointerEvents:"none"}} />
-        {open && (
-          <div style={{position:"absolute",top:-2,right:-2,width:20,height:20,borderRadius:"50%",background:C.txt,color:"#fff",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 6px rgba(0,0,0,.3)"}}>✕</div>
-        )}
       </button>
       {open && (
         <div style={{position:"fixed",top:winTop,left:winLeft,width:winW,maxWidth:"calc(100vw - 20px)",height:winH,maxHeight:"calc(100vh - 20px)",background:C.card,borderRadius:16,boxShadow:"0 8px 32px rgba(0,0,0,.3)",display:"flex",flexDirection:"column",zIndex:900,overflow:"hidden"}}>
-          <div style={{padding:"12px 14px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontWeight:800,fontSize:14}}>
-            🤖 {t.chatbotTitle||"Assistant Duvia"}
+          <div style={{padding:"12px 14px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontWeight:800,fontSize:14,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+            <span>🤖 {t.chatbotTitle||"Assistant Duvia"}</span>
+            <button onClick={()=>setOpen(false)} style={{background:"rgba(255,255,255,.2)",border:"none",color:"#fff",width:24,height:24,borderRadius:"50%",fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
           </div>
           <div style={{padding:"6px 12px 0"}}>
             <div style={{height:4,background:C.bor,borderRadius:2,overflow:"hidden"}}>
@@ -16936,6 +16948,10 @@ function ChatbotBubble() {
               {tokensUsedToday.toLocaleString()} / {tokensLimit.toLocaleString()} {t.chatbotTokensToday||"tokens aujourd'hui"}
             </div>
           </div>
+          <div className="chatbot-doubletap-hint" style={{fontSize:10,color:C.mut,textAlign:"center",padding:"4px 12px 0"}}>
+            💡 {t.chatbotDoubleTapHint||"Double-tape n'importe où sur l'écran pour masquer/réafficher l'assistant."}
+          </div>
+          <style>{`@media (pointer: fine) { .chatbot-doubletap-hint { display: none; } }`}</style>
           <div style={{flex:1,overflowY:"auto",padding:12,display:"flex",flexDirection:"column",gap:8}}>
             {messages.length===0 && (
               <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,marginTop:4}}>

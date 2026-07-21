@@ -467,7 +467,7 @@ const pt = {
     helpAccessApprovalBody:"Cada pedido de acesso é-lhe submetido. Aceita ou rejeita antes que possam ver algo.",
     scheduleTipBody:"Introduza aqui o horário de cada filho/a: disciplinas, salas, horários. Será visível para todos os membros da família, exceto observadores.",
     expSub:"Acompanhamento das despesas partilhadas",
-    expTipBody:"Acompanhe e partilhe as despesas do filho/a. Esta secção é visível apenas para os pais.",
+    expTipBody:"Acompanhe e partilhe as despesas do filho/a, e faça a gestão da pensão de alimentos. Esta secção é visível apenas para os pais.",
     exportPDF:"Exportar para PDF",
     premiumSubscribersOnly:"Reservado a membros Premium",
     contactsTipBody:"Encontre aqui os números úteis da família. Este diretório é visível para todos os membros da família.",
@@ -821,5 +821,6 @@ const pt = {
     chatbotDailyLimitError:"⚠️ Limite diário de perguntas atingido. Tenta novamente amanhã.",
     chatbotTokenLimitError:"⚠️ Limite diário de tokens atingido. Tenta novamente amanhã.",
     chatbotTokensToday:"tokens hoje",
+    chatbotDoubleTapHint:"Toca duas vezes em qualquer lugar do ecrã para ocultar/mostrar o assistente.",
   };
 export default pt;
