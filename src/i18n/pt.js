@@ -557,6 +557,8 @@ const pt = {
     pensionProposedBanner: "{name} propõe uma pensão de {amount}{currency}/mês, paga no dia {day} de cada mês, a partir de {date}.",
     pensionAwaitingOtherParent: "A aguardar confirmação do outro progenitor.",
     pensionConfirmBtn: "Confirmar",
+    pensionCancelBtn: "Cancelar",
+    pensionRefuseBtn: "Recusar",
     pensionCurrentDue: "Vencimento deste mês",
     pensionDayOfMonthShort: "no dia",
     pensionStatusPending: "Pendente",

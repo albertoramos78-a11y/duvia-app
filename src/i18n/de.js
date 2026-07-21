@@ -557,6 +557,8 @@ const de = {
     pensionProposedBanner: "{name} schlägt einen Unterhalt von {amount}{currency}/Monat vor, zahlbar am {day}. jeden Monats, ab dem {date}.",
     pensionAwaitingOtherParent: "Warten auf Bestätigung durch den anderen Elternteil.",
     pensionConfirmBtn: "Bestätigen",
+    pensionCancelBtn: "Abbrechen",
+    pensionRefuseBtn: "Ablehnen",
     pensionCurrentDue: "Fälligkeit diesen Monat",
     pensionDayOfMonthShort: "am",
     pensionStatusPending: "Ausstehend",

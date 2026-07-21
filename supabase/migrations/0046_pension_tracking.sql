@@ -208,7 +208,45 @@ $$;
 revoke all on function public.confirm_pension_config(uuid) from public;
 grant execute on function public.confirm_pension_config(uuid) to authenticated;
 
--- ── 5. RPC : le payeur marque un versement comme payé ───────────────────────
+-- ── 5. RPC : annuler/refuser une configuration proposée (par l'une ou l'autre
+-- partie, tant qu'elle est encore 'proposed') ───────────────────────────────
+-- Sert les deux cas : le proposant qui retire sa propre proposition, ou le
+-- destinataire qui la refuse. Suppression pure de la ligne — une proposition
+-- annulée/refusée n'a jamais pris effet, donc aucune valeur d'historique à
+-- conserver (simplification délibérée, pas un oubli : pas de statut 'rejected').
+
+create or replace function public.cancel_pension_config(p_config_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row public.pension_configs;
+begin
+  if auth.uid() is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select * into v_row from public.pension_configs where id = p_config_id;
+  if v_row.id is null then
+    raise exception 'not_found';
+  end if;
+  if v_row.status <> 'proposed' then
+    raise exception 'not_proposed';
+  end if;
+  if auth.uid() not in (v_row.from_user_id, v_row.to_user_id) then
+    raise exception 'not_a_party_to_this_pension';
+  end if;
+
+  delete from public.pension_configs where id = p_config_id;
+end;
+$$;
+
+revoke all on function public.cancel_pension_config(uuid) from public;
+grant execute on function public.cancel_pension_config(uuid) to authenticated;
+
+-- ── 6. RPC : le payeur marque un versement comme payé ───────────────────────
 
 create or replace function public.mark_pension_payment_paid(p_payment_id uuid)
 returns public.pension_payments
@@ -249,7 +287,7 @@ $$;
 revoke all on function public.mark_pension_payment_paid(uuid) from public;
 grant execute on function public.mark_pension_payment_paid(uuid) to authenticated;
 
--- ── 6. RPC : le bénéficiaire confirme un versement ──────────────────────────
+-- ── 7. RPC : le bénéficiaire confirme un versement ──────────────────────────
 
 create or replace function public.confirm_pension_payment(p_payment_id uuid)
 returns public.pension_payments
@@ -290,7 +328,7 @@ $$;
 revoke all on function public.confirm_pension_payment(uuid) from public;
 grant execute on function public.confirm_pension_payment(uuid) to authenticated;
 
--- ── 7. RPC : le bénéficiaire conteste un versement ──────────────────────────
+-- ── 8. RPC : le bénéficiaire conteste un versement ──────────────────────────
 
 create or replace function public.contest_pension_payment(p_payment_id uuid, p_note text default '')
 returns public.pension_payments
@@ -332,7 +370,7 @@ $$;
 revoke all on function public.contest_pension_payment(uuid, text) from public;
 grant execute on function public.contest_pension_payment(uuid, text) to authenticated;
 
--- ── 8. Fonction de génération mensuelle (appelée par pg_cron, pas par un client) ──
+-- ── 9. Fonction de génération mensuelle (appelée par pg_cron, pas par un client) ──
 
 create extension if not exists pg_net with schema extensions;
 

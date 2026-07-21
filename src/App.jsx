@@ -3310,7 +3310,7 @@ export default function App() {
   } = useExpenses(familySync.familyId);
   const {
     pensionConfigs, pensionPayments, pensionLoading,
-    proposePensionConfig, confirmPensionConfig,
+    proposePensionConfig, confirmPensionConfig, cancelPensionConfig,
     markPensionPaymentPaid, confirmPensionPayment, contestPensionPayment,
   } = usePension(familySync.familyId);
   const { history: historyData, addHistEntry } = useHistory(familySync.familyId);
@@ -5052,7 +5052,7 @@ export default function App() {
     pensionPayments,
     pensionLoading,
     pensionMethods: {
-      proposePensionConfig, confirmPensionConfig,
+      proposePensionConfig, confirmPensionConfig, cancelPensionConfig,
       markPensionPaymentPaid, confirmPensionPayment, contestPensionPayment,
     },
     history: historyData,
@@ -13345,7 +13345,7 @@ function PensionSection() {
   const { C, t, cfg, user, myUid, familySync, currency = "€",
           pensionConfigs, pensionPayments, pensionLoading, pensionMethods } = useApp();
   const {
-    proposePensionConfig, confirmPensionConfig,
+    proposePensionConfig, confirmPensionConfig, cancelPensionConfig,
     markPensionPaymentPaid, confirmPensionPayment, contestPensionPayment,
   } = pensionMethods;
 
@@ -13399,6 +13399,17 @@ function PensionSection() {
     setBusy(true); setErr("");
     try {
       await confirmPensionConfig(proposedConfig.id);
+    } catch (e) {
+      setErr(t.pensionErrGeneric || "Une erreur est survenue.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleCancelConfig() {
+    setBusy(true); setErr("");
+    try {
+      await cancelPensionConfig(proposedConfig.id);
     } catch (e) {
       setErr(t.pensionErrGeneric || "Une erreur est survenue.");
     } finally {
@@ -13494,11 +13505,17 @@ function PensionSection() {
           <button onClick={handleConfirmConfig} disabled={busy} style={{padding:"7px 14px",background:C.grn,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer",marginRight:8}}>
             {t.pensionConfirmBtn || "Confirmer"}
           </button>
+          <button onClick={handleCancelConfig} disabled={busy} style={{padding:"7px 14px",background:C.sur,color:C.red,border:`1px solid ${C.red}44`,borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+            {t.pensionRefuseBtn || "Refuser"}
+          </button>
         </div>
       )}
       {proposedConfig && iAmProposer && (
         <div style={{fontSize:12,color:C.mut,fontStyle:"italic"}}>
-          {t.pensionAwaitingOtherParent || "En attente de confirmation par l'autre parent."}
+          <div>{t.pensionAwaitingOtherParent || "En attente de confirmation par l'autre parent."}</div>
+          <button onClick={handleCancelConfig} disabled={busy} style={{marginTop:8,padding:"7px 14px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer",fontStyle:"normal"}}>
+            {t.pensionCancelBtn || "Annuler"}
+          </button>
         </div>
       )}
 

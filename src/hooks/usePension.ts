@@ -9,6 +9,7 @@ import {
   listPensionPayments,
   proposePensionConfig as proposePensionConfigApi,
   confirmPensionConfig as confirmPensionConfigApi,
+  cancelPensionConfig as cancelPensionConfigApi,
   markPensionPaymentPaid as markPensionPaymentPaidApi,
   confirmPensionPayment as confirmPensionPaymentApi,
   contestPensionPayment as contestPensionPaymentApi,
@@ -106,6 +107,18 @@ export function usePension(familyId: string | null) {
     await refresh();
   }, [refresh]);
 
+  /** Annule/refuse une configuration encore 'proposed' — optimiste (simple
+   * suppression), rollback via refresh() si l'appel serveur échoue. */
+  const cancelPensionConfig = useCallback(async (configId: string) => {
+    setConfigs((prev) => prev.filter((c) => c.id !== configId));
+    try {
+      await cancelPensionConfigApi(configId);
+    } catch (err) {
+      await refresh();
+      throw err;
+    }
+  }, [refresh]);
+
   const markPensionPaymentPaid = useCallback(async (paymentId: string) => {
     setPayments((prev) => prev.map((p) => (p.id === paymentId ? { ...p, status: "marked_paid" as const } : p)));
     try {
@@ -143,6 +156,7 @@ export function usePension(familyId: string | null) {
     pensionError: error,
     proposePensionConfig,
     confirmPensionConfig,
+    cancelPensionConfig,
     markPensionPaymentPaid,
     confirmPensionPayment,
     contestPensionPayment,

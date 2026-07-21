@@ -598,6 +598,8 @@ const en = {
     pensionProposedBanner: "{name} is proposing a child support payment of {amount}{currency}/month, paid on day {day} of each month, starting {date}.",
     pensionAwaitingOtherParent: "Waiting for the other parent to confirm.",
     pensionConfirmBtn: "Confirm",
+    pensionCancelBtn: "Cancel",
+    pensionRefuseBtn: "Decline",
     pensionCurrentDue: "This month's payment",
     pensionDayOfMonthShort: "on the",
     pensionStatusPending: "Pending",

@@ -122,6 +122,11 @@ export async function confirmPensionConfig(configId: string): Promise<PensionCon
   return dbToPensionConfig(data);
 }
 
+export async function cancelPensionConfig(configId: string): Promise<void> {
+  const { error } = await supabase.rpc("cancel_pension_config", { p_config_id: configId });
+  if (error) throw error;
+}
+
 export async function markPensionPaymentPaid(paymentId: string): Promise<PensionPayment> {
   const { data, error } = await supabase.rpc("mark_pension_payment_paid", { p_payment_id: paymentId });
   if (error) throw error;
