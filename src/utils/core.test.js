@@ -16,6 +16,7 @@ import {
   validateVaultFile,
   makeMsgRateLimiter,
   easterDate, pentecostDate, nthWeekday, sameDay, getMothersDayDate,
+  getFathersDayDate, wkNum, resolveGuard,
   containsBadWord, isCleanText,
   upsertMessageById, addReader,
   insertValidatedParent, reconcileOwnParentSlot, placeholderNameFromEmail,
@@ -867,4 +868,144 @@ test("nextPensionDueDate : passage d'année (décembre -> janvier)", () => {
 
 test("nextPensionDueDate : jour 28 en février (mois court) reste valide", () => {
   assert.equal(nextPensionDueDate(28, new Date(2026, 1, 1)), "2026-02-28");
+});
+
+// ── resolveGuard / getFathersDayDate / wkNum — extraits pour la fonctionnalité
+// "jours de garde IA" (2026-07-21). Comble un trou de test préexistant sur une
+// logique déjà critique aujourd'hui (calendrier), indépendamment de cette
+// fonctionnalité — sert aussi de référence pour le portage serveur.
+function makeTestCfg(overrides = {}) {
+  return {
+    parents: [
+      { id: 1, name: "Maman", gender: "F", birthDay: "10", birthMonth: "3" },
+      { id: 2, name: "Papa", gender: "M", birthDay: "20", birthMonth: "7" },
+    ],
+    children: [{ id: 1, name: "Enfant1", birthDay: "5", birthMonth: "9" }],
+    sameGuardAll: true,
+    country: "FR",
+    specialDates: { motherDay: { enabled: false }, fatherDay: { enabled: false }, parentBirths: [], schoolHolDetails: {} },
+    custody: {
+      type: "weekAlt", weekAlt: { evenIdx: 0 }, exclusive: { mainIdx: 0, weIdx: 1, parity: "even" },
+      pattern: [], startMonth: "01", startYear: "2024", confirmed: true,
+    },
+    custodyPerChild: {},
+    overrides: {},
+    ...overrides,
+  };
+}
+
+test("getFathersDayDate DE : Ascension (Pâques + 39 jours)", () => {
+  const d = getFathersDayDate(2026, "DE");
+  const easter = easterDate(2026);
+  const expected = new Date(easter); expected.setDate(easter.getDate() + 39);
+  assert.equal(toStr(d), toStr(expected));
+});
+
+test("getFathersDayDate FR : tombe un dimanche", () => {
+  const d = getFathersDayDate(2026, "FR");
+  assert.equal(d.getDay(), 0);
+});
+
+test("wkNum : constant sur toute une semaine, incrémente la semaine suivante", () => {
+  const d = new Date(2026, 6, 1);
+  const monday = new Date(d);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+  const nextMonday = new Date(monday); nextMonday.setDate(monday.getDate() + 7);
+  assert.equal(wkNum(monday), wkNum(sunday));
+  assert.notEqual(wkNum(monday), wkNum(nextMonday));
+});
+
+test("resolveGuard : override manuel prioritaire sur tout le reste", () => {
+  const cfg = makeTestCfg({ overrides: { "2026-07-21": { parentIdx: 1, timeType: "full", source: "manual" } } });
+  const result = resolveGuard("2026-07-21", cfg, null);
+  assert.deepEqual(result, { parentIdx: 1, timeType: "full", source: "manual" });
+});
+
+test("resolveGuard : Fête des Mères forcée sur la mère", () => {
+  const cfg = makeTestCfg({ specialDates: { motherDay: { enabled: true }, fatherDay: { enabled: false }, parentBirths: [], schoolHolDetails: {} } });
+  const mdDate = getMothersDayDate(2026, "FR");
+  const result = resolveGuard(toStr(mdDate), cfg, null);
+  assert.equal(result.parentIdx, 0);
+  assert.equal(result.source, "motherDay");
+});
+
+test("resolveGuard : Fête des Pères forcée sur le père", () => {
+  const cfg = makeTestCfg({ specialDates: { motherDay: { enabled: false }, fatherDay: { enabled: true }, parentBirths: [], schoolHolDetails: {} } });
+  const fdDate = getFathersDayDate(2026, "FR");
+  const result = resolveGuard(toStr(fdDate), cfg, null);
+  assert.equal(result.parentIdx, 1);
+  assert.equal(result.source, "fatherDay");
+});
+
+test("resolveGuard : anniversaire d'un parent forcé", () => {
+  const cfg = makeTestCfg({ specialDates: { motherDay: { enabled: false }, fatherDay: { enabled: false }, parentBirths: [{ enabled: false }, { enabled: true }], schoolHolDetails: {} } });
+  const result = resolveGuard("2026-07-20", cfg, null); // anniversaire de Papa : 20/7
+  assert.equal(result.parentIdx, 1);
+  assert.equal(result.source, "parentBirthday");
+});
+
+test("resolveGuard : anniversaire d'un enfant — garde paire/impaire selon l'année", () => {
+  const cfg = makeTestCfg({ specialDates: { motherDay: { enabled: false }, fatherDay: { enabled: false }, parentBirths: [], schoolHolDetails: {}, evenParentIdx: 0, oddParentIdx: 1 } });
+  const r2026 = resolveGuard("2026-09-05", cfg, null); // 2026 = année paire
+  assert.equal(r2026.parentIdx, 0);
+  const r2027 = resolveGuard("2027-09-05", cfg, null); // 2027 = année impaire
+  assert.equal(r2027.parentIdx, 1);
+});
+
+test("resolveGuard : vacances scolaires (global)", () => {
+  const cfg = makeTestCfg({ specialDates: { motherDay: { enabled: false }, fatherDay: { enabled: false }, parentBirths: [], schoolHolDetails: { "Été": { "2026-07-21": 1 } } } });
+  const result = resolveGuard("2026-07-21", cfg, null);
+  assert.equal(result.parentIdx, 1);
+  assert.equal(result.source, "schoolHol");
+});
+
+test("resolveGuard : vacances scolaires per-child prioritaires sur le global", () => {
+  const cfg = makeTestCfg({
+    specialDates: {
+      motherDay: { enabled: false }, fatherDay: { enabled: false }, parentBirths: [],
+      schoolHolDetails: { "Été": { "2026-07-21": 1 } },
+      schoolHolDetailsPerChild: { 1: { "Été": { "2026-07-21": 0 } } },
+    },
+  });
+  const result = resolveGuard("2026-07-21", cfg, 1);
+  assert.equal(result.parentIdx, 0);
+});
+
+test("resolveGuard : motif weekAlt — alterne d'une semaine à l'autre", () => {
+  const cfg = makeTestCfg();
+  const r1 = resolveGuard("2026-07-20", cfg, null);
+  const r2 = resolveGuard("2026-07-27", cfg, null);
+  assert.notEqual(r1.parentIdx, r2.parentIdx);
+});
+
+test("resolveGuard : motif exclusive — jour de semaine toujours chez le parent principal", () => {
+  const cfg = makeTestCfg({ custody: { type: "exclusive", weekAlt: { evenIdx: 0 }, exclusive: { mainIdx: 0, weIdx: 1, parity: "even" }, pattern: [], startMonth: "01", startYear: "2024", confirmed: true } });
+  const d = new Date(2026, 6, 1);
+  while (d.getDay() !== 1) d.setDate(d.getDate() + 1); // premier lundi de juillet 2026
+  const result = resolveGuard(toStr(d), cfg, null);
+  assert.equal(result.parentIdx, 0);
+});
+
+test("resolveGuard : motif custom — respecte la grille jour par jour", () => {
+  const cfg = makeTestCfg({
+    custody: {
+      type: "custom", weekAlt: { evenIdx: 0 }, exclusive: { mainIdx: 0, weIdx: 1, parity: "even" },
+      pattern: [
+        { parentIdx: 0, timeType: "full" }, { parentIdx: 0, timeType: "full" }, { parentIdx: 1, timeType: "full" },
+        { parentIdx: 1, timeType: "full" }, { parentIdx: 1, timeType: "full" }, { parentIdx: 0, timeType: "full" }, { parentIdx: 0, timeType: "full" },
+      ],
+      startMonth: "01", startYear: "2024", confirmed: true,
+    },
+  });
+  const start = new Date(2024, 0, 1);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  const result = resolveGuard(toStr(start), cfg, null);
+  assert.equal(result.parentIdx, 0); // jour 0 de la grille
+});
+
+test("resolveGuard : motif non confirmé renvoie null", () => {
+  const cfg = makeTestCfg({ custody: { type: "weekAlt", weekAlt: { evenIdx: 0 }, exclusive: { mainIdx: 0, weIdx: 1, parity: "even" }, pattern: [], startMonth: "01", startYear: "2024", confirmed: false } });
+  const result = resolveGuard("2026-07-21", cfg, null);
+  assert.equal(result, null);
 });

@@ -233,7 +233,16 @@ export function getEventDate(y, rule) {
 }
 
 export const MOTHERS_DAY = {
-  FR: [4, 0, -1], BE: [4, 0, 2], LU: [4, 0, -1], CH: [4, 0, 2], AT: [4, 0, 2],
+  FR: [4, 0, -1],
+  // 🔧 Corrigé 2026-07-21 : cette copie avait BE: [4, 0, 2] (2e dimanche de
+  // mai), mais la version qui tourne réellement en prod (App.jsx:11706) a
+  // BE: [4, 0, -1] (dernier dimanche de mai, comme la France). Cette fonction
+  // sert de référence fidèle à la production (voir resolveCustodyDayFromJson,
+  // 2026-07-21-custody-days-server-read-design.md) — elle doit donc matcher
+  // le comportement RÉEL, pas une correction non déployée. Si la vraie date
+  // légale belge est bien le 2e dimanche de mai, c'est une correction séparée
+  // et délibérée à faire ailleurs, pas ici.
+  BE: [4, 0, -1], LU: [4, 0, -1], CH: [4, 0, 2], AT: [4, 0, 2],
   DE: [4, 0, 2], NL: [4, 0, 2], IT: [4, 0, 2], ES: [4, 0, 1], PT: [4, 0, 1],
   GB: [2, 0, 4], IE: [2, 0, 4], CA: [4, 0, 2], PL: { fixed: [4, 26] },
   CZ: [4, 0, 2], SK: [4, 0, 2], HR: { fixed: [4, 22] },
@@ -707,4 +716,129 @@ export function aggregateHourlyPeriods(hours) {
     result[period] = { code: worst.code, temp: Math.round(avgTemp), rainChance: worst.rainChance };
   }
   return result;
+}
+
+// ── Fête des Pères, numéro de semaine, résolution de garde ───────────────────
+// Extraits de App.jsx (2026-07-21) pour la fonctionnalité "jours de garde IA" :
+// resolveGuard n'avait aucun test jusqu'ici malgré son rôle critique dans le
+// calendrier. Cette version sert aussi de référence testée pour le portage
+// serveur (resolveCustodyDayFromJson / resolveCustodyDayFromTables, voir
+// supabase/functions/ai-chatbot et admin-manage-subscriptions).
+export const FATHERS_DAY = {
+  FR: [5, 0, 3], BE: [5, 0, 2], LU: [5, 0, 3], CH: [5, 0, 3], AT: [5, 0, 2],
+  DE: null, NL: [5, 0, 3], IT: { fixed: [2, 19] }, ES: { fixed: [2, 19] }, PT: { fixed: [2, 19] },
+  GB: [5, 0, 3], IE: [5, 0, 3], CA: [5, 0, 3], PL: { fixed: [5, 23] },
+  CZ: [5, 0, 3], SK: [5, 0, 3], HR: [5, 0, 3],
+};
+
+export function getFathersDayDate(y, country) {
+  if (country === "DE") {
+    // Himmelfahrt = Ascension = Pâques + 39 jours
+    const easter = easterDate(y);
+    const asc = new Date(easter); asc.setDate(easter.getDate() + 39);
+    return asc;
+  }
+  return getEventDate(y, FATHERS_DAY[country]);
+}
+
+export function wkNum(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  return Math.ceil((((d - new Date(Date.UTC(d.getUTCFullYear(), 0, 1))) / 864e5) + 1) / 7);
+}
+
+export function resolveGuard(ds, cfg, childId) {
+  // 1. Sélectionner le bon planning : per-child ou global
+  const usePerChild = !cfg.sameGuardAll && childId && cfg.custodyPerChild?.[childId]?.confirmed;
+  const custody = usePerChild ? cfg.custodyPerChild[childId] : cfg.custody;
+
+  // 2. Manual overrides (global)
+  if (cfg.overrides?.[ds]) return cfg.overrides[ds];
+
+  // 3. Fête des Mères / Fête des Pères — garde forcée si activée
+  const sd = cfg.specialDates || {};
+  const country = cfg.country || "FR";
+  const dsDate = new Date(ds + "T12:00:00");
+  const y = dsDate.getFullYear();
+  if (sd.motherDay?.enabled) {
+    const mdDate = getMothersDayDate(y, country);
+    if (sameDay(mdDate, dsDate)) {
+      const motherIdx = cfg.parents.findIndex(p => p.gender === "F");
+      if (motherIdx !== -1) return { parentIdx: motherIdx, timeType: "full", source: "motherDay" };
+    }
+  }
+  if (sd.fatherDay?.enabled) {
+    const fdDate = getFathersDayDate(y, country);
+    if (sameDay(fdDate, dsDate)) {
+      const fatherIdx = cfg.parents.findIndex(p => p.gender === "M");
+      if (fatherIdx !== -1) return { parentIdx: fatherIdx, timeType: "full", source: "fatherDay" };
+    }
+  }
+
+  // 4. Anniversaires des parents — garde forcée si activée
+  const parentBirths = sd.parentBirths || [];
+  const dsM = dsDate.getMonth() + 1;
+  const dsD = dsDate.getDate();
+  for (let pi = 0; pi < cfg.parents.length; pi++) {
+    const pb = parentBirths[pi];
+    if (!pb?.enabled) continue;
+    const p = cfg.parents[pi];
+    if (!p?.birthDay || !p?.birthMonth) continue;
+    if (+p.birthDay === dsD && +p.birthMonth === dsM) {
+      return { parentIdx: pi, timeType: "full", source: "parentBirthday" };
+    }
+  }
+
+  // 4b. Anniversaires des enfants — garde paire/impaire si configurée
+  const perChildSD = cfg.specialDates?.perChild || {};
+  for (let ci = 0; ci < cfg.children.length; ci++) {
+    const ch = cfg.children[ci];
+    if (!ch?.birthDay || !ch?.birthMonth) continue;
+    if (+ch.birthDay !== dsD || +ch.birthMonth !== dsM) continue;
+    const chSdLocal = childId && perChildSD[ch.id] ? perChildSD[ch.id] : null;
+    const evenIdx = chSdLocal?.evenParentIdx ?? sd.evenParentIdx ?? 0;
+    const oddIdx = chSdLocal?.oddParentIdx ?? sd.oddParentIdx ?? 1;
+    const parentIdx = y % 2 === 0 ? evenIdx : oddIdx;
+    if (parentIdx === -1) return { parentIdx: -1, timeType: "full", source: "childBirthday", allParents: true };
+    return { parentIdx, timeType: "full", source: "childBirthday" };
+  }
+
+  // 5. Vacances scolaires — per-child si disponible, sinon global
+  const holDetails = (childId && cfg.specialDates?.schoolHolDetailsPerChild?.[childId])
+    || cfg.specialDates?.schoolHolDetails || {};
+  const holIdentities = (childId && cfg.specialDates?.schoolHolIdentitiesPerChild?.[childId])
+    || cfg.specialDates?.schoolHolIdentities || {};
+  for (const holName of Object.keys(holDetails)) {
+    const det = holDetails[holName];
+    if (det[ds] !== undefined) {
+      const v = det[ds];
+      if (typeof v === "string" && v.startsWith("obs:"))
+        return { obsId: v.slice(4), timeType: "full", source: "schoolHol" };
+      const idn = holIdentities[holName]?.[ds];
+      return { parentIdx: v, timeType: "full", source: "schoolHol", parentUserId: idn?.u || null, parentName: idn?.n || null };
+    }
+  }
+
+  // 6. Pattern de garde
+  if (!custody?.confirmed) return null;
+  const { type, weekAlt, exclusive, pattern } = custody;
+  const startYear = custody.startYear || cfg.custody.startYear;
+  const startMonth = custody.startMonth || cfg.custody.startMonth;
+  const start = new Date(+startYear, +startMonth - 1, 1);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  const target = new Date(ds + "T12:00:00");
+  const diff = Math.floor((target - start) / 864e5);
+  if (diff < 0) return null;
+  if (type === "weekAlt") {
+    const wn = wkNum(target);
+    return { parentIdx: wn % 2 === 0 ? weekAlt.evenIdx : 1 - weekAlt.evenIdx, timeType: "full" };
+  }
+  if (type === "exclusive") {
+    const dw = (target.getDay() + 6) % 7;
+    if (dw < 5) return { parentIdx: exclusive.mainIdx, timeType: "full" };
+    const wn = wkNum(target);
+    return { parentIdx: wn % 2 === (exclusive.parity === "even" ? 0 : 1) ? exclusive.weIdx : exclusive.mainIdx, timeType: "full" };
+  }
+  if (type === "custom" && pattern?.length) return pattern[diff % pattern.length] || null;
+  return null;
 }
