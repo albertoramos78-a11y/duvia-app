@@ -38,6 +38,194 @@ function parisMidnightISO(now: Date = new Date()): string {
   return new Date(Date.UTC(y, m - 1, d, 0, 0, 0) - offsetHours * 3600 * 1000).toISOString();
 }
 
+// ── Dates spéciales (Fête des Mères/Pères, Pâques) — porté depuis
+// src/utils/core.js (voir Task 1 du plan 2026-07-21-custody-days-server-read),
+// dupliqué ici car les Edge Functions sont déployées par copier-coller
+// dashboard (pas de build/import partagé) — même convention que
+// parisMidnightISO() ci-dessus et _shared/push.ts. Toute correction faite ici
+// doit être répercutée dans core.js et vice-versa.
+function easterDateX(y: number): Date {
+  const a = y % 19, b = ~~(y / 100), c = y % 100, d = ~~(b / 4), e = b % 4,
+    f = ~~((b + 8) / 25), g = ~~((b - f + 1) / 3),
+    h = (19 * a + b - d - g + 15) % 30, i = ~~(c / 4), k = c % 4,
+    l = (32 + 2 * e + 2 * i - h - k) % 7, m2 = ~~((a + 11 * h + 22 * l) / 451),
+    mo = ~~((h + l - 7 * m2 + 114) / 31), dy = ((h + l - 7 * m2 + 114) % 31) + 1;
+  return new Date(y, mo - 1, dy);
+}
+function pentecostDateX(y: number): Date {
+  const e = easterDateX(y);
+  const p = new Date(e); p.setDate(e.getDate() + 49);
+  return p;
+}
+function nthWeekdayX(y: number, month: number, weekday: number, n: number): Date {
+  if (n > 0) {
+    let d = new Date(y, month, 1), count = 0;
+    while (count < n) { if (d.getDay() === weekday) count++; if (count < n) d.setDate(d.getDate() + 1); }
+    return d;
+  } else {
+    let d = new Date(y, month + 1, 0);
+    while (d.getDay() !== weekday) d.setDate(d.getDate() - 1);
+    return d;
+  }
+}
+function sameDayX(d1: Date | null, d2: Date | null): boolean {
+  return !!(d1 && d2 && d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate());
+}
+function getEventDateX(y: number, rule: any): Date | null {
+  if (!rule) return null;
+  if (rule.fixed) return new Date(y, rule.fixed[0], rule.fixed[1]);
+  const [month, weekday, nth] = rule;
+  return nthWeekdayX(y, month, weekday, nth);
+}
+const MOTHERS_DAY_X: Record<string, any> = {
+  FR: [4, 0, -1], BE: [4, 0, -1], LU: [4, 0, -1], CH: [4, 0, 2], AT: [4, 0, 2],
+  DE: [4, 0, 2], NL: [4, 0, 2], IT: [4, 0, 2], ES: [4, 0, 1], PT: [4, 0, 1],
+  GB: [2, 0, 4], IE: [2, 0, 4], CA: [4, 0, 2], PL: { fixed: [4, 26] },
+  CZ: [4, 0, 2], SK: [4, 0, 2], HR: { fixed: [4, 22] },
+};
+const FATHERS_DAY_X: Record<string, any> = {
+  FR: [5, 0, 3], BE: [5, 0, 2], LU: [5, 0, 3], CH: [5, 0, 3], AT: [5, 0, 2],
+  DE: null, NL: [5, 0, 3], IT: { fixed: [2, 19] }, ES: { fixed: [2, 19] }, PT: { fixed: [2, 19] },
+  GB: [5, 0, 3], IE: [5, 0, 3], CA: [5, 0, 3], PL: { fixed: [5, 23] },
+  CZ: [5, 0, 3], SK: [5, 0, 3], HR: [5, 0, 3],
+};
+function getMothersDayDateX(y: number, country: string): Date | null {
+  const base = getEventDateX(y, MOTHERS_DAY_X[country] || MOTHERS_DAY_X["FR"]);
+  if (country === "FR" && base && sameDayX(base, pentecostDateX(y))) return nthWeekdayX(y, 5, 0, 1);
+  return base;
+}
+function getFathersDayDateX(y: number, country: string): Date | null {
+  if (country === "DE") {
+    const easter = easterDateX(y);
+    const asc = new Date(easter); asc.setDate(easter.getDate() + 39);
+    return asc;
+  }
+  return getEventDateX(y, FATHERS_DAY_X[country]);
+}
+function wkNumX(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  return Math.ceil((((d.getTime() - Date.UTC(d.getUTCFullYear(), 0, 1)) / 864e5) + 1) / 7);
+}
+
+interface CustodyDayResult { parentIdx: number | null; source: string | null; }
+interface CustodyTablesCtx {
+  ruleRows: any[];
+  patternDaysByRuleId: Record<string, any[]>;
+  overridesByDate: Map<string, number | null>;
+  globalSD: any;
+  perChildSDByChild: Record<string, any>;
+  annex: {
+    country: string; sameGuardAll: boolean;
+    parents: Array<{ gender: string; birthDay: string; birthMonth: string }>;
+    children: Array<{ id: number; birthDay: string; birthMonth: string }>;
+    schoolHolDetails: Record<string, Record<string, any>>;
+    schoolHolDetailsPerChild: Record<string, Record<string, Record<string, any>>>;
+  };
+}
+
+// ── resolveCustodyDayFromTables : lecture hybride (5 tables dédiées + petite
+// tranche de families.data) — même algorithme que resolveGuard (core.js),
+// sourcé depuis les tables Phase 3 plutôt que le JSON. Utilisée par le
+// chatbot (ce fichier) ET l'action admin verify_custody_parity
+// (admin-manage-subscriptions/index.ts, copie identique). Voir
+// docs/superpowers/specs/2026-07-21-custody-days-server-read-design.md. ──
+function resolveCustodyDayFromTables(ds: string, childId: number | null, ctx: CustodyTablesCtx): CustodyDayResult {
+  const usePerChild = !ctx.annex.sameGuardAll && childId != null
+    && ctx.ruleRows.some((r: any) => r.child_id === childId && r.confirmed);
+  const rule = usePerChild
+    ? ctx.ruleRows.find((r: any) => r.child_id === childId)
+    : ctx.ruleRows.find((r: any) => r.child_id === null);
+
+  // 2. Override manuel (global uniquement — cfg.overrides n'a pas de
+  // dimension par enfant dans le modèle JSON actuel, voir design doc).
+  if (ctx.overridesByDate.has(ds)) return { parentIdx: ctx.overridesByDate.get(ds) ?? null, source: "override" };
+
+  // 3. Fête des Mères / Fête des Pères
+  const dsDate = new Date(ds + "T12:00:00");
+  const y = dsDate.getFullYear();
+  const country = ctx.annex.country || "FR";
+  if (ctx.globalSD.mother_day_enabled) {
+    const mdDate = getMothersDayDateX(y, country);
+    if (mdDate && sameDayX(mdDate, dsDate)) {
+      const motherIdx = ctx.annex.parents.findIndex((p) => p.gender === "F");
+      if (motherIdx !== -1) return { parentIdx: motherIdx, source: "motherDay" };
+    }
+  }
+  if (ctx.globalSD.father_day_enabled) {
+    const fdDate = getFathersDayDateX(y, country);
+    if (fdDate && sameDayX(fdDate, dsDate)) {
+      const fatherIdx = ctx.annex.parents.findIndex((p) => p.gender === "M");
+      if (fatherIdx !== -1) return { parentIdx: fatherIdx, source: "fatherDay" };
+    }
+  }
+
+  // 4. Anniversaires des parents
+  const parentBirths = ctx.globalSD.parent_births || [];
+  const dsM = dsDate.getMonth() + 1, dsD = dsDate.getDate();
+  for (let pi = 0; pi < ctx.annex.parents.length; pi++) {
+    const pb = parentBirths[pi];
+    if (!pb?.enabled) continue;
+    const p = ctx.annex.parents[pi];
+    if (!p?.birthDay || !p?.birthMonth) continue;
+    if (+p.birthDay === dsD && +p.birthMonth === dsM) return { parentIdx: pi, source: "parentBirthday" };
+  }
+
+  // 4b. Anniversaires des enfants
+  for (let ci = 0; ci < ctx.annex.children.length; ci++) {
+    const ch = ctx.annex.children[ci];
+    if (!ch?.birthDay || !ch?.birthMonth) continue;
+    if (+ch.birthDay !== dsD || +ch.birthMonth !== dsM) continue;
+    const chSdLocal = childId != null ? ctx.perChildSDByChild[String(ch.id)] : null;
+    const evenIdx = chSdLocal?.even_parent_idx ?? ctx.globalSD.even_parent_idx ?? 0;
+    const oddIdx = chSdLocal?.odd_parent_idx ?? ctx.globalSD.odd_parent_idx ?? 1;
+    const parentIdx = y % 2 === 0 ? evenIdx : oddIdx;
+    if (parentIdx === -1) return { parentIdx: null, source: "childBirthday" };
+    return { parentIdx, source: "childBirthday" };
+  }
+
+  // 5. Vacances scolaires — SEUL champ qui n'existe pas dans les 5 tables,
+  // reste lu depuis l'annexe JSON (voir design doc, custody_overrides ne
+  // stocke que les overrides manuels).
+  const holDetails = (childId != null && ctx.annex.schoolHolDetailsPerChild?.[String(childId)])
+    || ctx.annex.schoolHolDetails || {};
+  for (const holName of Object.keys(holDetails)) {
+    const det = holDetails[holName];
+    if (det[ds] !== undefined) {
+      const v = det[ds];
+      if (typeof v === "string" && v.startsWith("obs:")) return { parentIdx: null, source: "schoolHol" };
+      return { parentIdx: v, source: "schoolHol" };
+    }
+  }
+
+  // 6. Motif par défaut
+  if (!rule?.confirmed) return { parentIdx: null, source: null };
+  const start = new Date(+rule.start_year, +rule.start_month - 1, 1);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  const target = new Date(ds + "T12:00:00");
+  const diff = Math.floor((target.getTime() - start.getTime()) / 864e5);
+  if (diff < 0) return { parentIdx: null, source: null };
+
+  if (rule.type === "weekAlt") {
+    const wn = wkNumX(target);
+    return { parentIdx: wn % 2 === 0 ? rule.week_alt_even_idx : 1 - rule.week_alt_even_idx, source: "pattern" };
+  }
+  if (rule.type === "exclusive") {
+    const dw = (target.getDay() + 6) % 7;
+    if (dw < 5) return { parentIdx: rule.exclusive_main_idx, source: "pattern" };
+    const wn = wkNumX(target);
+    const parity = rule.exclusive_parity === "even" ? 0 : 1;
+    return { parentIdx: wn % 2 === parity ? rule.exclusive_we_idx : rule.exclusive_main_idx, source: "pattern" };
+  }
+  if (rule.type === "custom") {
+    const days = ctx.patternDaysByRuleId[rule.id] || [];
+    if (!days.length) return { parentIdx: null, source: null };
+    const day = days[diff % days.length];
+    return { parentIdx: day?.parent_idx ?? null, source: day ? "pattern" : null };
+  }
+  return { parentIdx: null, source: null };
+}
+
 const SYSTEM_PROMPT = `Tu es l'assistant IA de Duvia, une application de coparentalité partagée entre deux foyers ("Deux maisons. Une famille."). Tu réponds aux questions des parents, observateurs et enfants utilisant l'application.
 
 Tu peux :
@@ -46,6 +234,7 @@ Tu peux :
 3. Résumer des conversations, décisions ou accords à partir des messages récupérés via l'outil de messagerie, sur demande.
 4. Reformuler un message que l'utilisateur colle dans la conversation s'il te semble agressif, accusateur ou conflictuel, et expliquer brièvement en quoi la reformulation est plus constructive.
 5. Traduire du texte à la demande, dans n'importe quelle langue.
+6. Calculer le nombre de jours de garde de chaque parent sur une période donnée (ex. "combien de jours de garde ce mois-ci ?", "et entre le 15 mars et le 10 avril ?") — utilise l'outil get_custody_days, jamais un calcul approximatif ou une déduction manuelle du planning.
 
 Tu ne réponds JAMAIS à des questions d'ordre juridique (garde, pension alimentaire, droits parentaux, procédures judiciaires, litiges) — dans ce cas, explique poliment que tu ne peux pas conseiller sur ces sujets et recommande de consulter un avocat ou un professionnel qualifié. Tu peux donner des conseils GÉNÉRAUX d'organisation, de communication ou de médiation, mais jamais d'interprétation de la loi ni d'affirmation sur les droits d'un parent.
 
@@ -93,6 +282,19 @@ const TOOLS = [
         to_date: { type: "string", description: "Date de fin (ISO 8601), optionnelle." },
         limit: { type: "number", description: "Nombre maximum de messages (1 à 200). Par défaut : 30." },
       },
+    },
+  },
+  {
+    name: "get_custody_days",
+    description: "Compte le nombre de jours de garde de chaque parent sur une période donnée, à partir du planning de garde réel de la famille (motif configuré, overrides manuels, dates spéciales, vacances scolaires). Ne réponds jamais à une question de comptage de jours de garde sans cet outil.",
+    input_schema: {
+      type: "object",
+      properties: {
+        from_date: { type: "string", description: "Date de début, format YYYY-MM-DD. Obligatoire." },
+        to_date: { type: "string", description: "Date de fin, format YYYY-MM-DD. Obligatoire. Écart maximum avec from_date : 730 jours." },
+        child_id: { type: "number", description: "Id de l'enfant concerné (voir get_family_config), si la famille a une garde différenciée par enfant et que la question précise un enfant. Sinon, ne pas fournir : utilise le planning global de la famille." },
+      },
+      required: ["from_date", "to_date"],
     },
   },
 ];
@@ -218,7 +420,7 @@ async function toolGetFamilyConfig(userClient: ReturnType<typeof createClient>, 
   const cfgData = family.data || {};
   return {
     parents: (cfgData.parents || []).map((p: any) => ({ name: p.name })),
-    children: (cfgData.children || []).map((c: any) => ({ name: c.name, birth_day: c.birthDay, birth_month: c.birthMonth, birth_year: c.birthYear })),
+    children: (cfgData.children || []).map((c: any) => ({ id: c.id, name: c.name, birth_day: c.birthDay, birth_month: c.birthMonth, birth_year: c.birthYear })),
     custom_dates: (cfgData.specialDates?.custom || []).map((d: any) => ({ label: d.label, day: d.day, month: d.month, yearly: d.yearly })),
     schedules: extractWeeklySchedule(cfgData),
   };
@@ -236,6 +438,74 @@ async function toolGetMessages(userClient: ReturnType<typeof createClient>, fami
   return { messages: (data || []).reverse().map((m: any) => ({ from: m.sender_name, content: m.content, date: m.created_at })) };
 }
 
+async function toolGetCustodyDays(userClient: ReturnType<typeof createClient>, familyId: string, args: any) {
+  const fromDate = String(args?.from_date || "");
+  const toDate = String(args?.to_date || "");
+  if (!fromDate || !toDate) return { error: "missing_dates" };
+  const fromMs = new Date(fromDate + "T00:00:00").getTime();
+  const toMs = new Date(toDate + "T00:00:00").getTime();
+  if (Number.isNaN(fromMs) || Number.isNaN(toMs) || toMs < fromMs) return { error: "invalid_range" };
+  const rangeDays = Math.round((toMs - fromMs) / 86400000) + 1;
+  if (rangeDays > 730) return { error: "range_too_large" };
+
+  const childId = args?.child_id != null ? Number(args.child_id) : null;
+
+  const { data: family, error: famErr } = await userClient.from("families").select("data").eq("id", familyId).maybeSingle();
+  if (famErr || !family) return { error: "family_not_found_or_no_access" };
+  const cfgData = family.data || {};
+  const annex = {
+    country: cfgData.country || "FR",
+    sameGuardAll: cfgData.sameGuardAll !== false,
+    parents: (cfgData.parents || []).map((p: any) => ({ gender: p.gender || "M", birthDay: p.birthDay || "", birthMonth: p.birthMonth || "" })),
+    children: (cfgData.children || []).map((c: any) => ({ id: c.id, birthDay: c.birthDay || "", birthMonth: c.birthMonth || "" })),
+    schoolHolDetails: cfgData.specialDates?.schoolHolDetails || {},
+    schoolHolDetailsPerChild: cfgData.specialDates?.schoolHolDetailsPerChild || {},
+  };
+
+  const { data: ruleRows, error: ruleErr } = await userClient
+    .from("custody_rules")
+    .select("id, child_id, type, start_month, start_year, week_alt_even_idx, exclusive_main_idx, exclusive_we_idx, exclusive_parity, confirmed")
+    .eq("family_id", familyId);
+  if (ruleErr) return { error: ruleErr.message };
+
+  const customRuleIds = (ruleRows || []).filter((r: any) => r.type === "custom").map((r: any) => r.id);
+  const patternDaysByRuleId: Record<string, any[]> = {};
+  if (customRuleIds.length) {
+    const { data: pdRows, error: pdErr } = await userClient
+      .from("custody_pattern_days").select("rule_id, day_index, parent_idx").in("rule_id", customRuleIds).order("day_index");
+    if (pdErr) return { error: pdErr.message };
+    for (const row of pdRows || []) (patternDaysByRuleId[row.rule_id] ||= []).push(row);
+  }
+
+  const { data: overrideRows, error: ovErr } = await userClient
+    .from("custody_overrides").select("override_date, parent_idx")
+    .eq("family_id", familyId).eq("source", "manual").is("child_id", null)
+    .gte("override_date", fromDate).lte("override_date", toDate);
+  if (ovErr) return { error: ovErr.message };
+  const overridesByDate = new Map((overrideRows || []).map((r: any) => [r.override_date, r.parent_idx]));
+
+  const { data: sdRows, error: sdErr } = await userClient
+    .from("custody_special_dates").select("child_id, mother_day_enabled, father_day_enabled, parent_births, even_parent_idx, odd_parent_idx")
+    .eq("family_id", familyId);
+  if (sdErr) return { error: sdErr.message };
+  const globalSD = (sdRows || []).find((r: any) => r.child_id === null) || {};
+  const perChildSDByChild: Record<string, any> = {};
+  for (const r of sdRows || []) if (r.child_id !== null) perChildSDByChild[String(r.child_id)] = r;
+
+  const ctx: CustodyTablesCtx = { ruleRows: ruleRows || [], patternDaysByRuleId, overridesByDate, globalSD, perChildSDByChild, annex };
+
+  let parent0 = 0, parent1 = 0, unassigned = 0;
+  for (let ms = fromMs; ms <= toMs; ms += 86400000) {
+    const ds = new Date(ms).toISOString().slice(0, 10);
+    const { parentIdx } = resolveCustodyDayFromTables(ds, childId, ctx);
+    if (parentIdx === 0) parent0++;
+    else if (parentIdx === 1) parent1++;
+    else unassigned++;
+  }
+
+  return { parent_0_days: parent0, parent_1_days: parent1, unassigned_days: unassigned, total_days: rangeDays, from_date: fromDate, to_date: toDate };
+}
+
 async function executeTool(
   name: string,
   args: any,
@@ -246,6 +516,7 @@ async function executeTool(
     case "get_weather": return toolGetWeather(ctx.userClient, ctx.admin, ctx.familyId, ctx.callerUserId, args);
     case "get_family_config": return toolGetFamilyConfig(ctx.userClient, ctx.familyId);
     case "get_messages": return toolGetMessages(ctx.userClient, ctx.familyId, args);
+    case "get_custody_days": return toolGetCustodyDays(ctx.userClient, ctx.familyId, args);
     default: return { error: "unknown_tool" };
   }
 }
