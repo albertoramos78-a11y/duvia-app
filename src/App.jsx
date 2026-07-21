@@ -16757,6 +16757,28 @@ function renderChatbotMarkdown(text) {
   });
 }
 
+// 🔧 Les plafonds quotidiens du chatbot (questions, tokens) se réinitialisent
+// à minuit HEURE DE PARIS côté serveur (ai-chatbot/index.ts, même fonction
+// dupliquée ici) — pas sur une fenêtre glissante de 24h, et pas sur le fuseau
+// local du navigateur (un parent connecté depuis l'étranger doit voir la même
+// limite que celle réellement appliquée par le serveur). Gère l'heure d'été/
+// hiver via Intl, sans dépendance externe.
+function parisMidnightISO(now = new Date()) {
+  const dateParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now);
+  const y = Number(dateParts.find((p) => p.type === "year").value);
+  const m = Number(dateParts.find((p) => p.type === "month").value);
+  const d = Number(dateParts.find((p) => p.type === "day").value);
+
+  const offsetPart = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Paris", timeZoneName: "shortOffset",
+  }).formatToParts(now).find((p) => p.type === "timeZoneName")?.value || "GMT+1";
+  const offsetHours = Number(offsetPart.replace("GMT", "")) || 1;
+
+  return new Date(Date.UTC(y, m - 1, d, 0, 0, 0) - offsetHours * 3600 * 1000).toISOString();
+}
+
 function ChatbotBubble() {
   const { C, t, sub, familySync } = useApp();
   const [open, setOpen] = useState(false);
@@ -16812,12 +16834,11 @@ function ChatbotBubble() {
   // même déclencheur pratique que l'effet ci-dessus.
   useEffect(() => {
     let cancelled = false;
-    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     supabase
       .from("ai_usage_log")
       .select("input_tokens, output_tokens")
       .eq("feature", "chatbot_query")
-      .gte("used_at", since24h)
+      .gte("used_at", parisMidnightISO())
       .then(({ data, error }) => {
         if (cancelled || error) return;
         const total = (data || []).reduce((s, r) => s + (r.input_tokens || 0) + (r.output_tokens || 0), 0);

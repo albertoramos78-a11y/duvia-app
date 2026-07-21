@@ -13,6 +13,31 @@ const MAX_TOOL_ROUNDS = 5;
 const MAX_QUESTION_LEN = 2000;
 const MAX_HISTORY_ENTRIES = 20;
 
+// 🔧 Les 2 plafonds quotidiens (20 questions, 40 000 tokens) se réinitialisent
+// à minuit HEURE DE PARIS, pas sur une fenêtre glissante de 24h (comportement
+// demandé explicitement — Paris passe de UTC+1 à UTC+2 en été, d'où ce calcul
+// plutôt qu'un simple "aujourd'hui à 00:00 UTC"). Deno tourne en UTC ; on
+// dérive l'année/mois/jour tels que vus à Paris via Intl, puis on retrouve le
+// décalage UTC réel de Paris à cet instant précis (gère l'heure d'été/hiver
+// automatiquement, sans dépendance externe).
+function parisMidnightISO(now: Date = new Date()): string {
+  const dateParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now);
+  const y = Number(dateParts.find((p) => p.type === "year")!.value);
+  const m = Number(dateParts.find((p) => p.type === "month")!.value);
+  const d = Number(dateParts.find((p) => p.type === "day")!.value);
+
+  const offsetPart = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Paris", timeZoneName: "shortOffset",
+  }).formatToParts(now).find((p) => p.type === "timeZoneName")?.value || "GMT+1";
+  const offsetHours = Number(offsetPart.replace("GMT", "")) || 1;
+
+  // Minuit à Paris (UTC+offsetHours) correspond à (00:00 UTC de ce jour) moins
+  // offsetHours — ex. minuit à Paris en été (UTC+2) = 22:00 UTC la veille.
+  return new Date(Date.UTC(y, m - 1, d, 0, 0, 0) - offsetHours * 3600 * 1000).toISOString();
+}
+
 const SYSTEM_PROMPT = `Tu es l'assistant IA de Duvia, une application de coparentalité partagée entre deux foyers ("Deux maisons. Une famille."). Tu réponds aux questions des parents, observateurs et enfants utilisant l'application.
 
 Tu peux :
@@ -262,12 +287,14 @@ serve(async (req) => {
 
   // ── Anti-abus : plafond quotidien simple (non-atomique, même schéma/
   // justification que rephrase_message — voir migrations 0044/0045). Une
-  // seule ligne par QUESTION, pas par aller-retour d'outil interne. ──
-  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  // seule ligne par QUESTION, pas par aller-retour d'outil interne. Les 2
+  // plafonds (questions, tokens) se réinitialisent à minuit heure de Paris,
+  // pas sur une fenêtre glissante — voir parisMidnightISO() plus haut. ──
+  const sinceParisMidnight = parisMidnightISO();
   const { data: usageRows, error: usageErr } = await admin
     .from("ai_usage_log")
     .select("input_tokens, output_tokens")
-    .eq("user_id", userId).eq("feature", "chatbot_query").gte("used_at", since24h);
+    .eq("user_id", userId).eq("feature", "chatbot_query").gte("used_at", sinceParisMidnight);
   if (usageErr) return jsonResponse({ error: usageErr.message }, 500);
   if ((usageRows || []).length >= DAILY_LIMIT) return jsonResponse({ error: "daily_limit_reached" }, 429);
   const tokensUsedSoFar = (usageRows || []).reduce((s, r) => s + (r.input_tokens || 0) + (r.output_tokens || 0), 0);
