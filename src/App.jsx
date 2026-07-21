@@ -16750,6 +16750,8 @@ function ChatbotBubble() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
+  const [tokensUsedToday, setTokensUsedToday] = useState(0);
+  const [tokensLimit, setTokensLimit] = useState(40000);
   // Position du bouton flottant en pixels (top/left) — permet de le faire
   // glisser librement à l'écran plutôt que de rester bloqué dans un coin.
   // Initialisée au coin bas-droit historique.
@@ -16786,6 +16788,29 @@ function ChatbotBubble() {
   // famille (family_id envoyé à chaque appel). Réinitialise la conversation à
   // chaque changement de famille active.
   useEffect(() => { setMessages([]); setErr(""); }, [familySync?.familyId]);
+
+  // 🔧 Récupère la consommation de tokens du jour directement depuis
+  // ai_usage_log (lisible grâce à la policy RLS "ai_usage_log_select_own",
+  // voir migration 0047) — pas besoin d'un aller-retour Edge Function juste
+  // pour afficher la barre de progression au montage. ai_usage_log n'a pas de
+  // colonne family_id (usage par COMPTE, pas par famille) : ce ré-effect au
+  // changement de famille ne filtre donc rien de plus, il réutilise juste le
+  // même déclencheur pratique que l'effet ci-dessus.
+  useEffect(() => {
+    let cancelled = false;
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    supabase
+      .from("ai_usage_log")
+      .select("input_tokens, output_tokens")
+      .eq("feature", "chatbot_query")
+      .gte("used_at", since24h)
+      .then(({ data, error }) => {
+        if (cancelled || error) return;
+        const total = (data || []).reduce((s, r) => s + (r.input_tokens || 0) + (r.output_tokens || 0), 0);
+        setTokensUsedToday(total);
+      });
+    return () => { cancelled = true; };
+  }, [familySync?.familyId]);
 
   // 🔧 pos est en pixels absolus (top/left), pas en bottom/right relatif au
   // viewport comme avant le drag — sans ce recalage, une rotation d'écran ou
@@ -16844,7 +16869,7 @@ function ChatbotBubble() {
         // documenté par @supabase/functions-js lui-même).
         let code = null;
         try { code = (await error.context.json())?.error; } catch { /* réponse non-JSON ou déjà consommée */ }
-        throw new Error(code === "daily_limit_reached" ? "daily" : "generic");
+        throw new Error(code === "daily_limit_reached" ? "daily" : code === "daily_token_limit_reached" ? "daily_tokens" : "generic");
       }
       if (data?.error) throw new Error("generic");
       // 🔧 Le serveur renvoie déjà l'historique plafonné (20 derniers tours,
@@ -16857,8 +16882,14 @@ function ChatbotBubble() {
       } else {
         setMessages([...nextMessages, { role: "assistant", content: data?.answer || "" }]);
       }
+      if (typeof data?.tokens_used_today === "number") setTokensUsedToday(data.tokens_used_today);
+      if (typeof data?.tokens_limit === "number") setTokensLimit(data.tokens_limit);
     } catch (e) {
-      setErr(e.message === "daily" ? (t.chatbotDailyLimitError||"⚠️ Limite quotidienne de questions atteinte. Réessaie demain.") : (t.chatbotError||"⚠️ Une erreur est survenue. Réessaie."));
+      setErr(
+        e.message === "daily" ? (t.chatbotDailyLimitError || "⚠️ Limite quotidienne de questions atteinte. Réessaie demain.")
+        : e.message === "daily_tokens" ? (t.chatbotTokenLimitError || "⚠️ Limite quotidienne de tokens atteinte. Réessaie demain.")
+        : (t.chatbotError || "⚠️ Une erreur est survenue. Réessaie.")
+      );
     } finally {
       setSending(false);
     }
@@ -16896,6 +16927,14 @@ function ChatbotBubble() {
         <div style={{position:"fixed",top:winTop,left:winLeft,width:winW,maxWidth:"calc(100vw - 20px)",height:winH,maxHeight:"calc(100vh - 20px)",background:C.card,borderRadius:16,boxShadow:"0 8px 32px rgba(0,0,0,.3)",display:"flex",flexDirection:"column",zIndex:900,overflow:"hidden"}}>
           <div style={{padding:"12px 14px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontWeight:800,fontSize:14}}>
             🤖 {t.chatbotTitle||"Assistant Duvia"}
+          </div>
+          <div style={{padding:"6px 12px 0"}}>
+            <div style={{height:4,background:C.bor,borderRadius:2,overflow:"hidden"}}>
+              <div style={{height:"100%",width:`${Math.min(100,(tokensUsedToday/tokensLimit)*100)}%`,background:tokensUsedToday>=tokensLimit?C.red:C.vio,transition:"width .3s"}} />
+            </div>
+            <div style={{fontSize:9,color:C.mut,marginTop:2,textAlign:"right"}}>
+              {tokensUsedToday.toLocaleString()} / {tokensLimit.toLocaleString()} {t.chatbotTokensToday||"tokens aujourd'hui"}
+            </div>
           </div>
           <div style={{flex:1,overflowY:"auto",padding:12,display:"flex",flexDirection:"column",gap:8}}>
             {messages.length===0 && (

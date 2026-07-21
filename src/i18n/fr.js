@@ -159,6 +159,8 @@ const fr = {
     chatbotDisclaimer:"L'IA peut générer des erreurs. Vérifie les informations importantes.",
     chatbotError:"⚠️ Une erreur est survenue. Réessaie.",
     chatbotDailyLimitError:"⚠️ Limite quotidienne de questions atteinte. Réessaie demain.",
+    chatbotTokenLimitError:"⚠️ Limite quotidienne de tokens atteinte. Réessaie demain.",
+    chatbotTokensToday:"tokens aujourd'hui",
     premHeaderPremium:"Premium",premHeaderInherited:"Premium hérité",
     lockParents:"🔒 Ajouter un parent — Premium",lockChildren:"🔒 Ajouter un enfant — Premium",
     lockObservers:"🔒 Ajouter un observateur — Premium",

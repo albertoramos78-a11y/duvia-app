@@ -160,6 +160,8 @@ const en = {
     chatbotDisclaimer:"AI can make mistakes. Check important information.",
     chatbotError:"⚠️ Something went wrong. Try again.",
     chatbotDailyLimitError:"⚠️ Daily question limit reached. Try again tomorrow.",
+    chatbotTokenLimitError:"⚠️ Daily token limit reached. Try again tomorrow.",
+    chatbotTokensToday:"tokens today",
     premHeaderPremium:"Premium",premHeaderInherited:"Inherited Premium",
     lockParents:"🔒 Add parent — Premium",lockChildren:"🔒 Add child — Premium",
     lockSection:"Premium Feature",lockDesc:"Available with a Premium subscription.",

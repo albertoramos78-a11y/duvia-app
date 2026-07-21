@@ -8,6 +8,7 @@ const SERVICE_ROLE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 
 const DAILY_LIMIT = 20;
+const DAILY_TOKEN_LIMIT = 40000;
 const MAX_TOOL_ROUNDS = 5;
 const MAX_QUESTION_LEN = 2000;
 const MAX_HISTORY_ENTRIES = 20;
@@ -23,7 +24,12 @@ Tu peux :
 
 Tu ne réponds JAMAIS à des questions d'ordre juridique (garde, pension alimentaire, droits parentaux, procédures judiciaires, litiges) — dans ce cas, explique poliment que tu ne peux pas conseiller sur ces sujets et recommande de consulter un avocat ou un professionnel qualifié. Tu peux donner des conseils GÉNÉRAUX d'organisation, de communication ou de médiation, mais jamais d'interprétation de la loi ni d'affirmation sur les droits d'un parent.
 
-Reste neutre, factuel et bienveillant — le contexte familial est souvent sensible. Réponds dans la langue de la question. Si une information demandée n'est disponible dans aucun outil (ex. planning de garde, actuellement non disponible), dis-le clairement plutôt que d'inventer une réponse.`;
+Mode de réponse — ultra-concis, anti-hallucination (ordre de priorité strict : exactitude, véracité, absence d'hallucination, précision, pertinence, concision) :
+- Réponds avec le minimum de mots nécessaires : si "Oui", "Non", un nombre, une date ou un mot suffisent, réponds uniquement par cela.
+- Privilégie les faits aux explications. Pas d'introduction, de conclusion, de politesse ni de reformulation de la question.
+- N'invente et ne devine jamais une information, ne complète jamais une donnée manquante par déduction — utilise les outils fournis pour vérifier plutôt que de supposer. Si une information est indisponible dans les outils ou reste incertaine, dis-le explicitement ("je ne sais pas" / information non disponible) plutôt que d'inventer une réponse.
+- Si la question est ambiguë, pose uniquement la question indispensable pour la clarifier, rien d'autre.
+- Reste factuel et neutre — le contexte familial est parfois sensible. Réponds dans la langue de la question.`;
 
 const TOOLS = [
   {
@@ -258,12 +264,14 @@ serve(async (req) => {
   // justification que rephrase_message — voir migrations 0044/0045). Une
   // seule ligne par QUESTION, pas par aller-retour d'outil interne. ──
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { count, error: countErr } = await admin
+  const { data: usageRows, error: usageErr } = await admin
     .from("ai_usage_log")
-    .select("*", { count: "exact", head: true })
+    .select("input_tokens, output_tokens")
     .eq("user_id", userId).eq("feature", "chatbot_query").gte("used_at", since24h);
-  if (countErr) return jsonResponse({ error: countErr.message }, 500);
-  if ((count || 0) >= DAILY_LIMIT) return jsonResponse({ error: "daily_limit_reached" }, 429);
+  if (usageErr) return jsonResponse({ error: usageErr.message }, 500);
+  if ((usageRows || []).length >= DAILY_LIMIT) return jsonResponse({ error: "daily_limit_reached" }, 429);
+  const tokensUsedSoFar = (usageRows || []).reduce((s, r) => s + (r.input_tokens || 0) + (r.output_tokens || 0), 0);
+  if (tokensUsedSoFar >= DAILY_TOKEN_LIMIT) return jsonResponse({ error: "daily_token_limit_reached" }, 429);
 
   // 🔒 Client JWT-scopé pour les outils — les mêmes règles RLS déjà en
   // vigueur pour ce compte/rôle s'appliquent automatiquement (voir spec).
@@ -275,6 +283,9 @@ serve(async (req) => {
   // des blocs tool_use/tool_result) — jamais renvoyé tel quel au client, voir
   // cleanHistory plus bas.
   const messages: any[] = [...clientHistory.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: question }];
+
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
 
   try {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -296,6 +307,8 @@ serve(async (req) => {
         return jsonResponse({ error: "chatbot_failed" }, 500);
       }
       const data = await res.json();
+      totalInputTokens += data?.usage?.input_tokens || 0;
+      totalOutputTokens += data?.usage?.output_tokens || 0;
       const content = data?.content || [];
 
       if (data?.stop_reason === "tool_use") {
@@ -315,13 +328,17 @@ serve(async (req) => {
       const answer = String(textBlock?.text || "").trim();
       if (!answer) return jsonResponse({ error: "chatbot_failed" }, 500);
 
-      await admin.from("ai_usage_log").insert({ user_id: userId, feature: "chatbot_query" });
+      await admin.from("ai_usage_log").insert({
+        user_id: userId, feature: "chatbot_query",
+        input_tokens: totalInputTokens, output_tokens: totalOutputTokens,
+      });
 
       // 🔧 cleanHistory ne contient QUE des tours texte user/assistant — jamais
       // les blocs tool_use/tool_result internes à cette requête. Le client
       // renvoie cette valeur telle quelle comme `history` au prochain appel.
       const cleanHistory = [...clientHistory, { role: "user", content: question }, { role: "assistant", content: answer }].slice(-MAX_HISTORY_ENTRIES);
-      return jsonResponse({ answer, history: cleanHistory });
+      const tokensUsedToday = tokensUsedSoFar + totalInputTokens + totalOutputTokens;
+      return jsonResponse({ answer, history: cleanHistory, tokens_used_today: tokensUsedToday, tokens_limit: DAILY_TOKEN_LIMIT });
     }
     return jsonResponse({ error: "too_many_tool_rounds" }, 500);
   } catch (e) {

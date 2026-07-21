@@ -819,5 +819,7 @@ const de = {
     chatbotDisclaimer:"Die KI kann Fehler machen. Überprüfe wichtige Informationen.",
     chatbotError:"⚠️ Etwas ist schiefgelaufen. Versuche es erneut.",
     chatbotDailyLimitError:"⚠️ Tägliches Fragenlimit erreicht. Versuche es morgen erneut.",
+    chatbotTokenLimitError:"⚠️ Tägliches Token-Limit erreicht. Versuch es morgen erneut.",
+    chatbotTokensToday:"Tokens heute",
   };
 export default de;

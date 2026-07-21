@@ -819,5 +819,7 @@ const pt = {
     chatbotDisclaimer:"A IA pode gerar erros. Verifica as informações importantes.",
     chatbotError:"⚠️ Ocorreu um erro. Tenta novamente.",
     chatbotDailyLimitError:"⚠️ Limite diário de perguntas atingido. Tenta novamente amanhã.",
+    chatbotTokenLimitError:"⚠️ Limite diário de tokens atingido. Tenta novamente amanhã.",
+    chatbotTokensToday:"tokens hoje",
   };
 export default pt;
