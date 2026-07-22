@@ -19471,6 +19471,37 @@ function pickSegment(isSubscriber = true, serverMonetary = "none") {
   return { segIdx, prize };
 }
 
+// ── Courbe d'accélération puis décélération de la roue (2026-07-22) ─────────
+// Avant : ease-out pur (départ au plus vite, décélération continue dès t=0).
+// Demande utilisateur : la roue doit ACCÉLÉRER au lancement puis ralentir
+// progressivement jusqu'à l'arrêt — deux phases raccordées en douceur
+// (dérivée quasi continue au point de jonction, à p=SPIN_ACCEL_FRAC) :
+//   - phase 1 (accélération, ease-in quadratique) : 0 → SPIN_ACCEL_FRAC du
+//     temps, couvre SPIN_ACCEL_DIST de la distance totale.
+//   - phase 2 (décélération, ease-out quart) : le reste du temps, couvre le
+//     reste de la distance.
+// spinEase() renvoie la position (0→1) ; spinEaseVelocity() sa dérivée
+// (utilisée pour faire trembler le pointeur plus ou moins vite selon la
+// vitesse réelle de la roue à cet instant précis).
+const SPIN_ACCEL_FRAC = 0.15;
+const SPIN_ACCEL_DIST = 0.25;
+function spinEase(p) {
+  if(p < SPIN_ACCEL_FRAC) {
+    const q = p / SPIN_ACCEL_FRAC;
+    return SPIN_ACCEL_DIST * q * q;
+  }
+  const q = (p - SPIN_ACCEL_FRAC) / (1 - SPIN_ACCEL_FRAC);
+  return SPIN_ACCEL_DIST + (1 - SPIN_ACCEL_DIST) * (1 - Math.pow(1 - q, 4));
+}
+function spinEaseVelocity(p) {
+  if(p < SPIN_ACCEL_FRAC) {
+    const q = p / SPIN_ACCEL_FRAC;
+    return SPIN_ACCEL_DIST * 2 * q / SPIN_ACCEL_FRAC;
+  }
+  const q = (p - SPIN_ACCEL_FRAC) / (1 - SPIN_ACCEL_FRAC);
+  return (1 - SPIN_ACCEL_DIST) * 4 * Math.pow(1 - q, 3) / (1 - SPIN_ACCEL_FRAC);
+}
+
 function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", isSubscriber=true }) {
   const {C,t,lang,sub,setSub,myUid} = useApp();
   const [spinning, setSpinning] = useState(false);
@@ -19479,6 +19510,11 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
   const [showResult, setShowResult] = useState(false);
   const [particles, setParticles] = useState([]);
   const [countdown, setCountdown] = useState(null); // null | 3 | 2 | 1, avant que la roue ne commence à tourner
+  // 🔧 (2026-07-22) Durée (en secondes) du tremblement du pointeur, recalculée
+  // à chaque frame de la rotation pour suivre la vitesse angulaire réelle de
+  // la roue (voir spinEase/spin() plus bas) — rapide quand la roue va vite,
+  // lent quand elle ralentit en fin de course. .11 = valeur de repos/défaut.
+  const [tickSpeed, setTickSpeed] = useState(0.11);
 
   const now = Date.now();
   // 🔧 (2026-07-22) Cooldown uniforme 7 jours — la roue n'est plus accessible
@@ -19563,15 +19599,26 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
 
     const start = deg;
     const dur = 5200;
+    // 🔧 Vitesse angulaire MOYENNE sur tout le tour — sert de référence pour
+    // calibrer la vitesse du tremblement du pointeur (voir spinEaseVelocity
+    // ci-dessus) : à vitesse moyenne, le pointeur tremble au même rythme
+    // qu'avant ce correctif (0.11s/tremblement) ; plus vite en pointe, plus
+    // lentement à l'approche de l'arrêt.
+    const reduceMotionForTick = typeof window!=="undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
     const t0 = performance.now();
     function frame(t) {
       const p = Math.min((t-t0)/dur, 1);
-      const e = 1 - Math.pow(1-p, 4);
+      const e = spinEase(p);
       setDeg(start + (target-start)*e);
+      if(!reduceMotionForTick) {
+        const v = spinEaseVelocity(p); // vitesse instantanée, unité arbitraire (~1 en moyenne)
+        setTickSpeed(Math.min(0.4, Math.max(0.06, 0.11/Math.max(v,0.05))));
+      }
       if(p < 1) { requestAnimationFrame(frame); }
       else {
         setDeg(start + (target-start));
         setSpinning(false);
+        setTickSpeed(0.11);
         setResult(prize);
         setShowResult(true);
         {
@@ -19598,7 +19645,7 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
             id:i,
             x:(Math.random()-0.5)*260,
             driftX:(Math.random()-0.5)*140,
-            fallY:240+Math.random()*160,
+            fallY:320+Math.random()*160, // origine remontée en haut du champ de la roue → chute rallongée d'autant pour garder la même portée jusqu'à la carte de résultat
             rot:(Math.random()-0.5)*720,
             w:Math.random()<0.5?Math.random()*5+4:Math.random()*4+3,
             h:Math.random()<0.5?Math.random()*5+4:Math.random()*8+5,
@@ -19654,7 +19701,7 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
         <div key={p.id} className="wheel-confetti-piece" style={{
           position:"absolute",
           left:`calc(50% + ${p.x}px)`,
-          top:110,
+          top:30,
           width:p.w,height:p.h,
           background:p.color,
           borderRadius:p.round?"50%":"3px",
@@ -19682,7 +19729,7 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
         @keyframes wheelLoseDip { 0%{transform:scale(.7) translateY(-6px);opacity:0} 60%{transform:scale(1.04) translateY(2px);opacity:1} 100%{transform:scale(1) translateY(0);opacity:1} }
         @keyframes wheelCountdownPop { 0%{transform:scale(.3);opacity:0} 55%{transform:scale(1.2);opacity:1} 100%{transform:scale(1);opacity:1} }
         .wheel-pointer-idle { animation: wheelPointerBounce 1.6s ease-in-out infinite; }
-        .wheel-pointer-spin { animation: wheelPointerTick .11s linear infinite; }
+        .wheel-pointer-spin { animation-name: wheelPointerTick; animation-duration: var(--tick-speed, .11s); animation-timing-function: linear; animation-iteration-count: infinite; }
         .wheel-glow-ring { animation: wheelGlowPulse 1.8s ease-in-out infinite; }
         .wheel-settle { animation: wheelSettle .5s cubic-bezier(.16,1,.3,1); }
         .wheel-result-win { animation: wheelWinBurst .5s cubic-bezier(.16,1,.3,1); }
@@ -19725,7 +19772,7 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
             les picots d'une vraie roue de fête foraine qui font vibrer la flèche
             à chaque case franchie), transform-origin en haut = pivote depuis son
             point d'attache plutôt qu'autour de son propre centre. */}
-        <div className={spinning ? "wheel-pointer-spin" : "wheel-pointer-idle"} style={{position:"absolute",top:-14,left:"50%",transform:"translateX(-50%)",transformOrigin:"50% 0%",zIndex:10}}>
+        <div className={spinning ? "wheel-pointer-spin" : "wheel-pointer-idle"} style={{position:"absolute",top:-14,left:"50%",transform:"translateX(-50%)",transformOrigin:"50% 0%",zIndex:10,"--tick-speed":`${tickSpeed}s`}}>
           <svg width="30" height="34" viewBox="0 0 30 34" style={{filter:"drop-shadow(0 3px 5px rgba(0,0,0,.35))"}}>
             <defs>
               <linearGradient id="wheelPointerGrad" x1="0" y1="0" x2="0" y2="1">
