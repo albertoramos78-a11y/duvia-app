@@ -19380,28 +19380,37 @@ function isPrizeActive(p) {
 const PROBS_SUBSCRIBER = { year:0.001, month:0.010, theme:0.200, video:0.100, licorne:0.100, rg:0.050, wc:0.050, nothing:0.489 };
 const PROBS_OTHERS     = { year:0.000, month:0.000, theme:0.200, video:0.100, licorne:0.100, rg:0.050, wc:0.050, nothing:0.500 };
 
-// 20 segments visuels : nothing×10, theme×4, video×2, licorne×2, rg×1, wc×1
-// year et month sont "virtuels" (pas de segment propre) → atterrissent sur rien/mois visuellement
+// 20 segments visuels : nothing×8, theme×4, video×2, licorne×2, rg×1, wc×1,
+// year×1, month×1.
+// 🔧 (2026-07-22) year/month ont désormais leur PROPRE segment — avant ce
+// correctif ils n'apparaissaient dans aucune case du dessin, et la roue
+// atterrissait de force sur un segment "Perdu" même quand le serveur venait
+// d'attribuer le mois/l'année gratuite : la carte de résultat annonçait un
+// gain que la roue elle-même semblait contredire (signalé par l'utilisateur
+// : "on ne voit jamais le gain 1an/1mois"). Rien ne change aux probabilités
+// réelles (toujours décidées par PROBS_SUBSCRIBER/PROBS_OTHERS ou par le
+// serveur pour year/month) — seul l'endroit où la roue s'arrête est corrigé.
 const P_NOTHING  = WHEEL_PRIZES[7]; // 😅
+const P_YEAR     = WHEEL_PRIZES[0]; // 🏆
+const P_MONTH    = WHEEL_PRIZES[1]; // 🎁
 const P_THEME    = WHEEL_PRIZES[2]; // 🌴
 const P_VIDEO    = WHEEL_PRIZES[3]; // 🎮
 const P_LICORNE  = WHEEL_PRIZES[4]; // 🦄
 const P_RG       = WHEEL_PRIZES[5]; // 🎾
 const P_WC       = WHEEL_PRIZES[6]; // ⚽
-const P_MONTH    = WHEEL_PRIZES[1]; // 🎁
 
 const WHEEL_SEGS = [
   P_NOTHING,  // 0
   P_THEME,    // 1
   P_NOTHING,  // 2
   P_VIDEO,    // 3
-  P_NOTHING,  // 4
+  P_YEAR,     // 4
   P_THEME,    // 5
   P_NOTHING,  // 6
   P_LICORNE,  // 7
   P_NOTHING,  // 8
   P_THEME,    // 9
-  P_NOTHING,  // 10
+  P_MONTH,    // 10
   P_RG,       // 11
   P_NOTHING,  // 12
   P_THEME,    // 13
@@ -19411,14 +19420,6 @@ const WHEEL_SEGS = [
   P_LICORNE,  // 17
   P_NOTHING,  // 18
   P_NOTHING,  // 19
-];
-
-// Couleurs visuelles des segments (correspondant à WHEEL_SEGS)
-const WHEEL_SEG_COLORS = [
-  "#9ca3af","#3ecf8e","#9ca3af","#7c6fcd","#9ca3af","#3ecf8e",
-  "#9ca3af","#ec4899","#9ca3af","#3ecf8e","#9ca3af","#c2745a",
-  "#9ca3af","#3ecf8e","#9ca3af","#7c6fcd","#2563eb","#ec4899",
-  "#9ca3af","#9ca3af",
 ];
 
 // Tirage pondéré avec prise en compte du rôle et des dates de validité
@@ -19431,33 +19432,30 @@ const WHEEL_SEG_COLORS = [
 // Avant ce correctif, "year"/"month" pouvaient être forcés à 100% en
 // trafiquant Math.random() dans le navigateur (ex: outils développeur).
 function pickSegment(isSubscriber = true, serverMonetary = "none") {
+  let prize;
   if(serverMonetary === "year" || serverMonetary === "month") {
-    const prize = WHEEL_PRIZES.find(p=>p.id===serverMonetary);
-    const nothingIdxs = WHEEL_SEGS.reduce((a,s,i)=>{ if(s.id==="nothing") a.push(i); return a; },[]);
-    const segIdx = nothingIdxs[Math.floor(Math.random()*nothingIdxs.length)];
-    return { segIdx, prize };
+    prize = WHEEL_PRIZES.find(p=>p.id===serverMonetary);
+  } else {
+    const probs = isSubscriber ? PROBS_SUBSCRIBER : PROBS_OTHERS;
+    // Redistribue les probabilités des lots hors-période (+ year/month, déjà
+    // tranchés par le serveur ci-dessus) vers "nothing"
+    const active = { ...probs, year:0, month:0, nothing: probs.nothing + probs.year + probs.month };
+    ["theme","rg","wc"].forEach(id=>{
+      const p = WHEEL_PRIZES.find(x=>x.id===id);
+      if(p && !isPrizeActive(p)) { active.nothing += active[id]; active[id] = 0; }
+    });
+    // Tirage (lots cosmétiques uniquement — aucune valeur monétaire en jeu)
+    const r = Math.random(); let cum = 0;
+    prize = WHEEL_PRIZES[7]; // défaut: perdu
+    for(const p of WHEEL_PRIZES) {
+      const prob = active[p.id] || 0;
+      cum += prob;
+      if(r < cum) { prize = p; break; }
+    }
   }
 
-  const probs = isSubscriber ? PROBS_SUBSCRIBER : PROBS_OTHERS;
-
-  // Redistribue les probabilités des lots hors-période (+ year/month, déjà
-  // tranchés par le serveur ci-dessus) vers "nothing"
-  const active = { ...probs, year:0, month:0, nothing: probs.nothing + probs.year + probs.month };
-  ["theme","rg","wc"].forEach(id=>{
-    const p = WHEEL_PRIZES.find(x=>x.id===id);
-    if(p && !isPrizeActive(p)) { active.nothing += active[id]; active[id] = 0; }
-  });
-
-  // Tirage (lots cosmétiques uniquement — aucune valeur monétaire en jeu)
-  const r = Math.random(); let cum = 0;
-  let prize = WHEEL_PRIZES[7]; // défaut: perdu
-  for(const p of WHEEL_PRIZES) {
-    const prob = active[p.id] || 0;
-    cum += prob;
-    if(r < cum) { prize = p; break; }
-  }
-
-  // Trouver le segment visuel correspondant
+  // Trouver le segment visuel correspondant (maintenant toujours possible,
+  // year/month ayant chacun leur case dédiée — voir WHEEL_SEGS ci-dessus)
   const matchIdxs = WHEEL_SEGS.reduce((a,s,i)=>{ if(s.id===prize.id) a.push(i); return a; },[]);
   let segIdx;
   if(matchIdxs.length > 0) {
@@ -19593,18 +19591,42 @@ function WheelGame({ isPremium, isAdmin=false, userId="", isSubscriber=true }) {
     return `M${cx},${cy} L${x1},${y1} A${r},${r} 0 0,1 ${x2},${y2} Z`;
   }
   function emojiPos(i) {
-    const r=75, cx=120, cy=120;
+    const r=78, cx=120, cy=120;
     const a = ((i+0.5)*segDeg-90)*Math.PI/180;
     return { x:cx+r*Math.cos(a), y:cy+r*Math.sin(a) };
   }
+  // Petits "clous" décoratifs façon roue de fête foraine, répartis sur la jante.
+  function bulbPos(i, count) {
+    const r=118, cx=120, cy=120;
+    const a = (i*(360/count)-90)*Math.PI/180;
+    return { x:cx+r*Math.cos(a), y:cy+r*Math.sin(a) };
+  }
 
-  const segColors = WHEEL_SEG_COLORS;
   const LOCALE = {fr:"fr-FR",en:"en-GB",de:"de-DE",es:"es-ES",pt:"pt-PT"}[lang] || "fr-FR";
+  const isBigWin = result && (result.id==="year" || result.id==="month");
+  // Dégradé par couleur unique (pas par segment — plusieurs segments partagent
+  // la même couleur) : rend chaque case moins plate qu'un simple aplat.
+  const uniqueColors = [...new Set(SEGS.map(s=>s.color))];
+  const gradId = (hex) => `wheelGrad-${hex.replace("#","")}`;
 
   return (
     <div style={{textAlign:"center"}}>
+      <style>{`
+        @keyframes confettiFall { from{opacity:1;transform:scale(1)} to{opacity:0;transform:scale(0.3) translateY(40px)} }
+        @keyframes wheelPopIn { from{transform:scale(0.4);opacity:0} to{transform:scale(1);opacity:1} }
+        @keyframes wheelGlowPulse { 0%,100%{opacity:.55;transform:scale(1)} 50%{opacity:1;transform:scale(1.12)} }
+        @keyframes wheelPointerBounce { 0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(3px)} }
+        @keyframes wheelSettle { 0%{transform:scale(1)} 50%{transform:scale(1.025)} 100%{transform:scale(1)} }
+        .wheel-pointer-idle { animation: wheelPointerBounce 1.6s ease-in-out infinite; }
+        .wheel-glow-ring { animation: wheelGlowPulse 1.8s ease-in-out infinite; }
+        .wheel-settle { animation: wheelSettle .5s cubic-bezier(.16,1,.3,1); }
+        @media (prefers-reduced-motion: reduce) {
+          .wheel-pointer-idle, .wheel-glow-ring, .wheel-settle { animation: none !important; }
+        }
+      `}</style>
+
       {/* Title */}
-      <div style={{marginBottom:16}}>
+      <div style={{marginBottom:18}}>
         <div style={{fontSize:22,fontWeight:900,background:"linear-gradient(135deg,#FFD700,#ff6bb5,#7c6fcd)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
           {t.wheelTitle}
         </div>
@@ -19616,7 +19638,7 @@ function WheelGame({ isPremium, isAdmin=false, userId="", isSubscriber=true }) {
       </div>
 
       {/* Wheel */}
-      <div style={{position:"relative",display:"inline-block",marginBottom:16}}>
+      <div style={{position:"relative",display:"inline-block",marginBottom:18}}>
         {/* Particles */}
         {particles.map(p=>(
           <div key={p.id} style={{
@@ -19631,40 +19653,72 @@ function WheelGame({ isPremium, isAdmin=false, userId="", isSubscriber=true }) {
             animation:"confettiFall 1.5s ease-out forwards",
           }}/>
         ))}
-        <style>{`
-          @keyframes confettiFall { from{opacity:1;transform:scale(1)} to{opacity:0;transform:scale(0.3) translateY(40px)} }
-          @keyframes popIn { from{transform:scale(0.4);opacity:0} to{transform:scale(1);opacity:1} }
-          @keyframes shimmer { 0%,100%{opacity:0.5} 50%{opacity:1} }
-        `}</style>
 
-        {/* Pointer */}
-        <div style={{position:"absolute",top:-18,left:"50%",transform:"translateX(-50%)",fontSize:26,zIndex:10,filter:"drop-shadow(0 2px 4px rgba(0,0,0,.4))"}}>▼</div>
+        {/* Pointer — losange dégradé avec ombre, léger rebond au repos pour inviter au jeu */}
+        <div className={!spinning ? "wheel-pointer-idle" : undefined} style={{position:"absolute",top:-14,left:"50%",transform:"translateX(-50%)",zIndex:10}}>
+          <svg width="30" height="34" viewBox="0 0 30 34" style={{filter:"drop-shadow(0 3px 5px rgba(0,0,0,.35))"}}>
+            <defs>
+              <linearGradient id="wheelPointerGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#FFE066"/>
+                <stop offset="100%" stopColor="#FFB020"/>
+              </linearGradient>
+            </defs>
+            <path d="M15 32 L2 10 A13 13 0 1 1 28 10 Z" fill="url(#wheelPointerGrad)" stroke="#fff" strokeWidth="1.5"/>
+          </svg>
+        </div>
 
         {/* SVG Wheel */}
         <svg width="240" height="240" viewBox="0 0 240 240"
-          style={{display:"block",transform:`rotate(${deg}deg)`,transition:spinning?"none":"none",
-            filter:"drop-shadow(0 8px 24px rgba(124,111,205,.4))",borderRadius:"50%"}}>
+          className={!spinning && deg!==0 ? "wheel-settle" : undefined}
+          style={{display:"block",transform:`rotate(${deg}deg)`,
+            filter:"drop-shadow(0 10px 28px rgba(124,111,205,.45))",borderRadius:"50%"}}>
+          <defs>
+            {uniqueColors.map(hex=>(
+              <radialGradient key={hex} id={gradId(hex)} cx="35%" cy="35%" r="75%">
+                <stop offset="0%" stopColor={hex} stopOpacity=".55"/>
+                <stop offset="100%" stopColor={hex}/>
+              </radialGradient>
+            ))}
+            <linearGradient id="wheelRimGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#FFD700"/>
+              <stop offset="50%" stopColor="#ff9f43"/>
+              <stop offset="100%" stopColor="#FFD700"/>
+            </linearGradient>
+            <radialGradient id="wheelHubGrad" cx="35%" cy="30%" r="75%">
+              <stop offset="0%" stopColor="#fff"/>
+              <stop offset="100%" stopColor="#eae6fb"/>
+            </radialGradient>
+          </defs>
+
+          {/* Jante dorée */}
+          <circle cx="120" cy="120" r="115" fill="none" stroke="url(#wheelRimGrad)" strokeWidth="6"/>
+          {/* Clous décoratifs sur la jante */}
+          {Array.from({length:20},(_,i)=>{
+            const pos = bulbPos(i,20);
+            return <circle key={i} cx={pos.x} cy={pos.y} r="2.6" fill="#FFE066" stroke="#c9860a" strokeWidth=".5"/>;
+          })}
+
           {/* Segments */}
           {SEGS.map((seg,i)=>(
             <g key={i}>
-              <path d={segPath(i)} fill={segColors[i]} stroke="white" strokeWidth="2"/>
-              <path d={segPath(i)} fill="rgba(255,255,255,0.1)" stroke="none"/>
+              <path d={segPath(i)} fill={`url(#${gradId(seg.color)})`} stroke="#fff" strokeWidth="2"/>
             </g>
           ))}
           {/* Emojis */}
           {SEGS.map((seg,i)=>{
             const pos=emojiPos(i);
             return <text key={i} x={pos.x} y={pos.y} textAnchor="middle" dominantBaseline="middle"
-              fontSize="18" style={{userSelect:"none"}}>{seg.emoji}</text>;
+              fontSize="17" style={{userSelect:"none"}}>{seg.emoji}</text>;
           })}
-          {/* Center */}
-          <circle cx="120" cy="120" r="24" fill="white" stroke="#7c6fcd" strokeWidth="3"/>
-          <text x="120" y="120" textAnchor="middle" dominantBaseline="middle" fontSize="16">✦</text>
+          {/* Center hub */}
+          <circle cx="120" cy="120" r="26" fill="url(#wheelHubGrad)" stroke="#7c6fcd" strokeWidth="3"/>
+          <circle cx="120" cy="120" r="19" fill="none" stroke="#7c6fcd33" strokeWidth="1.5"/>
+          <text x="120" y="120" textAnchor="middle" dominantBaseline="middle" fontSize="17">✦</text>
         </svg>
       </div>
 
       {/* Button */}
-      <div style={{marginBottom:14}}>
+      <div style={{marginBottom:16}}>
         {!isPremium ? (
           <div style={{padding:"11px 28px",background:`${C.vio}15`,border:`2px dashed ${C.vio}`,borderRadius:50,fontSize:13,fontWeight:800,color:C.vio,display:"inline-block"}}>
             {t.wheelLockedPremium}
@@ -19692,10 +19746,13 @@ function WheelGame({ isPremium, isAdmin=false, userId="", isSubscriber=true }) {
 
       {/* Result */}
       {showResult && result && (
-        <div style={{background:result.id==="nothing"?C.sur:`${result.color}18`,border:`2.5px solid ${result.color}`,borderRadius:18,padding:"18px 16px",marginBottom:14,animation:"popIn .4s cubic-bezier(.16,1,.3,1)"}}>
-          <div style={{fontSize:44,marginBottom:6}}>{result.emoji}</div>
-          <div style={{fontSize:20,fontWeight:900,color:result.color,marginBottom:6}}>{t[result.labelKey]||result.label}</div>
-          <div style={{fontSize:12,color:C.mut,marginBottom:12,lineHeight:1.5}}>
+        <div style={{position:"relative",background:result.id==="nothing"?C.sur:`${result.color}18`,border:`2.5px solid ${result.color}`,borderRadius:18,padding:"18px 16px",marginBottom:14,overflow:"hidden",animation:"wheelPopIn .4s cubic-bezier(.16,1,.3,1)"}}>
+          {result.id!=="nothing" && (
+            <div className="wheel-glow-ring" style={{position:"absolute",top:"50%",left:"50%",width:90,height:90,marginTop:-95,marginLeft:-45,borderRadius:"50%",background:result.color,filter:"blur(24px)",opacity:.6,pointerEvents:"none"}} />
+          )}
+          <div style={{position:"relative",fontSize:isBigWin?52:44,marginBottom:6}}>{result.emoji}</div>
+          <div style={{position:"relative",fontSize:20,fontWeight:900,color:result.color,marginBottom:6}}>{t[result.labelKey]||result.label}</div>
+          <div style={{position:"relative",fontSize:12,color:C.mut,marginBottom:12,lineHeight:1.5}}>
             {result.type==="payment" && t.wheelResultPayment}
             {result.id==="theme" && (isSummerPeriod()?t.wheelResultThemeUnlocked:t.wheelResultThemeEarned)}
             {result.id==="video" && t.wheelResultVideoUnlocked}
@@ -19704,41 +19761,47 @@ function WheelGame({ isPremium, isAdmin=false, userId="", isSubscriber=true }) {
             {result.id==="wc" && (isWCPeriod()?t.wheelResultWCUnlocked:t.wheelResultWCEarned)}
             {result.id==="nothing" && `${t.wheelResultNothingPrefix} ${t.cooldown7days} ${t.wheelResultNothingSuffix}`}
           </div>
-          <button onClick={()=>setShowResult(false)} style={{padding:"8px 22px",background:result.color,color:"#fff",fontSize:13,fontWeight:800,borderRadius:20}}>
+          <button onClick={()=>setShowResult(false)} style={{position:"relative",padding:"8px 22px",background:result.color,color:"#fff",fontSize:13,fontWeight:800,borderRadius:20}}>
             {result.id==="nothing"?t.wheelOk:t.wheelGreat}
           </button>
         </div>
       )}
 
-      {/* Prize table */}
+      {/* Prize table — séparé en deux groupes : ouvert à tous vs réservé aux abonnés payants */}
       <div style={{textAlign:"left",marginTop:8}}>
         <div style={{fontSize:10,fontWeight:800,color:C.mut,letterSpacing:".08em",textTransform:"uppercase",marginBottom:8}}>{t.wheelPrizeTableTitle}</div>
-        {WHEEL_PRIZES.map(p=>{
+        {WHEEL_PRIZES.filter(p=>p.type==="reward").map(p=>{
           const active = isPrizeActive(p);
           return (
             <div key={p.id} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"9px 10px",marginBottom:4,
-              background:p.type==="payment"?`${p.color}08`:C.sur,borderRadius:10,
-              border:`1.5px solid ${p.type==="payment"?p.color+"44":active?C.bor:C.bor+"44"}`,
+              background:C.sur,borderRadius:10,
+              border:`1.5px solid ${active?C.bor:C.bor+"44"}`,
               opacity:active?1:0.5}}>
               <div style={{width:30,height:30,borderRadius:8,background:`${p.color}22`,border:`2px solid ${p.color}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0,marginTop:1}}>{p.emoji}</div>
               <div style={{flex:1}}>
                 <div style={{fontSize:12,fontWeight:800,color:p.color}}>{t[p.labelKey]||p.label}</div>
-                {p.type==="payment" ? (
-                  <div style={{fontSize:9,color:C.mut,marginTop:2}}>{t.wheelPrizePaymentInfo}</div>
-                ) : p.type==="reward" ? (
-                  <div style={{fontSize:9,color:C.mut,marginTop:2}}>
-                    {p.price&&<span style={{background:`${p.color}15`,color:p.color,borderRadius:5,padding:"1px 5px",fontWeight:700,marginRight:5}}>{t.wheelBuyPrefix} {p.price}{t.wheelBuyPermanentSuffix}</span>}
-                    {p.validStart
-                      ? <span>{p.validStart.toLocaleDateString(LOCALE,{day:"2-digit",month:"2-digit"})} → {p.validEnd.toLocaleDateString(LOCALE,{day:"2-digit",month:"2-digit"})}{!active?t.wheelAvailableByPurchase:""}</span>
-                      : <span>{t.wheelPermanent}</span>}
-                  </div>
-                ) : (
-                  <div style={{fontSize:9,color:C.mut,marginTop:2}}>{t.wheelTryAgainSoon}</div>
-                )}
+                <div style={{fontSize:9,color:C.mut,marginTop:2}}>
+                  {p.price&&<span style={{background:`${p.color}15`,color:p.color,borderRadius:5,padding:"1px 5px",fontWeight:700,marginRight:5}}>{t.wheelBuyPrefix} {p.price}{t.wheelBuyPermanentSuffix}</span>}
+                  {p.validStart
+                    ? <span>{p.validStart.toLocaleDateString(LOCALE,{day:"2-digit",month:"2-digit"})} → {p.validEnd.toLocaleDateString(LOCALE,{day:"2-digit",month:"2-digit"})}{!active?t.wheelAvailableByPurchase:""}</span>
+                    : <span>{t.wheelPermanent}</span>}
+                </div>
               </div>
             </div>
           );
         })}
+
+        <div style={{fontSize:10,fontWeight:800,color:C.mut,letterSpacing:".08em",textTransform:"uppercase",margin:"14px 0 8px"}}>{t.wheelPrizeTableSubscriberTitle||"Réservé aux abonnés Premium"}</div>
+        {WHEEL_PRIZES.filter(p=>p.type==="payment").map(p=>(
+          <div key={p.id} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"9px 10px",marginBottom:4,
+            background:`${p.color}0c`,borderRadius:10,border:`1.5px solid ${p.color}44`}}>
+            <div style={{width:30,height:30,borderRadius:8,background:`${p.color}22`,border:`2px solid ${p.color}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0,marginTop:1}}>{p.emoji}</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:12,fontWeight:800,color:p.color}}>{t[p.labelKey]||p.label}</div>
+              <div style={{fontSize:9,color:C.mut,marginTop:2}}>{t.wheelPrizePaymentInfo}</div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
