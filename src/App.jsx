@@ -19472,26 +19472,27 @@ function pickSegment(isSubscriber = true, serverMonetary = "none") {
 }
 
 // ── Courbe d'accélération puis décélération de la roue (2026-07-22) ─────────
-// Avant : ease-out pur (départ au plus vite, décélération continue dès t=0).
-// Demande utilisateur : la roue doit ACCÉLÉRER au lancement puis ralentir
-// progressivement jusqu'à l'arrêt — deux phases raccordées en douceur
-// (dérivée quasi continue au point de jonction, à p=SPIN_ACCEL_FRAC) :
+// Deux phases raccordées avec une dérivée continue au point de jonction
+// p=SPIN_ACCEL_FRAC (voir le calcul en commentaire ci-dessous) :
 //   - phase 1 (accélération, ease-in quadratique) : 0 → SPIN_ACCEL_FRAC du
 //     temps, couvre SPIN_ACCEL_DIST de la distance totale.
-//   - phase 2 (décélération, ease-out quart) : le reste du temps, couvre le
-//     reste de la distance.
+//   - phase 2 (décélération, ease-out CUBIQUE — adouci depuis le quart
+//     d'origine, jugé trop abrupt en fin de course) : le reste du temps,
+//     couvre le reste de la distance.
 // spinEase() renvoie la position (0→1) ; spinEaseVelocity() sa dérivée
 // (utilisée pour faire trembler le pointeur plus ou moins vite selon la
-// vitesse réelle de la roue à cet instant précis).
+// vitesse réelle de la roue à cet instant précis). Continuité de la dérivée
+// à la jonction : 2*D/a = 3*(1-D)/(1-a) → D = 3a / (3a + 2(1-a)) avec
+// a=SPIN_ACCEL_FRAC — recalculé automatiquement si SPIN_ACCEL_FRAC change.
 const SPIN_ACCEL_FRAC = 0.15;
-const SPIN_ACCEL_DIST = 0.25;
+const SPIN_ACCEL_DIST = (3*SPIN_ACCEL_FRAC) / (3*SPIN_ACCEL_FRAC + 2*(1-SPIN_ACCEL_FRAC));
 function spinEase(p) {
   if(p < SPIN_ACCEL_FRAC) {
     const q = p / SPIN_ACCEL_FRAC;
     return SPIN_ACCEL_DIST * q * q;
   }
   const q = (p - SPIN_ACCEL_FRAC) / (1 - SPIN_ACCEL_FRAC);
-  return SPIN_ACCEL_DIST + (1 - SPIN_ACCEL_DIST) * (1 - Math.pow(1 - q, 4));
+  return SPIN_ACCEL_DIST + (1 - SPIN_ACCEL_DIST) * (1 - Math.pow(1 - q, 3));
 }
 function spinEaseVelocity(p) {
   if(p < SPIN_ACCEL_FRAC) {
@@ -19499,7 +19500,7 @@ function spinEaseVelocity(p) {
     return SPIN_ACCEL_DIST * 2 * q / SPIN_ACCEL_FRAC;
   }
   const q = (p - SPIN_ACCEL_FRAC) / (1 - SPIN_ACCEL_FRAC);
-  return (1 - SPIN_ACCEL_DIST) * 4 * Math.pow(1 - q, 3) / (1 - SPIN_ACCEL_FRAC);
+  return (1 - SPIN_ACCEL_DIST) * 3 * Math.pow(1 - q, 2) / (1 - SPIN_ACCEL_FRAC);
 }
 
 function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", isSubscriber=true }) {
@@ -19510,11 +19511,18 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
   const [showResult, setShowResult] = useState(false);
   const [particles, setParticles] = useState([]);
   const [countdown, setCountdown] = useState(null); // null | 3 | 2 | 1, avant que la roue ne commence à tourner
+  // 🔧 (2026-07-22) Distinct de `spinning` (qui couvre AUSSI le décompte
+  // 3-2-1 et reste vrai pour désactiver le bouton pendant tout l'enchaînement)
+  // — `isRotating` n'est vrai que pendant la rotation réelle de la roue, pour
+  // que le pointeur reste immobile pendant le décompte et ne tremble qu'une
+  // fois la roue effectivement lancée.
+  const [isRotating, setIsRotating] = useState(false);
   // 🔧 (2026-07-22) Durée (en secondes) du tremblement du pointeur, recalculée
   // à chaque frame de la rotation pour suivre la vitesse angulaire réelle de
   // la roue (voir spinEase/spin() plus bas) — rapide quand la roue va vite,
-  // lent quand elle ralentit en fin de course. .11 = valeur de repos/défaut.
-  const [tickSpeed, setTickSpeed] = useState(0.11);
+  // lent quand elle ralentit en fin de course. Valeur de repos plus calme
+  // qu'à la première version (jugée trop rapide).
+  const [tickSpeed, setTickSpeed] = useState(0.18);
 
   const now = Date.now();
   // 🔧 (2026-07-22) Cooldown uniforme 7 jours — la roue n'est plus accessible
@@ -19588,21 +19596,27 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
       }
     }
     setCountdown(null);
+    // 🔧 (2026-07-22) Le pointeur ne doit trembler que pendant la rotation
+    // réelle, jamais pendant le décompte 3-2-1 — `isRotating` (distinct de
+    // `spinning`, qui reste vrai plus longtemps pour garder le bouton
+    // désactivé) ne passe à true qu'ici, une fois le décompte terminé.
+    setIsRotating(true);
 
     const segCenter = segIdx * segDeg + segDeg / 2;
     const targetMod = ((-segCenter) % 360 + 360) % 360;
     const currentMod = ((deg % 360) + 360) % 360;
     const delta = (targetMod - currentMod + 360) % 360;
-    // 🔧 Rotation un peu plus douce qu'avant : moins de tours complets (5 au
-    // lieu de 7) et une durée un peu plus longue.
-    const target = deg + 360 * 5 + (delta === 0 ? 360 : delta);
+    // 🔧 Davantage de tours complets qu'avant (7 au lieu de 5) et une durée
+    // allongée en conséquence, pour que la roue tourne plus longtemps sans
+    // aller plus vite dans l'ensemble.
+    const target = deg + 360 * 7 + (delta === 0 ? 360 : delta);
 
     const start = deg;
-    const dur = 5200;
+    const dur = 6200;
     // 🔧 Vitesse angulaire MOYENNE sur tout le tour — sert de référence pour
     // calibrer la vitesse du tremblement du pointeur (voir spinEaseVelocity
-    // ci-dessus) : à vitesse moyenne, le pointeur tremble au même rythme
-    // qu'avant ce correctif (0.11s/tremblement) ; plus vite en pointe, plus
+    // ci-dessus) : à vitesse moyenne, le pointeur tremble au même rythme que
+    // sa valeur de repos (0.18s/tremblement) ; plus vite en pointe, plus
     // lentement à l'approche de l'arrêt.
     const reduceMotionForTick = typeof window!=="undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
     const t0 = performance.now();
@@ -19612,13 +19626,14 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
       setDeg(start + (target-start)*e);
       if(!reduceMotionForTick) {
         const v = spinEaseVelocity(p); // vitesse instantanée, unité arbitraire (~1 en moyenne)
-        setTickSpeed(Math.min(0.4, Math.max(0.06, 0.11/Math.max(v,0.05))));
+        setTickSpeed(Math.min(0.4, Math.max(0.1, 0.18/Math.max(v,0.05))));
       }
       if(p < 1) { requestAnimationFrame(frame); }
       else {
         setDeg(start + (target-start));
         setSpinning(false);
-        setTickSpeed(0.11);
+        setIsRotating(false);
+        setTickSpeed(0.18);
         setResult(prize);
         setShowResult(true);
         {
@@ -19772,7 +19787,7 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
             les picots d'une vraie roue de fête foraine qui font vibrer la flèche
             à chaque case franchie), transform-origin en haut = pivote depuis son
             point d'attache plutôt qu'autour de son propre centre. */}
-        <div className={spinning ? "wheel-pointer-spin" : "wheel-pointer-idle"} style={{position:"absolute",top:-14,left:"50%",transform:"translateX(-50%)",transformOrigin:"50% 0%",zIndex:10,"--tick-speed":`${tickSpeed}s`}}>
+        <div className={isRotating ? "wheel-pointer-spin" : "wheel-pointer-idle"} style={{position:"absolute",top:-14,left:"50%",transform:"translateX(-50%)",transformOrigin:"50% 0%",zIndex:10,"--tick-speed":`${tickSpeed}s`}}>
           <svg width="30" height="34" viewBox="0 0 30 34" style={{filter:"drop-shadow(0 3px 5px rgba(0,0,0,.35))"}}>
             <defs>
               <linearGradient id="wheelPointerGrad" x1="0" y1="0" x2="0" y2="1">
@@ -19784,9 +19799,14 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
           </svg>
         </div>
 
-        {/* SVG Wheel */}
+        {/* SVG Wheel — le micro-pulse d'arrêt (wheel-settle) est porté par ce
+            div englobant, PAS par le <svg> : la keyframe ne définit qu'un
+            `scale`, donc l'appliquer directement sur le <svg> écrasait
+            pendant 0.5s son propre `transform:rotate(deg)` inline (la roue
+            semblait "sauter" à la verticale puis revenir à sa position
+            d'arrêt réelle). */}
+        <div className={!spinning && deg!==0 ? "wheel-settle" : undefined} style={{display:"inline-block"}}>
         <svg width="240" height="240" viewBox="0 0 240 240"
-          className={!spinning && deg!==0 ? "wheel-settle" : undefined}
           style={{display:"block",transform:`rotate(${deg}deg)`,
             filter:"drop-shadow(0 10px 28px rgba(124,111,205,.45))",borderRadius:"50%"}}>
           <defs>
@@ -19832,6 +19852,7 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
           <circle cx="120" cy="120" r="19" fill="none" stroke="#7c6fcd33" strokeWidth="1.5"/>
           <text x="120" y="120" textAnchor="middle" dominantBaseline="middle" fontSize="17">✦</text>
         </svg>
+        </div>
       </div>
 
       {/* Button */}
