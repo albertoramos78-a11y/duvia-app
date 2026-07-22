@@ -818,7 +818,6 @@ const es = {
     chatbotThinking:"Pensando…",
     chatbotDisclaimer:"La IA puede cometer errores. Comprueba la información importante.",
     chatbotError:"⚠️ Algo salió mal. Inténtalo de nuevo.",
-    chatbotDailyLimitError:"⚠️ Límite diario de preguntas alcanzado. Inténtalo mañana.",
     chatbotTokenLimitError:"⚠️ Límite diario de tokens alcanzado. Vuelve a intentarlo mañana.",
     chatbotTokensToday:"tokens hoy",
     chatbotTokensExchange:"tokens",

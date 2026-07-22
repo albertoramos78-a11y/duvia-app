@@ -5804,13 +5804,23 @@ export default function App() {
             {menuTab==="parrainage" && <ParrainageSection />}
             {menuTab==="rating" && <RatingTab />}
             {menuTab==="admin" && isAdm && <AdminTab />}
-            {!menuTab && tab===0 && <div key="t0" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1) both`}}><CalTab readOnly={false} canEdit={st!=="freemium"} /></div>}
-            {!menuTab && tab===1 && <div key="t1" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1) both`}}><ScheduleTab /></div>}
-            {!menuTab && tab===2 && <div key="t2" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1) both`}}><ExpTab /></div>}
-            {!menuTab && tab===3 && <div key="t3" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1) both`}}><ContactsTab /></div>}
-            {!menuTab && tab===4 && <div key="t4" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1) both`}}><VaultTab /></div>}
-            {!menuTab && tab===5 && <div key="t5" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1) both`}}><MessagingTab /></div>}
-            {!menuTab && tab===6 && <div key="t6" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1) both`}}><GameTab /></div>}
+            {/* 🔧 PAS de fill-mode "both" ici (2026-07-22) : "both" maintient
+                transform:translateX(0) APRÈS la fin de l'animation, ce qui crée
+                un nouveau containing block CSS pour tout position:fixed
+                descendant (n'importe quelle modale plein écran dans l'onglet,
+                ex. EditDay du calendrier) — le fond et la fenêtre se
+                positionnaient alors relativement à cette div, pas à l'écran
+                entier. L'état visuel final (opacity:1, translateX(0) scale(1))
+                est identique à l'état non animé : retirer "both" ne change
+                rien à l'œil, juste au containing block une fois l'animation
+                terminée. */}
+            {!menuTab && tab===0 && <div key="t0" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1)`}}><CalTab readOnly={false} canEdit={st!=="freemium"} /></div>}
+            {!menuTab && tab===1 && <div key="t1" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1)`}}><ScheduleTab /></div>}
+            {!menuTab && tab===2 && <div key="t2" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1)`}}><ExpTab /></div>}
+            {!menuTab && tab===3 && <div key="t3" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1)`}}><ContactsTab /></div>}
+            {!menuTab && tab===4 && <div key="t4" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1)`}}><VaultTab /></div>}
+            {!menuTab && tab===5 && <div key="t5" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1)`}}><MessagingTab /></div>}
+            {!menuTab && tab===6 && <div key="t6" style={{animation:`calSlideIn${tabDir.current==="right"?"Right":"Left"} 0.25s cubic-bezier(.16,1,.3,1)`}}><GameTab /></div>}
           </div>
         )}
       </div>
@@ -12558,7 +12568,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
       </div>
       <div onTouchStart={handleCalTouchStart} onTouchEnd={handleCalTouchEnd}>
       {calView==="grid" && (
-        <div style={{animation:`calSlideIn${calViewDir.current==="right"?"Right":"Left"} 0.28s cubic-bezier(.16,1,.3,1) both`}}>
+        <div style={{animation:`calSlideIn${calViewDir.current==="right"?"Right":"Left"} 0.28s cubic-bezier(.16,1,.3,1)`}}>
         <MonthGridCalendar
           y={y} m={m} dc={dc} cfg={cfg} t={t} C={C} apiData={apiData}
           multiChild={multiChild} activeChildId={activeChildId}
@@ -12586,7 +12596,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
         </div>
       )}
       {calView==="list" && (
-        <div style={{animation:`calSlideIn${calViewDir.current==="left"?"Left":"Right"} 0.28s cubic-bezier(.16,1,.3,1) both`}}>
+        <div style={{animation:`calSlideIn${calViewDir.current==="left"?"Left":"Right"} 0.28s cubic-bezier(.16,1,.3,1)`}}>
       <div className="card" style={{padding:0,overflow:"hidden"}}>
         <div style={{display:"grid",gridTemplateColumns:"minmax(20px,28px) minmax(56px,82px) 1.2fr 1fr",background:C.sur,padding:"8px 12px",fontSize:10,color:C.mut,fontWeight:800,letterSpacing:".1em",textTransform:"uppercase",borderBottom:`1.5px solid ${C.bor}`}}>
           <span>{t.wk}</span><span>{t.day}</span><span>{t.info}</span>
@@ -12846,7 +12856,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
     const hasBadge = d.isRealChange && d.guard && !d.isBirthday && !cellTime;
     const guardAv = guardAvatarInfo(d.guard);
     return (
-      <div key={d.ds} onClick={()=>openDay(d.ds)}
+      <div key={d.ds} data-ds={d.ds} onClick={()=>openDay(d.ds)}
         title={(d.customGuardians?.length ? guardianNamesLabel(d.customGuardians) : null)||d.ferName||d.scoName||d.specials[0]?.label||undefined}
         style={{
           aspectRatio:"1",borderRadius:10,background:bg,padding:"6px 6px",
@@ -17066,14 +17076,14 @@ function ChatbotBubble() {
       });
       if (error) {
         // 🔧 invoke() renvoie data:null sur toute réponse non-2xx (429 pour
-        // le plafond quotidien inclus) — le vrai code d'erreur ne vit que sur
+        // le plafond de tokens inclus) — le vrai code d'erreur ne vit que sur
         // error.context (Response brute), jamais sur `data` (même bug déjà
         // rencontré et corrigé sur handleRephrase/sendInviteEmail, voir plus
         // haut dans ce fichier — "await error.context.json()" est le pattern
         // documenté par @supabase/functions-js lui-même).
         let code = null;
         try { code = (await error.context.json())?.error; } catch { /* réponse non-JSON ou déjà consommée */ }
-        throw new Error(code === "daily_limit_reached" ? "daily" : code === "daily_token_limit_reached" ? "daily_tokens" : "generic");
+        throw new Error(code === "daily_token_limit_reached" ? "daily_tokens" : "generic");
       }
       if (data?.error) throw new Error("generic");
       // 🔧 Le serveur renvoie déjà l'historique plafonné (20 derniers tours,
@@ -17095,8 +17105,7 @@ function ChatbotBubble() {
       if (typeof data?.tokens_limit === "number") setTokensLimit(data.tokens_limit);
     } catch (e) {
       setErr(
-        e.message === "daily" ? (t.chatbotDailyLimitError || "⚠️ Limite quotidienne de questions atteinte. Réessaie demain.")
-        : e.message === "daily_tokens" ? (t.chatbotTokenLimitError || "⚠️ Limite quotidienne de tokens atteinte. Réessaie demain.")
+        e.message === "daily_tokens" ? (t.chatbotTokenLimitError || "⚠️ Limite quotidienne de tokens atteinte. Réessaie demain.")
         : (t.chatbotError || "⚠️ Une erreur est survenue. Réessaie.")
       );
     } finally {

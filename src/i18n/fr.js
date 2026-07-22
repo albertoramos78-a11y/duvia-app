@@ -158,7 +158,6 @@ const fr = {
     chatbotThinking:"Réflexion…",
     chatbotDisclaimer:"L'IA peut générer des erreurs. Vérifie les informations importantes.",
     chatbotError:"⚠️ Une erreur est survenue. Réessaie.",
-    chatbotDailyLimitError:"⚠️ Limite quotidienne de questions atteinte. Réessaie demain.",
     chatbotTokenLimitError:"⚠️ Limite quotidienne de tokens atteinte. Réessaie demain.",
     chatbotTokensToday:"tokens aujourd'hui",
     chatbotTokensExchange:"tokens",

@@ -7,15 +7,14 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_ROLE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 
-const DAILY_LIMIT = 20;
 const DAILY_TOKEN_LIMIT = 100000;
 const MAX_TOOL_ROUNDS = 5;
 const MAX_QUESTION_LEN = 2000;
 const MAX_HISTORY_ENTRIES = 20;
 
-// 🔧 Les 2 plafonds quotidiens (20 questions, 100 000 tokens) se réinitialisent
-// à minuit HEURE DE PARIS, pas sur une fenêtre glissante de 24h (comportement
-// demandé explicitement — Paris passe de UTC+1 à UTC+2 en été, d'où ce calcul
+// 🔧 Le plafond quotidien (100 000 tokens) se réinitialise à minuit HEURE DE
+// PARIS, pas sur une fenêtre glissante de 24h (comportement demandé
+// explicitement — Paris passe de UTC+1 à UTC+2 en été, d'où ce calcul
 // plutôt qu'un simple "aujourd'hui à 00:00 UTC"). Deno tourne en UTC ; on
 // dérive l'année/mois/jour tels que vus à Paris via Intl, puis on retrouve le
 // décalage UTC réel de Paris à cet instant précis (gère l'heure d'été/hiver
@@ -609,18 +608,19 @@ serve(async (req) => {
   if (subErr) return jsonResponse({ error: subErr.message }, 500);
   if (!subRow?.ai_enabled) return jsonResponse({ error: "forbidden" }, 403);
 
-  // ── Anti-abus : plafond quotidien simple (non-atomique, même schéma/
-  // justification que rephrase_message — voir migrations 0044/0045). Une
-  // seule ligne par QUESTION, pas par aller-retour d'outil interne. Les 2
-  // plafonds (questions, tokens) se réinitialisent à minuit heure de Paris,
-  // pas sur une fenêtre glissante — voir parisMidnightISO() plus haut. ──
+  // ── Anti-abus : seul le plafond de TOKENS limite (2026-07-22 — le plafond
+  // de 20 questions/jour a été retiré, un plafond en nombre de questions
+  // n'a pas de sens tant que le coût réel (tokens) reste sous contrôle).
+  // Non-atomique, même schéma que rephrase_message — voir migrations
+  // 0044/0045. Une seule ligne par QUESTION, pas par aller-retour d'outil
+  // interne. Se réinitialise à minuit heure de Paris, pas sur une fenêtre
+  // glissante — voir parisMidnightISO() plus haut. ──
   const sinceParisMidnight = parisMidnightISO();
   const { data: usageRows, error: usageErr } = await admin
     .from("ai_usage_log")
     .select("input_tokens, output_tokens")
     .eq("user_id", userId).eq("feature", "chatbot_query").gte("used_at", sinceParisMidnight);
   if (usageErr) return jsonResponse({ error: usageErr.message }, 500);
-  if ((usageRows || []).length >= DAILY_LIMIT) return jsonResponse({ error: "daily_limit_reached" }, 429);
   const tokensUsedSoFar = (usageRows || []).reduce((s, r) => s + (r.input_tokens || 0) + (r.output_tokens || 0), 0);
   if (tokensUsedSoFar >= DAILY_TOKEN_LIMIT) return jsonResponse({ error: "daily_token_limit_reached" }, 429);
 

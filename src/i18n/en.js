@@ -159,7 +159,6 @@ const en = {
     chatbotThinking:"Thinking…",
     chatbotDisclaimer:"AI can make mistakes. Check important information.",
     chatbotError:"⚠️ Something went wrong. Try again.",
-    chatbotDailyLimitError:"⚠️ Daily question limit reached. Try again tomorrow.",
     chatbotTokenLimitError:"⚠️ Daily token limit reached. Try again tomorrow.",
     chatbotTokensToday:"tokens today",
     chatbotTokensExchange:"tokens",
