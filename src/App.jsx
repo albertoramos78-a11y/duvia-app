@@ -11965,10 +11965,17 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
     if (!fullDs) { setFullDsPos(null); return; }
     const el = document.querySelector(`[data-ds="${fullDs}"]`);
     if (!el) { setFullDsPos(null); return; }
-    const rect = el.getBoundingClientRect();
-    const modalMaxHeight = window.innerHeight * 0.9;
-    const top = Math.min(Math.max(rect.bottom + 8, 8), Math.max(8, window.innerHeight - modalMaxHeight - 8));
-    setFullDsPos({ top });
+    // 🔧 La ligne cliquée peut être hors champ (liste longue, l'utilisateur
+    // avait défilé avant de cliquer) — on la ramène d'abord dans le champ
+    // visible, puis on mesure sa position réelle une fois le scroll appliqué
+    // (rAF : scrollIntoView peut être asynchrone selon le navigateur).
+    el.scrollIntoView({ block: "center", behavior: "auto" });
+    requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect();
+      const modalMaxHeight = window.innerHeight * 0.9;
+      const top = Math.min(Math.max(rect.bottom + 8, 8), Math.max(8, window.innerHeight - modalMaxHeight - 8));
+      setFullDsPos({ top });
+    });
   }, [fullDs]);
   const [showLegend,setShowLegend]=useState(false);
   const [showCalActionsMenu,setShowCalActionsMenu]=useState(false);
@@ -12648,7 +12655,11 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
       </div>
       )}
       </div>
-      {fullDs&&!readOnly&&!editBlocked&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:300}} onClick={()=>setFullDs(null)}><div onClick={e=>e.stopPropagation()} style={{position:"fixed",top:fullDsPos?.top??90,left:"50%",transform:"translateX(-50%)",width:"calc(100% - 32px)",maxWidth:480,maxHeight:"90vh",overflowY:"auto",borderRadius:18}}><EditDay ds={fullDs} onClose={()=>setFullDs(null)} editRef={editRef} /></div></div>)}
+      {/* 🔧 zIndex:9999 (2026-07-22, était 300) : trop bas, l'en-tête de l'app
+          (bandeau logo/icônes/bêta) passait par-dessus sans être flouté —
+          même valeur que la modale de reset qui, elle, couvrait déjà tout
+          correctement. */}
+      {fullDs&&!readOnly&&!editBlocked&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:9999}} onClick={()=>setFullDs(null)}><div onClick={e=>e.stopPropagation()} style={{position:"fixed",top:fullDsPos?.top??90,left:"50%",transform:"translateX(-50%)",width:"calc(100% - 32px)",maxWidth:480,maxHeight:"90vh",overflowY:"auto",borderRadius:18}}><EditDay ds={fullDs} onClose={()=>setFullDs(null)} editRef={editRef} /></div></div>)}
     </div>
   );
 }
