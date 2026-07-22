@@ -234,7 +234,7 @@ Tu peux :
 3. Résumer des conversations, décisions ou accords à partir des messages récupérés via l'outil de messagerie, sur demande.
 4. Reformuler un message que l'utilisateur colle dans la conversation s'il te semble agressif, accusateur ou conflictuel, et expliquer brièvement en quoi la reformulation est plus constructive.
 5. Traduire du texte à la demande, dans n'importe quelle langue.
-6. Calculer le nombre de jours de garde de chaque parent sur une période donnée (ex. "combien de jours de garde ce mois-ci ?", "et entre le 15 mars et le 10 avril ?") — utilise l'outil get_custody_days, jamais un calcul approximatif ou une déduction manuelle du planning. Si l'outil répond child_selection_required, demande à l'utilisateur pour quel enfant avant de continuer, puis rappelle l'outil avec le child_id choisi.
+6. Calculer le nombre de jours de garde de chaque parent sur une période donnée (ex. "combien de jours de garde ce mois-ci ?", "et entre le 15 mars et le 10 avril ?") — utilise l'outil get_custody_days, jamais un calcul approximatif ou une déduction manuelle du planning. Les champs parent_0_days/parent_1_days correspondent, DANS L'ORDRE, aux parents renvoyés par get_family_config (appelle-le si tu n'as pas déjà les prénoms) — nomme toujours les parents par leur prénom dans ta réponse, jamais par leur index ni par "un parent"/"l'autre parent". Si l'outil répond child_selection_required, demande à l'utilisateur pour quel enfant avant de continuer, puis rappelle l'outil avec le child_id choisi.
 
 Tu ne réponds JAMAIS à des questions d'ordre juridique (garde, pension alimentaire, droits parentaux, procédures judiciaires, litiges) — dans ce cas, explique poliment que tu ne peux pas conseiller sur ces sujets et recommande de consulter un avocat ou un professionnel qualifié. Tu peux donner des conseils GÉNÉRAUX d'organisation, de communication ou de médiation, mais jamais d'interprétation de la loi ni d'affirmation sur les droits d'un parent.
 
@@ -243,6 +243,7 @@ Mode de réponse — ultra-concis, anti-hallucination (ordre de priorité strict
 - Privilégie les faits aux explications. Pas d'introduction, de conclusion, de politesse ni de reformulation de la question.
 - N'invente et ne devine jamais une information, ne complète jamais une donnée manquante par déduction — utilise les outils fournis pour vérifier plutôt que de supposer. Si une information est indisponible dans les outils ou reste incertaine, dis-le explicitement ("je ne sais pas" / information non disponible) plutôt que d'inventer une réponse.
 - Si la question est ambiguë, pose uniquement la question indispensable pour la clarifier, rien d'autre.
+- Quand tu mentionnes un parent, un enfant ou un observateur dans ta réponse, utilise toujours son prénom réel (via get_family_config ou déjà connu du contexte) — jamais "un parent", "l'autre parent", "parent 0/1" ou une référence générique.
 - Reste factuel et neutre — le contexte familial est parfois sensible. Réponds dans la langue de la question.`;
 
 const TOOLS = [
@@ -611,6 +612,17 @@ serve(async (req) => {
   // cleanHistory plus bas.
   const messages: any[] = [...clientHistory.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: question }];
 
+  // 🔧 Claude n'a par défaut aucune idée fiable de la date du jour — sans
+  // cette ligne, une question relative ("ce mois-ci", "la semaine prochaine")
+  // se traduit en dates devinées, parfois dans la mauvaise année. Calculée
+  // fraîche à CHAQUE requête (jamais mise en cache dans SYSTEM_PROMPT, qui
+  // est un const statique), heure de Paris pour rester cohérent avec
+  // parisMidnightISO() ci-dessus et le fuseau des utilisateurs.
+  const todayParisStr = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
+  const systemPromptWithDate = `${SYSTEM_PROMPT}\n\nDate du jour (heure de Paris) : ${todayParisStr}. Utilise cette date comme référence fiable pour toute expression temporelle relative ("ce mois-ci", "la semaine prochaine", "hier", "dans 10 jours"...) — ne devine ni n'estime jamais la date actuelle autrement.`;
+
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
 
@@ -622,7 +634,7 @@ serve(async (req) => {
         body: JSON.stringify({
           model: "claude-sonnet-5",
           max_tokens: 1024,
-          system: SYSTEM_PROMPT,
+          system: systemPromptWithDate,
           thinking: { type: "disabled" },
           tools: TOOLS,
           messages,
