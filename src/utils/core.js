@@ -842,3 +842,18 @@ export function resolveGuard(ds, cfg, childId) {
   if (type === "custom" && pattern?.length) return pattern[diff % pattern.length] || null;
   return null;
 }
+
+// ── Calendrier : fusion/effacement d'un override manuel ─────────────────────
+// CORRECTIF (2026-07-22) : effacer un override devait SUPPRIMER la clé du
+// jour, pas fusionner des champs vides dedans — sinon cfg.overrides[ds]
+// devient un objet vide {} qui reste "truthy" pour resolveGuard
+// (if(cfg.overrides?.[ds])), et ce jour reste bloqué sur un override fantôme
+// au lieu de retomber sur le motif par défaut. Trouvé via verify_custody_parity
+// sur une famille réelle : la table custody_overrides supprimait déjà
+// correctement sa ligne à l'effacement (shadowDeleteOverride), révélant
+// l'asymétrie avec le JSON qui ne supprimait jamais rien (App.jsx, updateCal).
+export function computeOverrideUpdate(existingOverride, data) {
+  const merged = { ...(existingOverride || {}), ...data };
+  const isCleared = merged.parentIdx === undefined && !merged.obsId;
+  return { merged, isCleared };
+}

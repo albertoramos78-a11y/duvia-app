@@ -24,7 +24,7 @@ import { usePush } from "./hooks/usePush";
 import { getMyLocation, setMyLocation } from "./services/supabase/locationService";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION, APP_VERSION } from './config.js';
-import { nextPensionDueDate } from './utils/core.js';
+import { nextPensionDueDate, computeOverrideUpdate } from './utils/core.js';
 import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact, weatherIconFor, getInitials, aggregateHourlyPeriods } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, LICORNE, FILLEUL, BRAND, BRAND_GRADIENT, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
@@ -4626,10 +4626,20 @@ export default function App() {
     return addHistEntry(action, detail, type, cfg.parents?.[user?.parentIdx]?.name || user?.name || "Système", myUid||null);
   }
   function updateCal(ds,data) {
-    setCfg(c=>({...c,overrides:{...c.overrides,[ds]:{...(c.overrides[ds]||{}),...data}}}));
+    const { merged, isCleared } = computeOverrideUpdate(cfg.overrides?.[ds], data);
+    setCfg(c=>{
+      const nextOverrides = {...c.overrides};
+      // 🔧 Effacer un override doit SUPPRIMER la clé, pas fusionner des champs
+      // vides dedans — sinon overrides[ds] reste un objet {} qui passe pour
+      // un "vrai" override côté resolveGuard (if(cfg.overrides?.[ds])), et ce
+      // jour reste bloqué au lieu de retomber sur le motif par défaut. Voir
+      // computeOverrideUpdate (core.js) — trouvé via verify_custody_parity.
+      if (isCleared) delete nextOverrides[ds];
+      else nextOverrides[ds] = merged;
+      return {...c, overrides: nextOverrides};
+    });
     // Phase 3 — écriture en parallèle (silencieuse)
-    const merged = {...(cfg.overrides?.[ds]||{}), ...data};
-    if (merged.parentIdx===undefined && !merged.obsId) {
+    if (isCleared) {
       custodyShadow?.shadowDeleteOverride?.(null, ds);
     } else {
       custodyShadow?.shadowOverride?.({

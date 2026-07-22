@@ -23,6 +23,7 @@ import {
   weatherIconFor, isWithinForecastWindow, aggregateHourlyPeriods,
   getInitials,
   nextPensionDueDate,
+  computeOverrideUpdate,
 } from "./core.js";
 
 // ── B1 — validatePassword (majuscule + caractère spécial désormais requis) ────
@@ -1008,4 +1009,22 @@ test("resolveGuard : motif non confirmé renvoie null", () => {
   const cfg = makeTestCfg({ custody: { type: "weekAlt", weekAlt: { evenIdx: 0 }, exclusive: { mainIdx: 0, weIdx: 1, parity: "even" }, pattern: [], startMonth: "01", startYear: "2024", confirmed: false } });
   const result = resolveGuard("2026-07-21", cfg, null);
   assert.equal(result, null);
+});
+
+// ── computeOverrideUpdate — non-régression bug updateCal (2026-07-22) ────────
+test("computeOverrideUpdate : effacer un override renvoie isCleared=true", () => {
+  const { isCleared } = computeOverrideUpdate({ parentIdx: 0, timeType: "full" }, { parentIdx: undefined, obsId: null, obsName: null });
+  assert.equal(isCleared, true);
+});
+
+test("computeOverrideUpdate : poser un override sur un parent renvoie isCleared=false", () => {
+  const { merged, isCleared } = computeOverrideUpdate(null, { parentIdx: 1, timeType: "full" });
+  assert.equal(isCleared, false);
+  assert.equal(merged.parentIdx, 1);
+});
+
+test("computeOverrideUpdate : poser un override sur un observateur (obsId, sans parentIdx) renvoie isCleared=false", () => {
+  const { merged, isCleared } = computeOverrideUpdate(null, { parentIdx: undefined, obsId: "obs1", obsName: "Mamie" });
+  assert.equal(isCleared, false);
+  assert.equal(merged.obsId, "obs1");
 });
