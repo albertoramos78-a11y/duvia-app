@@ -11956,6 +11956,20 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
   const setCur=useCallback((v)=>{ setCurRaw(prev=>{ const next=typeof v==="function"?v(prev):v; _setCalMs(next.getTime()); return next; }); },[_setCalMs]);
   const [inlineDs,setInlineDs]=useState(null);
   const [fullDs,setFullDs]=useState(null);
+  // 🔧 Position de la modale d'édition complète (2026-07-22) : ancrée sous la
+  // ligne de la date cliquée (via son attribut data-ds) plutôt que centrée
+  // au milieu de l'écran, qui pouvait tomber loin de la zone visible sur une
+  // longue liste et obliger à scroller jusqu'à elle.
+  const [fullDsPos,setFullDsPos]=useState(null);
+  useEffect(() => {
+    if (!fullDs) { setFullDsPos(null); return; }
+    const el = document.querySelector(`[data-ds="${fullDs}"]`);
+    if (!el) { setFullDsPos(null); return; }
+    const rect = el.getBoundingClientRect();
+    const modalMaxHeight = window.innerHeight * 0.9;
+    const top = Math.min(Math.max(rect.bottom + 8, 8), Math.max(8, window.innerHeight - modalMaxHeight - 8));
+    setFullDsPos({ top });
+  }, [fullDs]);
   const [showLegend,setShowLegend]=useState(false);
   const [showCalActionsMenu,setShowCalActionsMenu]=useState(false);
   const [calView,setCalView]=useLocalStorage("duvia_cal_view","list");
@@ -12596,7 +12610,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
           const todayStr=toStr(new Date()),isToday=ds===todayStr;
           return (
             <div key={i}>
-              <div style={{display:"grid",gridTemplateColumns:"minmax(20px,28px) minmax(56px,82px) 1.2fr 1fr",padding:"8px 12px",borderBottom:`1px solid ${C.bor}`,background:isInl?C.sur:isToday?`${C.vio}18`:isWE?`${C.yel}11`:"transparent",transition:"background .15s",borderLeft:isToday?`3px solid ${C.vio}`:"3px solid transparent"}}>
+              <div data-ds={ds} style={{display:"grid",gridTemplateColumns:"minmax(20px,28px) minmax(56px,82px) 1.2fr 1fr",padding:"8px 12px",borderBottom:`1px solid ${C.bor}`,background:isInl?C.sur:isToday?`${C.vio}18`:isWE?`${C.yel}11`:"transparent",transition:"background .15s",borderLeft:isToday?`3px solid ${C.vio}`:"3px solid transparent"}}>
                 <span style={{fontFamily:"JetBrains Mono",fontSize:10,color:C.mut,alignSelf:"center"}}>{dw===0?wk:""}</span>
                 <div style={{alignSelf:"center"}}>
                   <div style={{fontFamily:"JetBrains Mono",fontSize:13,fontWeight:700,color:isToday?C.vio:isWE?C.yel:C.txt,display:"flex",alignItems:"center",gap:5}}>
@@ -12634,7 +12648,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
       </div>
       )}
       </div>
-      {fullDs&&!readOnly&&!editBlocked&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setFullDs(null)}><div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto",borderRadius:18}}><EditDay ds={fullDs} onClose={()=>setFullDs(null)} editRef={editRef} /></div></div>)}
+      {fullDs&&!readOnly&&!editBlocked&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:300}} onClick={()=>setFullDs(null)}><div onClick={e=>e.stopPropagation()} style={{position:"fixed",top:fullDsPos?.top??90,left:"50%",transform:"translateX(-50%)",width:"calc(100% - 32px)",maxWidth:480,maxHeight:"90vh",overflowY:"auto",borderRadius:18}}><EditDay ds={fullDs} onClose={()=>setFullDs(null)} editRef={editRef} /></div></div>)}
     </div>
   );
 }
