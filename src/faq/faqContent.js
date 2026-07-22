@@ -87,6 +87,29 @@ export const FAQ_SECTIONS = {
           q: "Comment créer une dépense récurrente (ex. cantine mensuelle) ?",
           a: "Lors de l'ajout d'une dépense, active **Dépense récurrente**, choisis la fréquence (**Hebdo.**, **Mensuelle** ou **Annuelle**) ainsi qu'une date de début/fin — l'app génère automatiquement une occurrence par période.",
         },
+        {
+          q: "Comment supprimer une dépense ?",
+          a: "Ouvre la dépense (ou utilise le bouton **✕** dans la liste) puis **🗑 Supprimer**. Si elle n'a pas encore été validée par l'autre parent, elle est supprimée immédiatement. Si elle est déjà **confirmée**, la suppression n'est plus unilatérale : l'autre parent reçoit une demande de suppression qu'il doit accepter ou refuser. Pour une dépense récurrente, une fenêtre demande si tu veux supprimer uniquement cette occurrence ou toute la série.",
+        },
+      ],
+    },
+    {
+      id: "pension",
+      icon: "💶",
+      title: "Pension alimentaire",
+      items: [
+        {
+          q: "Comment configurer la pension alimentaire ?",
+          a: "Onglet **Dépenses**, section **💶 Pension alimentaire** → **Configurer la pension** → indique qui paie, le montant mensuel, le jour d'échéance dans le mois (1-28) et une date de début → **Proposer**. C'est une proposition : l'autre parent doit **Confirmer** (ou **Refuser**) avant qu'elle devienne active. Le proposeur peut aussi **Annuler** sa proposition tant qu'elle est en attente.",
+        },
+        {
+          q: "Comment signaler qu'un versement de pension a été effectué ?",
+          a: "Une fois la pension active, le parent qui paie clique sur **Marquer payé** sur l'échéance du mois. Le parent qui reçoit voit alors apparaître **Confirmer** (le versement est acté) ou **Contester** (avec un motif) s'il estime ne pas l'avoir reçu.",
+        },
+        {
+          q: "Comment modifier le montant ou la date de la pension ?",
+          a: "Bouton **Modifier le montant** à côté de la pension active — cela crée une nouvelle proposition (montant, jour, date) que l'autre parent doit à nouveau confirmer, exactement comme à la configuration initiale.",
+        },
       ],
     },
     {
