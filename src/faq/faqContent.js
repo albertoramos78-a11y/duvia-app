@@ -70,7 +70,7 @@ export const FAQ_SECTIONS = {
         },
         {
           q: "Que voient un enfant et un observateur dans l'application ?",
-          a: "Les deux ont accès au **Calendrier**, à la fiche **Enfant**, aux **Contacts**, à la **Messagerie** et à la roue de récompenses (**Jeu**) — mais PAS aux **Dépenses** ni au **Coffre-fort**, réservés aux parents. L'**enfant** a en plus son propre **Emploi du temps** en lecture seule ; l'**observateur** n'y a pas accès du tout. Seuls les parents peuvent modifier la configuration de la famille (modèle de garde, dates spéciales, invitations) via **Configuration famille** — ni un enfant ni un observateur n'y ont accès.",
+          a: "Les deux ont accès au **Calendrier**, à la fiche **Enfant**, aux **Contacts** et à la **Messagerie** — mais PAS aux **Dépenses** ni au **Coffre-fort**, réservés aux parents. L'**enfant** a en plus son propre **Emploi du temps** en lecture seule (pas l'observateur) ; l'**observateur**, lui, a en plus accès à la roue de récompenses (**Jeu**), au **Parrainage** et à **Donner mon avis** (pas l'enfant). Seuls les parents peuvent modifier la configuration de la famille (modèle de garde, dates spéciales, invitations) via **Configuration famille** — ni un enfant ni un observateur n'y ont accès.",
         },
       ],
     },
@@ -210,15 +210,15 @@ export const FAQ_SECTIONS = {
       items: [
         {
           q: "Comment fonctionne la roue Duvia ?",
-          a: "Onglet **Jeu** (🎡) → tourne la roue une fois le délai d'attente écoulé (7 jours pour les parents/observateurs, 2 jours pour les enfants). Réservée aux comptes **Premium** côté parents (verrouillée en formule gratuite) — mais les enfants et observateurs peuvent toujours jouer, même dans une famille freemium, pour les lots \"thème\" uniquement (jamais les mois/année Premium offerts, réservés au parent qui paie réellement l'abonnement).",
+          a: "Onglet **Jeu** (🎡, parents et observateurs uniquement — pas les enfants) → tourne la roue une fois le délai d'attente écoulé, **7 jours** pour tout le monde. Réservée aux familles **Premium** (Trial, Premium, Premium+IA) — verrouillée en formule gratuite, aussi bien pour un parent que pour un observateur. Exception : un tour de roue gagné par parrainage reste jouable même verrouillé (voir ci-dessous), mais sans jamais pouvoir faire gagner un abonnement gratuit.",
         },
         {
           q: "Quels lots peut-on gagner à la roue ?",
-          a: "Des thèmes visuels de l'application : **🎮 Jeu vidéo**, **🦄 Licorne** (permanents), et les thèmes saisonniers **🌴 Été**, **🎾 Tennis** (Roland-Garros) et **⚽ Coupe du monde** (uniquement pendant leur période de l'année). Pour le parent qui paie réellement Premium, la roue peut aussi faire gagner **1 mois** ou **1 an** d'abonnement offert.",
+          a: "Des thèmes visuels de l'application : **🎮 Jeu vidéo**, **🦄 Licorne** (permanents), et les thèmes saisonniers **🌴 Été**, **🎾 Tennis** (Roland-Garros) et **⚽ Coupe du monde** (uniquement pendant leur période de l'année). Pour le parent qui paie réellement Premium (pas pour un parent couvert par le Premium de son co-parent, ni pour un observateur), la roue peut aussi faire gagner **1 mois** ou **1 an** d'abonnement offert.",
         },
         {
           q: "Comment gagner des tours de roue supplémentaires ?",
-          a: "Chaque filleul parrainé qui valide son compte (menu ☰ → **🎁 Parrainage**) t'offre un tour de roue en plus, quel que soit ton statut actuel.",
+          a: "Chaque filleul parrainé qui valide son compte (menu ☰ → **🎁 Parrainage**, accessible aux parents comme aux observateurs) t'offre un tour de roue en plus. Ce tour reste utilisable même si tu es par ailleurs verrouillé (famille freemium) — il permet de gagner un thème, mais jamais un abonnement gratuit.",
         },
         {
           q: "Peut-on acheter un thème directement, sans passer par la roue ?",

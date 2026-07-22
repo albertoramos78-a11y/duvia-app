@@ -5452,6 +5452,13 @@ export default function App() {
                   <button onClick={()=>{setMenuTab("prefs");setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
                     <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>⚙️</span><span style={{flex:1,textAlign:"left"}}>{t.obsPrefsMenu||t.menuPrefs||"Préférences"}</span>
                   </button>
+                  <button onClick={()=>{setMenuTab("parrainage");setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:`${C.pin}08`,color:C.pin,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                    <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>🎁</span><span style={{flex:1,textAlign:"left"}}>{t.parrainage||"Parrainage"}</span>
+                    {(sub.refMonths||0)>0 && <span style={{background:`${C.grn}22`,color:C.grn,borderRadius:10,padding:"2px 7px",fontSize:10,fontWeight:800}}>+{sub.refMonths} mois</span>}
+                  </button>
+                  <button onClick={()=>{setMenuTab("rating");setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:`${C.yel}08`,color:C.yel,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                    <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>⭐</span><span style={{flex:1,textAlign:"left"}}>{t.rateAppMenu||"Donner mon avis"}</span>
+                  </button>
                   <button onClick={async()=>{
                     if(!(await confirmAsync(t.obsLeaveFamilyConfirm||"Quitter la famille ? Vous n'aurez plus accès au calendrier ni à la messagerie.", {icon:"🚪"}))) return;
                     const res = await familySync?.leaveFamily?.();
@@ -19462,7 +19469,7 @@ function pickSegment(isSubscriber = true, serverMonetary = "none") {
   return { segIdx, prize };
 }
 
-function WheelGame({ isPremium, isAdmin=false, restrictedRole=false, userId="", isSubscriber=true, isParent=true }) {
+function WheelGame({ isPremium, isAdmin=false, userId="", isSubscriber=true }) {
   const {C,t,lang,sub,setSub,myUid} = useApp();
   const [spinning, setSpinning] = useState(false);
   const [deg, setDeg] = useState(0);
@@ -19471,8 +19478,9 @@ function WheelGame({ isPremium, isAdmin=false, restrictedRole=false, userId="", 
   const [particles, setParticles] = useState([]);
 
   const now = Date.now();
-  // Cooldown : 7 jours pour les parents, 2 jours pour enfants/observateurs
-  const cooldownMs = isParent ? 7*24*60*60*1000 : 2*24*60*60*1000;
+  // 🔧 (2026-07-22) Cooldown uniforme 7 jours — la roue n'est plus accessible
+  // aux enfants (voir GameTab), seuls parents/observateurs y jouent désormais.
+  const cooldownMs = 7*24*60*60*1000;
   const isAdminSub = isAdmin || sub._admin || false;
   // 🔧 Clé de cooldown : UUID Supabase (myUid) de préférence à userId (id
   // local Date.now(), voir doReg) — userId est régénéré à chaque
@@ -19548,7 +19556,7 @@ function WheelGame({ isPremium, isAdmin=false, restrictedRole=false, userId="", 
         setSpinning(false);
         setResult(prize);
         setShowResult(true);
-        if(!restrictedRole) {
+        {
           const now_ts = new Date().toISOString();
           setSpinTimestamps(h=>({...h,[spinKey]:now_ts}));
           setSub(s=>({...s,
@@ -19560,11 +19568,6 @@ function WheelGame({ isPremium, isAdmin=false, restrictedRole=false, userId="", 
             earnedRG:      prize.id==="rg"      || s.earnedRG,
             earnedWC:      prize.id==="wc"      || s.earnedWC,
           }));
-        } else {
-          // Rôles restreints → on enregistre quand même le cooldown
-          const now_ts = new Date().toISOString();
-          setSpinTimestamps(h=>({...h,[spinKey]:now_ts}));
-          setSub(s=>({...s, lastSpinByUser: { ...(s.lastSpinByUser||{}), [spinKey]: now_ts }}));
         }
         if(prize.id!=="nothing") {
           setParticles(Array.from({length:40},(_,i)=>({
@@ -19608,9 +19611,7 @@ function WheelGame({ isPremium, isAdmin=false, restrictedRole=false, userId="", 
         <div style={{fontSize:11,color:C.mut,marginTop:3}}>
           {isAdmin
             ? t.wheelAdminMode
-            : restrictedRole
-              ? `${t.wheelFunPrefix} ${isParent?t.unitDayAbbrevParent:t.unitDayAbbrevChild}`
-              : `${t.wheelNormalPrefix} ${isParent?t.cooldown7days:t.cooldown2days} ${t.wheelPremiumSuffix}`}
+            : `${t.wheelNormalPrefix} ${t.cooldown7days} ${t.wheelPremiumSuffix}`}
         </div>
       </div>
 
@@ -19701,7 +19702,7 @@ function WheelGame({ isPremium, isAdmin=false, restrictedRole=false, userId="", 
             {result.id==="licorne" && t.wheelResultLicorneUnlocked}
             {result.id==="rg" && (isRGPeriod()?t.wheelResultRGUnlocked:t.wheelResultRGEarned)}
             {result.id==="wc" && (isWCPeriod()?t.wheelResultWCUnlocked:t.wheelResultWCEarned)}
-            {result.id==="nothing" && `${t.wheelResultNothingPrefix} ${isParent?t.cooldown7days:t.cooldown2days} ${t.wheelResultNothingSuffix}`}
+            {result.id==="nothing" && `${t.wheelResultNothingPrefix} ${t.cooldown7days} ${t.wheelResultNothingSuffix}`}
           </div>
           <button onClick={()=>setShowResult(false)} style={{padding:"8px 22px",background:result.color,color:"#fff",fontSize:13,fontWeight:800,borderRadius:20}}>
             {result.id==="nothing"?t.wheelOk:t.wheelGreat}
@@ -20033,8 +20034,17 @@ function GameTab() {
   // cette fonctionnalité (ex. un parent slot 0 en Trial, jamais payeur).
   const isSubscriber = isParent && perms.spinWinSub;
   const isAdult   = (isParent || isObs) && !isAdm; // adulte non-admin
-  const restrictedRole = (isChild || isObs) && !isAdm; // roue sans gains d'abonnement
-  const cooldownLabel = isChild ? t.cooldown2days : t.cooldown7days;
+  // 🔧 (2026-07-22) La roue n'est plus accessible aux enfants (déjà hors de
+  // portée : pas d'onglet Jeu dans leur TABS). Les observateurs suivent
+  // désormais le MÊME verrou Premium que les parents (avant : toujours
+  // autorisés quel que soit le palier de la famille) — seul un tour de roue
+  // gagné par parrainage (pendingSpins) reste jouable malgré le verrou,
+  // sans jamais pouvoir faire gagner un abonnement gratuit (déjà garanti,
+  // indépendamment de ce verrou, par isSubscriber / spin_wheel_check_
+  // monetary_prize côté serveur).
+  const hasBonusSpin = (sub.pendingSpins||0) > 0;
+  const canAccessWheel = prem || hasBonusSpin;
+  const cooldownLabel = t.cooldown7days;
   const userId = String(user?.id || "");
 
   // Lots cadeaux reçus par cet enfant (si le joueur est un enfant)
@@ -20046,12 +20056,12 @@ function GameTab() {
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
         <div>
           <div style={{fontSize:16,fontWeight:900,background:"linear-gradient(135deg,#FFD700,#ff6bb5,#7c6fcd)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{t.wheelTitle}</div>
-          <div style={{fontSize:11,color:C.mut}}>{restrictedRole ? `${t.wheelTabSubFunPrefix} ${cooldownLabel}` : `${t.wheelTabSubPremiumPrefix} ${cooldownLabel} ${t.wheelTabSubPremiumSuffix}`}</div>
+          <div style={{fontSize:11,color:C.mut}}>{`${t.wheelTabSubPremiumPrefix} ${cooldownLabel} ${t.wheelTabSubPremiumSuffix}`}</div>
         </div>
       </div>
 
-      {/* Lock banner for freemium (not shown for restricted roles or trial users) */}
-      {!prem && !restrictedRole && (
+      {/* Lock banner for freemium (not shown if a referral bonus spin is available) */}
+      {!canAccessWheel && (
         <div onClick={onUpgrade} style={{cursor:"pointer",background:`linear-gradient(135deg,${C.vio}22,${C.blu}22)`,border:`2px dashed ${C.vio}`,borderRadius:14,padding:"20px",textAlign:"center",marginBottom:16}}>
           <div style={{fontSize:36,marginBottom:8}}>🔒</div>
           <div style={{fontWeight:900,fontSize:15,color:C.vio,marginBottom:6}}>{t.wheelPremiumFeature}</div>
@@ -20067,13 +20077,10 @@ function GameTab() {
       {/* Wheel game */}
       <div className="card" style={{marginBottom:14,borderColor:`${C.vio}44`,padding:"20px 14px"}}>
         <WheelGame
-          isPremium={prem || restrictedRole}
+          isPremium={canAccessWheel}
           isAdmin={sub._admin||false}
-          restrictedRole={restrictedRole}
           userId={userId}
           isSubscriber={isSubscriber}
-          /* 🔧 Observateurs alignés sur le cooldown 7j des parents, pas 2j comme les enfants */
-          isParent={isParent || isObs || isAdm}
         />
       </div>
 
