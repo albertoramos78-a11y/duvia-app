@@ -5752,6 +5752,15 @@ export default function App() {
                 </div>
                 <ObserverPrefsTab />
               </div>
+            ) : menuTab==="parrainage" ? (
+              /* 🔧 (2026-07-22) Manquait ici : le bouton menu "Parrainage" fait
+                 déjà setMenuTab("parrainage") depuis 2026-07-22, mais cette
+                 branche (rendu observateur) ne savait afficher que "prefs" —
+                 tout le reste retombait sur l'onglet du bas déjà affiché, donc
+                 le clic semblait ne rien faire du tout. */
+              <ParrainageSection />
+            ) : menuTab==="rating" ? (
+              <RatingTab />
             ) : (
               <>
                 {tab===0 && <CalTab readOnly updateCal={()=>{}} />}
