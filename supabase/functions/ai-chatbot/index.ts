@@ -225,10 +225,182 @@ function resolveCustodyDayFromTables(ds: string, childId: number | null, ctx: Cu
   return { parentIdx: null, source: null };
 }
 
+// 🔧 (2026-07-22) Contenu dupliqué depuis src/faq/faqContent.js (FAQ_SECTIONS.fr,
+// affiché en app par FaqModal, menu ☰ → ❓ Aide / FAQ). Avant ce correctif,
+// l'assistant IA n'avait AUCUNE connaissance du contenu de cette FAQ — il
+// répondait "je n'ai pas d'information" sur des sujets pourtant déjà
+// documentés (ex. la roue Duvia), alors que sa consigne anti-hallucination
+// lui interdit justement de deviner. Format texte brut (pas l'objet JS) pour
+// économiser des tokens de contexte par rapport à la syntaxe JSON/JS.
+// 🔧 Les Edge Functions Supabase sont déployées en collant le code
+// directement dans le dashboard (voir CLAUDE.md) — pas d'import cross-fichier
+// possible ici, donc PAS de synchronisation automatique avec faqContent.js :
+// à mettre à jour manuellement si le contenu de la FAQ change.
+const FAQ_KNOWLEDGE = `## 📅 Calendrier de garde
+Q: Comment configurer le modèle de garde (garde alternée, exclusive, personnalisée) ?
+R: Ouvre le menu ☰ (en haut) → **Configuration famille** → onglet **Modèle garde** (le 4e des 4 onglets). Choisis un type : **📅 1 semaine sur 2** (alternance simple), **🏠 Garde exclusive + 1 WE/2** (un parent en semaine, l'autre un weekend sur deux), ou **✏️ Personnalisé** (motif sur-mesure de 14 jours qui se répète). Réponds aux questions qui s'affichent (qui a la semaine paire, etc.), puis appuie sur **✓ Confirmer et appliquer** — tant que ce n'est pas confirmé, le calendrier n'utilise pas encore ce motif.
+
+Q: Le calendrier semble décalé d'une semaine, que faire ?
+R: Vérifie la **Date de départ du calendrier** (champs Mois/Année), réglée dans l'onglet précédent **Dates spéciales** — c'est elle qui détermine quelle semaine compte comme « paire » ou « impaire » pour l'alternance.
+
+Q: Comment modifier un jour précis sans changer tout le modèle de garde ?
+R: Dans le calendrier (vue **☰ Détaillée** ou **▦ Miniature**), touche le jour concerné : un sélecteur rapide s'ouvre pour assigner ce jour à un parent (ou à un observateur « gardien ») en un tap, ou le remettre à zéro avec **✕**. Pour préciser une heure de prise/fin de garde, un lieu ou une note, touche **✎ Édition complète**.
+
+Q: Comment annuler toutes mes modifications ponctuelles d'un coup ?
+R: Dans le calendrier, ouvre le menu « … » (actions) → **Réinit.** → confirme. Toutes les modifications manuelles reviennent au modèle de garde de base ; le modèle lui-même n'est pas modifié.
+
+Q: Puis-je avoir un planning de garde différent pour chaque enfant ?
+R: Oui, en Premium : dans l'onglet **Dates spéciales**, désactive **Même garde pour tous les enfants**, puis configure le modèle enfant par enfant dans l'onglet **Modèle garde** (un sélecteur d'enfant apparaît en haut de cet onglet).
+
+## ✉️ Inviter un membre de la famille
+Q: Comment inviter l'autre parent ?
+R: Menu ☰ → **Configuration famille** → onglet **Famille** → section **Parents** → **+ Ajouter un parent**. Renseigne son email et/ou téléphone, appuie sur **🔗 Générer le lien d'invitation**, puis envoie-le par email ou copie-le pour le transmettre toi-même (lien valable 24h).
+
+Q: Comment inviter un enfant à rejoindre l'app ?
+R: Même onglet **Famille**, section **Enfants** — une fois son prénom renseigné, un bloc **📨 Inviter [prénom] à rejoindre l'app** apparaît avec un bouton pour générer son lien d'invitation.
+
+Q: Comment inviter un observateur (grand-parent, proche...) ?
+R: Menu ☰ → **Configuration famille** → onglet **Observateurs** → renseigne email et/ou téléphone, choisis le **Type de relation**, puis **📨 Envoyer l'invitation** (fonctionnalité Premium). Active **🏠 Peut être gardien** si cette personne doit pouvoir apparaître comme gardien ponctuel dans le calendrier.
+
+Q: Comment valider l'inscription de quelqu'un que j'ai invité ?
+R: Une fois que la personne a cliqué son lien et créé son compte, sa fiche affiche des boutons **✅ Valider** / **❌** dans l'onglet correspondant (Famille ou Observateurs) — tant que tu n'as pas validé, elle n'a pas encore accès aux données de la famille.
+
+Q: Que voient un enfant et un observateur dans l'application ?
+R: Les deux ont accès au **Calendrier**, à la fiche **Enfant**, aux **Contacts** et à la **Messagerie** — mais PAS aux **Dépenses** ni au **Coffre-fort**, réservés aux parents. L'**enfant** a en plus son propre **Emploi du temps** en lecture seule (pas l'observateur) ; l'**observateur**, lui, a en plus accès à la roue de récompenses (**Jeu**), au **Parrainage** et à **Donner mon avis** (pas l'enfant). Seuls les parents peuvent modifier la configuration de la famille (modèle de garde, dates spéciales, invitations) via **Configuration famille** — ni un enfant ni un observateur n'y ont accès.
+
+## 💰 Dépenses
+Q: Comment ajouter une dépense ?
+R: Onglet **Dépenses** → **+ Ajouter une dépense** → renseigne description, montant, qui a payé, catégorie, date, et le partage (curseur entre les deux parents) → **Enregistrer**. La dépense reste **en attente** jusqu'à ce que l'autre parent la valide.
+
+Q: Comment enregistrer un remboursement ?
+R: Onglet **Dépenses** → **💸 Remboursement** → indique qui rembourse qui, le montant et la date → **💸 Enregistrer le remboursement**. Le solde affiché en haut de l'onglet n'est mis à jour qu'une fois que l'autre parent confirme avoir bien reçu le remboursement.
+
+Q: Comment créer une dépense récurrente (ex. cantine mensuelle) ?
+R: Lors de l'ajout d'une dépense, active **Dépense récurrente**, choisis la fréquence (**Hebdo.**, **Mensuelle** ou **Annuelle**) ainsi qu'une date de début/fin — l'app génère automatiquement une occurrence par période.
+
+Q: Comment supprimer une dépense ?
+R: Ouvre la dépense (ou utilise le bouton **✕** dans la liste) puis **🗑 Supprimer**. Si elle n'a pas encore été validée par l'autre parent, elle est supprimée immédiatement. Si elle est déjà **confirmée**, la suppression n'est plus unilatérale : l'autre parent reçoit une demande de suppression qu'il doit accepter ou refuser. Pour une dépense récurrente, une fenêtre demande si tu veux supprimer uniquement cette occurrence ou toute la série.
+
+## 💶 Pension alimentaire
+Q: Comment configurer la pension alimentaire ?
+R: Onglet **Dépenses**, section **💶 Pension alimentaire** → **Configurer la pension** → indique qui paie, le montant mensuel, le jour d'échéance dans le mois (1-28) et une date de début → **Proposer**. C'est une proposition : l'autre parent doit **Confirmer** (ou **Refuser**) avant qu'elle devienne active. Le proposeur peut aussi **Annuler** sa proposition tant qu'elle est en attente.
+
+Q: Comment signaler qu'un versement de pension a été effectué ?
+R: Une fois la pension active, le parent qui paie clique sur **Marquer payé** sur l'échéance du mois. Le parent qui reçoit voit alors apparaître **Confirmer** (le versement est acté) ou **Contester** (avec un motif) s'il estime ne pas l'avoir reçu.
+
+Q: Comment modifier le montant ou la date de la pension ?
+R: Bouton **Modifier le montant** à côté de la pension active — cela crée une nouvelle proposition (montant, jour, date) que l'autre parent doit à nouveau confirmer, exactement comme à la configuration initiale.
+
+## 🗄️ Coffre-fort
+Q: Comment ajouter un document au coffre-fort ?
+R: Onglet **Coffre** (réservé Premium) → **+ Ajouter un document** → nom, catégorie, date, notes, puis **📎 Choisir un fichier** → **✓ Enregistrer**. Le document devient visible par l'autre parent.
+
+Q: Les observateurs ou les enfants ont-ils accès au coffre-fort ?
+R: Non — le coffre-fort n'est accessible qu'aux parents.
+
+## 🎒 Emploi du temps scolaire
+Q: Comment configurer l'emploi du temps d'un enfant ?
+R: Onglet **EDT** (réservé Premium/Trial Premium, non disponible en formule gratuite) → sélectionne l'enfant (s'il y en a plusieurs) puis le jour de la semaine → **+ Ajouter** → renseigne matière, professeur, horaires, salle et bâtiment.
+
+## 💬 Messagerie
+Q: Comment envoyer un message plus posé en cas de tension avec l'autre parent ?
+R: Si ton abonnement inclut l'IA, un bouton **Reformuler** propose une reformulation plus neutre de ton message avant l'envoi — tu choisis ensuite **Envoyer celle-ci** ou **Garder mon texte original**.
+
+Q: Que veut dire l'icône 🔒 ou ⚠️ à côté d'un message ?
+R: Chaque message est protégé par une empreinte d'intégrité : 🔒 **Intégrité vérifiée** signifie qu'il n'a pas été modifié depuis son envoi ; ⚠️ **Message modifié !** signale une anomalie.
+
+Q: Si je supprime une conversation, est-elle supprimée pour l'autre personne aussi ?
+R: Non — la suppression ne retire la conversation que de ta propre liste ; elle reste visible pour les autres participants.
+
+## 🔔 Notifications
+Q: Où voir mes notifications ?
+R: Menu ☰ → **🔔 Notifications**, ou l'icône cloche en haut de l'écran pour un accès rapide sans changer d'onglet.
+
+Q: Comment choisir par quel canal être notifié (email, notification push) ?
+R: Menu ☰ → **⚙️ Préférences** → section **Notifications** : un interrupteur 📧 (email) et 🔔 (push) pour chaque type d'événement (nouveau message, nouvelle dépense, nouveau document, demande à rejoindre la famille).
+
+## 🎁 Premium et parrainage
+Q: Comment passer à Premium ?
+R: Touche n'importe quel bandeau ou icône verrouillée 🔒 dans l'app : tu es redirigé vers l'écran d'abonnement, avec le comparatif des formules et le choix entre paiement mensuel ou annuel.
+
+Q: Comment fonctionne le parrainage ?
+R: Menu ☰ → **🎁 Parrainage** → partage ton lien personnel (copie du lien, email ou SMS). Chaque invitation validée te rapporte des jours Premium et/ou un tour de roue à gratter, selon ta formule actuelle.
+
+Q: Comment annuler mon abonnement Premium ?
+R: Écran **Premium** → **Annuler mon abonnement** — il reste actif jusqu'à la fin de la période déjà payée, comme pour un abonnement classique.
+
+Q: Qui obtient le statut Premium par héritage dans une famille ?
+R: Le statut affiché à chaque membre (parent, enfant, observateur) correspond au **meilleur des deux abonnements des parents** de la famille. Si un seul des deux parents souscrit à Premium, toute la famille en profite — l'autre parent voit alors « **Premium hérité** » plutôt que « Premium », avec un bandeau « 👨‍👩‍👧 Premium via votre famille » précisant qui a souscrit. Seul un tour de roue gagné compte comme « payeur réel » : gagner du Premium à la roue reste réservé à qui a effectivement souscrit, pas à qui en bénéficie par héritage.
+
+Q: Comment fonctionne l'abonnement si j'appartiens à plusieurs familles (ex. des enfants avec deux ex-conjoints différents) ?
+R: Le statut Premium est calculé **indépendamment pour chaque famille**, à partir des DEUX parents de cette famille précise. Si tu as toi-même un abonnement Premium personnel et que tu es parent actif dans plusieurs familles, il s'applique à chacune d'elles — tu ne payes qu'une fois. En revanche, être Premium dans une famille ne rend pas Premium une autre famille où tu ne serais qu'observateur : dans ce cas, c'est l'abonnement des parents de CETTE famille-là qui compte, pas le tien.
+
+## 🎡 Roue Duvia et thèmes
+Q: Comment fonctionne la roue Duvia ?
+R: Onglet **Jeu** (🎡, parents et observateurs uniquement — pas les enfants) → tourne la roue une fois le délai d'attente écoulé, **7 jours** pour tout le monde. Réservée aux familles **Premium** (Trial, Premium, Premium+IA) — verrouillée en formule gratuite, aussi bien pour un parent que pour un observateur. Exception : un tour de roue gagné par parrainage reste jouable même verrouillé (voir ci-dessous), mais sans jamais pouvoir faire gagner un abonnement gratuit.
+
+Q: Quels lots peut-on gagner à la roue ?
+R: Des thèmes visuels de l'application : **🎮 Jeu vidéo**, **🦄 Licorne** (permanents), et les thèmes saisonniers **🌴 Été**, **🎾 Tennis** (Roland-Garros) et **⚽ Coupe du monde** (uniquement pendant leur période de l'année). Pour le parent qui paie réellement Premium (pas pour un parent couvert par le Premium de son co-parent, ni pour un observateur), la roue peut aussi faire gagner **1 mois** ou **1 an** d'abonnement offert.
+
+Q: Comment gagner des tours de roue supplémentaires ?
+R: Chaque filleul parrainé qui valide son compte (menu ☰ → **🎁 Parrainage**, accessible aux parents comme aux observateurs) t'offre un tour de roue en plus. Ce tour reste utilisable même si tu es par ailleurs verrouillé (famille freemium) — il permet de gagner un thème, mais jamais un abonnement gratuit.
+
+Q: Peut-on acheter un thème directement, sans passer par la roue ?
+R: Une boutique (🎨, dans l'onglet Jeu, réservée aux adultes Premium — parents et observateurs) permet de choisir un thème pour soi ou de l'offrir à un enfant. **Pendant la bêta actuelle, les achats sont désactivés** : la roue reste le seul moyen d'obtenir un thème, gratuitement, en tournant chaque fois que le délai d'attente est passé.
+
+## 🤖 Assistant IA
+Q: Qu'est-ce que l'assistant IA et où le trouver ?
+R: Un bouton flottant 🤖 (visible en bas de l'écran) ouvre une fenêtre de discussion. Réservé aux abonnements **Premium+IA** — les autres formules ne voient pas ce bouton.
+
+Q: Que peut lui demander l'assistant IA ?
+R: Deux types de questions : des questions générales sur l'utilisation de l'app ("comment inviter un observateur ?"), et des questions sur les données de TA propre famille (nombre de jours de garde sur une période, solde des dépenses, météo, résumé de messages) — il va chercher les vraies données avant de répondre, il n'invente rien. Il peut aussi reformuler un message tendu avant l'envoi, ou traduire un texte.
+
+Q: Y a-t-il une limite d'utilisation de l'assistant IA ?
+R: Oui, un quota quotidien de tokens (unité de calcul de l'IA), affiché sous forme de barre de progression en haut de la fenêtre de l'assistant — elle se réinitialise chaque jour à minuit (heure de Paris). Au-delà, l'assistant indique que la limite du jour est atteinte et invite à réessayer le lendemain.
+
+Q: Comment masquer rapidement l'assistant IA s'il gêne ce qu'il y a derrière ?
+R: Double-tape n'importe où sur l'écran : la bulle (et la fenêtre de discussion si elle était ouverte) se masque instantanément. Un second double-tap la fait réapparaître au même endroit.
+
+## ⚙️ Réglages
+Q: Comment changer la langue de l'application ?
+R: Menu ☰ → **⚙️ Préférences** : le sélecteur de langue se trouve tout en haut de cet écran.
+
+Q: Comment changer de thème (clair, sombre) ?
+R: Touche le petit bouton palette en haut de l'écran, à côté du logo Duvia — il fait défiler les modes 🎨 (thème coloré) → ☀️ (clair) → 🌙 (sombre) à chaque tap.
+
+Q: Comment changer le pays ou la zone scolaire ?
+R: Menu ☰ → **Configuration famille** → onglet **Dates spéciales** → menus **Pays** et **Zone** (cette zone sert à calculer les bonnes dates de vacances scolaires).
+
+## 🛟 Aide, avis et installation
+Q: Comment signaler un bug ?
+R: Menu ☰ → **🐛 Signaler un problème** → décris le souci dans le champ de texte, coche la case pour joindre une capture d'écran de l'app si elle peut aider (elle est prise automatiquement avant l'ouverture de la fenêtre), puis envoie.
+
+Q: Comment donner mon avis sur l'application ?
+R: Menu ☰ → **⭐ Donner mon avis** → choisis une note de 1 à 5 étoiles et ajoute un commentaire si tu veux. Tu peux revenir modifier ton avis plus tard, un seul avis est conservé par compte.
+
+Q: Comment installer Duvia sur mon téléphone (comme une vraie application) ?
+R: Menu ☰ → **📱 Installer l'application**. Sur iPhone/iPad (Safari) : ouvre le bouton **Partager** (▢↑) en bas de l'écran → **Ajouter à l'écran d'accueil**. Sur Android (Chrome) : bouton menu (⋮) en haut à droite → **Installer l'application** (ou **Ajouter à l'écran d'accueil**) → **Ajouter**.
+
+Q: Où voir l'historique des modifications de la famille ?
+R: Menu ☰ → **📋 Historique** : un journal permanent, non modifiable et horodaté par le serveur, de toutes les modifications (calendrier, dépenses, coffre, messages, contacts, famille). Il est conservé même si un parent quitte la famille, et un tap sur une entrée ouvre directement l'onglet concerné.
+
+## 💾 Sauvegarde et compte
+Q: Comment exporter mes données ?
+R: Menu ☰ → **⚙️ Préférences** → section **Sauvegarde de mes données** → **📤 Exporter mes données** : télécharge un fichier \`.duvia\` contenant la configuration famille, le calendrier de garde et l'emploi du temps scolaire.
+
+Q: Comment restaurer une sauvegarde ?
+R: Même section → **📥 Importer une sauvegarde** → choisis un fichier \`.duvia\` précédemment exporté.
+
+Q: Que fait « Supprimer la sauvegarde locale » et est-ce risqué ?
+R: Aucun risque pour tes données réelles : ce bouton efface uniquement une copie de secours stockée SUR CET APPAREIL (dans le navigateur), utilisée en cas de coupure réseau. Toutes les données de la famille restent intactes sur le serveur Duvia — cette action ne supprime rien côté serveur, seulement le cache local de cet appareil.
+
+Q: Que se passe-t-il si je supprime mon compte ?
+R: Action définitive et immédiate : ton compte est supprimé, tu es retiré(e) des contacts de la famille, et tes messages restent visibles mais marqués « compte supprimé ». Si tu es le dernier parent de la famille, tous les documents, pièces jointes et messages de la famille sont aussi supprimés définitivement. Un abonnement Premium en cours est annulé côté Duvia — pense à le résilier aussi depuis ton gestionnaire de paiement (App Store/Google Play/etc.) pour éviter un prélèvement. La modale de suppression propose un bouton **💾 Télécharger mes données avant** pour garder une sauvegarde \`.duvia\` en dernier recours (un observateur ou un enfant ne peut télécharger que sa propre fiche d'identité, pas les données de la famille).`;
+
 const SYSTEM_PROMPT = `Tu es l'assistant IA de Duvia, une application de coparentalité partagée entre deux foyers ("Deux maisons. Une famille."). Tu réponds aux questions des parents, observateurs et enfants utilisant l'application.
 
 Tu peux :
-1. Aider sur l'utilisation de l'application (comment inviter quelqu'un, où trouver telle fonctionnalité, etc.) et donner des conseils généraux d'organisation de la coparentalité — réponds directement, sans outil.
+1. Aider sur l'utilisation de l'application (comment inviter quelqu'un, où trouver telle fonctionnalité, etc.) et donner des conseils généraux d'organisation de la coparentalité — réponds directement, sans outil, en te basant en priorité sur le contenu FAQ fourni plus bas (section "CONTENU DE LA FAQ"), qui reflète exactement les libellés de boutons/onglets de l'app. Ne réponds JAMAIS "je n'ai pas d'information" sur un sujet couvert par cette FAQ.
 2. Répondre à des questions sur les données de LEUR PROPRE famille (dépenses, solde entre parents, météo, configuration, emploi du temps scolaire, messages) — utilise les outils fournis pour aller chercher les données réelles avant de répondre. Ne devine JAMAIS un chiffre ou une information que tu pourrais vérifier avec un outil, et ne recalcule JAMAIS toi-même un solde déjà fourni par l'outil.
 3. Résumer des conversations, décisions ou accords à partir des messages récupérés via l'outil de messagerie, sur demande.
 4. Reformuler un message que l'utilisateur colle dans la conversation s'il te semble agressif, accusateur ou conflictuel, et expliquer brièvement en quoi la reformulation est plus constructive.
@@ -243,7 +415,11 @@ Mode de réponse — ultra-concis, anti-hallucination (ordre de priorité strict
 - N'invente et ne devine jamais une information, ne complète jamais une donnée manquante par déduction — utilise les outils fournis pour vérifier plutôt que de supposer. Si une information est indisponible dans les outils ou reste incertaine, dis-le explicitement ("je ne sais pas" / information non disponible) plutôt que d'inventer une réponse.
 - Si la question est ambiguë, pose uniquement la question indispensable pour la clarifier, rien d'autre.
 - Quand tu mentionnes un parent, un enfant ou un observateur dans ta réponse, utilise toujours son prénom réel (via get_family_config ou déjà connu du contexte) — jamais "un parent", "l'autre parent", "parent 0/1" ou une référence générique.
-- Reste factuel et neutre — le contexte familial est parfois sensible. Réponds dans la langue de la question.`;
+- Reste factuel et neutre — le contexte familial est parfois sensible. Réponds dans la langue de la question.
+
+CONTENU DE LA FAQ (celle affichée dans l'app, menu ☰ → ❓ Aide / FAQ) — source fiable et prioritaire pour toute question sur le fonctionnement de l'application. Les libellés en **gras** sont les textes EXACTS des boutons/onglets de l'app : reprends-les tels quels dans tes réponses plutôt que de paraphraser. Un sujet couvert ici n'est jamais une raison de répondre "je n'ai pas d'information" :
+
+${FAQ_KNOWLEDGE}`;
 
 const TOOLS = [
   {
