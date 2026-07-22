@@ -3296,6 +3296,41 @@ export default function App() {
     }, 2000);
     return () => { if (specialDatesShadowTimer.current) clearTimeout(specialDatesShadowTimer.current); };
   }, [cfg.specialDates, familySync.familyId, custodyShadow]);
+
+  // 🔧 Phase 3 — shadow write cfg.custody/custodyPerChild, filet de sécurité
+  // (2026-07-22). StepGarde() a plusieurs points d'écriture directe (champs
+  // "Mois/Année de départ", brouillon sauvegardé au changement d'enfant en
+  // mode garde différenciée) qui ne passaient PAS par confirm()/shadowRule —
+  // trouvé en root-causant pourquoi custody_rules/custody_pattern_days
+  // pouvaient rester périmés pour de vraies familles (voir
+  // verify_custody_parity, 2026-07-22). Même principe que l'effet
+  // specialDates ci-dessus : un seul effet debounced qui surveille l'objet
+  // entier couvre tout point d'écriture présent ET futur, plutôt que de
+  // patcher chaque site un par un. Redondant avec l'appel explicite déjà
+  // fait dans confirm() (harmless, upsertCustodyRule est idempotent) —
+  // volontairement gardé pour un retour visuel immédiat juste après confirmation.
+  const custodyShadowTimer = useRef(null);
+  useEffect(() => {
+    if (!familySync.familyId) return;
+    if (custodyShadowTimer.current) clearTimeout(custodyShadowTimer.current);
+    custodyShadowTimer.current = setTimeout(() => {
+      const shadowOneRule = (childId, c) => {
+        if (!c?.confirmed) return;
+        const patternDays = c.type === "custom" ? (c.pattern || []).map(d => ({
+          parentIdx: d?.parentIdx ?? null, timeType: d?.timeType || "full",
+          startTime: d?.startTime || null, endTime: d?.endTime || null, location: d?.location || null,
+        })) : undefined;
+        custodyShadow?.shadowRule?.({
+          childId, type: c.type, startMonth: c.startMonth, startYear: c.startYear,
+          weekAltEvenIdx: c.weekAlt?.evenIdx, exclusiveMainIdx: c.exclusive?.mainIdx,
+          exclusiveWeIdx: c.exclusive?.weIdx, exclusiveParity: c.exclusive?.parity, confirmed: true,
+        }, patternDays);
+      };
+      shadowOneRule(null, cfg.custody);
+      Object.entries(cfg.custodyPerChild || {}).forEach(([childId, c]) => shadowOneRule(Number(childId), c));
+    }, 2000);
+    return () => { if (custodyShadowTimer.current) clearTimeout(custodyShadowTimer.current); };
+  }, [cfg.custody, cfg.custodyPerChild, familySync.familyId, custodyShadow]);
   const { localToUid, uidToLocal } = useIdLinks(familySync.familyId);
   const {
     expenses: allExpenses,
