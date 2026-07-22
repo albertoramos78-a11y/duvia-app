@@ -234,7 +234,7 @@ Tu peux :
 3. Résumer des conversations, décisions ou accords à partir des messages récupérés via l'outil de messagerie, sur demande.
 4. Reformuler un message que l'utilisateur colle dans la conversation s'il te semble agressif, accusateur ou conflictuel, et expliquer brièvement en quoi la reformulation est plus constructive.
 5. Traduire du texte à la demande, dans n'importe quelle langue.
-6. Calculer le nombre de jours de garde de chaque parent sur une période donnée (ex. "combien de jours de garde ce mois-ci ?", "et entre le 15 mars et le 10 avril ?") — utilise l'outil get_custody_days, jamais un calcul approximatif ou une déduction manuelle du planning.
+6. Calculer le nombre de jours de garde de chaque parent sur une période donnée (ex. "combien de jours de garde ce mois-ci ?", "et entre le 15 mars et le 10 avril ?") — utilise l'outil get_custody_days, jamais un calcul approximatif ou une déduction manuelle du planning. Si l'outil répond child_selection_required, demande à l'utilisateur pour quel enfant avant de continuer, puis rappelle l'outil avec le child_id choisi.
 
 Tu ne réponds JAMAIS à des questions d'ordre juridique (garde, pension alimentaire, droits parentaux, procédures judiciaires, litiges) — dans ce cas, explique poliment que tu ne peux pas conseiller sur ces sujets et recommande de consulter un avocat ou un professionnel qualifié. Tu peux donner des conseils GÉNÉRAUX d'organisation, de communication ou de médiation, mais jamais d'interprétation de la loi ni d'affirmation sur les droits d'un parent.
 
@@ -286,7 +286,7 @@ const TOOLS = [
   },
   {
     name: "get_custody_days",
-    description: "Compte le nombre de jours de garde de chaque parent sur une période donnée, à partir du planning de garde réel de la famille (motif configuré, overrides manuels, dates spéciales, vacances scolaires). Ne réponds jamais à une question de comptage de jours de garde sans cet outil.",
+    description: "Compte le nombre de jours de garde de chaque parent sur une période donnée, à partir du planning de garde réel de la famille (motif configuré, overrides manuels, dates spéciales, vacances scolaires). Si la famille a plusieurs enfants à planning différencié et qu'aucun child_id n'est fourni, renvoie {error:'child_selection_required', children:[{id,name}...]} — demande alors à l'utilisateur pour quel enfant, puis rappelle l'outil avec le child_id correspondant. Ne réponds jamais à une question de comptage de jours de garde sans cet outil.",
     input_schema: {
       type: "object",
       properties: {
@@ -448,7 +448,7 @@ async function toolGetCustodyDays(userClient: ReturnType<typeof createClient>, f
   const rangeDays = Math.round((toMs - fromMs) / 86400000) + 1;
   if (rangeDays > 730) return { error: "range_too_large" };
 
-  const childId = args?.child_id != null ? Number(args.child_id) : null;
+  const requestedChildId = args?.child_id != null ? Number(args.child_id) : null;
 
   const { data: family, error: famErr } = await userClient.from("families").select("data").eq("id", familyId).maybeSingle();
   if (famErr || !family) return { error: "family_not_found_or_no_access" };
@@ -457,10 +457,39 @@ async function toolGetCustodyDays(userClient: ReturnType<typeof createClient>, f
     country: cfgData.country || "FR",
     sameGuardAll: cfgData.sameGuardAll !== false,
     parents: (cfgData.parents || []).map((p: any) => ({ gender: p.gender || "M", birthDay: p.birthDay || "", birthMonth: p.birthMonth || "" })),
-    children: (cfgData.children || []).map((c: any) => ({ id: c.id, birthDay: c.birthDay || "", birthMonth: c.birthMonth || "" })),
+    children: (cfgData.children || []).map((c: any) => ({ id: c.id, name: c.name || "", birthDay: c.birthDay || "", birthMonth: c.birthMonth || "" })),
     schoolHolDetails: cfgData.specialDates?.schoolHolDetails || {},
     schoolHolDetailsPerChild: cfgData.specialDates?.schoolHolDetailsPerChild || {},
   };
+
+  // 🔧 Résolution de l'enfant effectif (2026-07-22) — CalTab (le calendrier
+  // réel, App.jsx) appelle TOUJOURS resolveGuard avec l'id du vrai enfant
+  // actif, jamais null, même en planning commun (sameGuardAll) : les
+  // vacances scolaires par enfant (schoolHolDetailsPerChild) sont consultées
+  // dès que childId est non-null, indépendamment de sameGuardAll. Passer
+  // childId=null par défaut (comme avant ce correctif) loupait donc ces
+  // données pour toute famille dont les vacances scolaires sont
+  // configurées par enfant — constaté en prod sur une vraie famille à
+  // enfant unique en pleines vacances d'été (28 jours faussement "non
+  // attribués"). Un seul enfant, ou planning commun (sameGuardAll) : on
+  // résout automatiquement sur un enfant représentatif. Plusieurs enfants
+  // ET planning différencié, sans précision : on demande à Claude de
+  // clarifier plutôt que de retomber sur un planning global probablement
+  // non configuré (personne ne configure de motif "global" séparé quand
+  // chaque enfant a le sien).
+  let childId = requestedChildId;
+  if (childId == null) {
+    if (annex.children.length <= 1) {
+      childId = annex.children[0]?.id ?? null;
+    } else if (annex.sameGuardAll) {
+      childId = annex.children[0].id;
+    } else {
+      return {
+        error: "child_selection_required",
+        children: annex.children.map((c) => ({ id: c.id, name: c.name })),
+      };
+    }
+  }
 
   const { data: ruleRows, error: ruleErr } = await userClient
     .from("custody_rules")
