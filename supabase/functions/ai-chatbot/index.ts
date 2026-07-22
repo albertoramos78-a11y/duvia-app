@@ -287,7 +287,7 @@ const TOOLS = [
   },
   {
     name: "get_custody_days",
-    description: "Compte le nombre de jours de garde de chaque parent sur une période donnée, à partir du planning de garde réel de la famille (motif configuré, overrides manuels, dates spéciales, vacances scolaires). Si la famille a plusieurs enfants à planning différencié et qu'aucun child_id n'est fourni, renvoie {error:'child_selection_required', children:[{id,name}...]} — demande alors à l'utilisateur pour quel enfant, puis rappelle l'outil avec le child_id correspondant. Ne réponds jamais à une question de comptage de jours de garde sans cet outil.",
+    description: "Compte le nombre de jours de garde de chaque parent sur une période donnée, à partir du planning de garde réel de la famille (motif configuré, overrides manuels, dates spéciales, vacances scolaires). Renvoie aussi unassigned_dates (liste des dates précises des jours non attribués, plafonnée à 50 — utilise-la directement si l'utilisateur demande ensuite lequel/lesquels sont non attribués, rappelle unassigned_dates_truncated s'il y en a plus). Si la famille a plusieurs enfants à planning différencié et qu'aucun child_id n'est fourni, renvoie {error:'child_selection_required', children:[{id,name}...]} — demande alors à l'utilisateur pour quel enfant, puis rappelle l'outil avec le child_id correspondant. Ne réponds jamais à une question de comptage de jours de garde sans cet outil.",
     input_schema: {
       type: "object",
       properties: {
@@ -530,16 +530,33 @@ async function toolGetCustodyDays(userClient: ReturnType<typeof createClient>, f
 
   const ctx: CustodyTablesCtx = { ruleRows: ruleRows || [], patternDaysByRuleId, overridesByDate, globalSD, perChildSDByChild, annex };
 
+  // 🔧 unassigned_dates (2026-07-22) : liste les dates précises des jours
+  // "non attribués" — un utilisateur demande naturellement "lequel ?" en
+  // suivi d'un comptage. Plafonnée (pas les 730 jours en clair, pour une
+  // famille mal configurée qui en aurait des centaines — la liste ne serait
+  // alors plus utile de toute façon) ; ne renvoie QUE les non-attribués, pas
+  // le détail jour par jour des 2 parents (resterait un vrai calendrier
+  // jour-par-jour, hors périmètre de cet outil de comptage).
+  const MAX_UNASSIGNED_DATES = 50;
   let parent0 = 0, parent1 = 0, unassigned = 0;
+  const unassignedDates: string[] = [];
   for (let ms = fromMs; ms <= toMs; ms += 86400000) {
     const ds = new Date(ms).toISOString().slice(0, 10);
     const { parentIdx } = resolveCustodyDayFromTables(ds, childId, ctx);
     if (parentIdx === 0) parent0++;
     else if (parentIdx === 1) parent1++;
-    else unassigned++;
+    else {
+      unassigned++;
+      if (unassignedDates.length < MAX_UNASSIGNED_DATES) unassignedDates.push(ds);
+    }
   }
 
-  return { parent_0_days: parent0, parent_1_days: parent1, unassigned_days: unassigned, total_days: rangeDays, from_date: fromDate, to_date: toDate };
+  return {
+    parent_0_days: parent0, parent_1_days: parent1, unassigned_days: unassigned,
+    total_days: rangeDays, from_date: fromDate, to_date: toDate,
+    unassigned_dates: unassignedDates,
+    unassigned_dates_truncated: unassigned > MAX_UNASSIGNED_DATES,
+  };
 }
 
 async function executeTool(
