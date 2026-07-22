@@ -618,10 +618,16 @@ serve(async (req) => {
   const sinceParisMidnight = parisMidnightISO();
   const { data: usageRows, error: usageErr } = await admin
     .from("ai_usage_log")
-    .select("input_tokens, output_tokens")
+    .select("input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens")
     .eq("user_id", userId).eq("feature", "chatbot_query").gte("used_at", sinceParisMidnight);
   if (usageErr) return jsonResponse({ error: usageErr.message }, 500);
-  const tokensUsedSoFar = (usageRows || []).reduce((s, r) => s + (r.input_tokens || 0) + (r.output_tokens || 0), 0);
+  // 🔧 cache_creation_input_tokens/cache_read_input_tokens (2026-07-22) : des
+  // champs SÉPARÉS de input_tokens dans la réponse Anthropic (voir plus bas) —
+  // les ignorer sous-comptait silencieusement l'usage réel dès que le cache
+  // de prompt était utilisé (le bloc système+outils pouvait être lu plusieurs
+  // fois par échange sans jamais compter dans ce plafond).
+  const tokensUsedSoFar = (usageRows || []).reduce((s, r) =>
+    s + (r.input_tokens || 0) + (r.output_tokens || 0) + (r.cache_creation_input_tokens || 0) + (r.cache_read_input_tokens || 0), 0);
   if (tokensUsedSoFar >= DAILY_TOKEN_LIMIT) return jsonResponse({ error: "daily_token_limit_reached" }, 429);
 
   // 🔒 Client JWT-scopé pour les outils — les mêmes règles RLS déjà en
@@ -658,6 +664,8 @@ serve(async (req) => {
 
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+  let totalCacheCreationTokens = 0;
+  let totalCacheReadTokens = 0;
 
   try {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -681,6 +689,12 @@ serve(async (req) => {
       const data = await res.json();
       totalInputTokens += data?.usage?.input_tokens || 0;
       totalOutputTokens += data?.usage?.output_tokens || 0;
+      // 🔧 cache_creation_input_tokens (écriture, 1ère fois) et cache_read_
+      // input_tokens (lecture, tous les appels suivants dans la fenêtre de
+      // cache) sont des champs séparés de input_tokens — jamais inclus
+      // dedans — donc à accumuler explicitement pour ne rien sous-compter.
+      totalCacheCreationTokens += data?.usage?.cache_creation_input_tokens || 0;
+      totalCacheReadTokens += data?.usage?.cache_read_input_tokens || 0;
       const content = data?.content || [];
 
       if (data?.stop_reason === "tool_use") {
@@ -703,20 +717,23 @@ serve(async (req) => {
       await admin.from("ai_usage_log").insert({
         user_id: userId, feature: "chatbot_query",
         input_tokens: totalInputTokens, output_tokens: totalOutputTokens,
+        cache_creation_input_tokens: totalCacheCreationTokens, cache_read_input_tokens: totalCacheReadTokens,
       });
 
       // 🔧 cleanHistory ne contient QUE des tours texte user/assistant — jamais
       // les blocs tool_use/tool_result internes à cette requête. Le client
       // renvoie cette valeur telle quelle comme `history` au prochain appel.
       const cleanHistory = [...clientHistory, { role: "user", content: question }, { role: "assistant", content: answer }].slice(-MAX_HISTORY_ENTRIES);
-      const tokensUsedToday = tokensUsedSoFar + totalInputTokens + totalOutputTokens;
+      const exchangeTokens = totalInputTokens + totalOutputTokens + totalCacheCreationTokens + totalCacheReadTokens;
+      const tokensUsedToday = tokensUsedSoFar + exchangeTokens;
       // 🔧 tokens_this_exchange (2026-07-22) : tokens réels de CET échange
-      // uniquement (question + tous les aller-retours d'outils inclus), pas
-      // le cumul du jour — pour un affichage "N tokens" sous chaque réponse
-      // côté client, distinct de la barre de progression globale.
+      // uniquement (question + tous les aller-retours d'outils inclus, cache
+      // de prompt inclus), pas le cumul du jour — pour un affichage "N
+      // tokens" sous chaque réponse côté client, distinct de la barre de
+      // progression globale.
       return jsonResponse({
         answer, history: cleanHistory, tokens_used_today: tokensUsedToday, tokens_limit: DAILY_TOKEN_LIMIT,
-        tokens_this_exchange: totalInputTokens + totalOutputTokens,
+        tokens_this_exchange: exchangeTokens,
       });
     }
     return jsonResponse({ error: "too_many_tool_rounds" }, 500);

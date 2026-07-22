@@ -1,0 +1,23 @@
+-- 0048_ai_usage_cache_tokens.sql
+--
+-- Ajoute le suivi des tokens de cache (prompt caching, voir 0047 pour le
+-- suivi input/output initial) : depuis l'ajout du cache_control ephemeral
+-- sur le system prompt + les outils du chatbot IA (supabase/functions/
+-- ai-chatbot/index.ts), Anthropic renvoie séparément cache_creation_input_
+-- tokens et cache_read_input_tokens dans `usage` — des champs distincts de
+-- input_tokens, jamais inclus dedans. Sans ce suivi :
+--   1. Le plafond quotidien (100 000 tokens, tokensUsedSoFar) sous-comptait
+--      silencieusement l'usage réel dès que le cache était utilisé (le bloc
+--      système+outils, ~1500-2000 tokens, pouvait être lu plusieurs fois par
+--      échange sans jamais compter dans le plafond) — un compte pouvait donc
+--      dépasser largement le volume réel de tokens traités par Anthropic
+--      sans jamais atteindre la limite affichée.
+--   2. Les requêtes SQL de coût moyen (avg(input_tokens*prix + ...)) sous-
+--      estimaient la vraie facture Anthropic, puisque les tokens de cache
+--      (même à 10% du prix pour une lecture) ont un coût réel non nul.
+--
+-- Les lignes déjà existantes prennent 0 par défaut (même raisonnement que
+-- 0047 : sous-estimation limitée aux lignes posées avant cette migration,
+-- sans conséquence au-delà).
+alter table public.ai_usage_log add column if not exists cache_creation_input_tokens int not null default 0;
+alter table public.ai_usage_log add column if not exists cache_read_input_tokens int not null default 0;
