@@ -19478,6 +19478,7 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
   const [result, setResult] = useState(null);
   const [showResult, setShowResult] = useState(false);
   const [particles, setParticles] = useState([]);
+  const [countdown, setCountdown] = useState(null); // null | 3 | 2 | 1, avant que la roue ne commence à tourner
 
   const now = Date.now();
   // 🔧 (2026-07-22) Cooldown uniforme 7 jours — la roue n'est plus accessible
@@ -19539,14 +19540,29 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
 
     const { segIdx, prize } = pickSegment(isSubscriber, serverMonetary);
 
+    // 🔧 (2026-07-22) Décompte 3-2-1 avant que la roue ne commence à tourner
+    // — le tirage est déjà résolu ci-dessus, donc la roue s'arrête sans
+    // latence perceptible dès que "1" disparaît. Ignoré (roue directe) si
+    // l'utilisateur préfère un mouvement réduit.
+    const reduceMotion = typeof window!=="undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    if(!reduceMotion) {
+      for(const n of [3,2,1]) {
+        setCountdown(n);
+        await new Promise(r=>setTimeout(r,650));
+      }
+    }
+    setCountdown(null);
+
     const segCenter = segIdx * segDeg + segDeg / 2;
     const targetMod = ((-segCenter) % 360 + 360) % 360;
     const currentMod = ((deg % 360) + 360) % 360;
     const delta = (targetMod - currentMod + 360) % 360;
-    const target = deg + 360 * 7 + (delta === 0 ? 360 : delta);
+    // 🔧 Rotation un peu plus douce qu'avant : moins de tours complets (5 au
+    // lieu de 7) et une durée un peu plus longue.
+    const target = deg + 360 * 5 + (delta === 0 ? 360 : delta);
 
     const start = deg;
-    const dur = 4200;
+    const dur = 5200;
     const t0 = performance.now();
     function frame(t) {
       const p = Math.min((t-t0)/dur, 1);
@@ -19664,15 +19680,17 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
         @keyframes wheelSettle { 0%{transform:scale(1)} 50%{transform:scale(1.025)} 100%{transform:scale(1)} }
         @keyframes wheelWinBurst { 0%{transform:scale(.3) rotate(-10deg);opacity:0} 60%{transform:scale(1.18) rotate(5deg);opacity:1} 100%{transform:scale(1) rotate(0deg);opacity:1} }
         @keyframes wheelLoseDip { 0%{transform:scale(.7) translateY(-6px);opacity:0} 60%{transform:scale(1.04) translateY(2px);opacity:1} 100%{transform:scale(1) translateY(0);opacity:1} }
+        @keyframes wheelCountdownPop { 0%{transform:scale(.3);opacity:0} 55%{transform:scale(1.2);opacity:1} 100%{transform:scale(1);opacity:1} }
         .wheel-pointer-idle { animation: wheelPointerBounce 1.6s ease-in-out infinite; }
         .wheel-pointer-spin { animation: wheelPointerTick .11s linear infinite; }
         .wheel-glow-ring { animation: wheelGlowPulse 1.8s ease-in-out infinite; }
         .wheel-settle { animation: wheelSettle .5s cubic-bezier(.16,1,.3,1); }
         .wheel-result-win { animation: wheelWinBurst .5s cubic-bezier(.16,1,.3,1); }
         .wheel-result-lose { animation: wheelLoseDip .45s cubic-bezier(.16,1,.3,1); }
+        .wheel-countdown-num { animation: wheelCountdownPop .55s cubic-bezier(.16,1,.3,1); }
         @media (prefers-reduced-motion: reduce) {
           .wheel-pointer-idle, .wheel-pointer-spin, .wheel-glow-ring, .wheel-settle,
-          .wheel-result-win, .wheel-result-lose { animation: none !important; }
+          .wheel-result-win, .wheel-result-lose, .wheel-countdown-num { animation: none !important; }
           .wheel-confetti-piece { display: none !important; }
         }
       `}</style>
@@ -19691,6 +19709,16 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
 
       {/* Wheel */}
       <div style={{position:"relative",display:"inline-block",marginBottom:18}}>
+
+        {/* Décompte 3-2-1 avant que la roue ne commence à tourner — remonté
+            (key={countdown}) à chaque chiffre pour rejouer le zoom d'entrée. */}
+        {countdown!==null && (
+          <div key={countdown} className="wheel-countdown-num" style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:40,pointerEvents:"none"}}>
+            <div style={{width:84,height:84,borderRadius:"50%",background:"linear-gradient(135deg,#FFD700,#ff9f43)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:40,fontWeight:900,color:"#fff",boxShadow:"0 10px 30px rgba(0,0,0,.35)"}}>
+              {countdown}
+            </div>
+          </div>
+        )}
 
         {/* Pointer — losange dégradé avec ombre. Rebond léger au repos (invite
             au jeu), petit tremblement rapide pendant que la roue tourne (comme
@@ -19773,7 +19801,7 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
             boxShadow:spinning?"none":"0 6px 20px rgba(255,215,0,.45)",
             transform:spinning?"scale(0.97)":"scale(1)",transition:"all .2s",
           }}>
-            {spinning ? t.wheelSpinning : t.wheelLaunch}
+            {spinning ? (countdown!==null ? countdown : t.wheelSpinning) : t.wheelLaunch}
           </button>
         ) : (
           <div style={{padding:"12px 20px",background:C.sur,borderRadius:14,border:`1.5px solid ${C.bor}`,display:"inline-block"}}>
