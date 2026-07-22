@@ -16877,7 +16877,7 @@ function parisMidnightISO(now = new Date()) {
 }
 
 function ChatbotBubble() {
-  const { C, t, sub, familySync } = useApp();
+  const { C, t, sub, familySync, myUid } = useApp();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]); // {role:"user"|"assistant", content:string}
   const [input, setInput] = useState("");
@@ -16914,13 +16914,53 @@ function ChatbotBubble() {
     return () => window.removeEventListener("pointerdown", onGlobalPointerDown);
   }, []);
 
-  // 🔧 ChatbotBubble reste monté en permanence (jamais démonté) — sans ça,
-  // basculer d'une famille à l'autre (cas multi-famille observateur) laisserait
-  // l'historique de conversation de l'ANCIENNE famille affiché après le
-  // changement, alors que le prochain message interrogerait la NOUVELLE
-  // famille (family_id envoyé à chaque appel). Réinitialise la conversation à
-  // chaque changement de famille active.
-  useEffect(() => { setMessages([]); setErr(""); }, [familySync?.familyId]);
+  // 🔧 Historique persistant (2026-07-22) — disparaissait avant à chaque
+  // refresh/reconnexion/fermeture d'appli puisque `messages` n'était qu'un
+  // useState en mémoire. Stockage "intelligent" comme la session Supabase
+  // elle-même (voir supabaseClient.js smartStorage) : "Rester connecté" coché
+  // → localStorage (survit à une fermeture complète) ; sinon → sessionStorage
+  // (survit à un refresh, effacé à la fermeture de l'onglet — sûr sur un
+  // appareil partagé). Clé scopée par COMPTE + FAMILLE : ChatbotBubble reste
+  // monté en permanence (jamais démonté, y compris au changement de famille
+  // en cas multi-famille observateur), donc changer de famille doit charger
+  // l'historique de la NOUVELLE famille plutôt que garder celui de l'ancienne
+  // affiché pendant que le prochain message interrogerait déjà la nouvelle.
+  const chatbotLoadedKeyRef = useRef(null);
+  const chatbotSkipNextSaveRef = useRef(false);
+  useEffect(() => {
+    setErr("");
+    if (!myUid || !familySync?.familyId) {
+      setMessages([]);
+      chatbotLoadedKeyRef.current = null;
+      return;
+    }
+    const key = `duvia_chatbot_history_${myUid}_${familySync.familyId}`;
+    try {
+      const remember = window.localStorage.getItem("duvia_remember") === "1";
+      const raw = remember ? window.localStorage.getItem(key) : window.sessionStorage.getItem(key);
+      setMessages(raw ? JSON.parse(raw) : []);
+    } catch {
+      setMessages([]);
+    }
+    // Le prochain passage de l'effet de sauvegarde ci-dessous verra encore
+    // l'ANCIENNE valeur de `messages` (même rendu, avant que ce setMessages
+    // ne s'applique) — sans ce flag, il écraserait l'historique qu'on vient
+    // de charger avec les données précédentes avant même qu'elles arrivent.
+    chatbotSkipNextSaveRef.current = true;
+    chatbotLoadedKeyRef.current = key;
+  }, [myUid, familySync?.familyId]);
+
+  useEffect(() => {
+    const key = chatbotLoadedKeyRef.current;
+    if (!key) return;
+    if (chatbotSkipNextSaveRef.current) { chatbotSkipNextSaveRef.current = false; return; }
+    try {
+      const remember = window.localStorage.getItem("duvia_remember") === "1";
+      const json = JSON.stringify(messages);
+      if (remember) { window.localStorage.setItem(key, json); window.sessionStorage.removeItem(key); }
+      else { window.sessionStorage.setItem(key, json); window.localStorage.removeItem(key); }
+    } catch {}
+  }, [messages]);
 
   // 🔧 Récupère la consommation de tokens du jour directement depuis
   // ai_usage_log (lisible grâce à la policy RLS "ai_usage_log_select_own",
