@@ -297,6 +297,12 @@ const TOOLS = [
       },
       required: ["from_date", "to_date"],
     },
+    // 🔧 Prompt caching (2026-07-22, backlog item 9) : TOOLS est statique et
+    // identique à chaque appel — marquer le DERNIER outil en cache_control
+    // met en cache la liste entière (système + outils, dans cet ordre côté
+    // modèle), réutilisée à chaque aller-retour du même round d'outils au
+    // lieu d'être refacturée en entier à chaque fois.
+    cache_control: { type: "ephemeral" },
   },
 ];
 
@@ -615,13 +621,23 @@ serve(async (req) => {
   // 🔧 Claude n'a par défaut aucune idée fiable de la date du jour — sans
   // cette ligne, une question relative ("ce mois-ci", "la semaine prochaine")
   // se traduit en dates devinées, parfois dans la mauvaise année. Calculée
-  // fraîche à CHAQUE requête (jamais mise en cache dans SYSTEM_PROMPT, qui
-  // est un const statique), heure de Paris pour rester cohérent avec
+  // fraîche à CHAQUE requête, heure de Paris pour rester cohérent avec
   // parisMidnightISO() ci-dessus et le fuseau des utilisateurs.
   const todayParisStr = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit",
   }).format(new Date());
-  const systemPromptWithDate = `${SYSTEM_PROMPT}\n\nDate du jour (heure de Paris) : ${todayParisStr}. Utilise cette date comme référence fiable pour toute expression temporelle relative ("ce mois-ci", "la semaine prochaine", "hier", "dans 10 jours"...) — ne devine ni n'estime jamais la date actuelle autrement.`;
+  // 🔧 Prompt caching (2026-07-22, backlog item 9) : SYSTEM_PROMPT est
+  // statique et identique à CHAQUE appel, y compris les multiples
+  // aller-retours d'un même round d'outils — marqué cache_control pour
+  // qu'Anthropic ne le refacture qu'une fois par fenêtre de cache plutôt que
+  // de le refacturer en entier à chaque appel. La date du jour, elle,
+  // change quotidiennement : gardée dans un bloc SÉPARÉ, non caché, placé
+  // APRÈS le bloc statique — mélanger les deux aurait invalidé le cache du
+  // gros bloc statique une fois par jour pour rien.
+  const systemBlocks = [
+    { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
+    { type: "text", text: `Date du jour (heure de Paris) : ${todayParisStr}. Utilise cette date comme référence fiable pour toute expression temporelle relative ("ce mois-ci", "la semaine prochaine", "hier", "dans 10 jours"...) — ne devine ni n'estime jamais la date actuelle autrement.` },
+  ];
 
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
@@ -634,7 +650,7 @@ serve(async (req) => {
         body: JSON.stringify({
           model: "claude-sonnet-5",
           max_tokens: 1024,
-          system: systemPromptWithDate,
+          system: systemBlocks,
           thinking: { type: "disabled" },
           tools: TOOLS,
           messages,
