@@ -13,7 +13,7 @@ const MAX_TOOL_ROUNDS = 5;
 const MAX_QUESTION_LEN = 2000;
 const MAX_HISTORY_ENTRIES = 20;
 
-// 🔧 Les 2 plafonds quotidiens (20 questions, 40 000 tokens) se réinitialisent
+// 🔧 Les 2 plafonds quotidiens (20 questions, 100 000 tokens) se réinitialisent
 // à minuit HEURE DE PARIS, pas sur une fenêtre glissante de 24h (comportement
 // demandé explicitement — Paris passe de UTC+1 à UTC+2 en été, d'où ce calcul
 // plutôt qu'un simple "aujourd'hui à 00:00 UTC"). Deno tourne en UTC ; on
