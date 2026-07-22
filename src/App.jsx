@@ -3157,7 +3157,7 @@ function BugReportModal({ C, t, open, screenshot, onClose, getContext }) {
     finally { setSending(false); }
   };
   return (
-    <div onClick={close} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div onClick={close} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,maxWidth:420,width:"100%",padding:22,boxShadow:"0 12px 40px rgba(0,0,0,.25)",maxHeight:"90vh",overflowY:"auto"}}>
         <div style={{fontSize:16,fontWeight:900,color:C.txt,textAlign:"center",marginBottom:4}}>🐛 {t.bugReportTitle}</div>
         {status==="ok" ? (
@@ -3191,7 +3191,7 @@ function BugReportModal({ C, t, open, screenshot, onClose, getContext }) {
 
 function InstallAppModal({C,t,onClose}) {
   return (
-    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,padding:20,maxWidth:400,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <div style={{fontSize:16,fontWeight:900,color:C.txt}}>{t.installAppTitle}</div>
@@ -5125,7 +5125,7 @@ export default function App() {
 
       {/* ── Confirmation modale générique (remplace window.confirm(), voir confirmAsync) ── */}
       {confirmModal && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:10001,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:10001,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:340,width:"100%",border:`1.5px solid ${C.bor}`,textAlign:"center"}}>
             <div style={{fontSize:40,marginBottom:10}}>{confirmModal.icon}</div>
             {confirmModal.title && <div style={{fontSize:16,fontWeight:900,color:C.txt,marginBottom:8}}>{confirmModal.title}</div>}
@@ -5143,7 +5143,7 @@ export default function App() {
       )}
 
       {ejectedNotice && (
-        <div style={{position:"fixed",inset:0,zIndex:10000,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{position:"fixed",inset:0,zIndex:10000,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.card,borderRadius:20,padding:"24px 22px",maxWidth:420,width:"100%",boxShadow:"0 10px 40px rgba(0,0,0,.3)"}}>
             <div style={{fontSize:20,fontWeight:900,color:C.txt,marginBottom:10}}>👋 Vous avez quitté cette famille</div>
             <div style={{fontSize:13.5,color:C.mut,lineHeight:1.6,marginBottom:18}}>
@@ -5187,7 +5187,7 @@ export default function App() {
         const doConfirm=()=>{ dbConfirmReim(r.id); setPendingReimPopup(null); };
         const doReject=()=>{ dbRejectReim(r.id); setPendingReimPopup(null); };
         return (
-          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
             <div style={{background:C.card,borderRadius:20,padding:"28px 24px",maxWidth:340,width:"100%",border:`1.5px solid ${C.yel}`,boxShadow:"0 16px 48px rgba(0,0,0,.28)",animation:"popIn .35s cubic-bezier(.16,1,.3,1)"}}>
               <div style={{fontSize:40,textAlign:"center",marginBottom:10}}>💸</div>
               <div style={{fontSize:16,fontWeight:800,marginBottom:6,textAlign:"center",color:C.txt}}>Remboursement reçu</div>
@@ -5217,7 +5217,7 @@ export default function App() {
         const doConfirmE=()=>{ dbConfirmExp(e.id); setPendingExpPopup(null); };
         const doRejectE=()=>{ dbRejectExp(e.id); setPendingExpPopup(null); };
         return (
-          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
             <div style={{background:C.card,borderRadius:20,padding:"28px 24px",maxWidth:340,width:"100%",border:`1.5px solid ${C.yel}`,boxShadow:"0 16px 48px rgba(0,0,0,.28)",animation:"popIn .35s cubic-bezier(.16,1,.3,1)"}}>
               <div style={{fontSize:40,textAlign:"center",marginBottom:10}}>💰</div>
               <div style={{fontSize:16,fontWeight:800,marginBottom:6,textAlign:"center",color:C.txt}}>{t.expPendingPopupTitle||"Dépense à confirmer"}</div>
@@ -5540,7 +5540,7 @@ export default function App() {
         const licTitle = LEGAL_TITLES.license[licLang] || LEGAL_TITLES.license.fr;
         const licBlocks = LEGAL_DOCS.license[licLang] || [];
         return (
-        <div onClick={()=>setShowLicenseModal(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div onClick={()=>setShowLicenseModal(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,padding:20,maxWidth:480,width:"100%",maxHeight:"80vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexShrink:0}}>
               <div style={{fontSize:16,fontWeight:900,color:C.txt}}>📄 {licTitle}</div>
@@ -5818,7 +5818,7 @@ export default function App() {
 
       {/* ── Modale suppression de mon compte ──────────────────────────────── */}
       {confirmDeleteAccount && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:340,width:"100%",border:`1.5px solid ${C.bor}`,textAlign:"center"}}>
             <div style={{fontSize:40,marginBottom:10}}>⚠️</div>
             <div style={{fontSize:16,fontWeight:900,color:C.txt,marginBottom:8}}>{t.deleteAccountTitle||"Supprimer mon compte ?"}</div>
@@ -5890,7 +5890,7 @@ export default function App() {
       )}
       {/* ── Modale reset ───────────────────────────────────────────────────── */}
       {showResetConfirm && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:320,width:"100%",border:`1.5px solid ${C.bor}`,textAlign:"center"}}>
             <div style={{fontSize:40,marginBottom:10}}>🔄</div>
             <div style={{fontSize:16,fontWeight:900,color:C.txt,marginBottom:8}}>Réinitialiser l'app ?</div>
@@ -5946,7 +5946,7 @@ function LegalDocModal({ C, t, doc, lang, onClose }) {
   const blocks = LEGAL_DOCS[doc]?.[docLang] || [];
   const warning = LEGAL_WARNING[docLang] || LEGAL_WARNING.fr;
   return (
-    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,maxWidth:600,width:"100%",padding:"22px 24px",boxShadow:"0 12px 40px rgba(0,0,0,.3)",maxHeight:"88vh",overflowY:"auto",color:C.txt,fontSize:13,lineHeight:1.6}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,gap:10}}>
           <div style={{fontSize:17,fontWeight:900}}>{title}</div>
@@ -6106,7 +6106,7 @@ function MfaChallengeGate({C, t, factorId, onVerified, onCancel}) {
   }
 
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div style={{width:"100%",maxWidth:340,background:C.card,borderRadius:20,padding:24,textAlign:"center"}}>
         <div style={{fontSize:40,marginBottom:10}}>🔐</div>
         <div style={{fontWeight:900,fontSize:17,marginBottom:8,color:C.txt}}>{t.mfaChallengeTitle||"Vérification en deux étapes"}</div>
@@ -7477,7 +7477,7 @@ function CropModal({ file, onCrop, onCancel }) {
 
   if (!file) return null;
   return (
-    <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{background:C.card,borderRadius:20,padding:20,maxWidth:320,width:"90%",textAlign:"center"}}>
         <div style={{fontWeight:800,fontSize:14,marginBottom:12,color:C.txt}}>📷 {t.cropPhotoTitle||"Recadrer la photo"}</div>
         <canvas ref={canvasRef} width={SIZE} height={SIZE}
@@ -9100,7 +9100,7 @@ function ConfigTab() {
     <div>
       {/* ── Modal 1 : Confirmation de suppression ─────────────────────────── */}
       {confirmDelIdx !== null && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:340,width:"100%",border:`1.5px solid ${C.bor}`}}>
             <div style={{fontSize:32,textAlign:"center",marginBottom:8}}>⚠️</div>
             <div style={{fontSize:15,fontWeight:900,color:C.txt,textAlign:"center",marginBottom:6}}>Supprimer ce parent ?</div>
@@ -9125,7 +9125,7 @@ function ConfigTab() {
 
       {/* ── Modal 2 : Simulation email de confirmation ───────────────────────── */}
       {emailSimIdx !== null && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.card,borderRadius:20,padding:0,maxWidth:360,width:"100%",border:`1.5px solid ${C.bor}`,overflow:"hidden"}}>
             {/* Header email simulé */}
             <div style={{background:C.dark,padding:"14px 18px",display:"flex",gap:10,alignItems:"center"}}>
@@ -9161,7 +9161,7 @@ function ConfigTab() {
 
       {/* ── Modal invitation parent 2 ──────────────────────────────────────── */}
       {showInviteModal && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:340,width:"100%",border:`1.5px solid ${C.bor}`}}>
             {!inviteResult ? (
               <>
@@ -12349,9 +12349,9 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
         // calendrier longue, obligeant à scroller jusqu'à elle. Ancrée près
         // du haut (sous la barre météo) via son propre position:fixed —
         // toujours visible sans scroll, quelle que soit la position de
-        // défilement. Fond assombri léger, même style que celui de
-        // l'assistant IA (rgba(0,0,0,.15)) plutôt que l'ancien fond opaque.
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.15)",zIndex:9999}}
+        // défilement. Fond assombri + flouté, même style désormais unifié
+        // sur toutes les modales plein écran de l'app (voir 2026-07-22).
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:9999}}
           onClick={()=>setConfirmResetOverrides(false)}>
           <div onClick={e=>e.stopPropagation()} style={{position:"fixed",top:90,left:"50%",transform:"translateX(-50%)",background:C.card,borderRadius:20,padding:22,maxWidth:380,width:"calc(100% - 40px)",border:`1.5px solid ${C.red}44`,boxShadow:"0 8px 30px rgba(0,0,0,.25)"}}>
             <div style={{fontSize:16,fontWeight:900,color:C.txt,marginBottom:8}}>{t.calResetTitle||"🔄 Reset manual exchanges?"}</div>
@@ -12634,7 +12634,7 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
       </div>
       )}
       </div>
-      {fullDs&&!readOnly&&!editBlocked&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setFullDs(null)}><div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto",borderRadius:18}}><EditDay ds={fullDs} onClose={()=>setFullDs(null)} editRef={editRef} /></div></div>)}
+      {fullDs&&!readOnly&&!editBlocked&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setFullDs(null)}><div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto",borderRadius:18}}><EditDay ds={fullDs} onClose={()=>setFullDs(null)} editRef={editRef} /></div></div>)}
     </div>
   );
 }
@@ -14531,7 +14531,7 @@ window.addEventListener('message',function(e){
         const deleteRequesterLabel=cfg.parents[e.deleteRequestedBy]?.name||`P${(e.deleteRequestedBy||0)+1}`;
         const isPending=st==="pending";
         return(
-          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:490,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setDetailExp(null)}>
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:490,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setDetailExp(null)}>
             <div onClick={ev=>ev.stopPropagation()} style={{background:C.card,borderRadius:"18px 18px 0 0",width:"100%",maxWidth:560,maxHeight:"88vh",overflowY:"auto",padding:"20px 18px 32px"}}>
               {/* Header */}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
@@ -14668,7 +14668,7 @@ window.addEventListener('message',function(e){
 
       {/* ── Viewer modal ── */}
       {viewer&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:500,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>{setViewer(null);setViewerUrl(null);}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:500,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>{setViewer(null);setViewerUrl(null);}}>
           <div onClick={e=>e.stopPropagation()} style={{maxWidth:"min(94vw,680px)",maxHeight:"88vh",display:"flex",flexDirection:"column",gap:10}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
               <span style={{color:"#fff",fontSize:13,fontWeight:700,wordBreak:"break-all"}}>{viewer.name}</span>
@@ -14694,7 +14694,7 @@ window.addEventListener('message',function(e){
 
       {/* ── Modal choix modification récurrente ── */}
       {recurringEditModal && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:320,width:"100%",border:`1.5px solid ${C.vio}`,boxShadow:"0 12px 40px rgba(0,0,0,.25)"}}>
             <div style={{fontSize:32,textAlign:"center",marginBottom:10}}>🔄</div>
             <div style={{fontSize:15,fontWeight:800,marginBottom:6,textAlign:"center"}}>Modifier la dépense récurrente</div>
@@ -14730,7 +14730,7 @@ window.addEventListener('message',function(e){
 
       {/* ── Modal choix suppression récurrente ── */}
       {recurringDelModal && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:320,width:"100%",border:`1.5px solid ${C.red}`,boxShadow:"0 12px 40px rgba(0,0,0,.25)"}}>
             <div style={{fontSize:32,textAlign:"center",marginBottom:10}}>🗑️</div>
             <div style={{fontSize:15,fontWeight:800,marginBottom:6,textAlign:"center"}}>Supprimer la dépense récurrente</div>
@@ -15370,7 +15370,7 @@ window.addEventListener('message',function(e){
 
       {/* ── Export Modal ── */}
       {showExportModal&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
           <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:400,width:"100%",border:`1.5px solid ${C.bor}`,boxShadow:"0 20px 50px rgba(0,0,0,.35)",maxHeight:"90vh",overflowY:"auto"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
               <div>
@@ -15475,7 +15475,7 @@ function useReferralTracking() {
 function ReferralBonusPopup({C, variant, onClose}) {
   const isReferree = variant==="referree";
   return (
-    <div style={{position:"fixed",inset:0,zIndex:999,background:"rgba(23,16,58,.6)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <div style={{position:"fixed",inset:0,zIndex:999,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:C.card,borderRadius:20,padding:"32px 28px",maxWidth:340,width:"100%",textAlign:"center",border:`2px solid ${C.vio}44`,boxShadow:`0 20px 60px ${C.vio}33`,animation:"popIn .35s cubic-bezier(.16,1,.3,1)"}}>
         <div style={{fontSize:52,marginBottom:12}}>{isReferree?"🎉":"🎁"}</div>
         <div style={{fontSize:20,fontWeight:800,marginBottom:8,background:`linear-gradient(90deg,${C.vio},${C.blu})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
@@ -15620,7 +15620,7 @@ function ParrainageSection() {
     <div>
       {/* Popups bonus */}
       {showReferreePopup && (
-        <div style={{position:"fixed",inset:0,zIndex:999,background:"rgba(23,16,58,.65)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{position:"fixed",inset:0,zIndex:999,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.card,borderRadius:20,padding:"32px 24px",maxWidth:320,width:"100%",textAlign:"center",border:`2px solid ${C.grn}44`,boxShadow:`0 20px 60px ${C.grn}33`}}>
             <div style={{fontSize:52,marginBottom:10}}>🎉</div>
             <div style={{fontSize:20,fontWeight:900,color:C.grn,marginBottom:8}}>{t.refFelicitations||"Félicitations !"}</div>
@@ -15634,7 +15634,7 @@ function ParrainageSection() {
         </div>
       )}
       {showReferrerPopup && (
-        <div style={{position:"fixed",inset:0,zIndex:999,background:"rgba(23,16,58,.65)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{position:"fixed",inset:0,zIndex:999,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.card,borderRadius:20,padding:"32px 24px",maxWidth:320,width:"100%",textAlign:"center",border:`2px solid ${C.vio}44`,boxShadow:`0 20px 60px ${C.vio}33`}}>
             <div style={{fontSize:52,marginBottom:10}}>🎁</div>
             <div style={{fontSize:20,fontWeight:900,color:C.vio,marginBottom:8}}>{t.refBonneNouvelle||"Bonne nouvelle !"}</div>
@@ -15812,7 +15812,7 @@ function ParrainageSection() {
 
       {/* ── Modale Inviter ──────────────────────────────────────────────── */}
       {showInvite && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
           <div style={{background:C.card,borderRadius:"20px 20px 0 0",padding:"24px 20px 32px",width:"100%",maxWidth:480,boxShadow:"0 -8px 32px rgba(0,0,0,.18)"}}>
             <div style={{width:40,height:4,background:C.bor,borderRadius:4,margin:"0 auto 20px"}}/>
             <div style={{fontSize:17,fontWeight:900,marginBottom:4}}>🎁 {t.refInviteOther}</div>
@@ -15859,7 +15859,7 @@ function ParrainageSection() {
 
       {/* ── Modale démo ─────────────────────────────────────────────────── */}
       {showDemo && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.card,borderRadius:20,padding:26,maxWidth:300,width:"100%",textAlign:"center",border:`1.5px solid ${C.bor}`}}>
             {demoStep===1 ? (<>
               <div style={{fontSize:36,marginBottom:10}}>📨</div>
@@ -17341,7 +17341,7 @@ function PremiumTab() {
 
       {/* Modal confirmation annulation */}
       {confirmCancelSub && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:340,width:"100%",border:`1.5px solid ${C.bor}`,textAlign:"center"}}>
             <div style={{fontSize:40,marginBottom:10}}>↩️</div>
             <div style={{fontSize:16,fontWeight:900,color:C.txt,marginBottom:8}}>{t.subCancelConfirmTitle||"Annuler l'abonnement ?"}</div>
@@ -18519,7 +18519,7 @@ function MessagingTab(){
 
       {/* Modale confirmation suppression conversation (locale à l'utilisateur) */}
       {deleteConvKey && (
-        <div onClick={()=>setDeleteConvKey(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div onClick={()=>setDeleteConvKey(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,padding:20,maxWidth:340,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
             <div style={{fontSize:15,fontWeight:900,color:C.txt,marginBottom:8}}>{t.msgDeleteConvConfirmTitle||"Supprimer cette conversation ?"}</div>
             <div style={{fontSize:13,color:C.mut,lineHeight:1.5,marginBottom:18}}>{t.msgDeleteConvConfirmBody||"Cette conversation sera supprimée uniquement de ta liste. Elle restera visible pour les autres participants."}</div>
@@ -19163,7 +19163,7 @@ function ContactsTab({readOnly,addOnly,prem: premProp}) {
 
       {/* Confirmation suppression */}
       {confirmDel && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.card,borderRadius:20,padding:24,maxWidth:320,width:"100%",textAlign:"center",border:`1.5px solid ${C.bor}`,boxShadow:"0 12px 40px rgba(0,0,0,.3)"}}>
             <div style={{fontSize:36,marginBottom:10}}>🗑️</div>
             <div style={{fontSize:15,fontWeight:800,marginBottom:6}}>{t.vaultConfirmDel||"Supprimer ce contact ?"}</div>
@@ -20390,7 +20390,7 @@ function VaultTab() {
           </div>
         )}
         {confirmDel && (
-          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
             <div style={{background:C.card,borderRadius:20,padding:24,maxWidth:320,width:"100%",textAlign:"center",border:`1.5px solid ${C.bor}`}}>
               <div style={{fontSize:32,marginBottom:10}}>🗑️</div>
               <div style={{fontSize:15,fontWeight:800,marginBottom:8}}>{t.vaultConfirmDel||"Supprimer ce document ?"}</div>
@@ -20656,7 +20656,7 @@ function VaultTab() {
 
       {/* Confirm delete modal (main list) */}
       {confirmDel && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.card,borderRadius:20,padding:24,maxWidth:320,width:"100%",textAlign:"center",border:`1.5px solid ${C.bor}`}}>
             <div style={{fontSize:32,marginBottom:10}}>🗑️</div>
             <div style={{fontSize:15,fontWeight:800,marginBottom:8}}>{t.vaultConfirmDel||"Supprimer ce document ?"}</div>
