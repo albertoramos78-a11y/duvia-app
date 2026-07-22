@@ -17110,7 +17110,7 @@ function ChatbotBubble() {
         // jusqu'à window (double-tap-to-hide existant doit continuer à
         // fonctionner même en tapant sur ce fond). La fermeture reste sur la
         // croix ou le double-tap, pas un tap simple sur ce fond.
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.15)",zIndex:899}} />
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:899}} />
       )}
       {open && (
         <div style={{position:"fixed",top:winTop,left:winLeft,width:winW,maxWidth:"calc(100vw - 20px)",height:winH,maxHeight:"calc(100vh - 20px)",background:C.card,borderRadius:16,boxShadow:"0 8px 32px rgba(0,0,0,.3)",display:"flex",flexDirection:"column",zIndex:900,overflow:"hidden"}}>
