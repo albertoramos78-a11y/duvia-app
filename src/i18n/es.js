@@ -821,6 +821,7 @@ const es = {
     chatbotDailyLimitError:"⚠️ Límite diario de preguntas alcanzado. Inténtalo mañana.",
     chatbotTokenLimitError:"⚠️ Límite diario de tokens alcanzado. Vuelve a intentarlo mañana.",
     chatbotTokensToday:"tokens hoy",
+    chatbotTokensExchange:"tokens",
     chatbotDoubleTapHint:"Toca dos veces en cualquier parte de la pantalla para ocultar/mostrar el asistente.",
   };
 export default es;

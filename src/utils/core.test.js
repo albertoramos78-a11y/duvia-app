@@ -24,6 +24,7 @@ import {
   getInitials,
   nextPensionDueDate,
   computeOverrideUpdate,
+  mergeHistoryPreservingTokens,
 } from "./core.js";
 
 // ── B1 — validatePassword (majuscule + caractère spécial désormais requis) ────
@@ -1027,4 +1028,51 @@ test("computeOverrideUpdate : poser un override sur un observateur (obsId, sans 
   const { merged, isCleared } = computeOverrideUpdate(null, { parentIdx: undefined, obsId: "obs1", obsName: "Mamie" });
   assert.equal(isCleared, false);
   assert.equal(merged.obsId, "obs1");
+});
+
+// ── mergeHistoryPreservingTokens — affichage des tokens par échange (2026-07-22) ──
+test("mergeHistoryPreservingTokens : premier échange, aucun historique préalable", () => {
+  const oldMessages = [];
+  const newHistory = [
+    { role: "user", content: "Q1" },
+    { role: "assistant", content: "A1" },
+  ];
+  const result = mergeHistoryPreservingTokens(oldMessages, newHistory, 100);
+  assert.equal(result[0].tokens, undefined);
+  assert.equal(result[1].tokens, 100);
+});
+
+test("mergeHistoryPreservingTokens : ajout d'un échange, préserve le compteur de l'échange précédent", () => {
+  const oldMessages = [
+    { role: "user", content: "Q1" },
+    { role: "assistant", content: "A1", tokens: 100 },
+  ];
+  const newHistory = [
+    { role: "user", content: "Q1" },
+    { role: "assistant", content: "A1" },
+    { role: "user", content: "Q2" },
+    { role: "assistant", content: "A2" },
+  ];
+  const result = mergeHistoryPreservingTokens(oldMessages, newHistory, 150);
+  assert.equal(result[1].tokens, 100);
+  assert.equal(result[3].tokens, 150);
+});
+
+test("mergeHistoryPreservingTokens : historique tronqué par le début, réaligne quand même par la fin", () => {
+  const oldMessages = [
+    { role: "user", content: "Q2" },
+    { role: "assistant", content: "A2", tokens: 150 },
+    { role: "user", content: "Q3" },
+    { role: "assistant", content: "A3", tokens: 200 },
+  ];
+  // Le serveur a tronqué Q2/A2 (plafond MAX_HISTORY_ENTRIES atteint) et ajouté Q4/A4.
+  const newHistory = [
+    { role: "user", content: "Q3" },
+    { role: "assistant", content: "A3" },
+    { role: "user", content: "Q4" },
+    { role: "assistant", content: "A4" },
+  ];
+  const result = mergeHistoryPreservingTokens(oldMessages, newHistory, 220);
+  assert.equal(result[1].tokens, 200);
+  assert.equal(result[3].tokens, 220);
 });

@@ -710,7 +710,14 @@ serve(async (req) => {
       // renvoie cette valeur telle quelle comme `history` au prochain appel.
       const cleanHistory = [...clientHistory, { role: "user", content: question }, { role: "assistant", content: answer }].slice(-MAX_HISTORY_ENTRIES);
       const tokensUsedToday = tokensUsedSoFar + totalInputTokens + totalOutputTokens;
-      return jsonResponse({ answer, history: cleanHistory, tokens_used_today: tokensUsedToday, tokens_limit: DAILY_TOKEN_LIMIT });
+      // 🔧 tokens_this_exchange (2026-07-22) : tokens réels de CET échange
+      // uniquement (question + tous les aller-retours d'outils inclus), pas
+      // le cumul du jour — pour un affichage "N tokens" sous chaque réponse
+      // côté client, distinct de la barre de progression globale.
+      return jsonResponse({
+        answer, history: cleanHistory, tokens_used_today: tokensUsedToday, tokens_limit: DAILY_TOKEN_LIMIT,
+        tokens_this_exchange: totalInputTokens + totalOutputTokens,
+      });
     }
     return jsonResponse({ error: "too_many_tool_rounds" }, 500);
   } catch (e) {

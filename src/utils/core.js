@@ -857,3 +857,23 @@ export function computeOverrideUpdate(existingOverride, data) {
   const isCleared = merged.parentIdx === undefined && !merged.obsId;
   return { merged, isCleared };
 }
+
+// ── Assistant IA : fusion de l'historique en préservant les compteurs de
+// tokens par échange (2026-07-22) ────────────────────────────────────────────
+// Le serveur renvoie à chaque appel un historique frais (`newHistory`, plafonné
+// aux N derniers tours, uniquement {role,content} — jamais de `tokens`), qui
+// remplace tout l'état local. Sans fusion, chaque nouvelle réponse effacerait
+// le nombre de tokens déjà affiché sous les échanges précédents. Les deux
+// tableaux grandissent de la même façon (seulement tronqués par le DÉBUT une
+// fois la limite dépassée) : on les aligne donc par la FIN pour retrouver,
+// pour chaque ancien message, son `tokens` déjà connu localement — et on pose
+// `newAssistantTokens` sur la toute dernière entrée (la réponse de CET échange).
+export function mergeHistoryPreservingTokens(oldMessages, newHistory, newAssistantTokens) {
+  const n = newHistory.length;
+  return newHistory.map((m, idx) => {
+    if (idx === n - 1) return { ...m, tokens: newAssistantTokens };
+    if (idx === n - 2) return { ...m };
+    const oldIdx = oldMessages.length - (n - 2 - idx);
+    return oldMessages[oldIdx] ? { ...m, tokens: oldMessages[oldIdx].tokens } : m;
+  });
+}

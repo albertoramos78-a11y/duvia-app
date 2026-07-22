@@ -162,6 +162,7 @@ const en = {
     chatbotDailyLimitError:"⚠️ Daily question limit reached. Try again tomorrow.",
     chatbotTokenLimitError:"⚠️ Daily token limit reached. Try again tomorrow.",
     chatbotTokensToday:"tokens today",
+    chatbotTokensExchange:"tokens",
     chatbotDoubleTapHint:"Double-tap anywhere on the screen to hide/show the assistant.",
     premHeaderPremium:"Premium",premHeaderInherited:"Inherited Premium",
     lockParents:"🔒 Add parent — Premium",lockChildren:"🔒 Add child — Premium",

@@ -24,7 +24,7 @@ import { usePush } from "./hooks/usePush";
 import { getMyLocation, setMyLocation } from "./services/supabase/locationService";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION, APP_VERSION } from './config.js';
-import { nextPensionDueDate, computeOverrideUpdate } from './utils/core.js';
+import { nextPensionDueDate, computeOverrideUpdate, mergeHistoryPreservingTokens } from './utils/core.js';
 import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact, weatherIconFor, getInitials, aggregateHourlyPeriods } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, LICORNE, FILLEUL, BRAND, BRAND_GRADIENT, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
@@ -17081,10 +17081,15 @@ function ChatbotBubble() {
       // appel — l'utiliser directement évite de faire grandir l'historique
       // local sans limite sur une longue session. Fallback sur l'ajout
       // manuel si absent/malformé (ancienne réponse serveur, etc.).
+      // Le tableau renvoyé n'a que {role,content} (jamais de tokens) — on
+      // réinjecte le nombre de tokens déjà connu localement pour chaque
+      // ancien message (alignement par la FIN, les deux tableaux grandissant
+      // pareil, seulement tronqués par le début), et celui de CET échange
+      // (tokens_this_exchange) sur la toute dernière réponse.
       if (Array.isArray(data?.history)) {
-        setMessages(data.history);
+        setMessages(mergeHistoryPreservingTokens(messages, data.history, data?.tokens_this_exchange));
       } else {
-        setMessages([...nextMessages, { role: "assistant", content: data?.answer || "" }]);
+        setMessages([...nextMessages, { role: "assistant", content: data?.answer || "", tokens: data?.tokens_this_exchange }]);
       }
       if (typeof data?.tokens_used_today === "number") setTokensUsedToday(data.tokens_used_today);
       if (typeof data?.tokens_limit === "number") setTokensLimit(data.tokens_limit);
@@ -17174,8 +17179,13 @@ function ChatbotBubble() {
               </div>
             )}
             {messages.map((m,i)=>(
-              <div key={i} style={{alignSelf:m.role==="user"?"flex-end":"flex-start",maxWidth:"85%",padding:"8px 12px",borderRadius:12,fontSize:13,lineHeight:1.4,whiteSpace:"pre-wrap",background:m.role==="user"?C.vio:C.sur,color:m.role==="user"?"#fff":C.txt}}>
-                {renderChatbotMarkdown(m.content)}
+              <div key={i} style={{display:"flex",flexDirection:"column",gap:2,alignSelf:m.role==="user"?"flex-end":"flex-start",maxWidth:"85%"}}>
+                <div style={{padding:"8px 12px",borderRadius:12,fontSize:13,lineHeight:1.4,whiteSpace:"pre-wrap",background:m.role==="user"?C.vio:C.sur,color:m.role==="user"?"#fff":C.txt}}>
+                  {renderChatbotMarkdown(m.content)}
+                </div>
+                {m.role==="assistant" && typeof m.tokens==="number" && (
+                  <div style={{fontSize:9,color:C.mut,padding:"0 4px"}}>{m.tokens.toLocaleString()} {t.chatbotTokensExchange||"tokens"}</div>
+                )}
               </div>
             ))}
             {sending && <div style={{alignSelf:"flex-start",fontSize:12,color:C.mut}}>{t.chatbotThinking||"Réflexion…"}</div>}
