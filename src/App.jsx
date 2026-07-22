@@ -17053,15 +17053,39 @@ function ChatbotBubble() {
         <img src="/mascot/body-laptop.png" alt="" style={{width:CHATBOT_HEART_W,height:CHATBOT_HEART_H,filter:"drop-shadow(0 4px 10px rgba(0,0,0,.3))",pointerEvents:"none"}} />
       </button>
       {open && (
+        // 🔧 Fond bloquant (2026-07-22) : sans lui, la fenêtre de l'assistant
+        // (340×460, jamais plein écran) laisse le reste de l'app cliquable
+        // tout autour — un utilisateur pouvait par ex. supprimer une dépense
+        // en arrière-plan pendant qu'il discute avec l'assistant. Un simple
+        // div plein écran (sans pointerEvents:"none") suffit à intercepter
+        // tout clic/tap destiné à ce qui est en dessous, sans handler dédié :
+        // pas de stopPropagation ici, pour laisser le pointerdown remonter
+        // jusqu'à window (double-tap-to-hide existant doit continuer à
+        // fonctionner même en tapant sur ce fond). La fermeture reste sur la
+        // croix ou le double-tap, pas un tap simple sur ce fond.
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.15)",zIndex:899}} />
+      )}
+      {open && (
         <div style={{position:"fixed",top:winTop,left:winLeft,width:winW,maxWidth:"calc(100vw - 20px)",height:winH,maxHeight:"calc(100vh - 20px)",background:C.card,borderRadius:16,boxShadow:"0 8px 32px rgba(0,0,0,.3)",display:"flex",flexDirection:"column",zIndex:900,overflow:"hidden"}}>
           <div style={{padding:"12px 14px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontWeight:800,fontSize:14,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
             <span>🤖 {t.chatbotTitle||"Assistant Duvia"}</span>
             <button onClick={()=>setOpen(false)} style={{background:"rgba(255,255,255,.2)",border:"none",color:"#fff",width:24,height:24,borderRadius:"50%",fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
           </div>
           <div style={{padding:"6px 12px 0"}}>
-            <div style={{height:4,background:C.bor,borderRadius:2,overflow:"hidden"}}>
-              <div style={{height:"100%",width:`${Math.min(100,(tokensUsedToday/tokensLimit)*100)}%`,background:tokensUsedToday>=tokensLimit?C.red:C.vio,transition:"width .3s"}} />
-            </div>
+            {(() => {
+              // 🔧 Barre de progression tokens : verte jusqu'à 50%, puis dégradé
+              // vert→jaune→rouge de 50% à 100% (teinte HSL décroissante de 120°
+              // à 0°) — un simple violet/rouge binaire ne prévenait pas assez tôt
+              // qu'on approche du plafond quotidien.
+              const tokenPct = Math.min(100, (tokensUsedToday / tokensLimit) * 100);
+              const tokenBarHue = tokenPct <= 50 ? 120 : Math.max(0, 120 - 2.4 * (tokenPct - 50));
+              const tokenBarColor = `hsl(${tokenBarHue}, 70%, 45%)`;
+              return (
+                <div style={{height:4,background:C.bor,borderRadius:2,overflow:"hidden"}}>
+                  <div style={{height:"100%",width:`${tokenPct}%`,background:tokenBarColor,transition:"width .3s, background-color .3s"}} />
+                </div>
+              );
+            })()}
             <div style={{fontSize:9,color:C.mut,marginTop:2,textAlign:"right"}}>
               {tokensUsedToday.toLocaleString()} / {tokensLimit.toLocaleString()} {t.chatbotTokensToday||"tokens aujourd'hui"}
             </div>
