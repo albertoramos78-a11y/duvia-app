@@ -28,6 +28,7 @@ import { nextPensionDueDate, computeOverrideUpdate, mergeHistoryPreservingTokens
 import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact, weatherIconFor, getInitials, aggregateHourlyPeriods } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, LICORNE, FILLEUL, BRAND, BRAND_GRADIENT, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
+import { FAQ_SECTIONS } from './faq/faqContent.js';
 
 // ─── POSTHOG — Analytics (pays, logins, comportement) ───────────────────────
 const PH_KEY = import.meta.env.VITE_POSTHOG_KEY;
@@ -3801,6 +3802,9 @@ export default function App() {
   }
   // Affichage in-app des CGU/CGV (évite de dépendre d'une URL externe pas encore prête)
   const [legalDocOpen, setLegalDocOpen] = useState(null); // null | "cgu" | "cgv"
+  // FAQ statique (2026-07-22) : accessible à TOUS les rôles/paliers, contrairement
+  // à l'assistant IA conversationnel réservé au palier Premium+IA — voir src/faq/faqContent.js.
+  const [showFaq, setShowFaq] = useState(false);
   // Message après éjection (retiré de la famille par le créateur / dissolution).
   const [ejectedNotice,setEjectedNotice] = useState(()=>{ try{return window.localStorage.getItem("duvia_ejected")==="1";}catch{return false;} });
   const [accountJustDeleted,setAccountJustDeleted] = useState(()=>{ try{return window.localStorage.getItem("duvia_account_deleted")==="1";}catch{return false;} });
@@ -5472,6 +5476,9 @@ export default function App() {
                 </>
               )}
 
+              <button onClick={()=>{setShowFaq(true);setShowMenu(false);}} style={{width:"100%",padding:"0 16px",height:44,background:"transparent",color:C.txt,display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${C.bor}`,fontSize:13,fontWeight:600,borderRadius:0,cursor:"pointer"}}>
+                <span style={{fontSize:17,width:22,textAlign:"center",flexShrink:0}}>❓</span><span style={{flex:1,textAlign:"left"}}>{t.menuFaq||"Aide / FAQ"}</span>
+              </button>
               <button onClick={async ()=>{
                 setShowMenu(false);
                 // 🔧 Capturée AVANT l'ouverture de la modale, pas au moment de
@@ -5515,6 +5522,9 @@ export default function App() {
 
       {/* Modale CGU/CGV */}
       {legalDocOpen && <LegalDocModal C={C} t={t} doc={legalDocOpen} lang={lang} onClose={()=>setLegalDocOpen(null)} />}
+
+      {/* Modale FAQ (aide statique, tous rôles/paliers) */}
+      {showFaq && <FaqModal C={C} t={t} lang={lang} onClose={()=>setShowFaq(false)} />}
 
       {/* Modale "Signaler un problème" (diagnostic) */}
       <BugReportModal C={C} t={t} open={showBugModal} screenshot={bugScreenshot}
@@ -5980,6 +5990,65 @@ function LegalDocModal({ C, t, doc, lang, onClose }) {
         </div>
 
         <button onClick={onClose} style={{width:"100%",height:44,marginTop:20,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",border:"none",borderRadius:12,fontWeight:800,fontSize:13,cursor:"pointer",boxShadow:`0 4px 14px ${C.vio}33`}}>{t.legalDocClose||"Fermer"}</button>
+      </div>
+    </div>
+  );
+}
+
+// ── FAQ statique (2026-07-22) : accessible à tous les rôles/paliers, contenu
+// dans src/faq/faqContent.js. Accordéon par question + recherche plein texte
+// (filtre question ET réponse) — repli sur le français si la langue courante
+// n'a pas encore de traduction, même mécanisme que LegalDocModal ci-dessus. ──
+function FaqModal({ C, t, lang, onClose }) {
+  const [query, setQuery] = useState("");
+  const [openKey, setOpenKey] = useState(null); // "sectionId:itemIndex" ouvert, un seul à la fois
+  const sections = FAQ_SECTIONS[lang] || FAQ_SECTIONS.fr;
+  const q = query.trim().toLowerCase();
+  const filteredSections = q
+    ? sections.map(s => ({ ...s, items: s.items.filter(it => it.q.toLowerCase().includes(q) || it.a.toLowerCase().includes(q)) })).filter(s => s.items.length)
+    : sections;
+  return (
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,maxWidth:560,width:"100%",padding:"22px 24px",boxShadow:"0 12px 40px rgba(0,0,0,.3)",maxHeight:"88vh",display:"flex",flexDirection:"column",color:C.txt,fontSize:13}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,gap:10}}>
+          <div style={{fontSize:17,fontWeight:900}}>❓ {t.faqTitle||"Aide / FAQ"}</div>
+          <button onClick={onClose} style={{width:30,height:30,flexShrink:0,background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:16,cursor:"pointer"}}>✕</button>
+        </div>
+
+        <input value={query} onChange={e=>setQuery(e.target.value)} placeholder={t.faqSearchPlaceholder||"Rechercher dans l'aide…"}
+          style={{width:"100%",height:40,padding:"0 14px",borderRadius:12,border:`1.5px solid ${C.bor}`,background:C.sur,color:C.txt,fontSize:13,marginBottom:14,boxSizing:"border-box"}} />
+
+        <div style={{overflowY:"auto",display:"flex",flexDirection:"column",gap:18}}>
+          {filteredSections.length===0 && (
+            <div style={{fontSize:12,color:C.mut,textAlign:"center",padding:"20px 0"}}>{t.faqNoResults||"Aucun résultat pour cette recherche."}</div>
+          )}
+          {filteredSections.map(section => (
+            <div key={section.id}>
+              <div style={{fontSize:13,fontWeight:800,marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+                <span>{section.icon}</span><span>{section.title}</span>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {section.items.map((item, i) => {
+                  const key = `${section.id}:${i}`;
+                  const isOpen = openKey===key;
+                  return (
+                    <div key={key} style={{border:`1.5px solid ${C.bor}`,borderRadius:12,overflow:"hidden"}}>
+                      <button onClick={()=>setOpenKey(isOpen?null:key)} style={{width:"100%",padding:"10px 14px",background:isOpen?`${C.vio}0d`:"transparent",color:C.txt,textAlign:"left",display:"flex",alignItems:"center",gap:8,fontSize:12.5,fontWeight:700,border:"none",cursor:"pointer"}}>
+                        <span style={{flex:1}}>{item.q}</span>
+                        <span style={{fontSize:10,color:C.mut,flexShrink:0,transition:"transform .15s",transform:isOpen?"rotate(180deg)":"rotate(0deg)"}}>▼</span>
+                      </button>
+                      {isOpen && (
+                        <div style={{padding:"0 14px 12px",fontSize:12.5,lineHeight:1.55,color:C.txt}}>
+                          {renderLegalInline(item.a)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
