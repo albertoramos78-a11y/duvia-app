@@ -19699,9 +19699,16 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
 
   const LOCALE = {fr:"fr-FR",en:"en-GB",de:"de-DE",es:"es-ES",pt:"pt-PT"}[lang] || "fr-FR";
   const isBigWin = result && (result.id==="year" || result.id==="month");
+  // 🎨 (rework 2026-07-22) Les 8 segments "perdu" alternent deux gris très
+  // proches (comme les cases noires/grises d'une vraie roue de fête foraine)
+  // au lieu d'un aplat unique répété 8 fois sur 20 — évite l'effet de "moitié
+  // de roue morte" qui rendait le dessin terne. Les autres segments gardent
+  // la couleur de leur lot (déjà reprise du thème correspondant : rg/wc/
+  // licorne/video partagent la couleur exacte de leur thème débloquable).
+  const segFill = (seg, i) => seg.id!=="nothing" ? seg.color : (i%2===0 ? "#9aa1ad" : "#b7bec8");
   // Dégradé par couleur unique (pas par segment — plusieurs segments partagent
   // la même couleur) : rend chaque case moins plate qu'un simple aplat.
-  const uniqueColors = [...new Set(SEGS.map(s=>s.color))];
+  const uniqueColors = [...new Set(SEGS.map((s,i)=>segFill(s,i)))];
   const gradId = (hex) => `wheelGrad-${hex.replace("#","")}`;
 
   return (
@@ -19759,7 +19766,13 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
 
       {/* Title */}
       <div style={{marginBottom:18}}>
-        <div style={{fontSize:22,fontWeight:900,background:"linear-gradient(135deg,#FFD700,#ff6bb5,#7c6fcd)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
+        {/* 🎨 (rework 2026-07-22) Ancien titre en gradient-clip-text remplacé par
+            une couleur pleine (C.vio, déjà le ton "titre important" utilisé
+            partout ailleurs dans l'app, contraste déjà vérifié sur les deux
+            thèmes) — le texte en dégradé ne sert jamais la lisibilité, juste la
+            décoration. */}
+        <div style={{fontSize:22,fontWeight:900,color:C.vio,letterSpacing:"-.01em",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+          <span aria-hidden="true" style={{fontSize:19}}>🎡</span>
           {t.wheelTitle}
         </div>
         <div style={{fontSize:11,color:C.mut,marginTop:3}}>
@@ -19770,7 +19783,15 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
       </div>
 
       {/* Wheel */}
-      <div style={{position:"relative",display:"inline-block",marginBottom:18}}>
+      <div style={{position:"relative",display:"inline-block",marginBottom:18,isolation:"isolate"}}>
+
+        {/* 🎨 (rework 2026-07-22) "Scène" derrière la roue : sans ça, le SVG
+            flottait à nu sur le fond plat de l'onglet — un halo violet (couleur
+            de marque C.vio, cohérente avec le reste de l'app) donne à ce moment
+            de jeu/récompense un vrai cadre de mise en scène plutôt qu'un simple
+            dessin posé sur la page. `isolation:isolate` + z-index négatif pour
+            rester sous la roue sans passer derrière le fond de l'onglet. */}
+        <div aria-hidden="true" style={{position:"absolute",top:"50%",left:"50%",width:300,height:300,transform:"translate(-50%,-50%)",borderRadius:"50%",background:`radial-gradient(circle, ${C.vio}33 0%, ${C.vio}00 70%)`,zIndex:-1,pointerEvents:"none"}} />
 
         {/* Décompte 3-2-1 avant que la roue ne commence à tourner — remonté
             (key={countdown}) à chaque chiffre pour rejouer le zoom d'entrée. */}
@@ -19838,7 +19859,7 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
           {/* Segments */}
           {SEGS.map((seg,i)=>(
             <g key={i}>
-              <path d={segPath(i)} fill={`url(#${gradId(seg.color)})`} stroke="#fff" strokeWidth="2"/>
+              <path d={segPath(i)} fill={`url(#${gradId(segFill(seg,i))})`} stroke="#fff" strokeWidth="2"/>
             </g>
           ))}
           {/* Emojis */}
@@ -19847,7 +19868,10 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
             return <text key={i} x={pos.x} y={pos.y} textAnchor="middle" dominantBaseline="middle"
               fontSize="17" style={{userSelect:"none"}}>{seg.emoji}</text>;
           })}
-          {/* Center hub */}
+          {/* Center hub — anneau doré (reprend le dégradé de la jante) ajouté
+              autour du médaillon violet pour que le moyeu se lise comme un
+              vrai médaillon assorti à la jante, pas un rond posé au hasard. */}
+          <circle cx="120" cy="120" r="30" fill="none" stroke="url(#wheelRimGrad)" strokeWidth="2.5"/>
           <circle cx="120" cy="120" r="26" fill="url(#wheelHubGrad)" stroke="#7c6fcd" strokeWidth="3"/>
           <circle cx="120" cy="120" r="19" fill="none" stroke="#7c6fcd33" strokeWidth="1.5"/>
           <text x="120" y="120" textAnchor="middle" dominantBaseline="middle" fontSize="17">✦</text>
