@@ -12344,9 +12344,16 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
 
       {/* Modale de confirmation : réinitialiser les échanges manuels */}
       {confirmResetOverrides && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:20}}
+        // 🔧 Repositionné (2026-07-22) : centrée verticalement, la modale
+        // pouvait tomber loin en dessous de la zone visible sur une page
+        // calendrier longue, obligeant à scroller jusqu'à elle. Ancrée près
+        // du haut (sous la barre météo) via son propre position:fixed —
+        // toujours visible sans scroll, quelle que soit la position de
+        // défilement. Fond assombri léger, même style que celui de
+        // l'assistant IA (rgba(0,0,0,.15)) plutôt que l'ancien fond opaque.
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.15)",zIndex:9999}}
           onClick={()=>setConfirmResetOverrides(false)}>
-          <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,padding:22,maxWidth:380,width:"100%",border:`1.5px solid ${C.red}44`}}>
+          <div onClick={e=>e.stopPropagation()} style={{position:"fixed",top:90,left:"50%",transform:"translateX(-50%)",background:C.card,borderRadius:20,padding:22,maxWidth:380,width:"calc(100% - 40px)",border:`1.5px solid ${C.red}44`,boxShadow:"0 8px 30px rgba(0,0,0,.25)"}}>
             <div style={{fontSize:16,fontWeight:900,color:C.txt,marginBottom:8}}>{t.calResetTitle||"🔄 Reset manual exchanges?"}</div>
             <div style={{fontSize:13,color:C.mut,lineHeight:1.5,marginBottom:16}}>
               {(overridesCount>1?(t.calResetBodyOther||"{n} manual exchanges on the calendar will be deleted. The schedule will revert to the base rule (week A/B, exclusive custody…). This action is irreversible.").replace("{n}",overridesCount):(t.calResetBodyOne||"1 manual exchange on the calendar will be deleted. The schedule will revert to the base rule (week A/B, exclusive custody…). This action is irreversible."))}
