@@ -19330,6 +19330,10 @@ function ContactsTab({readOnly,addOnly,prem: premProp}) {
 }
 
 // ─── SPIN WHEEL ───────────────────────────────────────────────────────────────
+// 🔧 (2026-07-22) Comptes de test autorisés à tourner la roue sans attendre
+// le cooldown (demande explicite) — contournement du délai uniquement, pas
+// un statut admin (pas de tours-monétaires-garantis ni d'autre privilège).
+const WHEEL_UNLIMITED_EMAILS = ["toti78200@gmail.com"];
 // Règles du tableau des lots (version 2.0)
 // ┌─────────────────────────────────────┬────────────┬──────────┬──────────────┐
 // │ LOT                                 │ Souscript. │ Autres   │ Achat        │
@@ -19467,7 +19471,7 @@ function pickSegment(isSubscriber = true, serverMonetary = "none") {
   return { segIdx, prize };
 }
 
-function WheelGame({ isPremium, isAdmin=false, userId="", isSubscriber=true }) {
+function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", isSubscriber=true }) {
   const {C,t,lang,sub,setSub,myUid} = useApp();
   const [spinning, setSpinning] = useState(false);
   const [deg, setDeg] = useState(0);
@@ -19479,7 +19483,7 @@ function WheelGame({ isPremium, isAdmin=false, userId="", isSubscriber=true }) {
   // 🔧 (2026-07-22) Cooldown uniforme 7 jours — la roue n'est plus accessible
   // aux enfants (voir GameTab), seuls parents/observateurs y jouent désormais.
   const cooldownMs = 7*24*60*60*1000;
-  const isAdminSub = isAdmin || sub._admin || false;
+  const isAdminSub = isAdmin || sub._admin || unlimitedSpins || false;
   // 🔧 Clé de cooldown : UUID Supabase (myUid) de préférence à userId (id
   // local Date.now(), voir doReg) — userId est régénéré à chaque
   // déconnexion/reconnexion (handleSetUser retire volontairement le profil
@@ -20109,6 +20113,11 @@ function GameTab() {
   const canAccessWheel = prem || hasBonusSpin;
   const cooldownLabel = t.cooldown7days;
   const userId = String(user?.id || "");
+  // 🔧 (2026-07-22) Compte de test autorisé à tourner la roue sans limite de
+  // cooldown, à la demande explicite — distinct d'un vrai statut admin
+  // (n'accorde PAS le mode admin/tours illimités affiché comme tel, ni
+  // aucun autre privilège), juste le contournement du délai d'attente.
+  const unlimitedSpins = WHEEL_UNLIMITED_EMAILS.includes(String(user?.email||"").toLowerCase());
 
   // Lots cadeaux reçus par cet enfant (si le joueur est un enfant)
   const myGifted = isChild ? (sub.giftedPrizes?.[userId] || {}) : {};
@@ -20142,6 +20151,7 @@ function GameTab() {
         <WheelGame
           isPremium={canAccessWheel}
           isAdmin={sub._admin||false}
+          unlimitedSpins={unlimitedSpins}
           userId={userId}
           isSubscriber={isSubscriber}
         />
