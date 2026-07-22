@@ -877,3 +877,44 @@ export function mergeHistoryPreservingTokens(oldMessages, newHistory, newAssista
     return oldMessages[oldIdx] ? { ...m, tokens: oldMessages[oldIdx].tokens } : m;
   });
 }
+
+// ── Recherche FAQ tolérante aux accents/fautes de frappe (2026-07-22) ────────
+// Bug signalé : chercher "depence" (faute courante en français — "c" et "s"
+// se prononcent pareil devant "e") ne trouvait pas "Dépenses" avec une simple
+// comparaison de sous-chaîne. levenshteinDistance = distance d'édition
+// standard (programmation dynamique). fuzzyIncludes : sous-chaîne exacte
+// (rapide, prioritaire) après normalisation des accents, puis repli sur une
+// comparaison mot-à-mot à distance d'édition bornée UNIQUEMENT si la requête
+// fait au moins 4 caractères (en dessous, une tolérance aux fautes produirait
+// trop de faux positifs sur des mots courts sans rapport).
+export function levenshteinDistance(a, b) {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+function stripAccents(str) {
+  return str.normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+export function fuzzyIncludes(haystack, needle) {
+  const h = stripAccents(String(haystack || "").toLowerCase());
+  const n = stripAccents(String(needle || "").trim().toLowerCase());
+  if (!n) return true;
+  if (h.includes(n)) return true;
+  if (n.length < 4) return false;
+  const maxDist = n.length <= 6 ? 1 : 2;
+  const words = h.split(/[^a-z0-9]+/).filter(Boolean);
+  return words.some(w => Math.abs(w.length - n.length) <= maxDist && levenshteinDistance(w, n) <= maxDist);
+}

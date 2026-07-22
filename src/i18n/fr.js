@@ -267,7 +267,7 @@ const fr = {
     installAppIos:["Ouvre le site internet dans Safari","En bas de l'écran, cherche le bouton « Partager » 👉 c'est une icône avec un carré et une flèche vers le haut (▢↑)","Appuie sur ce bouton","Un menu va apparaître : descends un peu dans la liste","Appuie sur « Ajouter à l'écran d'accueil »","Tu peux changer le nom si tu veux, puis appuie sur « Ajouter »"],
     installAppAndroidTitle:"Sur Android (Chrome)",
     installAppAndroid:["Ouvre le site internet dans Chrome","En haut à droite, appuie sur le bouton menu (⋮)","Un menu s'ouvre : appuie sur « Installer l'application » ou sur « Ajouter à l'écran d'accueil »","Confirme en appuyant sur « Ajouter »"],
-    viewLicense:"📄 Voir la licence complète",
+    viewLicense:"Voir la licence complète",
     calSchoolHol:"Vacances",calVisibleAll:"Visible par tous",calValidateGuardModel:"Veuillez valider le modèle de garde",
     cfgApiLoading:"Chargement via OpenHolidays API…",
     cfgApiOk:"Données officielles — OpenHolidays API",

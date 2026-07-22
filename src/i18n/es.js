@@ -199,7 +199,7 @@ const es = {
     installAppIos:["Abre el sitio web en Safari","En la parte inferior de la pantalla, busca el botón «Compartir» 👉 es un icono con un cuadrado y una flecha hacia arriba (▢↑)","Toca ese botón","Aparecerá un menú: desplázate un poco hacia abajo","Toca «Añadir a pantalla de inicio»","Puedes cambiar el nombre si quieres, luego toca «Añadir»"],
     installAppAndroidTitle:"En Android (Chrome)",
     installAppAndroid:["Abre el sitio web en Chrome","Arriba a la derecha, toca el botón de menú (⋮)","Se abre un menú: toca «Instalar aplicación» o «Añadir a pantalla de inicio»","Confirma tocando «Añadir»"],
-    viewLicense:"📄 Ver la licencia completa",
+    viewLicense:"Ver la licencia completa",
     calSchoolHol:"Vacaciones",calVisibleAll:"Visible para todos",calValidateGuardModel:"Por favor, valide el modelo de custodia",
     cfgApiLoading:"Cargando via OpenHolidays API…",
     cfgApiOk:"Datos oficiales — OpenHolidays API",

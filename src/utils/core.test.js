@@ -25,6 +25,8 @@ import {
   nextPensionDueDate,
   computeOverrideUpdate,
   mergeHistoryPreservingTokens,
+  levenshteinDistance,
+  fuzzyIncludes,
 } from "./core.js";
 
 // ── B1 — validatePassword (majuscule + caractère spécial désormais requis) ────
@@ -1075,4 +1077,40 @@ test("mergeHistoryPreservingTokens : historique tronqué par le début, réalign
   const result = mergeHistoryPreservingTokens(oldMessages, newHistory, 220);
   assert.equal(result[1].tokens, 200);
   assert.equal(result[3].tokens, 220);
+});
+
+// ── levenshteinDistance / fuzzyIncludes — recherche FAQ tolérante (2026-07-22) ──
+test("levenshteinDistance : chaînes identiques -> 0", () => {
+  assert.equal(levenshteinDistance("depense", "depense"), 0);
+});
+
+test("levenshteinDistance : une substitution -> 1", () => {
+  assert.equal(levenshteinDistance("depence", "depense"), 1);
+});
+
+test("levenshteinDistance : chaîne vide -> longueur de l'autre", () => {
+  assert.equal(levenshteinDistance("", "abc"), 3);
+  assert.equal(levenshteinDistance("abc", ""), 3);
+});
+
+test("fuzzyIncludes : sous-chaîne exacte trouvée", () => {
+  assert.equal(fuzzyIncludes("Comment ajouter une dépense ?", "dépense"), true);
+});
+
+test("fuzzyIncludes : insensible aux accents", () => {
+  assert.equal(fuzzyIncludes("Comment ajouter une dépense ?", "depense"), true);
+});
+
+test("fuzzyIncludes : tolère une faute de frappe courante (c/s) sur un mot assez long", () => {
+  // "depence" est une faute courante pour "dépense" (c/s se prononcent pareil en français) — bug signalé.
+  assert.equal(fuzzyIncludes("Dépenses", "depence"), true);
+});
+
+test("fuzzyIncludes : requête courte sans faute de frappe tolérée (évite les faux positifs)", () => {
+  assert.equal(fuzzyIncludes("Vue grille du calendrier", "vue"), true); // sous-chaîne exacte, ok
+  assert.equal(fuzzyIncludes("Emploi du temps", "vue"), false); // pas de faute tolérée sous 4 caractères
+});
+
+test("fuzzyIncludes : aucune correspondance sur un mot sans rapport", () => {
+  assert.equal(fuzzyIncludes("Comment inviter un observateur ?", "dépense"), false);
 });

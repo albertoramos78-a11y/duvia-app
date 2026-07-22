@@ -24,7 +24,7 @@ import { usePush } from "./hooks/usePush";
 import { getMyLocation, setMyLocation } from "./services/supabase/locationService";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION, APP_VERSION } from './config.js';
-import { nextPensionDueDate, computeOverrideUpdate, mergeHistoryPreservingTokens } from './utils/core.js';
+import { nextPensionDueDate, computeOverrideUpdate, mergeHistoryPreservingTokens, fuzzyIncludes } from './utils/core.js';
 import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact, weatherIconFor, getInitials, aggregateHourlyPeriods } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, LICORNE, FILLEUL, BRAND, BRAND_GRADIENT, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
@@ -6003,9 +6003,16 @@ function FaqModal({ C, t, lang, onClose }) {
   const [query, setQuery] = useState("");
   const [openKey, setOpenKey] = useState(null); // "sectionId:itemIndex" ouvert, un seul à la fois
   const sections = FAQ_SECTIONS[lang] || FAQ_SECTIONS.fr;
-  const q = query.trim().toLowerCase();
+  const q = query.trim();
+  // 🔧 fuzzyIncludes (2026-07-22) : insensible aux accents + tolère une faute
+  // de frappe courante (ex. "depence" pour "dépense") — une simple sous-chaîne
+  // exacte ratait ces recherches. Si la requête correspond au TITRE de la
+  // catégorie (ex. "depence" → "Dépenses"), on affiche TOUTE la catégorie —
+  // l'utilisateur cherche le sujet, pas une question précise.
   const filteredSections = q
-    ? sections.map(s => ({ ...s, items: s.items.filter(it => it.q.toLowerCase().includes(q) || it.a.toLowerCase().includes(q)) })).filter(s => s.items.length)
+    ? sections
+        .map(s => ({ ...s, items: fuzzyIncludes(s.title, q) ? s.items : s.items.filter(it => fuzzyIncludes(it.q, q) || fuzzyIncludes(it.a, q)) }))
+        .filter(s => s.items.length)
     : sections;
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>

@@ -111,7 +111,7 @@ export const FAQ_SECTIONS = {
       items: [
         {
           q: "Comment configurer l'emploi du temps d'un enfant ?",
-          a: "Onglet **EDT** → sélectionne l'enfant (s'il y en a plusieurs) puis le jour de la semaine → **+ Ajouter** → renseigne matière, professeur, horaires, salle et bâtiment. La formule gratuite limite à 1 cours par jour et par enfant ; le Premium retire cette limite.",
+          a: "Onglet **EDT** (réservé Premium/Trial Premium, non disponible en formule gratuite) → sélectionne l'enfant (s'il y en a plusieurs) puis le jour de la semaine → **+ Ajouter** → renseigne matière, professeur, horaires, salle et bâtiment.",
         },
       ],
     },
@@ -165,6 +165,25 @@ export const FAQ_SECTIONS = {
         {
           q: "Comment annuler mon abonnement Premium ?",
           a: "Écran **Premium** → **Annuler mon abonnement** — il reste actif jusqu'à la fin de la période déjà payée, comme pour un abonnement classique.",
+        },
+      ],
+    },
+    {
+      id: "assistant",
+      icon: "🤖",
+      title: "Assistant IA",
+      items: [
+        {
+          q: "Qu'est-ce que l'assistant IA et où le trouver ?",
+          a: "Un bouton flottant 🤖 (visible en bas de l'écran) ouvre une fenêtre de discussion. Réservé aux abonnements **Premium+IA** — les autres formules ne voient pas ce bouton.",
+        },
+        {
+          q: "Que peut lui demander l'assistant IA ?",
+          a: "Deux types de questions : des questions générales sur l'utilisation de l'app (\"comment inviter un observateur ?\"), et des questions sur les données de TA propre famille (nombre de jours de garde sur une période, solde des dépenses, météo, résumé de messages) — il va chercher les vraies données avant de répondre, il n'invente rien. Il peut aussi reformuler un message tendu avant l'envoi, ou traduire un texte.",
+        },
+        {
+          q: "Y a-t-il une limite d'utilisation de l'assistant IA ?",
+          a: "Oui, un quota quotidien de tokens (unité de calcul de l'IA), affiché sous forme de barre de progression en haut de la fenêtre de l'assistant — elle se réinitialise chaque jour à minuit (heure de Paris). Au-delà, l'assistant indique que la limite du jour est atteinte et invite à réessayer le lendemain.",
         },
       ],
     },

@@ -243,7 +243,7 @@ const en = {
     installAppIos:["Open the website in Safari","At the bottom of the screen, look for the \"Share\" button 👉 it's an icon with a square and an arrow pointing up (▢↑)","Tap this button","A menu will appear: scroll down a bit in the list","Tap \"Add to Home Screen\"","You can change the name if you want, then tap \"Add\""],
     installAppAndroidTitle:"On Android (Chrome)",
     installAppAndroid:["Open the website in Chrome","At the top right, tap the menu button (⋮)","A menu opens: tap \"Install app\" or \"Add to Home screen\"","Confirm by tapping \"Add\""],
-    viewLicense:"📄 View full license",
+    viewLicense:"View full license",
     calSchoolHol:"School holiday",calVisibleAll:"Visible to all",calValidateGuardModel:"Please validate the custody schedule",
     cfgApiLoading:"Loading via OpenHolidays API…",
     cfgApiOk:"Official data — OpenHolidays API",

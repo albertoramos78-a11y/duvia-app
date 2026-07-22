@@ -199,7 +199,7 @@ const de = {
     installAppIos:["Öffne die Website in Safari","Suche unten am Bildschirm nach dem Symbol „Teilen“ 👉 ein Quadrat mit einem Pfeil nach oben (▢↑)","Tippe auf dieses Symbol","Ein Menü öffnet sich: scrolle etwas nach unten","Tippe auf „Zum Home-Bildschirm“","Du kannst den Namen ändern, wenn du möchtest, und tippe dann auf „Hinzufügen“"],
     installAppAndroidTitle:"Auf Android (Chrome)",
     installAppAndroid:["Öffne die Website in Chrome","Tippe oben rechts auf das Menü (⋮)","Ein Menü öffnet sich: tippe auf „App installieren“ oder „Zum Startbildschirm hinzufügen“","Bestätige mit „Hinzufügen“"],
-    viewLicense:"📄 Vollständige Lizenz ansehen",
+    viewLicense:"Vollständige Lizenz ansehen",
     calSchoolHol:"Schulferien",calVisibleAll:"Für alle sichtbar",calValidateGuardModel:"Bitte das Sorgerechtsmodell bestätigen",
     cfgApiLoading:"Laden via OpenHolidays API…",
     cfgApiOk:"Offizielle Daten — OpenHolidays API",
