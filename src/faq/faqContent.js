@@ -68,6 +68,10 @@ export const FAQ_SECTIONS = {
           q: "Comment valider l'inscription de quelqu'un que j'ai invité ?",
           a: "Une fois que la personne a cliqué son lien et créé son compte, sa fiche affiche des boutons **✅ Valider** / **❌** dans l'onglet correspondant (Famille ou Observateurs) — tant que tu n'as pas validé, elle n'a pas encore accès aux données de la famille.",
         },
+        {
+          q: "Que voient un enfant et un observateur dans l'application ?",
+          a: "Les deux ont accès au **Calendrier**, à la fiche **Enfant**, aux **Contacts**, à la **Messagerie** et à la roue de récompenses (**Jeu**) — mais PAS aux **Dépenses** ni au **Coffre-fort**, réservés aux parents. L'**enfant** a en plus son propre **Emploi du temps** en lecture seule ; l'**observateur** n'y a pas accès du tout. Seuls les parents peuvent modifier la configuration de la famille (modèle de garde, dates spéciales, invitations) via **Configuration famille** — ni un enfant ni un observateur n'y ont accès.",
+        },
       ],
     },
     {
