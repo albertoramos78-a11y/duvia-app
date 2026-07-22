@@ -19620,12 +19620,19 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
         @keyframes wheelPopIn { from{transform:scale(0.4);opacity:0} to{transform:scale(1);opacity:1} }
         @keyframes wheelGlowPulse { 0%,100%{opacity:.55;transform:scale(1)} 50%{opacity:1;transform:scale(1.12)} }
         @keyframes wheelPointerBounce { 0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(3px)} }
+        @keyframes wheelPointerTick { 0%,100%{transform:translateX(-50%) rotate(0deg)} 25%{transform:translateX(-50%) rotate(-9deg)} 75%{transform:translateX(-50%) rotate(9deg)} }
         @keyframes wheelSettle { 0%{transform:scale(1)} 50%{transform:scale(1.025)} 100%{transform:scale(1)} }
+        @keyframes wheelWinBurst { 0%{transform:scale(.3) rotate(-10deg);opacity:0} 60%{transform:scale(1.18) rotate(5deg);opacity:1} 100%{transform:scale(1) rotate(0deg);opacity:1} }
+        @keyframes wheelLoseDip { 0%{transform:scale(.7) translateY(-6px);opacity:0} 60%{transform:scale(1.04) translateY(2px);opacity:1} 100%{transform:scale(1) translateY(0);opacity:1} }
         .wheel-pointer-idle { animation: wheelPointerBounce 1.6s ease-in-out infinite; }
+        .wheel-pointer-spin { animation: wheelPointerTick .11s linear infinite; }
         .wheel-glow-ring { animation: wheelGlowPulse 1.8s ease-in-out infinite; }
         .wheel-settle { animation: wheelSettle .5s cubic-bezier(.16,1,.3,1); }
+        .wheel-result-win { animation: wheelWinBurst .5s cubic-bezier(.16,1,.3,1); }
+        .wheel-result-lose { animation: wheelLoseDip .45s cubic-bezier(.16,1,.3,1); }
         @media (prefers-reduced-motion: reduce) {
-          .wheel-pointer-idle, .wheel-glow-ring, .wheel-settle { animation: none !important; }
+          .wheel-pointer-idle, .wheel-pointer-spin, .wheel-glow-ring, .wheel-settle,
+          .wheel-result-win, .wheel-result-lose { animation: none !important; }
         }
       `}</style>
 
@@ -19658,8 +19665,12 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
           }}/>
         ))}
 
-        {/* Pointer — losange dégradé avec ombre, léger rebond au repos pour inviter au jeu */}
-        <div className={!spinning ? "wheel-pointer-idle" : undefined} style={{position:"absolute",top:-14,left:"50%",transform:"translateX(-50%)",zIndex:10}}>
+        {/* Pointer — losange dégradé avec ombre. Rebond léger au repos (invite
+            au jeu), petit tremblement rapide pendant que la roue tourne (comme
+            les picots d'une vraie roue de fête foraine qui font vibrer la flèche
+            à chaque case franchie), transform-origin en haut = pivote depuis son
+            point d'attache plutôt qu'autour de son propre centre. */}
+        <div className={spinning ? "wheel-pointer-spin" : "wheel-pointer-idle"} style={{position:"absolute",top:-14,left:"50%",transform:"translateX(-50%)",transformOrigin:"50% 0%",zIndex:10}}>
           <svg width="30" height="34" viewBox="0 0 30 34" style={{filter:"drop-shadow(0 3px 5px rgba(0,0,0,.35))"}}>
             <defs>
               <linearGradient id="wheelPointerGrad" x1="0" y1="0" x2="0" y2="1">
@@ -19754,7 +19765,7 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
           {result.id!=="nothing" && (
             <div className="wheel-glow-ring" style={{position:"absolute",top:"50%",left:"50%",width:90,height:90,marginTop:-95,marginLeft:-45,borderRadius:"50%",background:result.color,filter:"blur(24px)",opacity:.6,pointerEvents:"none"}} />
           )}
-          <div style={{position:"relative",fontSize:isBigWin?52:44,marginBottom:6}}>{result.emoji}</div>
+          <div className={result.id==="nothing"?"wheel-result-lose":"wheel-result-win"} style={{position:"relative",fontSize:isBigWin?52:44,marginBottom:6}}>{result.emoji}</div>
           <div style={{position:"relative",fontSize:20,fontWeight:900,color:result.color,marginBottom:6}}>{t[result.labelKey]||result.label}</div>
           <div style={{position:"relative",fontSize:12,color:C.mut,marginBottom:12,lineHeight:1.5}}>
             {result.type==="payment" && t.wheelResultPayment}
