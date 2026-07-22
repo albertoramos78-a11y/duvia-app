@@ -19572,13 +19572,26 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
           }));
         }
         if(prize.id!=="nothing") {
-          setParticles(Array.from({length:40},(_,i)=>({
-            id:i, x:50, y:50,
-            vx:(Math.random()-0.5)*120, vy:(Math.random()-0.8)*120,
-            color:[prize.color,"#FFD700","#ff6bb5","#4a9eff"][i%4],
-            size:Math.random()*6+3,
+          // 🔧 (2026-07-22) Confettis relancés depuis le conteneur RACINE (roue
+          // + bouton + carte de résultat), pas seulement autour de la roue —
+          // chute large et longue pour traverser toute la zone visible plutôt
+          // que de disparaître avant que le regard n'atteigne le résultat.
+          // Léger décalage de départ (delay) par particule pour une chute en
+          // cascade plutôt qu'un "pop" synchronisé.
+          setParticles(Array.from({length:56},(_,i)=>({
+            id:i,
+            x:(Math.random()-0.5)*260,
+            driftX:(Math.random()-0.5)*140,
+            fallY:240+Math.random()*160,
+            rot:(Math.random()-0.5)*720,
+            w:Math.random()<0.5?Math.random()*5+4:Math.random()*4+3,
+            h:Math.random()<0.5?Math.random()*5+4:Math.random()*8+5,
+            round:Math.random()<0.5,
+            dur:1.6+Math.random()*0.7,
+            delay:Math.random()*0.25,
+            color:[prize.color,"#FFD700","#ff6bb5","#7c6fcd","#4a9eff"][i%5],
           })));
-          setTimeout(()=>setParticles([]),2000);
+          setTimeout(()=>setParticles([]),2600);
         }
       }
     }
@@ -19614,9 +19627,36 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
   const gradId = (hex) => `wheelGrad-${hex.replace("#","")}`;
 
   return (
-    <div style={{textAlign:"center"}}>
+    <div style={{textAlign:"center",position:"relative"}}>
+      {/* 🔧 Confettis (2026-07-22) : rendus au niveau de CE conteneur racine
+          (roue + bouton + carte de résultat), pas seulement autour de la
+          roue — sinon la fête se joue hors du champ de vision au moment où
+          l'utilisateur regarde la carte de résultat en dessous. Origine
+          proche de la roue, chute large et longue pour traverser visuellement
+          toute la zone jusqu'à la carte. */}
+      {particles.map(p=>(
+        <div key={p.id} className="wheel-confetti-piece" style={{
+          position:"absolute",
+          left:`calc(50% + ${p.x}px)`,
+          top:110,
+          width:p.w,height:p.h,
+          background:p.color,
+          borderRadius:p.round?"50%":"3px",
+          pointerEvents:"none",
+          zIndex:30,
+          "--fall-x":`${p.driftX}px`,
+          "--fall-y":`${p.fallY}px`,
+          "--fall-rot":`${p.rot}deg`,
+          animation:`confettiFall ${p.dur}s cubic-bezier(.2,.7,.4,1) ${p.delay}s forwards`,
+        }}/>
+      ))}
+
       <style>{`
-        @keyframes confettiFall { from{opacity:1;transform:scale(1)} to{opacity:0;transform:scale(0.3) translateY(40px)} }
+        @keyframes confettiFall {
+          from{opacity:1;transform:translate(0,0) rotate(0deg)}
+          70%{opacity:1}
+          to{opacity:0;transform:translate(var(--fall-x),var(--fall-y)) rotate(var(--fall-rot))}
+        }
         @keyframes wheelPopIn { from{transform:scale(0.4);opacity:0} to{transform:scale(1);opacity:1} }
         @keyframes wheelGlowPulse { 0%,100%{opacity:.55;transform:scale(1)} 50%{opacity:1;transform:scale(1.12)} }
         @keyframes wheelPointerBounce { 0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(3px)} }
@@ -19633,6 +19673,7 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
         @media (prefers-reduced-motion: reduce) {
           .wheel-pointer-idle, .wheel-pointer-spin, .wheel-glow-ring, .wheel-settle,
           .wheel-result-win, .wheel-result-lose { animation: none !important; }
+          .wheel-confetti-piece { display: none !important; }
         }
       `}</style>
 
@@ -19650,20 +19691,6 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
 
       {/* Wheel */}
       <div style={{position:"relative",display:"inline-block",marginBottom:18}}>
-        {/* Particles */}
-        {particles.map(p=>(
-          <div key={p.id} style={{
-            position:"absolute",
-            left:`calc(${p.x}% + ${p.vx*(1)}px)`,
-            top:`calc(${p.y}% + ${p.vy*(1)}px)`,
-            width:p.size,height:p.size,
-            background:p.color,
-            borderRadius:"50%",
-            pointerEvents:"none",
-            zIndex:20,
-            animation:"confettiFall 1.5s ease-out forwards",
-          }}/>
-        ))}
 
         {/* Pointer — losange dégradé avec ombre. Rebond léger au repos (invite
             au jeu), petit tremblement rapide pendant que la roue tourne (comme
