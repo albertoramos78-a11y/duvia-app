@@ -17033,7 +17033,11 @@ function ChatbotBubble() {
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
   const [tokensUsedToday, setTokensUsedToday] = useState(0);
-  const [tokensLimit, setTokensLimit] = useState(100000);
+  // 🔧 (2026-07-23) Plafond abaissé 100 000→30 000/jour (instruction explicite
+  // de l'utilisateur, 2026-07-22) — valeur par défaut uniquement, écrasée dès
+  // le premier échange par tokens_limit renvoyé par l'Edge Function (seule
+  // source de vérité réelle, voir DAILY_TOKEN_LIMIT dans ai-chatbot/index.ts).
+  const [tokensLimit, setTokensLimit] = useState(30000);
   // Position du bouton flottant en pixels (top/left) — permet de le faire
   // glisser librement à l'écran plutôt que de rester bloqué dans un coin.
   // Initialisée au coin bas-droit historique.

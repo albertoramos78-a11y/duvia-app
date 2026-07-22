@@ -14,7 +14,11 @@ const RESEND_API_KEY    = Deno.env.get("RESEND_API_KEY")!;
 const NOTIFY_FROM_EMAIL = "notifications@duvia.fr";
 const NOTIFY_ADMIN_EMAIL = "duvia.services@gmail.com";
 
-const DAILY_TOKEN_LIMIT = 100000;
+// 🔧 (2026-07-23) Abaissé 100 000→30 000/jour — instruction explicite de
+// l'utilisateur (2026-07-22), effective à partir du 2026-07-23. À ce niveau,
+// attendu ~10-17 questions/jour/utilisateur (coût mixte cache+input+output
+// par échange) et ≈1$/utilisateur/mois si le plafond est atteint chaque jour.
+const DAILY_TOKEN_LIMIT = 30000;
 const MAX_TOOL_ROUNDS = 5;
 const MAX_QUESTION_LEN = 2000;
 const MAX_HISTORY_ENTRIES = 20;
