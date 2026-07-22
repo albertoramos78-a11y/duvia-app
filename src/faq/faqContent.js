@@ -204,6 +204,29 @@ export const FAQ_SECTIONS = {
       ],
     },
     {
+      id: "roue",
+      icon: "🎡",
+      title: "Roue Duvia et thèmes",
+      items: [
+        {
+          q: "Comment fonctionne la roue Duvia ?",
+          a: "Onglet **Jeu** (🎡) → tourne la roue une fois le délai d'attente écoulé (7 jours pour les parents/observateurs, 2 jours pour les enfants). Réservée aux comptes **Premium** côté parents (verrouillée en formule gratuite) — mais les enfants et observateurs peuvent toujours jouer, même dans une famille freemium, pour les lots \"thème\" uniquement (jamais les mois/année Premium offerts, réservés au parent qui paie réellement l'abonnement).",
+        },
+        {
+          q: "Quels lots peut-on gagner à la roue ?",
+          a: "Des thèmes visuels de l'application : **🎮 Jeu vidéo**, **🦄 Licorne** (permanents), et les thèmes saisonniers **🌴 Été**, **🎾 Tennis** (Roland-Garros) et **⚽ Coupe du monde** (uniquement pendant leur période de l'année). Pour le parent qui paie réellement Premium, la roue peut aussi faire gagner **1 mois** ou **1 an** d'abonnement offert.",
+        },
+        {
+          q: "Comment gagner des tours de roue supplémentaires ?",
+          a: "Chaque filleul parrainé qui valide son compte (menu ☰ → **🎁 Parrainage**) t'offre un tour de roue en plus, quel que soit ton statut actuel.",
+        },
+        {
+          q: "Peut-on acheter un thème directement, sans passer par la roue ?",
+          a: "Une boutique (🎨, dans l'onglet Jeu, réservée aux adultes Premium — parents et observateurs) permet de choisir un thème pour soi ou de l'offrir à un enfant. **Pendant la bêta actuelle, les achats sont désactivés** : la roue reste le seul moyen d'obtenir un thème, gratuitement, en tournant chaque fois que le délai d'attente est passé.",
+        },
+      ],
+    },
+    {
       id: "assistant",
       icon: "🤖",
       title: "Assistant IA",
