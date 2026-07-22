@@ -6010,35 +6010,45 @@ function FaqModal({ C, t, lang, onClose }) {
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,maxWidth:560,width:"100%",padding:"22px 24px",boxShadow:"0 12px 40px rgba(0,0,0,.3)",maxHeight:"88vh",display:"flex",flexDirection:"column",color:C.txt,fontSize:13}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,gap:10}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:10,flexShrink:0}}>
           <div style={{fontSize:17,fontWeight:900}}>❓ {t.faqTitle||"Aide / FAQ"}</div>
-          <button onClick={onClose} style={{width:30,height:30,flexShrink:0,background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:16,cursor:"pointer"}}>✕</button>
+          <button onClick={onClose} style={{width:30,height:30,flexShrink:0,background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:16}}>✕</button>
         </div>
 
+        {/* 🔧 Pas de style custom : les inputs ont déjà un style global cohérent
+            (hauteur/rayon/focus, voir css() plus haut dans ce fichier) — même
+            convention que la recherche du Coffre-fort (vaultSearch). */}
         <input value={query} onChange={e=>setQuery(e.target.value)} placeholder={t.faqSearchPlaceholder||"Rechercher dans l'aide…"}
-          style={{width:"100%",height:40,padding:"0 14px",borderRadius:12,border:`1.5px solid ${C.bor}`,background:C.sur,color:C.txt,fontSize:13,marginBottom:14,boxSizing:"border-box"}} />
+          style={{marginBottom:16,flexShrink:0}} />
 
-        <div style={{overflowY:"auto",display:"flex",flexDirection:"column",gap:18}}>
+        <div style={{overflowY:"auto",display:"flex",flexDirection:"column",gap:20}}>
           {filteredSections.length===0 && (
-            <div style={{fontSize:12,color:C.mut,textAlign:"center",padding:"20px 0"}}>{t.faqNoResults||"Aucun résultat pour cette recherche."}</div>
+            <div style={{fontSize:12,color:C.mut,textAlign:"center",padding:"24px 0"}}>{t.faqNoResults||"Aucun résultat pour cette recherche."}</div>
           )}
           {filteredSections.map(section => (
             <div key={section.id}>
-              <div style={{fontSize:13,fontWeight:800,marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
-                <span>{section.icon}</span><span>{section.title}</span>
+              <div style={{fontSize:13,fontWeight:800,color:C.txt,paddingBottom:8,marginBottom:8,borderBottom:`1px solid ${C.bor}`,display:"flex",alignItems:"center",gap:7}}>
+                <span style={{fontSize:15}}>{section.icon}</span><span>{section.title}</span>
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:6}}>
                 {section.items.map((item, i) => {
                   const key = `${section.id}:${i}`;
                   const isOpen = openKey===key;
                   return (
-                    <div key={key} style={{border:`1.5px solid ${C.bor}`,borderRadius:12,overflow:"hidden"}}>
-                      <button onClick={()=>setOpenKey(isOpen?null:key)} style={{width:"100%",padding:"10px 14px",background:isOpen?`${C.vio}0d`:"transparent",color:C.txt,textAlign:"left",display:"flex",alignItems:"center",gap:8,fontSize:12.5,fontWeight:700,border:"none",cursor:"pointer"}}>
-                        <span style={{flex:1}}>{item.q}</span>
-                        <span style={{fontSize:10,color:C.mut,flexShrink:0,transition:"transform .15s",transform:isOpen?"rotate(180deg)":"rotate(0deg)"}}>▼</span>
+                    <div key={key} style={{background:isOpen?`${C.vio}0f`:C.sur,border:`1px solid ${isOpen?C.vio+"55":C.bor}`,borderRadius:12,overflow:"hidden",transition:"background .15s, border-color .15s"}}>
+                      {/* 🔧 white-space:normal + minWidth:0 (2026-07-22) : le
+                          bouton hérite par défaut de white-space:nowrap (règle
+                          globale button{} du thème) et un enfant flex sans
+                          min-width:0 ne peut pas rétrécir sous sa largeur de
+                          contenu — combinés, une question longue débordait
+                          hors de la modale au lieu de passer à la ligne
+                          (signalé par l'utilisateur, capture à l'appui). */}
+                      <button onClick={()=>setOpenKey(isOpen?null:key)} style={{width:"100%",height:"auto",minHeight:44,padding:"11px 14px",background:"transparent",color:C.txt,textAlign:"left",whiteSpace:"normal",display:"flex",alignItems:"center",gap:10,fontSize:12.5,fontWeight:700}}>
+                        <span style={{flex:1,minWidth:0}}>{item.q}</span>
+                        <span style={{fontSize:10,color:isOpen?C.vio:C.mut,flexShrink:0,transition:"transform .18s ease-out",transform:isOpen?"rotate(180deg)":"rotate(0deg)"}}>▼</span>
                       </button>
                       {isOpen && (
-                        <div style={{padding:"0 14px 12px",fontSize:12.5,lineHeight:1.55,color:C.txt}}>
+                        <div className="faq-answer-in" style={{padding:"0 14px 14px",fontSize:12.5,lineHeight:1.6,color:C.txt}}>
                           {renderLegalInline(item.a)}
                         </div>
                       )}
@@ -6050,6 +6060,11 @@ function FaqModal({ C, t, lang, onClose }) {
           ))}
         </div>
       </div>
+      <style>{`
+        @keyframes faqAnswerIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+        .faq-answer-in{animation:faqAnswerIn .18s cubic-bezier(.16,1,.3,1);}
+        @media (prefers-reduced-motion: reduce){.faq-answer-in{animation:none;}}
+      `}</style>
     </div>
   );
 }
