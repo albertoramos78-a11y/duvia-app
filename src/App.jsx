@@ -16884,7 +16884,7 @@ function ChatbotBubble() {
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
   const [tokensUsedToday, setTokensUsedToday] = useState(0);
-  const [tokensLimit, setTokensLimit] = useState(40000);
+  const [tokensLimit, setTokensLimit] = useState(100000);
   // Position du bouton flottant en pixels (top/left) — permet de le faire
   // glisser librement à l'écran plutôt que de rester bloqué dans un coin.
   // Initialisée au coin bas-droit historique.
