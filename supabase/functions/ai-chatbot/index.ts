@@ -6,6 +6,13 @@ const SUPABASE_URL      = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_ROLE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
+// 🔧 (2026-07-22) Réutilise le secret RESEND_API_KEY déjà configuré au niveau
+// du projet Supabase pour les autres fonctions notify-* (bug_report, rating,
+// etc.) — pas de configuration supplémentaire nécessaire, les secrets sont
+// partagés entre toutes les Edge Functions d'un même projet.
+const RESEND_API_KEY    = Deno.env.get("RESEND_API_KEY")!;
+const NOTIFY_FROM_EMAIL = "notifications@duvia.fr";
+const NOTIFY_ADMIN_EMAIL = "duvia.services@gmail.com";
 
 const DAILY_TOKEN_LIMIT = 100000;
 const MAX_TOOL_ROUNDS = 5;
@@ -413,6 +420,7 @@ Mode de réponse — ultra-concis, anti-hallucination (ordre de priorité strict
 - Réponds avec le minimum de mots nécessaires : si "Oui", "Non", un nombre, une date ou un mot suffisent, réponds uniquement par cela.
 - Privilégie les faits aux explications. Pas d'introduction, de conclusion, de politesse ni de reformulation de la question.
 - N'invente et ne devine jamais une information, ne complète jamais une donnée manquante par déduction — utilise les outils fournis pour vérifier plutôt que de supposer. Si une information est indisponible dans les outils ou reste incertaine, dis-le explicitement ("je ne sais pas" / information non disponible) plutôt que d'inventer une réponse.
+- Dans ce cas précis (tu ne sais vraiment pas répondre, l'information n'est ni dans la FAQ ci-dessous ni disponible via un outil), commence ta réponse par le marqueur exact [NO_ANSWER] suivi d'un espace, puis continue normalement dans la langue de la question — ce marqueur est un signal technique invisible pour l'utilisateur (retiré avant affichage), à utiliser UNIQUEMENT dans ce cas, jamais quand tu as pu répondre même partiellement.
 - Si la question est ambiguë, pose uniquement la question indispensable pour la clarifier, rien d'autre.
 - Quand tu mentionnes un parent, un enfant ou un observateur dans ta réponse, utilise toujours son prénom réel (via get_family_config ou déjà connu du contexte) — jamais "un parent", "l'autre parent", "parent 0/1" ou une référence générique.
 - Reste factuel et neutre — le contexte familial est parfois sensible. Réponds dans la langue de la question.
@@ -734,6 +742,67 @@ async function toolGetCustodyDays(userClient: ReturnType<typeof createClient>, f
   };
 }
 
+// 🔒 Même fonction que dans notify-bug-report/index.ts (dupliquée, pas
+// d'import cross-fichier possible entre Edge Functions) : la question et la
+// réponse sont du texte libre (saisi par l'utilisateur / généré par le
+// modèle) — jamais interpolées telles quelles dans le HTML de l'email, sinon
+// l'une ou l'autre pourrait injecter des balises dans le mail reçu par
+// NOTIFY_ADMIN_EMAIL.
+function escapeHtmlChatbot(s: string): string {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// 🔧 (2026-07-22) Notifie l'admin par email quand l'assistant IA n'a pas su
+// répondre (voir le marqueur [NO_ANSWER] dans SYSTEM_PROMPT et son usage dans
+// serve() plus bas) — permet de repérer les trous de la FAQ_KNOWLEDGE sans
+// devoir éplucher les logs. Best-effort : les erreurs sont catchées par
+// l'appelant, un échec d'envoi ne doit jamais faire échouer la réponse du
+// chatbot à l'utilisateur.
+async function notifyNoAnswer(info: { question: string; answer: string; userEmail: string; familyId: string; userId: string }) {
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,sans-serif">
+  <div style="max-width:520px;margin:32px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)">
+    <div style="background:linear-gradient(135deg,#7BA8F5,#9D8FF0);padding:28px 24px;text-align:center">
+      <div style="font-size:36px;margin-bottom:8px">🤖</div>
+      <div style="color:#fff;font-size:18px;font-weight:800">L'assistant IA n'a pas su répondre</div>
+    </div>
+    <div style="padding:28px 24px">
+      <div style="font-size:11px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px">Question posée</div>
+      <p style="color:#333;margin:0 0 16px;white-space:pre-wrap;background:#f7f7fb;border-radius:10px;padding:12px">${escapeHtmlChatbot(info.question)}</p>
+      <div style="font-size:11px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px">Réponse donnée</div>
+      <p style="color:#333;margin:0 0 16px;white-space:pre-wrap;background:#f7f7fb;border-radius:10px;padding:12px">${escapeHtmlChatbot(info.answer)}</p>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;color:#555">
+        <tr><td style="padding:4px 0;font-weight:700">Utilisateur</td><td style="padding:4px 0">${escapeHtmlChatbot(info.userEmail || info.userId)}</td></tr>
+        <tr><td style="padding:4px 0;font-weight:700">Famille</td><td style="padding:4px 0">${escapeHtmlChatbot(info.familyId)}</td></tr>
+      </table>
+      <p style="color:#999;margin:16px 0 0;font-size:12px">Si le sujet mérite d'être documenté, ajoute-le à FAQ_KNOWLEDGE dans supabase/functions/ai-chatbot/index.ts (et dans src/faq/faqContent.js si pertinent aussi pour la FAQ affichée dans l'app).</p>
+    </div>
+    <div style="padding:16px 24px;text-align:center;color:#bbb;font-size:11px;border-top:1px solid #f0f0f0">
+      Duvia · Assistant IA
+    </div>
+  </div>
+</body></html>`;
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: `Duvia <${NOTIFY_FROM_EMAIL}>`,
+      to: [NOTIFY_ADMIN_EMAIL],
+      subject: "🤖 L'assistant IA n'a pas su répondre",
+      html,
+    }),
+  });
+  const resBody = await res.json();
+  console.log("ai-chatbot: notifyNoAnswer Resend response:", JSON.stringify(resBody));
+}
+
 async function executeTool(
   name: string,
   args: any,
@@ -887,8 +956,28 @@ serve(async (req) => {
 
       // stop_reason "end_turn" (ou autre) : réponse finale.
       const textBlock = content.find((b: any) => b.type === "text");
-      const answer = String(textBlock?.text || "").trim();
+      const rawAnswer = String(textBlock?.text || "").trim();
+      if (!rawAnswer) return jsonResponse({ error: "chatbot_failed" }, 500);
+
+      // 🔧 (2026-07-22) Détection "je ne sais pas" via un marqueur littéral
+      // plutôt qu'un test de phrase ("je ne sais pas"...) : le chatbot répond
+      // "dans la langue de la question" (voir SYSTEM_PROMPT), donc un test en
+      // français raterait toute réponse en anglais/allemand/espagnol/
+      // portugais. Le marqueur est retiré avant l'envoi au client — jamais
+      // visible dans l'app ni dans l'historique renvoyé par le client au
+      // prochain appel.
+      const NO_ANSWER_MARKER = "[NO_ANSWER]";
+      const isNoAnswer = rawAnswer.startsWith(NO_ANSWER_MARKER);
+      const answer = (isNoAnswer ? rawAnswer.slice(NO_ANSWER_MARKER.length) : rawAnswer).trim();
       if (!answer) return jsonResponse({ error: "chatbot_failed" }, 500);
+
+      if (isNoAnswer) {
+        try {
+          await notifyNoAnswer({ question, answer, userEmail: callerData.user.email || "", familyId, userId });
+        } catch (e) {
+          console.error("ai-chatbot: notifyNoAnswer failed", e);
+        }
+      }
 
       await admin.from("ai_usage_log").insert({
         user_id: userId, feature: "chatbot_query",
