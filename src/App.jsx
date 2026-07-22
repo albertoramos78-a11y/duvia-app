@@ -16228,6 +16228,55 @@ function AdminChangeLogCard({ C, onChanged }) {
   );
 }
 
+function VerifyCustodyParityCard({ C }) {
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState(null);
+  const [err, setErr] = useState("");
+
+  async function run() {
+    setRunning(true); setErr(""); setResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-manage-subscriptions", { body: { action: "verify_custody_parity" } });
+      if (error) throw new Error(error.message || "invoke_failed");
+      if (data?.error) throw new Error(data.error);
+      setResult(data);
+    } catch (e) {
+      setErr(String(e?.message || e));
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="card" style={{marginBottom:14,borderColor:`${C.mut}44`,background:`${C.mut}08`}}>
+      <div style={{fontSize:11,fontWeight:800,color:C.mut,letterSpacing:".1em",textTransform:"uppercase",marginBottom:12}}>🔍 Fiabilité du calcul de garde (tables)</div>
+      <div style={{fontSize:12,color:C.mut,marginBottom:12,lineHeight:1.5}}>
+        Compare, sur 3 ans (2 ans passés + 1 an à venir), le calcul de garde actuel (JSON) et le nouveau calcul depuis les tables dédiées, pour toutes les familles ayant une configuration confirmée. Action en lecture seule, sans risque, peut être relancée à tout moment.
+      </div>
+      <button onClick={run} disabled={running}
+        style={{padding:"8px 18px",background:`${C.mut}18`,color:C.mut,border:`1.5px solid ${C.mut}55`,borderRadius:10,fontSize:12,fontWeight:800,cursor:running?"default":"pointer"}}>
+        {running ? "Vérification…" : "🔍 Lancer la vérification"}
+      </button>
+      {result && (
+        <div style={{marginTop:10,fontSize:12,color:result.total_desaccords===0?C.grn:C.red}}>
+          {result.total_desaccords===0
+            ? `✅ ${result.familles_verifiees} famille(s), ${result.jours_compares} jour(s) comparés — 0 désaccord.`
+            : `⚠️ ${result.total_desaccords} désaccord(s) sur ${result.jours_compares} jour(s) comparés (${result.familles_verifiees} famille(s)).`}
+          {result.total_desaccords > 0 && (
+            <div style={{marginTop:8,maxHeight:200,overflowY:"auto",fontFamily:"monospace",fontSize:11}}>
+              {result.desaccords.map((d,i)=>(
+                <div key={i}>{d.family_id.slice(0,8)}… · {d.date} · enfant {d.child_id ?? "global"} · JSON={d.old_result ?? "—"} vs tables={d.new_result ?? "—"}</div>
+              ))}
+              {result.desaccords_tronques && <div style={{marginTop:4,fontStyle:"italic"}}>Liste tronquée à 200 désaccords.</div>}
+            </div>
+          )}
+        </div>
+      )}
+      {err && <div style={{marginTop:10,fontSize:11,color:C.red}}>⚠️ {err}</div>}
+    </div>
+  );
+}
+
 // 🔧 Version "bouton admin", rejouable, de la migration ponctuelle
 // 0033_cleanup_anonymous_families.sql — rattrape d'éventuels comptes/familles
 // "anonymes" résiduels (ancien mécanisme de badge invisible, retiré le
@@ -16568,6 +16617,9 @@ function AdminTab() {
 
       {/* ── Nettoyage comptes anonymes résiduels ────────────────────────── */}
       <AnonymousCleanupCard C={C} />
+
+      {/* ── Vérification de fiabilité garde (Phase 4, étape 1) ──────────── */}
+      <VerifyCustodyParityCard C={C} />
     </div>
   );
 }
