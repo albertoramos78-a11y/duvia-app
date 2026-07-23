@@ -173,3 +173,87 @@ end;
 $$;
 
 revoke all on function public._wheel_family_is_premium(uuid,uuid) from public;
+
+-- ── 3. Draw logic — individual-subscriber check (extracted verbatim from
+--    the soon-to-be-retired spin_wheel_check_monetary_prize(), migration
+--    0041) and the weighted draw (mirrors PROBS_SUBSCRIBER/PROBS_OTHERS in
+--    src/App.jsx). Neither granted to authenticated — internal to
+--    spin_wheel() (Task 4).
+
+create or replace function public._wheel_is_individual_subscriber(p_uid uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_plan text;
+  v_premium_since timestamptz;
+  v_cycle text;
+  v_ref_months int;
+  v_expiry timestamptz;
+begin
+  select plan, premium_since, cycle, coalesce(ref_months, 0)
+    into v_plan, v_premium_since, v_cycle, v_ref_months
+  from public.subscriptions
+  where user_id = p_uid;
+
+  if v_plan is distinct from 'premium' then
+    return false;
+  end if;
+  if v_premium_since is not null and v_cycle is not null then
+    v_expiry := v_premium_since
+      + (case when v_cycle = 'yearly' then interval '1 year' else interval '1 month' end)
+      + (v_ref_months * interval '30 days');
+    return now() <= v_expiry;
+  end if;
+  return true;
+end;
+$$;
+
+revoke all on function public._wheel_is_individual_subscriber(uuid) from public;
+
+create or replace function public._wheel_draw(p_is_subscriber boolean)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_r double precision := random();
+  v_cum double precision := 0;
+  v_year double precision := case when p_is_subscriber then 0.001 else 0 end;
+  v_month double precision := case when p_is_subscriber then 0.010 else 0 end;
+  v_theme double precision := 0.200;
+  v_video double precision := 0.100;
+  v_licorne double precision := 0.100;
+  v_rg double precision := 0.050;
+  v_wc double precision := 0.050;
+  -- Seasonal windows — mirrors SUMMER_START/END, RG_START/END, WC_START/END
+  -- in src/theme.js. Resync manually if those dates change.
+  v_theme_active boolean := now() >= '2026-06-21'::timestamptz and now() <= '2026-07-23 23:59:59'::timestamptz;
+  v_rg_active boolean := now() >= '2026-05-24'::timestamptz and now() <= '2026-06-04 23:59:59'::timestamptz;
+  v_wc_active boolean := now() >= '2026-06-06'::timestamptz and now() <= '2026-07-26 23:59:59'::timestamptz;
+begin
+  if not v_theme_active then v_theme := 0; end if;
+  if not v_rg_active then v_rg := 0; end if;
+  if not v_wc_active then v_wc := 0; end if;
+
+  if v_r < v_cum + v_year then return 'year'; end if;
+  v_cum := v_cum + v_year;
+  if v_r < v_cum + v_month then return 'month'; end if;
+  v_cum := v_cum + v_month;
+  if v_r < v_cum + v_theme then return 'theme'; end if;
+  v_cum := v_cum + v_theme;
+  if v_r < v_cum + v_video then return 'video'; end if;
+  v_cum := v_cum + v_video;
+  if v_r < v_cum + v_licorne then return 'licorne'; end if;
+  v_cum := v_cum + v_licorne;
+  if v_r < v_cum + v_rg then return 'rg'; end if;
+  v_cum := v_cum + v_rg;
+  if v_r < v_cum + v_wc then return 'wc'; end if;
+  return 'nothing';
+end;
+$$;
+
+revoke all on function public._wheel_draw(boolean) from public;
