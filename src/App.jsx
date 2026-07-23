@@ -13821,43 +13821,47 @@ function PensionSection() {
         <>
           <div style={{fontSize:11,color:C.mut,marginBottom:8,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
             <span>{(cfg.parents[activeConfig.fromParent]?.name || "P1")} → {(cfg.parents[activeConfig.toParent]?.name || "P2")} · {activeConfig.amount}{currency}/mois · {t.pensionDayOfMonthShort || "le"} {activeConfig.dayOfMonth}</span>
-            {!proposedConfig && !showForm && (
-              <button
-                onClick={() => {
-                  setForm({
-                    payerIdx: activeConfig.fromParent,
-                    amount: String(activeConfig.amount),
-                    dayOfMonth: String(activeConfig.dayOfMonth),
-                    startDate: toStr(new Date()),
-                  });
-                  setShowForm(true);
-                }}
-                title={t.pensionEditAmountBtn || "Modifier le montant"}
-                style={{padding:"5px 9px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12}}>
-                ✎
-              </button>
+            {/* 🔧 Même badge jaune que la suppression d'une dépense en attente
+            (expDeletePendingLabel) : visible côté demandeur tant que l'autre
+            parent n'a pas tranché. */}
+            {activeConfig.pendingEnd && myUid === activeConfig.endRequestedBy && (
+              <span style={{display:"inline-flex",alignItems:"center",padding:"2px 8px",background:`${C.yel}18`,border:`1px solid ${C.yel}44`,borderRadius:20,fontSize:11,fontWeight:700,color:C.yel}}>
+                {t.pensionEndPendingLabel || "⏳ Fin en attente de validation"}
+              </span>
             )}
-            {!proposedConfig && !showForm && !activeConfig.pendingEnd && (
-              <button onClick={handleRequestEndConfig} disabled={busy}
-                title={t.pensionEndBtn || "Mettre fin à la pension"}
-                style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12}}>
-                ✕
-              </button>
+            {!proposedConfig && !showForm && (
+              <div style={{display:"flex",gap:5,flexShrink:0,marginLeft:"auto"}}>
+                <button
+                  onClick={() => {
+                    setForm({
+                      payerIdx: activeConfig.fromParent,
+                      amount: String(activeConfig.amount),
+                      dayOfMonth: String(activeConfig.dayOfMonth),
+                      startDate: toStr(new Date()),
+                    });
+                    setShowForm(true);
+                  }}
+                  title={t.pensionEditAmountBtn || "Modifier le montant"}
+                  style={{padding:"5px 9px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12}}>
+                  ✎
+                </button>
+                {!activeConfig.pendingEnd && (
+                  <button onClick={handleRequestEndConfig} disabled={busy}
+                    title={t.pensionEndBtn || "Mettre fin à la pension"}
+                    style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12}}>
+                    ✕
+                  </button>
+                )}
+                {activeConfig.pendingEnd && myUid === activeConfig.endRequestedBy && (
+                  <button onClick={handleCancelEndConfig} disabled={busy}
+                    title={t.pensionCancelEndBtn || "Annuler la demande"}
+                    style={{padding:"5px 9px",background:"transparent",color:C.yel,border:`1px solid ${C.yel}`,borderRadius:8,fontSize:12}}>
+                    ⏳
+                  </button>
+                )}
+              </div>
             )}
           </div>
-
-          {/* 🔒 Même principe que la suppression d'une dépense confirmée (App.jsx
-          ExpTab) : mettre fin à une pension active demande l'accord de l'autre
-          parent plutôt qu'un arrêt unilatéral immédiat. */}
-          {activeConfig.pendingEnd && myUid === activeConfig.endRequestedBy && (
-            <div style={{fontSize:12,color:C.mut,fontStyle:"italic",marginBottom:8}}>
-              {t.pensionEndAwaitingOtherParent || "Demande de fin en attente de confirmation par l'autre parent."}
-              <button onClick={handleCancelEndConfig} disabled={busy}
-                style={{display:"block",marginTop:8,padding:"7px 14px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer",fontStyle:"normal"}}>
-                {t.pensionCancelEndBtn || "Annuler la demande"}
-              </button>
-            </div>
-          )}
           {activeConfig.pendingEnd && myUid !== activeConfig.endRequestedBy && (myUid === activeConfig.fromUserId || myUid === activeConfig.toUserId) && (
             <div style={{padding:"10px 12px",background:`${C.red}10`,border:`1.5px solid ${C.red}44`,borderRadius:10,marginBottom:8}}>
               <div style={{fontSize:12,color:C.txt,marginBottom:8}}>
@@ -14835,7 +14839,7 @@ window.addEventListener('message',function(e){
                     <span style={{fontSize:12,fontWeight:700,color:stColor}}>{stLabel}</span>
                   </div>
                   {e.pendingDelete && iAmDeleteRequester && (
-                    <div style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 10px",background:`${C.yel}15`,border:`1px solid ${C.yel}44`,borderRadius:20,marginTop:6,marginLeft:6}}>
+                    <div style={{width:"fit-content",display:"flex",alignItems:"center",gap:4,padding:"3px 10px",background:`${C.yel}15`,border:`1px solid ${C.yel}44`,borderRadius:20,marginTop:6}}>
                       <span style={{fontSize:12,fontWeight:700,color:C.yel}}>{t.expDeletePendingLabel||"⏳ Suppression en attente de validation"}</span>
                     </div>
                   )}
@@ -15567,7 +15571,7 @@ window.addEventListener('message',function(e){
                     supplémentaire, seule l'icône ⏳ (avec un simple title au survol)
                     signalait l'attente, facile à manquer. */}
                     {e.pendingDelete && iAmExpDeleteRequester && (
-                      <div style={{marginTop:5,marginLeft:6,display:"inline-flex",alignItems:"center",gap:4,padding:"2px 8px",background:`${C.yel}15`,border:`1px solid ${C.yel}44`,borderRadius:20}}>
+                      <div style={{marginTop:5,width:"fit-content",display:"flex",alignItems:"center",gap:4,padding:"2px 8px",background:`${C.yel}15`,border:`1px solid ${C.yel}44`,borderRadius:20}}>
                         <span style={{fontSize:11,fontWeight:700,color:C.yel}}>{t.expDeletePendingLabel||"⏳ Suppression en attente de validation"}</span>
                       </div>
                     )}
