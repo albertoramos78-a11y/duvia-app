@@ -637,7 +637,7 @@ const fr = {
     pensionConfigureBtn: "Configurer la pension",
     pensionFormPayerLabel: "Qui paie la pension ?",
     pensionFormAmountLabel: "Montant mensuel",
-    pensionFormDayLabel: "Jour d'échéance dans le mois (1-28)",
+    pensionFormDayLabel: "Jour d'échéance (1-28)",
     pensionFormStartLabel: "Date de début",
     pensionFormSubmitBtn: "Proposer",
     pensionFormCancelBtn: "Annuler",

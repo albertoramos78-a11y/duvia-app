@@ -13700,7 +13700,7 @@ function PensionSection() {
           </div>
           <div style={{display:"flex",gap:8}}>
             <div style={{flex:1,display:"flex",flexDirection:"column",gap:4}}>
-              <label style={{fontSize:11,color:C.mut,fontWeight:700}}>{t.pensionFormDayLabel || "Jour d'échéance dans le mois (1-28)"}</label>
+              <label style={{fontSize:11,color:C.mut,fontWeight:700}}>{t.pensionFormDayLabel || "Jour d'échéance (1-28)"}</label>
               <select value={form.dayOfMonth} onChange={(e) => setForm((f) => ({...f, dayOfMonth: e.target.value}))} style={{height:38,borderRadius:8,border:`1px solid ${C.bor}`,padding:"0 8px"}}>
                 {Array.from({length:28},(_,i)=>i+1).map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
