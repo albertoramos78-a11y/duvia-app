@@ -122,17 +122,15 @@ export function usePension(familyId: string | null) {
     }
   }, [refresh]);
 
-  /** Demande la fin d'une pension active — optimiste (pending_end local),
-   * rollback via refresh() si le serveur refuse. */
+  /** Demande la fin d'une pension active — non optimiste : la RPC renvoie la
+   * ligne à jour (avec end_requested_by), on l'applique telle quelle plutôt
+   * que de deviner l'état localement (une mise à jour "optimiste" qui
+   * oubliait end_requested_by faisait voir au demandeur lui-même l'écran
+   * "l'autre parent demande", le temps que le serveur réponde). */
   const requestEndPensionConfig = useCallback(async (configId: string) => {
-    setConfigs((prev) => prev.map((c) => (c.id === configId ? { ...c, pendingEnd: true } : c)));
-    try {
-      await requestEndPensionConfigApi(configId);
-    } catch (err) {
-      await refresh();
-      throw err;
-    }
-  }, [refresh]);
+    const updated = await requestEndPensionConfigApi(configId);
+    setConfigs((prev) => prev.map((c) => (c.id === configId ? updated : c)));
+  }, []);
 
   /** Confirme la fin (par l'AUTRE parent) — relit l'état après (clôture réelle). */
   const confirmEndPensionConfig = useCallback(async (configId: string) => {
