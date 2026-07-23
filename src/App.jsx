@@ -13830,23 +13830,8 @@ function PensionSection() {
 
       {activeConfig && (
         <>
-          <div style={{fontSize:11,color:C.mut,marginBottom:8,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <div style={{fontSize:11,color:C.mut,marginBottom:4,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
             <span>{(cfg.parents[activeConfig.fromParent]?.name || "P1")} → {(cfg.parents[activeConfig.toParent]?.name || "P2")} · {activeConfig.amount}{currency}/mois · {t.pensionDayOfMonthShort || "le"} {activeConfig.dayOfMonth}</span>
-            {/* 🔧 Même badge de statut PERSISTANT que les dépenses (expStatusLabel,
-            toujours affiché, pas seulement pendant la transition) : une pension
-            "active" = validée par l'autre parent, donc badge vert en permanence,
-            pas juste un instant après confirmation. */}
-            <div style={{width:"fit-content",display:"flex",alignItems:"center",gap:4,padding:"2px 8px",background:`${C.grn}15`,border:`1px solid ${C.grn}44`,borderRadius:20}}>
-              <span style={{fontSize:11,fontWeight:700,color:C.grn}}>✅ {t.pensionStatusConfirmed || "Confirmé"}</span>
-            </div>
-            {/* 🔧 Même badge jaune que la suppression d'une dépense en attente
-            (expDeletePendingLabel) : visible côté demandeur tant que l'autre
-            parent n'a pas tranché. */}
-            {activeConfig.pendingEnd && myUid === activeConfig.endRequestedBy && (
-              <span style={{display:"inline-flex",alignItems:"center",padding:"2px 8px",background:`${C.yel}18`,border:`1px solid ${C.yel}44`,borderRadius:20,fontSize:11,fontWeight:700,color:C.yel}}>
-                {t.pensionEndPendingLabel || "⏳ Fin en attente de validation"}
-              </span>
-            )}
             {!proposedConfig && !showForm && (
               <div style={{display:"flex",gap:5,flexShrink:0,marginLeft:"auto"}}>
                 <button
@@ -13877,6 +13862,26 @@ function PensionSection() {
                     ⏳
                   </button>
                 )}
+              </div>
+            )}
+          </div>
+          {/* 🔧 Badges de statut alignés à gauche, sous la ligne d'infos — même
+          traitement que la bulle "En attente" du proposant ci-dessus : sur leur
+          propre ligne, jamais collés inline au texte. */}
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+            {/* 🔧 Même badge de statut PERSISTANT que les dépenses (expStatusLabel,
+            toujours affiché, pas seulement pendant la transition) : une pension
+            "active" = validée par l'autre parent, donc badge vert en permanence,
+            pas juste un instant après confirmation. */}
+            <div style={{width:"fit-content",display:"flex",alignItems:"center",gap:4,padding:"2px 8px",background:`${C.grn}15`,border:`1px solid ${C.grn}44`,borderRadius:20}}>
+              <span style={{fontSize:11,fontWeight:700,color:C.grn}}>✅ {t.pensionStatusConfirmed || "Confirmé"}</span>
+            </div>
+            {/* 🔧 Même badge jaune que la suppression d'une dépense en attente
+            (expDeletePendingLabel) : visible côté demandeur tant que l'autre
+            parent n'a pas tranché. */}
+            {activeConfig.pendingEnd && myUid === activeConfig.endRequestedBy && (
+              <div style={{width:"fit-content",display:"flex",alignItems:"center",gap:4,padding:"2px 8px",background:`${C.yel}18`,border:`1px solid ${C.yel}44`,borderRadius:20}}>
+                <span style={{fontSize:11,fontWeight:700,color:C.yel}}>{t.pensionEndPendingLabel || "⏳ Fin en attente de validation"}</span>
               </div>
             )}
           </div>
