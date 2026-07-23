@@ -13597,12 +13597,30 @@ function PensionSection() {
     try {
       const payerIdx = Number(form.payerIdx);
       const recipientIdx = payerIdx === 0 ? 1 : 0;
+      // 🔧 cfg.parents[i].userId n'est JAMAIS renseigné pour le CRÉATEUR de la
+      // famille (voir core.js, ligne ~424 : seuls les parents invités l'ont) —
+      // s'y fier aveuglément envoyait un p_to_user_id/p_from_user_id undefined
+      // à l'RPC dès que l'autre parent était le créateur, ce que PostgREST
+      // traduit en 404 (paramètre manquant, aucune fonction ne correspond),
+      // pas en une erreur explicite. On retrouve son vrai user_id via
+      // family_members (le seul autre parent actif qui n'est pas moi) quand
+      // le blob JSON ne l'a pas.
+      const otherIdx = payerIdx === myIdx ? recipientIdx : payerIdx;
+      let otherUserId = cfg.parents[otherIdx]?.userId;
+      if (!otherUserId) {
+        const { data: members } = await supabase.from("family_members")
+          .select("user_id").eq("family_id", familySync.familyId).eq("role", "parent").eq("status", "active");
+        otherUserId = (members || []).find((m) => m.user_id !== myUid)?.user_id || null;
+      }
+      const fromUserId = payerIdx === myIdx ? myUid : otherUserId;
+      const toUserId = recipientIdx === myIdx ? myUid : otherUserId;
+      if (!fromUserId || !toUserId) { setErr(t.pensionErrGeneric || "Une erreur est survenue."); setBusy(false); return; }
       await proposePensionConfig({
         familyId: familySync.familyId,
         fromParent: payerIdx,
-        fromUserId: cfg.parents[payerIdx]?.userId,
+        fromUserId,
         toParent: recipientIdx,
-        toUserId: cfg.parents[recipientIdx]?.userId,
+        toUserId,
         amount,
         dayOfMonth,
         startDate: form.startDate,
@@ -15093,7 +15111,14 @@ window.addEventListener('message',function(e){
                 {cfg.parents.map((p,i)=><option key={i} value={i}>{p.name||`P${i+1}`}</option>)}
               </select>
             </div>
-            <div style={{display:"flex",alignItems:"center",paddingBottom:14,fontSize:18}}>→</div>
+            {/* 🔧 Polish (impeccable, 2026-07-23) : remplace le "→" brut + hack
+            paddingBottom par un badge circulaire aligné sur le select via
+            align-items:flex-end du .row (pas de valeur magique), même langage
+            visuel que les badges/avatars circulaires déjà utilisés ailleurs,
+            couleur verte du bloc remboursement plutôt qu'une nouvelle teinte. */}
+            <div style={{flex:"0 0 auto",width:36,height:44,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <div style={{width:30,height:30,borderRadius:"50%",background:`${C.grn}18`,border:`1.5px solid ${C.grn}44`,color:C.grn,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,flexShrink:0}}>→</div>
+            </div>
             <div className="field" style={{flex:1}}>
               <label className="lbl">{t.expReimTo||"À (qui reçoit)"}</label>
               <select value={reimForm.to} onChange={e=>{const v=+e.target.value;setReimForm(f=>({...f,to:v,from:f.from===v?(v===0?1:0):f.from}));}}>
