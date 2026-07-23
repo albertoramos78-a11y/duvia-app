@@ -19347,22 +19347,11 @@ function ContactsTab({readOnly,addOnly,prem: premProp}) {
 // le cooldown (demande explicite) — contournement du délai uniquement, pas
 // un statut admin (pas de tours-monétaires-garantis ni d'autre privilège).
 const WHEEL_UNLIMITED_EMAILS = ["toti78200@gmail.com"];
-// Règles du tableau des lots (version 2.0)
-// ┌─────────────────────────────────────┬────────────┬──────────┬──────────────┐
-// │ LOT                                 │ Souscript. │ Autres   │ Achat        │
-// ├─────────────────────────────────────┼────────────┼──────────┼──────────────┤
-// │ Perdu                               │ 48,9 %     │ 50,0 %   │ —            │
-// │ 1 an offert                         │  0,1 %     │  0,0 %   │ —            │
-// │ 1 mois offert                       │  1,0 %     │  0,0 %   │ —            │
-// │ Thème Été 26 (21/06–23/07)          │ 20,0 %     │ 20,0 %   │ 0,49 €       │
-// │ Thème Jeu vidéo (permanent)         │ 10,0 %     │ 10,0 %   │ 0,29 €       │
-// │ Thème Licorne  (permanent)          │ 10,0 %     │ 10,0 %   │ 0,29 €       │
-// │ Thème Tennis France 26 (24/05–04/06)│  5,0 %     │  5,0 %   │ 0,99 €       │
-// │ Thème Coupe du Monde 26 (06/06–26/07│  5,0 %     │  5,0 %   │ 0,99 €       │
-// └─────────────────────────────────────┴────────────┴──────────┴──────────────┘
-// Fréquence : 7 jours (parents) · 2 jours (enfants/observateurs)
-// Permission : OUI pour tous les rôles
-// Si achat : devient permanent pour tous les thèmes
+// 🔒 (2026-07-23) Le tirage (probabilités, fenêtres saisonnières) est
+// désormais décidé côté serveur par spin_wheel() (voir
+// supabase/migrations/0049_wheel_spins_security.sql) — les tables de
+// probabilités qui vivaient ici ont été retirées, elles ne sont plus la
+// source de vérité. Voir la migration pour les valeurs exactes.
 
 const WHEEL_PRIZES = [
   { id:"year",    label:"1 AN OFFERT",          labelKey:"wheelSegYear",    emoji:"🏆", color:"#FFD700", type:"payment",
@@ -19390,13 +19379,6 @@ function isPrizeActive(p) {
   return n >= p.validStart && n <= p.validEnd;
 }
 
-// ─── PROBABILITÉS PAR RÔLE ───────────────────────────────────────────────────
-// "Souscripteur" = parent dont le sub INDIVIDUEL (pas le plan familial partagé)
-// est premium (perms.spinWinSub, voir GameTab) — celui qui paie réellement.
-// "Autres" = autre parent, enfant, observateur
-const PROBS_SUBSCRIBER = { year:0.001, month:0.010, theme:0.200, video:0.100, licorne:0.100, rg:0.050, wc:0.050, nothing:0.489 };
-const PROBS_OTHERS     = { year:0.000, month:0.000, theme:0.200, video:0.100, licorne:0.100, rg:0.050, wc:0.050, nothing:0.500 };
-
 // 20 segments visuels : nothing×8, theme×4, video×2, licorne×2, rg×1, wc×1,
 // year×1, month×1.
 // 🔧 (2026-07-22) year/month ont désormais leur PROPRE segment — avant ce
@@ -19405,8 +19387,8 @@ const PROBS_OTHERS     = { year:0.000, month:0.000, theme:0.200, video:0.100, li
 // d'attribuer le mois/l'année gratuite : la carte de résultat annonçait un
 // gain que la roue elle-même semblait contredire (signalé par l'utilisateur
 // : "on ne voit jamais le gain 1an/1mois"). Rien ne change aux probabilités
-// réelles (toujours décidées par PROBS_SUBSCRIBER/PROBS_OTHERS ou par le
-// serveur pour year/month) — seul l'endroit où la roue s'arrête est corrigé.
+// réelles (désormais entièrement décidées par spin_wheel() côté serveur,
+// voir 2026-07-23 plus bas) — seul l'endroit où la roue s'arrête est corrigé.
 const P_NOTHING  = WHEEL_PRIZES[7]; // 😅
 const P_YEAR     = WHEEL_PRIZES[0]; // 🏆
 const P_MONTH    = WHEEL_PRIZES[1]; // 🎁
@@ -19439,40 +19421,12 @@ const WHEEL_SEGS = [
   P_NOTHING,  // 19
 ];
 
-// Tirage pondéré avec prise en compte du rôle et des dates de validité
-// 🔒 2026-07-18 : `serverMonetary` ('year'|'month'|'none') vient désormais
-// TOUJOURS d'un aller-retour serveur honnête (RPC spin_wheel_check_
-// monetary_prize, App.jsx WheelGame.spin()) avant l'appel à cette fonction —
-// c'est la SEULE façon d'obtenir "year"/"month" ici. Ce Math.random() local
-// ne peut plus jamais produire un lot payant lui-même, seulement les lots
-// cosmétiques (thèmes) qui n'ont aucune valeur monétaire exploitable.
-// Avant ce correctif, "year"/"month" pouvaient être forcés à 100% en
-// trafiquant Math.random() dans le navigateur (ex: outils développeur).
-function pickSegment(isSubscriber = true, serverMonetary = "none") {
-  let prize;
-  if(serverMonetary === "year" || serverMonetary === "month") {
-    prize = WHEEL_PRIZES.find(p=>p.id===serverMonetary);
-  } else {
-    const probs = isSubscriber ? PROBS_SUBSCRIBER : PROBS_OTHERS;
-    // Redistribue les probabilités des lots hors-période (+ year/month, déjà
-    // tranchés par le serveur ci-dessus) vers "nothing"
-    const active = { ...probs, year:0, month:0, nothing: probs.nothing + probs.year + probs.month };
-    ["theme","rg","wc"].forEach(id=>{
-      const p = WHEEL_PRIZES.find(x=>x.id===id);
-      if(p && !isPrizeActive(p)) { active.nothing += active[id]; active[id] = 0; }
-    });
-    // Tirage (lots cosmétiques uniquement — aucune valeur monétaire en jeu)
-    const r = Math.random(); let cum = 0;
-    prize = WHEEL_PRIZES[7]; // défaut: perdu
-    for(const p of WHEEL_PRIZES) {
-      const prob = active[p.id] || 0;
-      cum += prob;
-      if(r < cum) { prize = p; break; }
-    }
-  }
-
-  // Trouver le segment visuel correspondant (maintenant toujours possible,
-  // year/month ayant chacun leur case dédiée — voir WHEEL_SEGS ci-dessus)
+// 🔒 (2026-07-23) Le tirage lui-même vient désormais TOUJOURS de spin_wheel()
+// côté serveur (voir WheelGame.spin() plus bas) — cette fonction ne fait plus
+// que trouver un segment visuel correspondant au prize_id déjà décidé, pour
+// que la roue animée s'arrête au bon endroit. Plus aucun Math.random() ici.
+function pickSegment(prizeId) {
+  const prize = WHEEL_PRIZES.find(p=>p.id===prizeId) || WHEEL_PRIZES.find(p=>p.id==="nothing");
   const matchIdxs = WHEEL_SEGS.reduce((a,s,i)=>{ if(s.id===prize.id) a.push(i); return a; },[]);
   let segIdx;
   if(matchIdxs.length > 0) {
@@ -19577,25 +19531,30 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
 
   async function spin() {
     if(spinning || (!canSpin && !isAdminSub) || !isPremium) return;
-    const usingBonus = !isAdminSub && hasBonusSpin && lastSpin && (now - new Date(lastSpin).getTime()) < cooldownMs;
     setShowResult(false); setResult(null); setParticles([]);
     setSpinning(true);
 
-    // 🔒 2026-07-18 : "year"/"month" (les 2 seuls lots à valeur monétaire réelle)
-    // ne peuvent plus être décidés localement — un aller-retour serveur honnête
-    // (le random() tourne côté Postgres, pas dans le navigateur) tranche
-    // d'abord la question, pickSegment() ne fait plus que le tirage cosmétique.
-    // Seuls les vrais souscripteurs y sont éligibles (0% sinon côté client de
-    // toute façon) — évite un aller-retour réseau inutile pour tout le monde.
-    let serverMonetary = "none";
-    if(isSubscriber) {
-      try {
-        const { data, error } = await supabase.rpc("spin_wheel_check_monetary_prize");
-        if(!error && data) serverMonetary = data;
-      } catch(e) { console.warn("[Duvia] spin_wheel_check_monetary_prize failed:", e); }
+    // 🔒 (2026-07-23) Le tirage ENTIER (éligibilité, cooldown, décrément d'un
+    // tour bonus, tirage mensuel/annuel ET cosmétique, persistance) est
+    // désormais décidé par spin_wheel() côté serveur — plus aucun
+    // Math.random() ni logique d'éligibilité/cooldown en local. En cas
+    // d'erreur (not_eligible/cooldown_active — le serveur a le dernier mot
+    // même si le filtre client canSpin/canAccessWheel a laissé passer un
+    // clic), on arrête l'enchaînement proprement sans faire tourner la roue.
+    let spinData;
+    try {
+      const { data, error } = await supabase.rpc("spin_wheel");
+      if(error) throw error;
+      spinData = data?.[0];
+    } catch(e) {
+      console.warn("[Duvia] spin_wheel failed:", e);
+      setSpinning(false);
+      return;
     }
+    if(!spinData) { setSpinning(false); return; }
+    const usingBonus = spinData.used_bonus_spin;
 
-    const { segIdx, prize } = pickSegment(isSubscriber, serverMonetary);
+    const { segIdx, prize } = pickSegment(spinData.prize_id);
 
     // 🔧 (2026-07-22) Décompte 3-2-1 avant que la roue ne commence à tourner
     // — le tirage est déjà résolu ci-dessus, donc la roue s'arrête sans
