@@ -231,9 +231,18 @@ declare
   v_wc double precision := 0.050;
   -- Seasonal windows — mirrors SUMMER_START/END, RG_START/END, WC_START/END
   -- in src/theme.js. Resync manually if those dates change.
-  v_theme_active boolean := now() >= '2026-06-21'::timestamptz and now() <= '2026-07-23 23:59:59'::timestamptz;
-  v_rg_active boolean := now() >= '2026-05-24'::timestamptz and now() <= '2026-06-04 23:59:59'::timestamptz;
-  v_wc_active boolean := now() >= '2026-06-06'::timestamptz and now() <= '2026-07-26 23:59:59'::timestamptz;
+  -- 🔧 (review finding) Les bornes de FIN utilisent AT TIME ZONE 'Europe/Paris'
+  -- pour matcher fidèlement src/theme.js : new Date("...T23:59:59") (sans
+  -- offset) est interprété comme l'heure LOCALE du navigateur en JS — une
+  -- chaîne DATE SEULE (sans partie horaire, comme les bornes de DÉBUT
+  -- ci-dessous) est en revanche interprétée en UTC (seule exception de la
+  -- spec JS Date). Sans cet ajustement, le serveur gardait un lot saisonnier
+  -- tirable ~1-2h de plus qu'affiché par l'app pour un utilisateur en
+  -- Europe/Paris (le marché de référence de l'app, voir CLAUDE.md et
+  -- parisMidnightISO() dans ai-chatbot/index.ts qui résout le même problème).
+  v_theme_active boolean := now() >= '2026-06-21'::timestamptz and now() <= ('2026-07-23 23:59:59'::timestamp at time zone 'Europe/Paris');
+  v_rg_active boolean := now() >= '2026-05-24'::timestamptz and now() <= ('2026-06-04 23:59:59'::timestamp at time zone 'Europe/Paris');
+  v_wc_active boolean := now() >= '2026-06-06'::timestamptz and now() <= ('2026-07-26 23:59:59'::timestamp at time zone 'Europe/Paris');
 begin
   if not v_theme_active then v_theme := 0; end if;
   if not v_rg_active then v_rg := 0; end if;
