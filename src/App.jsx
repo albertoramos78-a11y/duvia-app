@@ -10535,7 +10535,12 @@ function StepDates() {
           const chZone = { subdivisionCode: cfg.subdivisionCode||"", zone: cfg.zone||"" };
           const chSubs = OH_SUBS_CATALOG[chCountry] || [];
           const chCurSub = chZone.subdivisionCode || "";
-          const chHols = getHolsFromData(chCountry, apiData, chCurSub||chZone.zone);
+          // 🔧 (2026-07-23) Masque les périodes déjà terminées avant la date de
+          // départ du calendrier (cfg.custody.startMonth/startYear) — sinon la
+          // liste affichait aussi les vacances passées, sans rapport avec le
+          // calendrier réellement utilisé (voir backlog "vacances scolaires").
+          const calStart = `${cfg.custody.startYear||new Date().getFullYear()}-${cfg.custody.startMonth||"01"}-01`;
+          const chHols = getHolsFromData(chCountry, apiData, chCurSub||chZone.zone).filter(h=>h.e>=calStart);
           const chOpen = openHol && !openHol.includes("::") ? openHol : null;
           const setChOpen = (hn) => setOpenHol(hn || null);
           const chGetHolDetails=()=> { return sd.schoolHolDetails || {}; };
@@ -10730,7 +10735,11 @@ function StepDates() {
         const chSubs = OH_SUBS_CATALOG[chCountry] || [];
         const chCurSub = chZone.subdivisionCode || "";
         // School hols for this child
-        const chHols = getHolsFromData(chCountry, apiData, chCurSub||chZone.zone);
+        // 🔧 (2026-07-23) Masque les périodes déjà terminées avant la date de
+        // départ du calendrier — voir le même correctif dans le bloc mono-enfant
+        // ci-dessus pour le détail.
+        const calStart = `${cfg.custody.startYear||new Date().getFullYear()}-${cfg.custody.startMonth||"01"}-01`;
+        const chHols = getHolsFromData(chCountry, apiData, chCurSub||chZone.zone).filter(h=>h.e>=calStart);
         // Open state per child
         const [chOpen, setChOpen] = [
           openHol && openHol.startsWith(chId+"::") ? openHol.slice((chId+"::").length) : null,
@@ -11428,13 +11437,22 @@ function WeekRow({wk, wkPiCounts, dominantPi, wkColor, wkLabel, hol, det, chGetH
               {(p.name?.trim().split(" ")[0]?.slice(0,6)) || `P${pi+1}`}
             </button>
           ))}
-          {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=>(
-            <button key={o.id}
-              onClick={()=>{const base=chGetHolDetails();const nd={...base,[hol.n]:{...(base[hol.n]||{})}};wk.forEach(({ds})=>{nd[hol.n][ds]=`obs:${o.id}`;});chSetHolDetails(nd);setOpen(false);}}
-              style={{padding:"3px 9px",background:"#f59e0b22",color:"#f59e0b",border:"1.5px solid #f59e0b",borderRadius:20,fontSize:11,fontWeight:800}}>
-              🏠 {obsLabel(o)}
-            </button>
-          ))}
+          {(cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard).map(o=>{
+            // 🔧 (2026-07-23) Ce bouton n'avait jamais l'état "rempli" quand le
+            // gardien était sélectionné pour toute la semaine — contrairement aux
+            // boutons parent juste au-dessus, il ignorait wkPiCounts. wkPiCounts
+            // tallie déjà det[ds] tel quel (index parent NUMÉRIQUE ou chaîne
+            // "obs:<id>"), donc la même clé fonctionne directement ici.
+            const obsKey = `obs:${o.id}`;
+            const isFull = wkPiCounts[obsKey]===wk.length;
+            return (
+              <button key={o.id}
+                onClick={()=>{const base=chGetHolDetails();const nd={...base,[hol.n]:{...(base[hol.n]||{})}};wk.forEach(({ds})=>{nd[hol.n][ds]=obsKey;});chSetHolDetails(nd);setOpen(false);}}
+                style={{padding:"3px 9px",background:isFull?"#f59e0b":"#f59e0b22",color:isFull?"#fff":"#f59e0b",border:"1.5px solid #f59e0b",borderRadius:20,fontSize:11,fontWeight:800}}>
+                🏠 {obsLabel(o)}
+              </button>
+            );
+          })}
           <button onClick={()=>setOpen(o=>!o)}
             style={{padding:"3px 8px",background:open?`${C.vio}18`:"transparent",color:open?C.vio:C.mut,border:`1.5px solid ${open?C.vio:C.bor}`,borderRadius:20,fontSize:10,fontWeight:700}}>
             {open?"▲":"✏️"}
@@ -11730,6 +11748,14 @@ function StepAccess() {
             }
             <div style={{flex:1}}>
               <div style={{fontWeight:800,fontSize:14,color:C.txt}}>{(o.name==="Observateur invité"||o.name==="Observateur")?(t.obsGenericLabel||o.name):o.name}</div>
+              {/* 🔧 (2026-07-23) Tant que le nom réel n'est pas connu (avant que la
+                  personne invitée n'ait rejoint), affiche l'email/téléphone saisi
+                  à l'invitation — sans ça, plusieurs invitations en attente
+                  étaient indiscernables (toutes juste "Personne invitée"), voir
+                  backlog "visualiser le mail et/ou tel de la personne invitée". */}
+              {(o.name==="Observateur invité"||o.name==="Observateur") && (o.email||o.phone) && (
+                <div style={{fontSize:11,color:C.mut,marginTop:1}}>{o.email||o.phone}</div>
+              )}
               {matchingPending
                 ? <span className="badge" style={{background:`${C.grn}22`,color:C.grn,display:"inline-block",marginTop:2}}>🔔 A rejoint — en attente de validation</span>
                 : o.status==="pending_invite"
