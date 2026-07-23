@@ -23,6 +23,18 @@ const MAX_TOOL_ROUNDS = 5;
 const MAX_QUESTION_LEN = 2000;
 const MAX_HISTORY_ENTRIES = 20;
 
+// 🔧 (2026-07-23) Poids réels des catégories de tokens Anthropic (prix
+// relatif à un input_tokens classique) : une lecture de cache coûte ~0.1x,
+// une écriture de cache TTL 5 min (celle utilisée ici, cache_control sans
+// ttl explicite) coûte ~1.25x. Utilisé pour tout calcul de quota/affichage
+// afin qu'il reflète le coût réel plutôt que le nombre brut de tokens — voir
+// le commentaire au site d'appel dans serve() pour le contexte du bug corrigé.
+function weightedTokens(r: { input_tokens?: number; output_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number }): number {
+  return (r.input_tokens || 0) + (r.output_tokens || 0)
+    + (r.cache_creation_input_tokens || 0) * 1.25
+    + (r.cache_read_input_tokens || 0) * 0.1;
+}
+
 // 🔧 Le plafond quotidien (100 000 tokens) se réinitialise à minuit HEURE DE
 // PARIS, pas sur une fenêtre glissante de 24h (comportement demandé
 // explicitement — Paris passe de UTC+1 à UTC+2 en été, d'où ce calcul
@@ -870,13 +882,18 @@ serve(async (req) => {
     .select("input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens")
     .eq("user_id", userId).eq("feature", "chatbot_query").gte("used_at", sinceParisMidnight);
   if (usageErr) return jsonResponse({ error: usageErr.message }, 500);
-  // 🔧 cache_creation_input_tokens/cache_read_input_tokens (2026-07-22) : des
-  // champs SÉPARÉS de input_tokens dans la réponse Anthropic (voir plus bas) —
-  // les ignorer sous-comptait silencieusement l'usage réel dès que le cache
-  // de prompt était utilisé (le bloc système+outils pouvait être lu plusieurs
-  // fois par échange sans jamais compter dans ce plafond).
-  const tokensUsedSoFar = (usageRows || []).reduce((s, r) =>
-    s + (r.input_tokens || 0) + (r.output_tokens || 0) + (r.cache_creation_input_tokens || 0) + (r.cache_read_input_tokens || 0), 0);
+  // 🔧 (2026-07-23) cache_creation_input_tokens/cache_read_input_tokens ne
+  // coûtent PAS le même prix qu'un input_tokens classique côté Anthropic —
+  // une lecture de cache coûte ~0.1x un input token normal, une écriture
+  // (TTL 5 min, celui utilisé ici) ~1.25x. Les compter à poids égal (1x)
+  // comme avant surcomptait massivement les lectures de cache (10x trop
+  // cher) : dès qu'un échange déclenchait 2 aller-retours d'outils (round
+  // de tool_use), le bloc système+outils caché (~10 700 tokens) était relu
+  // en entier à chaque round et compté en pleine valeur à chaque fois,
+  // gonflant une question simple à ~22 000 "tokens" contre le plafond
+  // journalier — constaté en prod le 2026-07-23. weightedTokens() reflète le
+  // coût réel plutôt que le nombre brut de tokens.
+  const tokensUsedSoFar = (usageRows || []).reduce((s, r) => s + weightedTokens(r), 0);
   if (tokensUsedSoFar >= DAILY_TOKEN_LIMIT) return jsonResponse({ error: "daily_token_limit_reached" }, 429);
 
   // 🔒 Client JWT-scopé pour les outils — les mêmes règles RLS déjà en
@@ -993,7 +1010,10 @@ serve(async (req) => {
       // les blocs tool_use/tool_result internes à cette requête. Le client
       // renvoie cette valeur telle quelle comme `history` au prochain appel.
       const cleanHistory = [...clientHistory, { role: "user", content: question }, { role: "assistant", content: answer }].slice(-MAX_HISTORY_ENTRIES);
-      const exchangeTokens = totalInputTokens + totalOutputTokens + totalCacheCreationTokens + totalCacheReadTokens;
+      const exchangeTokens = weightedTokens({
+        input_tokens: totalInputTokens, output_tokens: totalOutputTokens,
+        cache_creation_input_tokens: totalCacheCreationTokens, cache_read_input_tokens: totalCacheReadTokens,
+      });
       const tokensUsedToday = tokensUsedSoFar + exchangeTokens;
       // 🔧 tokens_this_exchange (2026-07-22) : tokens réels de CET échange
       // uniquement (question + tous les aller-retours d'outils inclus, cache
