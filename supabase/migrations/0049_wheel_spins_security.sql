@@ -37,3 +37,123 @@ create policy "wheel_spins_select_own" on public.wheel_spins
 -- Deliberately NO insert/update/delete policy for authenticated/anon — only
 -- spin_wheel() (SECURITY DEFINER, added in a later step of this file) writes
 -- to this table, executing as the table owner regardless of these policies.
+
+-- ── 2. Family-wide effective Premium — full replica of src/App.jsx's
+--    subStatus()+isBeta()+planRankFor()+bestParentSub(). NOT granted to
+--    authenticated — only spin_wheel() (Task 4) calls it internally.
+--    Resync manually if the client-side logic changes.
+
+create or replace function public._wheel_plan_rank(
+  p_user_id uuid,
+  p_plan text,
+  p_premium_since timestamptz,
+  p_cycle text,
+  p_ref_months int,
+  p_trial_start timestamptz,
+  p_account_created_at timestamptz,
+  p_trial_extension_days int,
+  p_acct_beta_end timestamptz,
+  p_global_beta boolean
+) returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_is_admin boolean;
+  v_plan text := coalesce(p_plan, 'trial_premium'); -- no subscriptions row yet → fresh-trial default, mirrors bestParentSub()'s fallback
+  v_created timestamptz := coalesce(p_account_created_at, p_trial_start, now());
+  v_ext int := coalesce(p_trial_extension_days, 0);
+  v_expiry timestamptz;
+  v_max_days int;
+  v_days numeric;
+  v_status text;
+begin
+  select exists(select 1 from public.app_admins where user_id = p_user_id) into v_is_admin;
+  if v_is_admin then
+    return 2; -- mirrors subStatus(): if(sub._admin) return "premium"
+  end if;
+
+  if v_plan = 'premium' then
+    if p_premium_since is not null and p_cycle is not null then
+      v_expiry := p_premium_since
+        + (case when p_cycle = 'yearly' then interval '1 year' else interval '1 month' end)
+        + (coalesce(p_ref_months, 0) * interval '30 days');
+      v_status := case when now() > v_expiry then 'freemium' else 'premium' end;
+    else
+      v_status := 'premium';
+    end if;
+  elsif v_plan = 'beta' then
+    if p_acct_beta_end is not null and now() < p_acct_beta_end then
+      v_status := 'trial_premium';
+    else
+      v_days := extract(epoch from (now() - coalesce(p_acct_beta_end, now()))) / 86400;
+      v_status := case when v_days <= 15 then 'trial_premium' else 'freemium' end; -- TRIAL_BASE_DAYS
+    end if;
+  elsif v_plan = 'freemium' then
+    v_status := 'freemium';
+  else
+    -- organic path: trial_premium / earned_premium
+    v_max_days := least(15 + v_ext, 30); -- TRIAL_BASE_DAYS + ext, capped at TRIAL_MAX_DAYS
+    v_days := extract(epoch from (now() - v_created)) / 86400;
+    if v_days <= v_max_days then
+      v_status := case when v_plan = 'earned_premium' then 'earned_premium' else 'trial_premium' end;
+    elsif p_global_beta then
+      v_status := 'trial_premium';
+    else
+      v_status := 'freemium';
+    end if;
+  end if;
+
+  return case
+    when v_status = 'premium' then 2
+    when v_status in ('trial_premium', 'earned_premium') then 1
+    else 0
+  end;
+end;
+$$;
+
+revoke all on function public._wheel_plan_rank(uuid,text,timestamptz,text,int,timestamptz,timestamptz,int,timestamptz,boolean) from public;
+
+create or replace function public._wheel_family_is_premium(p_family_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_beta_enabled boolean;
+  v_beta_end timestamptz;
+  v_global_beta boolean;
+  v_best_rank int := -1;
+  v_rank int;
+  rec record;
+begin
+  select beta_enabled, beta_end into v_beta_enabled, v_beta_end
+    from public.app_config where id = 1;
+  v_global_beta := coalesce(v_beta_enabled, false) and v_beta_end is not null and now() < v_beta_end;
+
+  for rec in
+    select fm.user_id,
+           s.plan, s.premium_since, s.cycle, s.ref_months,
+           s.trial_start, s.account_created_at, s.trial_extension_days,
+           s.beta_end as acct_beta_end
+      from public.family_members fm
+      left join public.subscriptions s on s.user_id = fm.user_id
+     where fm.family_id = p_family_id
+       and fm.role = 'parent'
+       and fm.status = 'active'
+  loop
+    v_rank := public._wheel_plan_rank(
+      rec.user_id, rec.plan, rec.premium_since, rec.cycle, rec.ref_months,
+      rec.trial_start, rec.account_created_at, rec.trial_extension_days,
+      rec.acct_beta_end, v_global_beta
+    );
+    if v_rank > v_best_rank then v_best_rank := v_rank; end if;
+  end loop;
+
+  return v_best_rank >= 1; -- rank 1 (trial/earned) or 2 (premium) both count as family-premium
+end;
+$$;
+
+revoke all on function public._wheel_family_is_premium(uuid) from public;
