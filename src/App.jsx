@@ -13812,8 +13812,9 @@ function PensionSection() {
         </div>
       )}
       {proposedConfig && iAmProposer && (
-        <div style={{fontSize:12,color:C.mut,fontStyle:"italic"}}>
-          {t.pensionAwaitingOtherParent || "En attente de confirmation par l'autre parent."}
+        <div style={{width:"fit-content",display:"flex",alignItems:"center",gap:4,padding:"2px 8px",background:`${C.yel}15`,border:`1px solid ${C.yel}44`,borderRadius:20}}
+          title={t.pensionAwaitingOtherParent || "En attente de confirmation par l'autre parent."}>
+          <span style={{fontSize:11,fontWeight:700,color:C.yel}}>⏳ {t.pensionStatusPending || "En attente"}</span>
         </div>
       )}
 
