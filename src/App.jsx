@@ -19504,20 +19504,55 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
   // (constaté en prod 2026-07-11). myUid ne change jamais pour un même
   // compte. Repli sur userId tant que myUid n'est pas encore connu
   // (juste après connexion, avant la résolution de la famille).
-  const spinKey = myUid || userId;
-  // ── lastSpin : clé dédiée résistante aux rechargements du sub ────────────
-  // duvia_spin_ts est une clé séparée, jamais écrasée par setSub()
-  const [spinTimestamps, setSpinTimestamps] = useLocalStorage("duvia_spin_ts", {});
-  const lastSpinByUser = useMemo(() => {
-    const fromSub = sub.lastSpinByUser || {};
-    // Fusionner sub (legacy) + spinTimestamps (nouvelle clé) → prend le plus récent
-    const merged = {...fromSub};
-    Object.entries(spinTimestamps).forEach(([uid, ts]) => {
-      if (!merged[uid] || ts > merged[uid]) merged[uid] = ts;
-    });
-    return merged;
-  }, [sub.lastSpinByUser, spinTimestamps]);
-  const lastSpin = lastSpinByUser[spinKey] || null;
+  // 🔒 (2026-07-23) lastSpin vient désormais de wheel_spins (source de vérité
+  // serveur, voir spin_wheel() dans supabase/migrations/0049_wheel_spins_
+  // security.sql), gardé par myUid directement — plus besoin de spinKey/
+  // duvia_spin_ts/sub.lastSpinByUser (localStorage, manipulable, retirés).
+  // Toujours utilisé uniquement comme filtre d'AFFICHAGE (canSpin ci-dessous)
+  // — spin_wheel() est la vraie barrière, ce fetch ne sert qu'à ne pas
+  // montrer un bouton "Lancer" trompeur.
+  const [lastSpin, setLastSpin] = useState(null);
+  useEffect(() => {
+    if(!myUid) return;
+    let cancelled = false;
+    supabase.from("wheel_spins")
+      .select("spun_at")
+      .eq("user_id", myUid)
+      .order("spun_at", { ascending: false })
+      .limit(1)
+      .then(({ data }) => { if(!cancelled) setLastSpin(data?.[0]?.spun_at || null); });
+    return () => { cancelled = true; };
+  }, [myUid]);
+
+  // 🔒 (2026-07-23) Recale sub.earnedX sur la vérité serveur (wheel_spins) —
+  // n'AJOUTE un flag vrai que si wheel_spins le confirme, ne retire jamais un
+  // flag déjà à true localement (voir le correctif du plan pour le
+  // raisonnement). Volontairement scopé à WheelGame (monté seulement quand
+  // l'onglet Jeu est ouvert), pas à l'initialisation globale de App() — plus
+  // simple, au prix d'un très bref délai avant que d'autres écrans (menu
+  // thèmes) reflètent un changement d'appareil si l'utilisateur ne passe pas
+  // par l'onglet Jeu en premier ; acceptable car ceci reste une amélioration
+  // de cohérence des données, pas la barrière de sécurité elle-même (celle-ci
+  // est déjà assurée par spin_wheel() ci-dessus).
+  useEffect(() => {
+    if(!myUid) return;
+    let cancelled = false;
+    supabase.from("wheel_spins")
+      .select("prize_id")
+      .eq("user_id", myUid)
+      .then(({ data }) => {
+        if(cancelled || !data?.length) return;
+        const ids = new Set(data.map(r=>r.prize_id));
+        setSub(s=>({...s,
+          earnedTheme:   ids.has("theme")   || s.earnedTheme,
+          earnedVideo:   ids.has("video")   || s.earnedVideo,
+          earnedLicorne: ids.has("licorne") || s.earnedLicorne,
+          earnedRG:      ids.has("rg")      || s.earnedRG,
+          earnedWC:      ids.has("wc")      || s.earnedWC,
+        }));
+      });
+    return () => { cancelled = true; };
+  }, [myUid]);
   const hasBonusSpin = (sub.pendingSpins||0) > 0;
   const canSpin = isAdminSub || hasBonusSpin || !lastSpin || (now - new Date(lastSpin).getTime()) >= cooldownMs;
   const nextSpinDate = lastSpin ? new Date(new Date(lastSpin).getTime()+cooldownMs) : null;
@@ -19610,9 +19645,8 @@ function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", 
         setShowResult(true);
         {
           const now_ts = new Date().toISOString();
-          setSpinTimestamps(h=>({...h,[spinKey]:now_ts}));
+          setLastSpin(now_ts);
           setSub(s=>({...s,
-            lastSpinByUser: { ...(s.lastSpinByUser||{}), [spinKey]: now_ts },
             pendingSpins: usingBonus ? Math.max(0,(s.pendingSpins||0)-1) : (s.pendingSpins||0),
             earnedTheme:   prize.id==="theme"   || s.earnedTheme,
             earnedVideo:   prize.id==="video"   || s.earnedVideo,
