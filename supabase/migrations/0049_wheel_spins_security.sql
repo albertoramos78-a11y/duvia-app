@@ -86,8 +86,16 @@ begin
   elsif v_plan = 'beta' then
     if p_acct_beta_end is not null and now() < p_acct_beta_end then
       v_status := 'trial_premium';
+    elsif p_acct_beta_end is null then
+      -- Mirrors subStatus(): a null betaEnd makes the JS fall back to
+      -- betaEndMs=0 (Unix epoch) — always in the past, so the elapsed-days
+      -- check below always exceeds TRIAL_BASE_DAYS and JS always returns
+      -- "freemium" in this case. Handled as its own branch rather than
+      -- coalescing beta_end to now() (which would wrongly compute 0 elapsed
+      -- days and return trial_premium instead — the bug this fixes).
+      v_status := 'freemium';
     else
-      v_days := extract(epoch from (now() - coalesce(p_acct_beta_end, now()))) / 86400;
+      v_days := extract(epoch from (now() - p_acct_beta_end)) / 86400;
       v_status := case when v_days <= 15 then 'trial_premium' else 'freemium' end; -- TRIAL_BASE_DAYS
     end if;
   elsif v_plan = 'freemium' then
