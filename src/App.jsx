@@ -3347,6 +3347,7 @@ export default function App() {
   const {
     pensionConfigs, pensionPayments, pensionLoading,
     proposePensionConfig, confirmPensionConfig, cancelPensionConfig,
+    requestEndPensionConfig, confirmEndPensionConfig, cancelEndPensionConfig,
     markPensionPaymentPaid, confirmPensionPayment, contestPensionPayment,
   } = usePension(familySync.familyId);
   const { history: historyData, addHistEntry } = useHistory(familySync.familyId);
@@ -5108,6 +5109,7 @@ export default function App() {
     pensionLoading,
     pensionMethods: {
       proposePensionConfig, confirmPensionConfig, cancelPensionConfig,
+      requestEndPensionConfig, confirmEndPensionConfig, cancelEndPensionConfig,
       markPensionPaymentPaid, confirmPensionPayment, contestPensionPayment,
     },
     history: historyData,
