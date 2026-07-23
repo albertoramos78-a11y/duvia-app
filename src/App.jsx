@@ -13698,7 +13698,14 @@ function PensionSection() {
 
   return (
     <div className="card" style={{padding:14,marginBottom:14,border:`1.5px solid ${C.vio}33`}}>
-      <div style={{fontSize:13,fontWeight:900,color:C.vio,marginBottom:10}}>💶 {t.pensionTabTitle || "Pension alimentaire"}</div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:10}}>
+        <div style={{fontSize:13,fontWeight:900,color:C.vio}}>💶 {t.pensionTabTitle || "Pension alimentaire"}</div>
+        {proposedConfig && iAmProposer && (
+          <button onClick={handleCancelConfig} disabled={busy} style={{padding:"5px 10px",height:"auto",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontWeight:700,fontSize:11,cursor:"pointer",flexShrink:0}}>
+            {t.pensionCancelBtn || "Annuler"}
+          </button>
+        )}
+      </div>
 
       {err && <div style={{fontSize:11,color:C.red,marginBottom:8}}>{err}</div>}
 
@@ -13770,10 +13777,7 @@ function PensionSection() {
       )}
       {proposedConfig && iAmProposer && (
         <div style={{fontSize:12,color:C.mut,fontStyle:"italic"}}>
-          <div>{t.pensionAwaitingOtherParent || "En attente de confirmation par l'autre parent."}</div>
-          <button onClick={handleCancelConfig} disabled={busy} style={{marginTop:8,padding:"7px 14px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer",fontStyle:"normal"}}>
-            {t.pensionCancelBtn || "Annuler"}
-          </button>
+          {t.pensionAwaitingOtherParent || "En attente de confirmation par l'autre parent."}
         </div>
       )}
 

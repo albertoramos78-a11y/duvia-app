@@ -50,7 +50,7 @@ export function useMessages(familyId: string | null, userId: string | null) {
           }
         }
       )
-      .subscribe();
+      .subscribe((status, err) => { console.log("[Duvia Realtime] messages channel:", status, err); });
     return () => {
       supabase.removeChannel(channel);
     };

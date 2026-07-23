@@ -81,7 +81,7 @@ export function useExpenses(familyId: string | null) {
           }
         }
       )
-      .subscribe();
+      .subscribe((status, err) => { console.log("[Duvia Realtime] expenses channel:", status, err); });
 
     const reimChannel = supabase
       .channel(`reimbursements_${familyId}`)
@@ -104,7 +104,7 @@ export function useExpenses(familyId: string | null) {
           }
         }
       )
-      .subscribe();
+      .subscribe((status, err) => { console.log("[Duvia Realtime] reimbursements channel:", status, err); });
 
     return () => {
       supabase.removeChannel(expChannel);
