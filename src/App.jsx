@@ -14250,10 +14250,31 @@ function ExpTab() {
     const e=(ctxExpenses||[]).find(x=>x.id===id);
     if(scope==="series" && e?.recurringId){
       const seriesItems=(ctxExpenses||[]).filter(x=>x.recurringId===e.recurringId);
-      await deleteAttFiles(seriesItems);
-      await expMethods.deleteExpensesBySeries(e.recurringId);
-      addHist("Dépense supprimée",`🔄 Série : ${e?.label||""} — ${(e?.amount||0).toFixed(2)} ${currency}`,"exp");
-      pushNotif("🔄 Série supprimée","exp");
+      const confirmedItems=seriesItems.filter(x=>x.status==="confirmed");
+      if(confirmedItems.length===0){
+        // Aucune occurrence confirmée par l'autre parent : suppression
+        // immédiate de toute la série, comportement inchangé.
+        await deleteAttFiles(seriesItems);
+        await expMethods.deleteExpensesBySeries(e.recurringId);
+        addHist("Dépense supprimée",`🔄 Série : ${e?.label||""} — ${(e?.amount||0).toFixed(2)} ${currency}`,"exp");
+        pushNotif("🔄 Série supprimée","exp");
+      } else {
+        // 🔒 Même règle que pour une suppression simple (del()) : une
+        // occurrence déjà confirmée par l'autre parent ne peut pas être
+        // supprimée unilatéralement, même via "Toute la série" — elle passe
+        // par une demande d'approbation, une à une. Les occurrences non
+        // confirmées de la série restent supprimées immédiatement.
+        const deletableItems=seriesItems.filter(x=>x.status!=="confirmed");
+        if(deletableItems.length){
+          await deleteAttFiles(deletableItems);
+          for(const it of deletableItems) await expMethods.deleteExpense(it.id);
+        }
+        for(const it of confirmedItems){
+          await expMethods.updateExpense(it.id,{pendingDelete:true,deleteRequestedBy:user?.parentIdx??0});
+        }
+        pushNotif(`🗑️ Suppression demandée : ${confirmedItems.length} occurrence(s) confirmée(s) de "${e.label}"`,"exp");
+        addHist("Suppression demandée",`🔄 ${confirmedItems.length} occurrence(s) confirmée(s) — ${e.label}`,"exp");
+      }
     } else {
       await deleteAttFiles([e]);
       await expMethods.deleteExpense(id);
