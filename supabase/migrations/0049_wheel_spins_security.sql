@@ -43,6 +43,8 @@ create policy "wheel_spins_select_own" on public.wheel_spins
 --    authenticated — only spin_wheel() (Task 4) calls it internally.
 --    Resync manually if the client-side logic changes.
 
+drop function if exists public._wheel_plan_rank(uuid,text,timestamptz,text,int,timestamptz,timestamptz,int,timestamptz,boolean);
+
 create or replace function public._wheel_plan_rank(
   p_user_id uuid,
   p_plan text,
@@ -53,7 +55,8 @@ create or replace function public._wheel_plan_rank(
   p_account_created_at timestamptz,
   p_trial_extension_days int,
   p_acct_beta_end timestamptz,
-  p_global_beta boolean
+  p_global_beta boolean,
+  p_apply_admin_and_ref boolean default true
 ) returns int
 language plpgsql
 security definer
@@ -69,16 +72,18 @@ declare
   v_days numeric;
   v_status text;
 begin
-  select exists(select 1 from public.app_admins where user_id = p_user_id) into v_is_admin;
-  if v_is_admin then
-    return 2; -- mirrors subStatus(): if(sub._admin) return "premium"
+  if p_apply_admin_and_ref then
+    select exists(select 1 from public.app_admins where user_id = p_user_id) into v_is_admin;
+    if v_is_admin then
+      return 2; -- mirrors subStatus(): if(sub._admin) return "premium"
+    end if;
   end if;
 
   if v_plan = 'premium' then
     if p_premium_since is not null and p_cycle is not null then
       v_expiry := p_premium_since
         + (case when p_cycle = 'yearly' then interval '1 year' else interval '1 month' end)
-        + (coalesce(p_ref_months, 0) * interval '30 days');
+        + ((case when p_apply_admin_and_ref then coalesce(p_ref_months, 0) else 0 end) * interval '30 days');
       v_status := case when now() > v_expiry then 'freemium' else 'premium' end;
     else
       v_status := 'premium';
@@ -121,9 +126,11 @@ begin
 end;
 $$;
 
-revoke all on function public._wheel_plan_rank(uuid,text,timestamptz,text,int,timestamptz,timestamptz,int,timestamptz,boolean) from public;
+revoke all on function public._wheel_plan_rank(uuid,text,timestamptz,text,int,timestamptz,timestamptz,int,timestamptz,boolean,boolean) from public;
 
-create or replace function public._wheel_family_is_premium(p_family_id uuid)
+drop function if exists public._wheel_family_is_premium(uuid);
+
+create or replace function public._wheel_family_is_premium(p_family_id uuid, p_calling_uid uuid)
 returns boolean
 language plpgsql
 security definer
@@ -155,7 +162,8 @@ begin
     v_rank := public._wheel_plan_rank(
       rec.user_id, rec.plan, rec.premium_since, rec.cycle, rec.ref_months,
       rec.trial_start, rec.account_created_at, rec.trial_extension_days,
-      rec.acct_beta_end, v_global_beta
+      rec.acct_beta_end, v_global_beta,
+      p_apply_admin_and_ref := (rec.user_id = p_calling_uid)
     );
     if v_rank > v_best_rank then v_best_rank := v_rank; end if;
   end loop;
@@ -164,4 +172,4 @@ begin
 end;
 $$;
 
-revoke all on function public._wheel_family_is_premium(uuid) from public;
+revoke all on function public._wheel_family_is_premium(uuid,uuid) from public;
