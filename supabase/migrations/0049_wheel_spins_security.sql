@@ -266,3 +266,119 @@ end;
 $$;
 
 revoke all on function public._wheel_draw(boolean) from public;
+
+-- ── 4. spin_wheel() — the single entry point the client calls per spin.
+--    Eligibility mirrors canAccessWheel (prem || hasBonusSpin) in GameTab —
+--    NOT affected by the unlimited-test-account bypass. Cooldown applies to
+--    EVERYONE, Premium included — only a bonus spin or the unlimited test
+--    account skips it (see Global Constraints).
+
+create or replace function public.spin_wheel()
+returns table (prize_id text, used_bonus_spin boolean, next_eligible_at timestamptz)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_family_id uuid;
+  v_email text;
+  v_is_unlimited boolean;
+  v_family_premium boolean;
+  v_pending_spins int;
+  v_last_spin timestamptz;
+  v_cooldown interval := interval '7 days';
+  v_using_bonus boolean := false;
+  v_is_individual_subscriber boolean;
+  v_prize text;
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select family_id into v_family_id
+    from public.family_members
+   where user_id = v_uid and status = 'active'
+   limit 1;
+  if v_family_id is null then
+    raise exception 'no_family';
+  end if;
+
+  v_family_premium := public._wheel_family_is_premium(v_family_id, v_uid);
+
+  select email into v_email from auth.users where id = v_uid;
+  v_is_unlimited := (v_email = 'toti78200@gmail.com');
+
+  select pending_spins into v_pending_spins
+    from public.subscriptions where user_id = v_uid;
+  v_pending_spins := coalesce(v_pending_spins, 0);
+
+  if not (v_family_premium or v_pending_spins > 0) then
+    raise exception 'not_eligible';
+  end if;
+
+  select max(spun_at) into v_last_spin
+    from public.wheel_spins where user_id = v_uid;
+
+  if v_last_spin is not null and now() < v_last_spin + v_cooldown and not v_is_unlimited then
+    if v_pending_spins > 0 then
+      update public.subscriptions
+         set pending_spins = pending_spins - 1
+       where user_id = v_uid and pending_spins > 0;
+      if not found then
+        raise exception 'cooldown_active';
+      end if;
+      v_using_bonus := true;
+    else
+      raise exception 'cooldown_active';
+    end if;
+  end if;
+
+  v_is_individual_subscriber := public._wheel_is_individual_subscriber(v_uid);
+  v_prize := public._wheel_draw(v_is_individual_subscriber);
+
+  insert into public.wheel_spins (user_id, family_id, prize_id, used_bonus_spin)
+    values (v_uid, v_family_id, v_prize, v_using_bonus);
+
+  -- 🔧 (found during Task 4 verification) next_eligible_at must be derived
+  -- from THIS spin (now(), stable within the transaction and equal to the
+  -- row just inserted via spun_at's default), not from v_last_spin (the
+  -- PREVIOUS spin, read before this insert). The brief's original
+  -- `coalesce(v_last_spin, now()) + v_cooldown` only happened to be correct
+  -- for an account's very first-ever spin (v_last_spin null); reproduced live
+  -- against the unlimited test account (toti78200@gmail.com): two consecutive
+  -- real spins returned the IDENTICAL next_eligible_at, frozen at the first
+  -- spin's window, because v_last_spin on the second call still pointed at
+  -- spin #1. Currently inert (neither Task 5 nor Task 6 of this plan reads
+  -- spin_wheel()'s next_eligible_at — Task 6 re-derives cooldown display from
+  -- a fresh wheel_spins query instead) but left correct now rather than
+  -- leaving a documented-but-wrong field for a future consumer to inherit.
+  return query select v_prize, v_using_bonus, (now() + v_cooldown);
+end;
+$$;
+
+revoke all on function public.spin_wheel() from public;
+grant execute on function public.spin_wheel() to authenticated;
+
+-- 🔧 (found during Task 4 verification) Supabase's default privileges for
+-- the `public` schema (see `pg_default_acl`, defaclobjtype='f') grant EXECUTE
+-- directly to anon/authenticated/service_role on every new function AT
+-- CREATE TIME — a grant that is entirely separate from the implicit PUBLIC
+-- grant Postgres also makes by default. Every "revoke all ... from public"
+-- above (Tasks 1-3 and spin_wheel() above) only undid the latter, NOT the
+-- former: without this block, _wheel_family_is_premium/_wheel_plan_rank/
+-- _wheel_is_individual_subscriber/_wheel_draw — meant to be internal-only,
+-- per their own header comments — were (and until this runs, remain) directly
+-- callable by ANY caller via PostgREST's /rest/v1/rpc/<fn> endpoint, including
+-- a fully unauthenticated one using only the public anon API key. For
+-- _wheel_family_is_premium/_wheel_is_individual_subscriber specifically this
+-- is a real confidentiality leak: arbitrary family/user Premium status is
+-- enumerable with zero authentication. spin_wheel() itself was not
+-- exploitable this way (auth.uid() is null for a genuinely unauthenticated
+-- call, so it always raised not_authenticated) but is included below too for
+-- defense in depth, since only `authenticated` is meant to reach it.
+revoke execute on function public._wheel_plan_rank(uuid,text,timestamptz,text,int,timestamptz,timestamptz,int,timestamptz,boolean,boolean) from anon, authenticated;
+revoke execute on function public._wheel_family_is_premium(uuid,uuid) from anon, authenticated;
+revoke execute on function public._wheel_is_individual_subscriber(uuid) from anon, authenticated;
+revoke execute on function public._wheel_draw(boolean) from anon, authenticated;
+revoke execute on function public.spin_wheel() from anon;
