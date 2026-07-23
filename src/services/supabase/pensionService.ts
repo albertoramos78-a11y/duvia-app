@@ -16,6 +16,8 @@ export interface PensionConfig {
   createdAt: string;
   confirmedByUserId: string | null;
   confirmedAt: string | null;
+  pendingEnd: boolean;
+  endRequestedBy: string | null;
 }
 
 export interface PensionPayment {
@@ -51,6 +53,8 @@ export function dbToPensionConfig(row: Record<string, any>): PensionConfig {
     createdAt: row.created_at,
     confirmedByUserId: row.confirmed_by_user_id ?? null,
     confirmedAt: row.confirmed_at ?? null,
+    pendingEnd: row.pending_end ?? false,
+    endRequestedBy: row.end_requested_by ?? null,
   };
 }
 
@@ -125,6 +129,27 @@ export async function confirmPensionConfig(configId: string): Promise<PensionCon
 export async function cancelPensionConfig(configId: string): Promise<void> {
   const { error } = await supabase.rpc("cancel_pension_config", { p_config_id: configId });
   if (error) throw error;
+}
+
+/** Demande de mettre fin à une pension ACTIVE — nécessite l'accord de l'autre parent. */
+export async function requestEndPensionConfig(configId: string): Promise<PensionConfig> {
+  const { data, error } = await supabase.rpc("request_end_pension_config", { p_config_id: configId });
+  if (error) throw error;
+  return dbToPensionConfig(data);
+}
+
+/** Confirme la fin (par l'AUTRE parent que le demandeur) — clôt la pension. */
+export async function confirmEndPensionConfig(configId: string): Promise<PensionConfig> {
+  const { data, error } = await supabase.rpc("confirm_end_pension_config", { p_config_id: configId });
+  if (error) throw error;
+  return dbToPensionConfig(data);
+}
+
+/** Annule/refuse une demande de fin (le demandeur qui se rétracte, ou l'autre parent qui refuse). */
+export async function cancelEndPensionConfig(configId: string): Promise<PensionConfig> {
+  const { data, error } = await supabase.rpc("cancel_end_pension_config", { p_config_id: configId });
+  if (error) throw error;
+  return dbToPensionConfig(data);
 }
 
 export async function markPensionPaymentPaid(paymentId: string): Promise<PensionPayment> {

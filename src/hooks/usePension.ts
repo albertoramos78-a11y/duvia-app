@@ -10,6 +10,9 @@ import {
   proposePensionConfig as proposePensionConfigApi,
   confirmPensionConfig as confirmPensionConfigApi,
   cancelPensionConfig as cancelPensionConfigApi,
+  requestEndPensionConfig as requestEndPensionConfigApi,
+  confirmEndPensionConfig as confirmEndPensionConfigApi,
+  cancelEndPensionConfig as cancelEndPensionConfigApi,
   markPensionPaymentPaid as markPensionPaymentPaidApi,
   confirmPensionPayment as confirmPensionPaymentApi,
   contestPensionPayment as contestPensionPaymentApi,
@@ -119,6 +122,35 @@ export function usePension(familyId: string | null) {
     }
   }, [refresh]);
 
+  /** Demande la fin d'une pension active — optimiste (pending_end local),
+   * rollback via refresh() si le serveur refuse. */
+  const requestEndPensionConfig = useCallback(async (configId: string) => {
+    setConfigs((prev) => prev.map((c) => (c.id === configId ? { ...c, pendingEnd: true } : c)));
+    try {
+      await requestEndPensionConfigApi(configId);
+    } catch (err) {
+      await refresh();
+      throw err;
+    }
+  }, [refresh]);
+
+  /** Confirme la fin (par l'AUTRE parent) — relit l'état après (clôture réelle). */
+  const confirmEndPensionConfig = useCallback(async (configId: string) => {
+    await confirmEndPensionConfigApi(configId);
+    await refresh();
+  }, [refresh]);
+
+  /** Annule/refuse la demande de fin — optimiste, rollback via refresh() en cas d'échec. */
+  const cancelEndPensionConfig = useCallback(async (configId: string) => {
+    setConfigs((prev) => prev.map((c) => (c.id === configId ? { ...c, pendingEnd: false, endRequestedBy: null } : c)));
+    try {
+      await cancelEndPensionConfigApi(configId);
+    } catch (err) {
+      await refresh();
+      throw err;
+    }
+  }, [refresh]);
+
   const markPensionPaymentPaid = useCallback(async (paymentId: string) => {
     setPayments((prev) => prev.map((p) => (p.id === paymentId ? { ...p, status: "marked_paid" as const } : p)));
     try {
@@ -157,6 +189,9 @@ export function usePension(familyId: string | null) {
     proposePensionConfig,
     confirmPensionConfig,
     cancelPensionConfig,
+    requestEndPensionConfig,
+    confirmEndPensionConfig,
+    cancelEndPensionConfig,
     markPensionPaymentPaid,
     confirmPensionPayment,
     contestPensionPayment,

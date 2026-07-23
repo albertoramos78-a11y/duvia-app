@@ -13572,6 +13572,7 @@ function PensionSection() {
           pensionConfigs, pensionPayments, pensionLoading, pensionMethods } = useApp();
   const {
     proposePensionConfig, confirmPensionConfig, cancelPensionConfig,
+    requestEndPensionConfig, confirmEndPensionConfig, cancelEndPensionConfig,
     markPensionPaymentPaid, confirmPensionPayment, contestPensionPayment,
   } = pensionMethods;
 
@@ -13654,6 +13655,39 @@ function PensionSection() {
     setBusy(true); setErr("");
     try {
       await cancelPensionConfig(proposedConfig.id);
+    } catch (e) {
+      setErr(t.pensionErrGeneric || "Une erreur est survenue.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRequestEndConfig() {
+    setBusy(true); setErr("");
+    try {
+      await requestEndPensionConfig(activeConfig.id);
+    } catch (e) {
+      setErr(t.pensionErrGeneric || "Une erreur est survenue.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleConfirmEndConfig() {
+    setBusy(true); setErr("");
+    try {
+      await confirmEndPensionConfig(activeConfig.id);
+    } catch (e) {
+      setErr(t.pensionErrGeneric || "Une erreur est survenue.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleCancelEndConfig() {
+    setBusy(true); setErr("");
+    try {
+      await cancelEndPensionConfig(activeConfig.id);
     } catch (e) {
       setErr(t.pensionErrGeneric || "Une erreur est survenue.");
     } finally {
@@ -13800,7 +13834,43 @@ function PensionSection() {
                 {t.pensionEditAmountBtn || "Modifier le montant"}
               </button>
             )}
+            {!proposedConfig && !showForm && !activeConfig.pendingEnd && (
+              <button onClick={handleRequestEndConfig} disabled={busy}
+                style={{padding:"4px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}66`,borderRadius:8,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                {t.pensionEndBtn || "Mettre fin à la pension"}
+              </button>
+            )}
           </div>
+
+          {/* 🔒 Même principe que la suppression d'une dépense confirmée (App.jsx
+          ExpTab) : mettre fin à une pension active demande l'accord de l'autre
+          parent plutôt qu'un arrêt unilatéral immédiat. */}
+          {activeConfig.pendingEnd && myUid === activeConfig.endRequestedBy && (
+            <div style={{fontSize:12,color:C.mut,fontStyle:"italic",marginBottom:8}}>
+              {t.pensionEndAwaitingOtherParent || "Demande de fin en attente de confirmation par l'autre parent."}
+              <button onClick={handleCancelEndConfig} disabled={busy}
+                style={{display:"block",marginTop:8,padding:"7px 14px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer",fontStyle:"normal"}}>
+                {t.pensionCancelEndBtn || "Annuler la demande"}
+              </button>
+            </div>
+          )}
+          {activeConfig.pendingEnd && myUid !== activeConfig.endRequestedBy && (myUid === activeConfig.fromUserId || myUid === activeConfig.toUserId) && (
+            <div style={{padding:"10px 12px",background:`${C.red}10`,border:`1.5px solid ${C.red}44`,borderRadius:10,marginBottom:8}}>
+              <div style={{fontSize:12,color:C.txt,marginBottom:8}}>
+                🗑️ <strong style={{color:cfg.parents[activeConfig.endRequestedBy===activeConfig.fromUserId?activeConfig.fromParent:activeConfig.toParent]?.color||C.blu}}>
+                  {cfg.parents[activeConfig.endRequestedBy===activeConfig.fromUserId?activeConfig.fromParent:activeConfig.toParent]?.name||""}
+                </strong>{" "}{t.pensionEndRequestedBy || "souhaite mettre fin à cette pension."}
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={handleConfirmEndConfig} disabled={busy} style={{flex:1,height:36,background:C.red,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                  {t.pensionConfirmEndBtn || "Confirmer la fin"}
+                </button>
+                <button onClick={handleCancelEndConfig} disabled={busy} style={{flex:1,height:36,background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                  {t.pensionRefuseBtn || "Refuser"}
+                </button>
+              </div>
+            </div>
+          )}
 
           {currentPayment && (
             <div style={{padding:"10px 12px",background:C.sur,borderRadius:10,marginBottom:8}}>
