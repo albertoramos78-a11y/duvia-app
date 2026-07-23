@@ -13833,14 +13833,14 @@ function PensionSection() {
                   setShowForm(true);
                 }}
                 title={t.pensionEditAmountBtn || "Modifier le montant"}
-                style={{width:36,height:36,padding:0,background:`${C.vio}18`,color:C.vio,border:"none",borderRadius:10,fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+                style={{padding:"5px 9px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12}}>
                 ✎
               </button>
             )}
             {!proposedConfig && !showForm && !activeConfig.pendingEnd && (
               <button onClick={handleRequestEndConfig} disabled={busy}
                 title={t.pensionEndBtn || "Mettre fin à la pension"}
-                style={{width:36,height:36,padding:0,background:"transparent",color:C.red,border:`1.5px solid ${C.red}66`,borderRadius:10,fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+                style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12}}>
                 ✕
               </button>
             )}
