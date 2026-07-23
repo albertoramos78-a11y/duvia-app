@@ -4385,9 +4385,15 @@ export default function App() {
     : ((cfg.vaultActivity?.by && cfg.vaultActivity.by!==_myId && cfg.vaultActivity.ts>(_seen.vault||"")) ? 1 : 0);
   const contactsDot= liveActivity.contacts?.by && liveActivity.contacts.by!==_myId && liveActivity.contacts.ts>(_seen.contacts||"");
   // Badge dépenses = nombre de dépenses EN ATTENTE créées par l'autre parent (source DB)
+  // 🔧 Une dépense récurrente génère des occurrences futures dès sa création,
+  // toutes "pending" jusqu'à confirmation — sans le filtre de date (même
+  // règle que la liste affichée dans ExpTab, App.jsx:~13880), la bulle
+  // comptait des occurrences dont la date n'est même pas encore arrivée.
+  const _expBadgeTodayStr = toStr(simDate ? new Date(simDate) : new Date());
   const expPendingCount = (allExpenses||[]).filter(e =>
     e.status==="pending" && user?.role==="parent" &&
-    e.createdBy!==undefined && e.createdBy!==(user?.parentIdx??-1)
+    e.createdBy!==undefined && e.createdBy!==(user?.parentIdx??-1) &&
+    (!e.date || e.date<=_expBadgeTodayStr)
   ).length;
   // Sync current user's sub into the users list (so admin can see all subscribers)
   useEffect(()=>{
