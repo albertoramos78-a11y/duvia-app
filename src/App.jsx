@@ -14907,7 +14907,15 @@ window.addEventListener('message',function(e){
               Supprimer uniquement cette occurrence ou toute la série ?
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              <button onClick={()=>doDelete(recurringDelModal.id,"single")}
+              <button onClick={()=>{
+                  // 🔒 Même règle que pour une dépense non récurrente (voir del()
+                  // ci-dessus) : une occurrence déjà confirmée par l'autre parent
+                  // ne peut pas être supprimée unilatéralement, même via "Cette
+                  // occurrence uniquement" — sans ça, ce chemin de suppression
+                  // récurrente contournait complètement la demande d'approbation.
+                  if(recurringDelModal.status==="confirmed"){ requestDeleteExp(recurringDelModal.id); setRecurringDelModal(null); }
+                  else doDelete(recurringDelModal.id,"single");
+                }}
                 style={{padding:"13px",background:C.sur,color:C.txt,border:`1.5px solid ${C.bor}`,borderRadius:12,fontWeight:700,fontSize:14,textAlign:"left",display:"flex",alignItems:"center",gap:10}}>
                 <span style={{fontSize:20}}>📌</span>
                 <div>
