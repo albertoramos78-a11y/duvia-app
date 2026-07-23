@@ -18418,14 +18418,10 @@ function MessagingTab(){
                 {showDate&&<div style={{textAlign:"center",fontSize:11,color:C.mut,margin:"12px 0 8px",fontWeight:600}}>{new Date(m.ts).toLocaleDateString()}</div>}
                 {/* Ligne principale : avatar + colonne bulle */}
                 <div style={{display:"flex",flexDirection:isMe?"row-reverse":"row",alignItems:"flex-start",gap:8,marginBottom:4,paddingLeft:isMe?48:0,paddingRight:isMe?0:48}}>
-                  {/* Avatar — aligné en haut avec la bulle */}
-                  {!isMe?(
-                    <div style={{width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${col},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0,overflow:"hidden",marginTop:2}}>
-                      {renderAvatar(pMap[String(m.from)]?.avatar)}
-                    </div>
-                  ):(
-                    <div style={{width:32,flexShrink:0}}/>
-                  )}
+                  {/* Avatar — aligné en haut avec la bulle, aussi pour ses propres messages */}
+                  <div style={{width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${col},${C.blu})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0,overflow:"hidden",marginTop:2}}>
+                    {renderAvatar(pMap[String(m.from)]?.avatar)}
+                  </div>
                   {/* Bulle + épingle côte à côte */}
                   <div style={{maxWidth:"78%",display:"flex",flexDirection:isMe?"row-reverse":"row",alignItems:"flex-end",gap:4}}>
                   <div style={{display:"flex",flexDirection:"column",alignItems:isMe?"flex-end":"flex-start",minWidth:0,flex:1}}>
