@@ -68,7 +68,7 @@ export function usePension(familyId: string | null) {
           }
         }
       )
-      .subscribe((status, err) => { console.log("[Duvia Realtime] pension_configs channel:", status, err); });
+      .subscribe();
 
     const pmtChannel = supabase
       .channel(`pension_payments_${familyId}`)
@@ -87,7 +87,7 @@ export function usePension(familyId: string | null) {
           }
         }
       )
-      .subscribe((status, err) => { console.log("[Duvia Realtime] pension_payments channel:", status, err); });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(cfgChannel);
