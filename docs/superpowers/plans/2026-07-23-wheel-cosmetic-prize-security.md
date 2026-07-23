@@ -395,7 +395,7 @@ git commit -m "Add wheel draw logic helpers (subscriber check + weighted draw)"
 - Modify: `supabase/migrations/0049_wheel_spins_security.sql` (append)
 
 **Interfaces:**
-- Consumes: `public._wheel_family_is_premium(uuid)` (Task 2), `public._wheel_is_individual_subscriber(uuid)` + `public._wheel_draw(boolean)` (Task 3), `public.wheel_spins` (Task 1).
+- Consumes: `public._wheel_family_is_premium(p_family_id uuid, p_calling_uid uuid)` — **note the corrected 2-arg signature**: Task 2's review found the original 1-arg design let a co-parent's referral bonus/admin status leak into the whole family's Premium check (a real divergence from the client's `bestParentSub()`, which never applies either to anyone but the caller). Fixed during Task 2 by adding a `p_calling_uid` parameter — pass `v_uid` (see Step 1 below), not just `v_family_id`. `public._wheel_is_individual_subscriber(uuid)` + `public._wheel_draw(boolean)` (Task 3), `public.wheel_spins` (Task 1).
 - Produces: `public.spin_wheel() returns table(prize_id text, used_bonus_spin boolean, next_eligible_at timestamptz)`, granted to `authenticated`. Raises `not_authenticated`, `no_family`, `not_eligible`, or `cooldown_active` as needed.
 
 - [ ] **Step 1: Append the RPC to the migration file**
@@ -438,7 +438,7 @@ begin
     raise exception 'no_family';
   end if;
 
-  v_family_premium := public._wheel_family_is_premium(v_family_id);
+  v_family_premium := public._wheel_family_is_premium(v_family_id, v_uid);
 
   select email into v_email from auth.users where id = v_uid;
   v_is_unlimited := (v_email = 'toti78200@gmail.com');
