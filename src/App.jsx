@@ -15119,10 +15119,13 @@ window.addEventListener('message',function(e){
             </div>
             {/* 🔧 Polish (impeccable, 2026-07-23) : remplace le "→" brut + hack
             paddingBottom par un badge circulaire aligné sur le select via
-            align-items:flex-end du .row (pas de valeur magique), même langage
-            visuel que les badges/avatars circulaires déjà utilisés ailleurs,
-            couleur verte du bloc remboursement plutôt qu'une nouvelle teinte. */}
-            <div style={{flex:"0 0 auto",width:36,height:44,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            align-items:flex-end du .row, même langage visuel que les
+            badges/avatars circulaires déjà utilisés ailleurs, couleur verte
+            du bloc remboursement plutôt qu'une nouvelle teinte.
+            marginBottom:20 reproduit EXACTEMENT le margin-bottom de .field
+            (sinon le badge, sans cette marge, s'aligne 20px plus bas que le
+            select — .row aligne les BOÎTES DE MARGE, pas juste le contenu). */}
+            <div style={{flex:"0 0 auto",width:36,height:44,marginBottom:20,display:"flex",alignItems:"center",justifyContent:"center"}}>
               <div style={{width:30,height:30,borderRadius:"50%",background:`${C.grn}18`,border:`1.5px solid ${C.grn}44`,color:C.grn,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,flexShrink:0}}>→</div>
             </div>
             <div className="field" style={{flex:1}}>
