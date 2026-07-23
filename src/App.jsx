@@ -13832,14 +13832,16 @@ function PensionSection() {
                   });
                   setShowForm(true);
                 }}
-                style={{padding:"4px 10px",background:"transparent",color:C.vio,border:`1px solid ${C.vio}66`,borderRadius:8,fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                {t.pensionEditAmountBtn || "Modifier le montant"}
+                title={t.pensionEditAmountBtn || "Modifier le montant"}
+                style={{width:36,height:36,padding:0,background:`${C.vio}18`,color:C.vio,border:"none",borderRadius:10,fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+                ✎
               </button>
             )}
             {!proposedConfig && !showForm && !activeConfig.pendingEnd && (
               <button onClick={handleRequestEndConfig} disabled={busy}
-                style={{padding:"4px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}66`,borderRadius:8,fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                {t.pensionEndBtn || "Mettre fin à la pension"}
+                title={t.pensionEndBtn || "Mettre fin à la pension"}
+                style={{width:36,height:36,padding:0,background:"transparent",color:C.red,border:`1.5px solid ${C.red}66`,borderRadius:10,fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+                ✕
               </button>
             )}
           </div>
