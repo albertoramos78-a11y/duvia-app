@@ -14732,6 +14732,11 @@ window.addEventListener('message',function(e){
                   <div style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 10px",background:`${stColor}15`,border:`1px solid ${stColor}44`,borderRadius:20,marginTop:6}}>
                     <span style={{fontSize:12,fontWeight:700,color:stColor}}>{stLabel}</span>
                   </div>
+                  {e.pendingDelete && iAmDeleteRequester && (
+                    <div style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 10px",background:`${C.yel}15`,border:`1px solid ${C.yel}44`,borderRadius:20,marginTop:6,marginLeft:6}}>
+                      <span style={{fontSize:12,fontWeight:700,color:C.yel}}>{t.expDeletePendingLabel||"⏳ Suppression en attente de validation"}</span>
+                    </div>
+                  )}
                 </div>
                 <button onClick={()=>setDetailExp(null)} style={{background:"transparent",border:"none",fontSize:20,color:C.mut,padding:"0 4px",flexShrink:0}}>✕</button>
               </div>
@@ -15445,6 +15450,15 @@ window.addEventListener('message',function(e){
                     <div style={{marginTop:5,display:"inline-flex",alignItems:"center",gap:4,padding:"2px 8px",background:`${expStatusColor}15`,border:`1px solid ${expStatusColor}44`,borderRadius:20}}>
                       <span style={{fontSize:11,fontWeight:700,color:expStatusColor}}>{expStatusLabel}</span>
                     </div>
+                    {/* 🔧 Vue du demandeur : le badge de statut seul ("Accepté") ne dit
+                    rien de la demande de suppression en cours — sans ce badge
+                    supplémentaire, seule l'icône ⏳ (avec un simple title au survol)
+                    signalait l'attente, facile à manquer. */}
+                    {e.pendingDelete && iAmExpDeleteRequester && (
+                      <div style={{marginTop:5,marginLeft:6,display:"inline-flex",alignItems:"center",gap:4,padding:"2px 8px",background:`${C.yel}15`,border:`1px solid ${C.yel}44`,borderRadius:20}}>
+                        <span style={{fontSize:11,fontWeight:700,color:C.yel}}>{t.expDeletePendingLabel||"⏳ Suppression en attente de validation"}</span>
+                      </div>
+                    )}
                   </div>
                   {/* Boutons émetteur */}
                   {(iAmExpSender||isAdm) && expSt==="pending" && (
@@ -20849,7 +20863,7 @@ function VaultTab() {
             <input value={formName} onChange={e=>setFormName(e.target.value)} placeholder={t.vaultDocNamePh||"ex : Jugement du 12/03/2023"} className={shakeDocName?"duvia-shake":""} />
           </div>
           <div className="row" style={{alignItems:"stretch"}}>
-            <div className="field" style={{flex:2,position:"relative",marginBottom:0}}>
+            <div className="field" style={{flex:3,position:"relative",marginBottom:0}}>
               <label className="lbl">{t.vaultCat||"Catégorie"}</label>
               <button onClick={()=>setShowCatMenu(v=>!v)} style={{width:"100%",height:44,padding:"0 12px",background:C.inp,border:`1.5px solid ${showCatMenu?C.vio:C.bor}`,color:C.txt,borderRadius:10,fontSize:13,textAlign:"left",display:"flex",alignItems:"center",gap:8,fontWeight:600,justifyContent:"space-between",boxSizing:"border-box"}}>
                 <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{vaultCats[formCat]||"—"}</span>
@@ -20859,7 +20873,7 @@ function VaultTab() {
                 <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:C.card,border:`1.5px solid ${C.vio}`,borderRadius:14,zIndex:50,overflow:"hidden",boxShadow:"0 8px 24px rgba(0,0,0,.18)"}}>
                   {vaultCats.map((c,i)=>(
                     <button key={i} onClick={()=>{setFormCat(i);setShowCatMenu(false);}}
-                      style={{width:"100%",height:44,padding:"0 14px",background:i===formCat?`${C.vio}18`:"transparent",color:i===formCat?C.vio:C.txt,textAlign:"left",fontSize:13,fontWeight:i===formCat?800:600,display:"flex",alignItems:"center",gap:8,borderBottom:i<vaultCats.length-1?`1px solid ${C.bor}`:"none",borderRadius:0,transition:"background .1s"}}>
+                      style={{width:"100%",height:44,padding:"0 14px",background:i===formCat?`${C.vio}18`:"transparent",color:i===formCat?C.vio:C.txt,textAlign:"left",fontSize:13,fontWeight:i===formCat?800:600,display:"flex",alignItems:"center",justifyContent:"flex-start",gap:8,borderBottom:i<vaultCats.length-1?`1px solid ${C.bor}`:"none",borderRadius:0,transition:"background .1s"}}>
                       <span style={{fontSize:17,width:24,textAlign:"center"}}>{c.split(" ")[0]}</span>
                       <span>{c.replace(/^[^\s]+ /,"")}</span>
                       {i===formCat && <span style={{marginLeft:"auto",fontSize:12}}>✓</span>}
@@ -20868,7 +20882,7 @@ function VaultTab() {
                 </div>
               )}
             </div>
-            <div className="field" style={{flex:1,marginBottom:0}}>
+            <div className="field" style={{flex:2,marginBottom:0}}>
               <label className="lbl">{t.vaultDate||"Date"}</label>
               <input type="date" value={formDate} onChange={e=>setFormDate(e.target.value)} />
             </div>
