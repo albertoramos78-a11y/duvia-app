@@ -3,8 +3,10 @@
 -- Wheel cosmetic-prize server-side security fix (backlog item 9c) — see
 -- docs/superpowers/specs/2026-07-23-wheel-cosmetic-prize-security-design.md.
 -- Moves the wheel's entire prize draw, cooldown, eligibility, and
--- persistence server-side. Idempotent (IF NOT EXISTS / OR REPLACE
--- throughout), safe to re-run.
+-- persistence server-side. Idempotent throughout (IF NOT EXISTS/OR REPLACE
+-- for tables/policies/functions, DROP CONSTRAINT IF EXISTS + re-ADD for the
+-- one FK fix, DROP FUNCTION IF EXISTS before any signature change) — safe
+-- to re-run the whole file at any point.
 
 -- ── 1. Table: one row per real spin (cooldown + ownership source of truth) ──
 

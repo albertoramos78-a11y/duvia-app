@@ -293,7 +293,7 @@ function refBonusDaysPremium(monthlyCount) {
 // backward compat
 function refBonusDays(n) { return REF_TRIAL_PALIERS[n] ?? 0; }
 function refBonusDaysFor(n, isPF) { return isPF ? refBonusDaysPremium(n) : refBonusDaysTrial(n, 0); }
-function makeAdminSub() { return { plan:"premium", premiumSince:new Date().toISOString(), cycle:"yearly", earnedTheme:true, earnedBadge:true, earnedRG:true, earnedWC:true, earnedVideo:true, earnedLicorne:true, lastSpinByUser:{}, giftedPrizes:{}, _admin:true }; }
+function makeAdminSub() { return { plan:"premium", premiumSince:new Date().toISOString(), cycle:"yearly", earnedTheme:true, earnedBadge:true, earnedRG:true, earnedWC:true, earnedVideo:true, earnedLicorne:true, giftedPrizes:{}, _admin:true }; }
 function subStatus(sub) {
   if(sub._admin) return "premium";
   if(sub.plan==="premium") {
@@ -19470,7 +19470,7 @@ function spinEaseVelocity(p) {
   return (1 - SPIN_ACCEL_DIST) * 3 * Math.pow(1 - q, 2) / (1 - SPIN_ACCEL_FRAC);
 }
 
-function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="", isSubscriber=true }) {
+function WheelGame({ isPremium, isAdmin=false, unlimitedSpins=false, userId="" }) {
   const {C,t,lang,sub,setSub,myUid} = useApp();
   const [spinning, setSpinning] = useState(false);
   const [deg, setDeg] = useState(0);
@@ -20257,13 +20257,6 @@ function GameTab() {
   const isPremium = prem; // trial_premium + premium peuvent jouer (freemium : non)
   // Rôle du joueur
   const isParent  = user?.role === "parent";
-  // Souscripteur RÉEL (paie personnellement Premium) — perms.spinWinSub reste
-  // toujours basé sur le sub INDIVIDUEL (jamais le plan familial partagé), donc
-  // un parent couvert par le Premium de son co-parent sans payer lui-même ne
-  // peut jamais gagner ce lot, même s'il occupe le slot parent 0. Remplace
-  // l'ancienne heuristique parentIdx===0, qui pouvait déjà être fausse avant
-  // cette fonctionnalité (ex. un parent slot 0 en Trial, jamais payeur).
-  const isSubscriber = isParent && perms.spinWinSub;
   const isAdult   = (isParent || isObs) && !isAdm; // adulte non-admin
   // 🔧 (2026-07-22) La roue n'est plus accessible aux enfants (déjà hors de
   // portée : pas d'onglet Jeu dans leur TABS). Les observateurs suivent
@@ -20271,8 +20264,10 @@ function GameTab() {
   // autorisés quel que soit le palier de la famille) — seul un tour de roue
   // gagné par parrainage (pendingSpins) reste jouable malgré le verrou,
   // sans jamais pouvoir faire gagner un abonnement gratuit (déjà garanti,
-  // indépendamment de ce verrou, par isSubscriber / spin_wheel_check_
-  // monetary_prize côté serveur).
+  // indépendamment de ce verrou, par spin_wheel() côté serveur — voir
+  // supabase/migrations/0049_wheel_spins_security.sql — qui revérifie le
+  // statut de souscripteur INDIVIDUEL avant tout tirage mensuel/annuel,
+  // jamais fait confiance à un état client).
   const hasBonusSpin = (sub.pendingSpins||0) > 0;
   const canAccessWheel = prem || hasBonusSpin;
   const cooldownLabel = t.cooldown7days;
@@ -20317,7 +20312,6 @@ function GameTab() {
           isAdmin={sub._admin||false}
           unlimitedSpins={unlimitedSpins}
           userId={userId}
-          isSubscriber={isSubscriber}
         />
       </div>
 
