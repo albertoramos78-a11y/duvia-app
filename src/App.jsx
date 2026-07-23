@@ -13812,9 +13812,19 @@ function PensionSection() {
         </div>
       )}
       {proposedConfig && iAmProposer && (
-        <div style={{width:"fit-content",display:"flex",alignItems:"center",gap:4,padding:"2px 8px",background:`${C.yel}15`,border:`1px solid ${C.yel}44`,borderRadius:20}}
-          title={t.pensionAwaitingOtherParent || "En attente de confirmation par l'autre parent."}>
-          <span style={{fontSize:11,fontWeight:700,color:C.yel}}>⏳ {t.pensionStatusPending || "En attente"}</span>
+        <div>
+          <div style={{fontSize:12,color:C.txt,marginBottom:8}}>
+            {(t.pensionProposedBanner || "{name} propose une pension de {amount}{currency}/mois, versée le {day} de chaque mois, à partir du {date}.")
+              .replace("{name}", cfg.parents[proposedConfig.fromParent]?.name || "")
+              .replace("{amount}", proposedConfig.amount)
+              .replace("{currency}", currency)
+              .replace("{day}", proposedConfig.dayOfMonth)
+              .replace("{date}", proposedConfig.startDate)}
+          </div>
+          <div style={{width:"fit-content",display:"flex",alignItems:"center",gap:4,padding:"2px 8px",background:`${C.yel}15`,border:`1px solid ${C.yel}44`,borderRadius:20}}
+            title={t.pensionAwaitingOtherParent || "En attente de confirmation par l'autre parent."}>
+            <span style={{fontSize:11,fontWeight:700,color:C.yel}}>⏳ {t.pensionStatusPending || "En attente"}</span>
+          </div>
         </div>
       )}
 
