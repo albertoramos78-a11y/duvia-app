@@ -10,7 +10,7 @@
 -- upsert per family/local_id pair is a real INSERT (allowed), but every
 -- later page load for that same pair hits the ON CONFLICT DO UPDATE branch
 -- — which had no RLS policy at all, so Postgres silently refused it as a
--- 403. Root-caused 2026-07-24: reproduced via pg_policies showing zero
+-- 403. Root-caused 2026-07-23: reproduced via pg_policies showing zero
 -- UPDATE policy on id_links, confirmed against push_subscriptions' working
 -- INSERT/UPDATE/DELETE-all-"own"-row pattern (0027).
 --
