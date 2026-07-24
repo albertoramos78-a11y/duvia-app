@@ -13305,11 +13305,12 @@ function InlinePicker({ds,guard,onClose,onFull,dayInfo,readOnly=false}) {
           const active=guard?.parentIdx===pi&&!guard?.obsId;
           return (
           <button key={pi} onClick={()=>{updateCal(ds,{parentIdx:pi,obsId:undefined,timeType:"full",startTime:"",endTime:"",location:"",note:""});onClose();}}
-            style={{display:"flex",alignItems:"center",gap:6,padding:"5px 12px 5px 5px",background:active?p.color:`${p.color}22`,color:active?"#fff":p.color,border:`2px solid ${p.color}`,borderRadius:20,fontSize:13,fontWeight:700}}>
+            title={p.name||`P${pi+1}`}
+            style={{display:"flex",alignItems:"center",gap:6,padding:photo?"5px":"5px 12px 5px 5px",background:active?p.color:`${p.color}22`,color:active?"#fff":p.color,border:`2px solid ${p.color}`,borderRadius:20,fontSize:13,fontWeight:700}}>
             <span style={{width:22,height:22,borderRadius:"50%",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:active?"rgba(255,255,255,.3)":`${p.color}33`,fontSize:12}}>
               {photo ? <img src={photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} /> : (p.avatar||getInitials(p?.name)||"P")}
             </span>
-            {p.name||`P${pi+1}`}
+            {!photo && (p.name||`P${pi+1}`)}
           </button>
           );
         })}
@@ -13318,11 +13319,12 @@ function InlinePicker({ds,guard,onClose,onFull,dayInfo,readOnly=false}) {
           const active=guard?.obsId===o.id;
           return (
           <button key={o.id} onClick={()=>{updateCal(ds,{parentIdx:undefined,obsId:o.id,obsName:o.name,timeType:"full",startTime:"",endTime:"",location:"",note:""});onClose();}}
-            style={{display:"flex",alignItems:"center",gap:6,padding:"5px 12px 5px 5px",background:active?"#f59e0b":"#f59e0b18",color:active?"#fff":"#f59e0b",border:"2px solid #f59e0b",borderRadius:20,fontSize:13,fontWeight:700}}>
+            title={obsLabel(o)}
+            style={{display:"flex",alignItems:"center",gap:6,padding:photo?"5px":"5px 12px 5px 5px",background:active?"#f59e0b":"#f59e0b18",color:active?"#fff":"#f59e0b",border:"2px solid #f59e0b",borderRadius:20,fontSize:13,fontWeight:700}}>
             <span style={{width:22,height:22,borderRadius:"50%",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:active?"rgba(255,255,255,.3)":"#f59e0b33",fontSize:12}}>
               {photo ? <img src={photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} /> : (o.avatar||getInitials(o?.name)||"🏠")}
             </span>
-            {obsLabel(o)}
+            {!photo && obsLabel(o)}
           </button>
           );
         })}
