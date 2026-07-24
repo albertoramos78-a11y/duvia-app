@@ -2654,19 +2654,50 @@ function useFamilySync(cfg, setCfg) {
     }
   }
 
-  // Retire un membre ACTIF de la famille (inviteur → invité). Le serveur passe
-  // son adhésion à 'removed' ; le membre retiré repartira sur une famille
-  // vierge à sa prochaine connexion (détecté dans le boot ci-dessus).
+  // Retire un membre ACTIF de la famille (inviteur → invité). Pour un parent
+  // déjà actif, le serveur pose une DEMANDE (pending_removal_by) au lieu de
+  // retirer immédiatement — il doit confirmer lui-même (voir
+  // confirm_parent_removal/cancel_parent_removal). Pour un observateur/enfant/
+  // invitation pas encore acceptée, le retrait reste immédiat comme avant.
   async function removeFamilyMember(userId) {
     if (!userId || !familyIdRef.current) return { ok: false, error: "missing" };
     try {
-      const { error } = await supabase.rpc("remove_family_member", { p_family_id: familyIdRef.current, p_user_id: userId });
+      const { data: rpcData, error } = await supabase.rpc("remove_family_member", { p_family_id: familyIdRef.current, p_user_id: userId });
       if (error) throw error;
-      const { data } = await supabase.auth.getUser();
-      await refreshFamilies(data?.user?.id);
-      return { ok: true };
+      const { data: authData } = await supabase.auth.getUser();
+      await refreshFamilies(authData?.user?.id);
+      return { ok: true, pending: rpcData === true };
     } catch (e) {
       console.error("[Duvia][sync] removeFamilyMember error:", e);
+      return { ok: false, error: e.message || "error" };
+    }
+  }
+
+  // Le parent visé accepte sa propre demande de retrait.
+  async function confirmParentRemoval() {
+    if (!familyIdRef.current) return { ok: false, error: "missing" };
+    try {
+      const { error } = await supabase.rpc("confirm_parent_removal", { p_family_id: familyIdRef.current });
+      if (error) throw error;
+      return { ok: true };
+    } catch (e) {
+      console.error("[Duvia][sync] confirmParentRemoval error:", e);
+      return { ok: false, error: e.message || "error" };
+    }
+  }
+
+  // Annule/refuse une demande de retrait — appelable par le demandeur (annule
+  // sa propre demande) ou par le parent visé (la refuse).
+  async function cancelParentRemoval(userId) {
+    if (!userId || !familyIdRef.current) return { ok: false, error: "missing" };
+    try {
+      const { error } = await supabase.rpc("cancel_parent_removal", { p_family_id: familyIdRef.current, p_user_id: userId });
+      if (error) throw error;
+      const { data: authData } = await supabase.auth.getUser();
+      await refreshFamilies(authData?.user?.id);
+      return { ok: true };
+    } catch (e) {
+      console.error("[Duvia][sync] cancelParentRemoval error:", e);
       return { ok: false, error: e.message || "error" };
     }
   }
@@ -2770,7 +2801,7 @@ function useFamilySync(cfg, setCfg) {
     }
   }
 
-  return { syncStatus, familyId, families, joinFamily, linkAccount, signInExisting, switchFamily, createNewFamily, refreshFamilies, joinFamilyByToken, pendingMembers, refreshPendingMembers, validateMember, rejectMember, removeFamilyMember, leaveFamily, pendingApproval, removedObserver, removedUserIds };
+  return { syncStatus, familyId, families, joinFamily, linkAccount, signInExisting, switchFamily, createNewFamily, refreshFamilies, joinFamilyByToken, pendingMembers, refreshPendingMembers, validateMember, rejectMember, removeFamilyMember, confirmParentRemoval, cancelParentRemoval, leaveFamily, pendingApproval, removedObserver, removedUserIds };
 }
 
 const SETUP_ICONS = {
@@ -3802,7 +3833,15 @@ export default function App() {
     setRgpdOk(true);
   }
   // Affichage in-app des CGU/CGV (évite de dépendre d'une URL externe pas encore prête)
-  const [legalDocOpen, setLegalDocOpen] = useState(null); // null | "cgu" | "cgv"
+  const [legalDocOpen, setLegalDocOpen] = useState(null); // null | "cgu" | "cgv" | "privacy"
+  // Deep link public depuis le site vitrine (ex: app.duvia.fr/?legal=cgu) — ouvre la
+  // modale directement sur l'écran de connexion, sans nécessiter de compte.
+  useEffect(() => {
+    try {
+      const doc = new URLSearchParams(window.location.search).get("legal");
+      if (doc === "cgu" || doc === "cgv" || doc === "privacy") setLegalDocOpen(doc);
+    } catch {}
+  }, []);
   // FAQ statique (2026-07-22) : accessible à TOUS les rôles/paliers, contrairement
   // à l'assistant IA conversationnel réservé au palier Premium+IA — voir src/faq/faqContent.js.
   const [showFaq, setShowFaq] = useState(false);
@@ -9141,9 +9180,12 @@ function ConfigTab() {
       setCfg(c=>({...c, parents:c.parents.filter((_,j)=>j!==i)}));
       return;
     }
-    if(!(await confirmAsync((t.retirerInviteConfirm||"Retirer {name} de la famille ?\n\nIl repartira sur une famille personnelle vierge. Vous conservez la famille et son code.").replace("{name}",p.name||t.guestLabel||"l'invité")))) return;
+    if(!(await confirmAsync((t.retirerInviteConfirm||"Retirer {name} de la famille ?\n\n{name} devra confirmer son retrait de son côté. Vous conservez la famille et son code.").replace("{name}",p.name||t.guestLabel||"l'invité")))) return;
     const res = await familySync?.removeFamilyMember?.(p.userId);
-    if(res?.ok){
+    if(res?.ok && res.pending){
+      addHist(`${p.name||t.guestLabel||"L'invité"} : retrait demandé, en attente de confirmation`, "", "family");
+      setCfg(c=>({...c, parents:c.parents.map((pp,j)=>j===i?{...pp,pendingRemovalBy:myUid,pendingRemovalRequestedAt:new Date().toISOString()}:pp)}));
+    } else if(res?.ok){
       addHist(`${p.name||t.guestLabel||"L'invité"} a été retiré de la famille`, "", "family");
       setCfg(c=>({...c, parents:c.parents.filter((_,j)=>j!==i)}));
     } else {
@@ -9455,6 +9497,28 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
   },[user]);
   const markTouched = (key) => setTouched(v=>({...v,[key]:true}));
 
+  // Le parent visé confirme (accepte) sa propre demande de retrait.
+  async function confirmerMonRetrait(){
+    if(!(await confirmAsync("Confirmer votre retrait de cette famille ?\n\nVous repartirez sur une famille personnelle vierge."))) return;
+    const res = await familySync?.confirmParentRemoval?.();
+    if(res?.ok){ duviaReload(); }
+    else alert("⚠️ Impossible de confirmer le retrait.\n\nDétail : "+(res?.error||"inconnu"));
+  }
+
+  // Annule/refuse une demande de retrait — appelable par le demandeur (annule
+  // sa propre demande) ou par le parent visé (la refuse).
+  async function annulerRetrait(i){
+    const p = cfg.parents[i];
+    if(!p?.userId) return;
+    const res = await familySync?.cancelParentRemoval?.(p.userId);
+    if(res?.ok){
+      addHist(`Demande de retrait de ${p.name||"ce parent"} annulée`, "", "family");
+      setCfg(c=>({...c, parents:c.parents.map((pp,j)=>j===i?{...pp,pendingRemovalBy:null,pendingRemovalRequestedAt:null}:pp)}));
+    } else {
+      alert("⚠️ Impossible d'annuler la demande.\n\nDétail : "+(res?.error||"inconnu"));
+    }
+  }
+
   // Shared field styles for consistent height/alignment
   const IH = 44;
   const fieldBox = {display:"flex",flexDirection:"column",gap:0};
@@ -9654,13 +9718,27 @@ function StepId({setParent,setChild,addParent,reinvite,removeParent,addChild,rem
                   ⏳ Suppression en attente
                 </span>
               )}
+              {cfg.parents[i]?.pendingRemovalBy && (
+                <span style={{fontSize:9,fontWeight:900,background:`${C.red}22`,color:C.red,border:`1px solid ${C.red}44`,padding:"2px 7px",borderRadius:8}}>
+                  ⏳ Retrait en attente de confirmation
+                </span>
+              )}
             </div>
             {i===user?.parentIdx ? (
-              <button onClick={quitterFamille} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.leaveFamily}</button>
+              cfg.parents[i]?.pendingRemovalBy ? (
+                <div style={{display:"flex",gap:6}}>
+                  <button onClick={()=>annulerRetrait(i)} style={{padding:"3px 10px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,fontSize:12,borderRadius:6}}>Refuser</button>
+                  <button onClick={confirmerMonRetrait} style={{padding:"3px 10px",background:C.red,color:"#fff",border:"none",fontSize:12,borderRadius:6,fontWeight:700}}>Confirmer mon retrait</button>
+                </div>
+              ) : (
+                <button onClick={quitterFamille} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.leaveFamily}</button>
+              )
             ) : (user?.parentIdx===0 && i===1) ? (
-              sub?.subscriberParentIdx===i
-                ? <span style={{fontSize:11,color:C.mut,fontStyle:"italic"}}>🔒 Protégé</span>
-                : <button onClick={()=>retirerInvite(i)} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.obsRemoveGuest||"Retirer l'invité"}</button>
+              cfg.parents[i]?.pendingRemovalBy
+                ? <button onClick={()=>annulerRetrait(i)} style={{padding:"3px 10px",background:"transparent",color:C.mut,border:`1px solid ${C.bor}`,fontSize:12,borderRadius:6}}>Annuler la demande</button>
+                : sub?.subscriberParentIdx===i
+                  ? <span style={{fontSize:11,color:C.mut,fontStyle:"italic"}}>🔒 Protégé</span>
+                  : <button onClick={()=>retirerInvite(i)} style={{padding:"3px 10px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,fontSize:12,borderRadius:6}}>{t.obsRemoveGuest||"Retirer l'invité"}</button>
             ) : null}
           </div>
 
