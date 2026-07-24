@@ -13310,10 +13310,10 @@ function InlinePicker({ds,guard,onClose,onFull,dayInfo,readOnly=false}) {
             🏠 {obsLabel(o)}
           </button>
         ))}
-        <button onClick={()=>{updateCal(ds,{parentIdx:undefined,obsId:undefined});onClose();}} style={{padding:"5px 10px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:20,fontSize:12}}>✕</button>
+        <button onClick={()=>{updateCal(ds,{parentIdx:undefined,obsId:undefined});onClose();}} style={{padding:"5px 10px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:20,fontSize:12}}>{t.calResetDefault||"↺ Par défaut"}</button>
         {onFull
-          ? <button onClick={onFull} style={{padding:"5px 10px",background:"transparent",color:C.vio,border:`1.5px solid ${C.vio}`,borderRadius:20,fontSize:12,marginLeft:"auto"}}>{t.fullEdit}</button>
-          : <button disabled style={{padding:"5px 10px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:20,fontSize:12,marginLeft:"auto",opacity:.6,cursor:"not-allowed",display:"flex",alignItems:"center",gap:5}}>🔒 {t.fullEdit}</button>
+          ? <button onClick={onFull} title={t.fullEdit} style={{padding:"5px 10px",background:"transparent",color:C.vio,border:`1.5px solid ${C.vio}`,borderRadius:20,fontSize:14,marginLeft:"auto"}}>✎</button>
+          : <button disabled title={t.fullEdit} style={{padding:"5px 10px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:20,fontSize:14,marginLeft:"auto",opacity:.6,cursor:"not-allowed"}}>🔒</button>
         }
       </div>
       )}
@@ -13368,7 +13368,7 @@ function EditDay({ds,onClose,editRef}) {
       {(tt==="start"||tt==="split")&&<div className="field"><label className="lbl">{t.pickupTime}</label><input type="time" value={st} onChange={e=>setSt(e.target.value)} /></div>}
       {(tt==="end"||tt==="split")&&<div className="field"><label className="lbl">{t.dropoffTime}</label><input type="time" value={et} onChange={e=>setEt(e.target.value)} /></div>}
       {tt!=="full"&&<div className="field"><label className="lbl">{t.place}</label><input value={loc} onChange={e=>setLoc(e.target.value)} /></div>}
-      <div className="field"><label className="lbl">{t.note}</label><input value={note} onChange={e=>setNote(e.target.value)} /></div>
+      <div className="field"><label className="lbl">{t.note}</label><input value={note} onChange={e=>setNote(e.target.value)} style={{background:"#fff",color:"#000"}} /></div>
       <button onClick={save} style={{width:"100%",padding:"10px",background:C.vio,color:"#fff"}}>{t.saveDay}</button>
     </div>
   );
@@ -14495,16 +14495,15 @@ function ExpTab() {
   const reimbursements=ctxReimbursements||[];
   // Backward compat: expenses without status are treated as confirmed
   const confirmedExpenses=expenses.filter(e=>!e.status||e.status==="confirmed");
-  // 🔧 Pension alimentaire : comptée dans la répartition globale dès qu'elle
-  // est due, PAS seulement une fois confirmée par le receveur — c'est une
-  // obligation automatique du payeur, pas une dépense discutable comme les
-  // autres (voir direction produit 2026-07-24). 100% à charge du payeur :
-  // modélisée comme une dépense fictive "payée par le receveur" (symétrie du
-  // solde) avec une part à 100% pour le payeur, en réutilisant le même calcul
-  // totals/owed que les vraies dépenses — aucune formule à dupliquer. Exclut
-  // les versements contestés (litige non résolu, ne doit pas compter tant que
-  // pas tranché) ; inclut pending/marked_paid/confirmed.
-  const pensionAsExpenses=(pensionPayments||[]).filter(p=>p.status!=="contested").map(p=>{
+  // 🔧 Pension alimentaire : compte dans la répartition globale tant qu'elle
+  // n'est PAS confirmée par le receveur — obligation automatique du payeur,
+  // 100% à sa charge (voir direction produit 2026-07-24). Une fois le receveur
+  // confirmé la réception réelle, le versement sort du calcul (soldé, comme si
+  // ça n'avait jamais compté) — la validation agit vraiment sur les comptes,
+  // pas juste sur un badge. Modélisée comme une dépense fictive "payée par le
+  // receveur" (symétrie du solde) avec une part à 100% pour le payeur, en
+  // réutilisant le même calcul totals/owed que les vraies dépenses.
+  const pensionAsExpenses=(pensionPayments||[]).filter(p=>p.status==="pending"||p.status==="marked_paid").map(p=>{
     const pc=(pensionConfigs||[]).find(c=>c.id===p.configId);
     if(!pc) return null;
     return {paidBy:pc.toParent, amount:p.amount, split:pc.fromParent===1?100:0};
@@ -14647,11 +14646,12 @@ function ExpTab() {
       const rejectedExp=filteredExpenses.filter(e=>e.status==="rejected");
       const confirmedReims=filteredReims.filter(r=>r.status==="confirmed");
       const totalReims=confirmedReims.reduce((s,r)=>s+r.amount,0);
-      // 🔧 Même logique que le solde live (ExpTab) : la pension due compte dans
-      // le solde du PDF aussi, 100% payeur, dès qu'elle existe (pas seulement
-      // confirmée) — cohérence du chiffre légal avec l'écran. Non listée ligne
-      // par ligne dans le tableau détaillé pour l'instant, juste dans le solde.
-      const pensionForPdf=(pensionPayments||[]).filter(p=>p.status!=="contested"&&(!from||p.dueDate>=from)&&(!to||p.dueDate<=to)).map(p=>{
+      // 🔧 Même logique que le solde live (ExpTab) : la pension compte dans le
+      // solde du PDF tant qu'elle n'est pas confirmée par le receveur, puis en
+      // sort une fois soldée — cohérence du chiffre légal avec l'écran. Non
+      // listée ligne par ligne dans le tableau détaillé pour l'instant, juste
+      // dans le solde.
+      const pensionForPdf=(pensionPayments||[]).filter(p=>(p.status==="pending"||p.status==="marked_paid")&&(!from||p.dueDate>=from)&&(!to||p.dueDate<=to)).map(p=>{
         const pc=(pensionConfigs||[]).find(c=>c.id===p.configId);
         if(!pc) return null;
         return {paidBy:pc.toParent, amount:p.amount, split:pc.fromParent===1?100:0};
