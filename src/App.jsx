@@ -13300,18 +13300,32 @@ function InlinePicker({ds,guard,onClose,onFull,dayInfo,readOnly=false}) {
         </div>
       ) : (
       <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
-        {cfg.parents.map((p,pi)=>(
+        {cfg.parents.map((p,pi)=>{
+          const photo=(typeof p?.avatar==="string" && p.avatar.startsWith("http")) ? p.avatar : null;
+          const active=guard?.parentIdx===pi&&!guard?.obsId;
+          return (
           <button key={pi} onClick={()=>{updateCal(ds,{parentIdx:pi,obsId:undefined,timeType:"full",startTime:"",endTime:"",location:"",note:""});onClose();}}
-            style={{padding:"5px 12px",background:guard?.parentIdx===pi&&!guard?.obsId?p.color:`${p.color}22`,color:guard?.parentIdx===pi&&!guard?.obsId?"#fff":p.color,border:`2px solid ${p.color}`,borderRadius:20,fontSize:13,fontWeight:700}}>
+            style={{display:"flex",alignItems:"center",gap:6,padding:"5px 12px 5px 5px",background:active?p.color:`${p.color}22`,color:active?"#fff":p.color,border:`2px solid ${p.color}`,borderRadius:20,fontSize:13,fontWeight:700}}>
+            <span style={{width:22,height:22,borderRadius:"50%",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:active?"rgba(255,255,255,.3)":`${p.color}33`,fontSize:12}}>
+              {photo ? <img src={photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} /> : (p.avatar||getInitials(p?.name)||"P")}
+            </span>
             {p.name||`P${pi+1}`}
           </button>
-        ))}
-        {guardianObs.map(o=>(
+          );
+        })}
+        {guardianObs.map(o=>{
+          const photo=(typeof o?.avatar==="string" && o.avatar.startsWith("http")) ? o.avatar : null;
+          const active=guard?.obsId===o.id;
+          return (
           <button key={o.id} onClick={()=>{updateCal(ds,{parentIdx:undefined,obsId:o.id,obsName:o.name,timeType:"full",startTime:"",endTime:"",location:"",note:""});onClose();}}
-            style={{padding:"5px 12px",background:guard?.obsId===o.id?"#f59e0b":"#f59e0b18",color:guard?.obsId===o.id?"#fff":"#f59e0b",border:"2px solid #f59e0b",borderRadius:20,fontSize:13,fontWeight:700}}>
-            🏠 {obsLabel(o)}
+            style={{display:"flex",alignItems:"center",gap:6,padding:"5px 12px 5px 5px",background:active?"#f59e0b":"#f59e0b18",color:active?"#fff":"#f59e0b",border:"2px solid #f59e0b",borderRadius:20,fontSize:13,fontWeight:700}}>
+            <span style={{width:22,height:22,borderRadius:"50%",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:active?"rgba(255,255,255,.3)":"#f59e0b33",fontSize:12}}>
+              {photo ? <img src={photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} /> : (o.avatar||getInitials(o?.name)||"🏠")}
+            </span>
+            {obsLabel(o)}
           </button>
-        ))}
+          );
+        })}
         <button onClick={()=>{updateCal(ds,{parentIdx:undefined,obsId:undefined});onClose();}} style={{padding:"5px 10px",background:"transparent",color:C.mut,border:`1.5px solid ${C.bor}`,borderRadius:20,fontSize:12}}>{t.calResetDefault||"↺ Par défaut"}</button>
         {onFull
           ? <button onClick={onFull} title={t.fullEdit} style={{padding:"5px 10px",background:"transparent",color:C.vio,border:`1.5px solid ${C.vio}`,borderRadius:20,fontSize:14,marginLeft:"auto"}}>✎</button>
