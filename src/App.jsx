@@ -15707,7 +15707,7 @@ window.addEventListener('message',function(e){
                   )}
                   {!item.pendingDelete && (pSt==="pending"||pSt==="marked_paid") && iAmRecipient && (
                     <button onClick={()=>pensionMethods.confirmPensionPayment(item.id)} style={{marginTop:10,padding:"10px",background:C.grn,color:"#fff",border:"none",borderRadius:10,fontWeight:800,fontSize:13,cursor:"pointer"}}>
-                      ✅ {t.pensionConfirmBtn||"Confirmer la réception"}
+                      ✅ {t.pensionConfirmReceiptBtn||"J'ai bien reçu le versement"}
                     </button>
                   )}
                   {item.pendingDelete && item.deleteRequestedBy!==myUid && (iAmPayer||iAmRecipient) && (
