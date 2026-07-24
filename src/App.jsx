@@ -14054,6 +14054,11 @@ function ExpTab() {
   const [showAdd,setShowAdd]=useState(false);
   const [editId,setEditId]=useState(null);
   const [catF,setCatF]=useState("all");
+  // 🔧 Filtre mois/année — la liste grossit vite avec les dépenses récurrentes
+  // + pension mensuelle, "all" reste la vue par défaut mais devient vite
+  // ingérable sans pouvoir zoomer sur un mois précis.
+  const [monthF,setMonthF]=useState("all");
+  const [showScheduled,setShowScheduled]=useState(false);
   const [viewer,setViewer]=useState(null);
   const [viewerUrl,setViewerUrl]=useState(null);
   const [detailExp,setDetailExp]=useState(null);
@@ -14625,11 +14630,32 @@ function ExpTab() {
       fromParent:pc?.fromParent, toParent:pc?.toParent, fromUserId:pc?.fromUserId, toUserId:pc?.toUserId};
   });
   // Unified list: expenses + reimbursements + pension sorted by date desc
-  const allItems=[
+  const allItemsUnfilteredByMonth=[
     ...filtered.map(e=>({...e,_type:"expense"})),
     ...(catF==="all"?reimbursements.map(r=>({...r,_type:"reim"})):[]),
     ...pensionItems,
   ].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+  // Mois disponibles (YYYY-MM), triés du plus récent au plus ancien, calculés
+  // sur la liste avant filtre mois (mais après filtre catégorie) pour que le
+  // sélecteur ne propose que des mois pertinents pour la catégorie choisie.
+  const availableMonths=[...new Set(allItemsUnfilteredByMonth.map(it=>(it.date||"").slice(0,7)).filter(Boolean))].sort((a,b)=>b.localeCompare(a));
+  const allItems=monthF==="all"?allItemsUnfilteredByMonth:allItemsUnfilteredByMonth.filter(it=>(it.date||"").slice(0,7)===monthF);
+
+  // 🔧 "Dépenses programmées" : une ligne par SÉRIE récurrente (pas par
+  // occurrence) pour éditer/supprimer toute la série d'un coup, sans avoir à
+  // retrouver puis cliquer une occurrence précise dans une liste qui peut
+  // être très longue. Réutilise openEditForm/doDelete existants, scope
+  // "series" direct (pas de choix single/series : on est déjà dans le
+  // contexte "gérer la série").
+  const recurringGroups=Object.values((ctxExpenses||[]).filter(e=>e.recurringId).reduce((acc,e)=>{
+    (acc[e.recurringId]=acc[e.recurringId]||[]).push(e);
+    return acc;
+  },{})).map(items=>{
+    const first=items.reduce((a,b)=>a.date<=b.date?a:b,items[0]);
+    const last=items.reduce((a,b)=>a.date>=b.date?a:b,items[0]);
+    return {...first, _seriesFirst:first.date, _seriesLast:last.date, _seriesCount:items.length};
+  }).sort((a,b)=>b._seriesFirst.localeCompare(a._seriesFirst));
+  const freqLabel={weekly:t.freqWeekly||"Toutes les semaines",monthly:t.freqMonthly||"Tous les mois",yearly:t.freqYearly||"Tous les ans"};
 
   // ── PDF Export ───────────────────────────────────────────────────────────
   async function generateLegalPDF(){
@@ -15571,6 +15597,48 @@ window.addEventListener('message',function(e){
           ))}
         </div>
       );})()}
+
+      {/* ── Filtre mois/année — la liste s'allonge vite (récurrentes + pension) ── */}
+      {availableMonths.length>1 && (
+        <div style={{marginBottom:12}}>
+          <select value={monthF} onChange={e=>setMonthF(e.target.value)} style={{height:34,borderRadius:8,border:`1px solid ${C.bor}`,padding:"0 10px",fontSize:12,fontWeight:700,color:C.txt,background:C.card}}>
+            <option value="all">{t.expAllMonths||"Tous les mois"}</option>
+            {availableMonths.map(m=>(
+              <option key={m} value={m}>{new Date(m+"-01T12:00:00").toLocaleDateString(undefined,{month:"long",year:"numeric"})}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* ── Dépenses programmées (récurrentes) — une ligne par série, pour
+      éditer/supprimer toute la série sans chercher une occurrence dans une
+      liste qui peut être très longue. ── */}
+      {recurringGroups.length>0 && (
+        <div className="card" style={{marginBottom:14,padding:"10px 14px"}}>
+          <div onClick={()=>setShowScheduled(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}>
+            <div style={{fontSize:13,fontWeight:900,color:C.vio}}>🔄 {t.expScheduledTitle||"Dépenses programmées"} ({recurringGroups.length})</div>
+            <span style={{fontSize:12,color:C.mut}}>{showScheduled?"▲":"▼"}</span>
+          </div>
+          {showScheduled && (
+            <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:8}}>
+              {recurringGroups.map(g=>(
+                <div key={g.recurringId} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:C.sur,borderRadius:10}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:13,fontWeight:700,color:C.txt}}>{g.label} — {Number(g.amount).toFixed(2)} {currency}</div>
+                    <div style={{fontSize:11,color:C.mut,marginTop:2}}>
+                      {freqLabel[g.recurringFreq]||g.recurringFreq} · {(g._seriesFirst||"").split("-").reverse().join("/")} → {(g._seriesLast||"").split("-").reverse().join("/")} · {g._seriesCount} {t.expScheduledOccurrences||"occurrences"}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:5,flexShrink:0}}>
+                    <button onClick={()=>openEditForm(g,"series")} title={t.expScheduledEdit||"Modifier la série"} style={{padding:"5px 9px",background:C.card,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:12}}>✎</button>
+                    <button onClick={()=>doDelete(g.id,"series")} title={t.expScheduledDelete||"Supprimer la série"} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12}}>✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Expense list ── */}
       {/* 🔧 Impeccable critique P2 : distingue "encore en train de charger" de
