@@ -15686,6 +15686,19 @@ window.addEventListener('message',function(e){
                         )}
                       </div>
                     </div>
+                    {/* 🔧 Même emplacement que pour les dépenses/remboursements : les
+                    boutons de (dé)suppression vivent dans la ligne d'en-tête, pas en
+                    dessous — ✕ pour demander, ⏳ pour annuler sa propre demande. */}
+                    {!item.pendingDelete && (iAmPayer||iAmRecipient) && (
+                      <button onClick={()=>pensionMethods.requestDeletePensionPayment(item.id)} title={t.pensionRequestDeleteBtn||"Demander la suppression de cette ligne"} style={{padding:"5px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12,flexShrink:0}}>
+                        ✕
+                      </button>
+                    )}
+                    {item.pendingDelete && item.deleteRequestedBy===myUid && (
+                      <button onClick={()=>pensionMethods.cancelDeletePensionPayment(item.id)} title={t.pensionCancelDeleteBtn||"Annuler la demande de suppression"} style={{padding:"5px 9px",background:"transparent",color:C.yel,border:`1px solid ${C.yel}`,borderRadius:8,fontSize:12,flexShrink:0}}>
+                        ⏳
+                      </button>
+                    )}
                   </div>
                   {!item.pendingDelete && pSt==="pending" && iAmPayer && (
                     <button onClick={()=>pensionMethods.markPensionPaymentPaid(item.id)} style={{marginTop:10,padding:"7px 14px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
@@ -15695,19 +15708,6 @@ window.addEventListener('message',function(e){
                   {!item.pendingDelete && (pSt==="pending"||pSt==="marked_paid") && iAmRecipient && (
                     <button onClick={()=>pensionMethods.confirmPensionPayment(item.id)} style={{marginTop:10,padding:"10px",background:C.grn,color:"#fff",border:"none",borderRadius:10,fontWeight:800,fontSize:13,cursor:"pointer"}}>
                       ✅ {t.pensionConfirmBtn||"Confirmer la réception"}
-                    </button>
-                  )}
-                  {/* 🔧 Demande de suppression de la ligne (correction d'erreur) — même
-                  principe que la suppression de dépense/remboursement confirmé : l'une
-                  ou l'autre partie peut demander, l'AUTRE doit confirmer. */}
-                  {!item.pendingDelete && (iAmPayer||iAmRecipient) && (
-                    <button onClick={()=>pensionMethods.requestDeletePensionPayment(item.id)} title={t.pensionRequestDeleteBtn||"Demander la suppression de cette ligne"} style={{marginTop:10,marginLeft:8,padding:"7px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12,cursor:"pointer"}}>
-                      ✕
-                    </button>
-                  )}
-                  {item.pendingDelete && item.deleteRequestedBy===myUid && (
-                    <button onClick={()=>pensionMethods.cancelDeletePensionPayment(item.id)} title={t.pensionCancelDeleteBtn||"Annuler la demande de suppression"} style={{marginTop:10,padding:"7px 14px",background:"transparent",color:C.yel,border:`1px solid ${C.yel}`,borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
-                      ⏳ {t.pensionCancelDeleteBtn||"Annuler la demande"}
                     </button>
                   )}
                   {item.pendingDelete && item.deleteRequestedBy!==myUid && (iAmPayer||iAmRecipient) && (
