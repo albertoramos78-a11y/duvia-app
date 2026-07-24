@@ -14495,12 +14495,27 @@ function ExpTab() {
   const reimbursements=ctxReimbursements||[];
   // Backward compat: expenses without status are treated as confirmed
   const confirmedExpenses=expenses.filter(e=>!e.status||e.status==="confirmed");
-  const total=confirmedExpenses.reduce((s,e)=>s+e.amount,0);
-  const totals=cfg.parents.map((_,i)=>confirmedExpenses.filter(e=>e.paidBy===i).reduce((s,e)=>s+e.amount,0));
+  // 🔧 Pension alimentaire : comptée dans la répartition globale dès qu'elle
+  // est due, PAS seulement une fois confirmée par le receveur — c'est une
+  // obligation automatique du payeur, pas une dépense discutable comme les
+  // autres (voir direction produit 2026-07-24). 100% à charge du payeur :
+  // modélisée comme une dépense fictive "payée par le receveur" (symétrie du
+  // solde) avec une part à 100% pour le payeur, en réutilisant le même calcul
+  // totals/owed que les vraies dépenses — aucune formule à dupliquer. Exclut
+  // les versements contestés (litige non résolu, ne doit pas compter tant que
+  // pas tranché) ; inclut pending/marked_paid/confirmed.
+  const pensionAsExpenses=(pensionPayments||[]).filter(p=>p.status!=="contested").map(p=>{
+    const pc=(pensionConfigs||[]).find(c=>c.id===p.configId);
+    if(!pc) return null;
+    return {paidBy:pc.toParent, amount:p.amount, split:pc.fromParent===1?100:0};
+  }).filter(Boolean);
+  const totalledExpenses=[...confirmedExpenses, ...pensionAsExpenses];
+  const total=totalledExpenses.reduce((s,e)=>s+e.amount,0);
+  const totals=cfg.parents.map((_,i)=>totalledExpenses.filter(e=>e.paidBy===i).reduce((s,e)=>s+e.amount,0));
   // 🔧 split = TOUJOURS la part de cfg.parents[1] (position fixe), quel que
   // soit le payeur (voir commentaire du formulaire ligne ~12078). La quote-part
   // de chacun ne dépend donc que de sa position, jamais de qui a payé.
-  const owed=cfg.parents.map((_,i)=>confirmedExpenses.reduce((s,e)=>{
+  const owed=cfg.parents.map((_,i)=>totalledExpenses.reduce((s,e)=>{
     const sp=e.split??50;
     return s+e.amount*(i===1?sp:(100-sp))/100;
   },0));
@@ -14594,13 +14609,15 @@ function ExpTab() {
     if(e){ const sA=e.split??50; const sB=100-sA; pushNotif(`${t.expRejectedNotif||"❌ Dépense refusée"} : ${e.label}`,"exp"); addHist(t.expRejectedNotif||"Dépense refusée",`${e.label} — ${Number(e.amount).toFixed(2)} ${currency} · ${sA}/${sB}`,"exp"); }
   }
 
-  const filtered=catF==="all"?expenses:expenses.filter(e=>e.category===catF);
+  const filtered=catF==="__pension"?[]:catF==="all"?expenses:expenses.filter(e=>e.category===catF);
   // 🔧 Pension alimentaire fondue visuellement dans la liste (100% à charge du
   // parent payeur, comme une dépense) — SANS dupliquer les données : toujours
   // pension_payments/pension_configs en interne (usePension), juste reformaté
   // ici pour l'affichage. Voir PensionSection pour le suivi complet (dont la
   // contestation, volontairement pas dupliquée dans cette vue condensée).
-  const pensionItems=(catF==="all"?(pensionPayments||[]):[]).map(p=>{
+  // "__pension" est une pseudo-catégorie (pas une vraie cfg.parents category)
+  // pour permettre de filtrer sur uniquement la pension.
+  const pensionItems=(catF==="all"||catF==="__pension"?(pensionPayments||[]):[]).map(p=>{
     const pc=(pensionConfigs||[]).find(c=>c.id===p.configId);
     return {_type:"pension", id:p.id, amount:p.amount, date:p.dueDate, status:p.status,
       fromParent:pc?.fromParent, toParent:pc?.toParent, fromUserId:pc?.fromUserId, toUserId:pc?.toUserId};
@@ -14630,8 +14647,18 @@ function ExpTab() {
       const rejectedExp=filteredExpenses.filter(e=>e.status==="rejected");
       const confirmedReims=filteredReims.filter(r=>r.status==="confirmed");
       const totalReims=confirmedReims.reduce((s,r)=>s+r.amount,0);
-      const totalsPerParent=cfg.parents.map((_,i)=>confirmedExp.filter(e=>e.paidBy===i).reduce((s,e)=>s+e.amount,0));
-      const owedPerParent=cfg.parents.map((_,i)=>confirmedExp.reduce((s,e)=>{const sp=e.split??50;return s+e.amount*(i===1?sp:(100-sp))/100;},0));
+      // 🔧 Même logique que le solde live (ExpTab) : la pension due compte dans
+      // le solde du PDF aussi, 100% payeur, dès qu'elle existe (pas seulement
+      // confirmée) — cohérence du chiffre légal avec l'écran. Non listée ligne
+      // par ligne dans le tableau détaillé pour l'instant, juste dans le solde.
+      const pensionForPdf=(pensionPayments||[]).filter(p=>p.status!=="contested"&&(!from||p.dueDate>=from)&&(!to||p.dueDate<=to)).map(p=>{
+        const pc=(pensionConfigs||[]).find(c=>c.id===p.configId);
+        if(!pc) return null;
+        return {paidBy:pc.toParent, amount:p.amount, split:pc.fromParent===1?100:0};
+      }).filter(Boolean);
+      const confirmedExpWithPension=[...confirmedExp, ...pensionForPdf];
+      const totalsPerParent=cfg.parents.map((_,i)=>confirmedExpWithPension.filter(e=>e.paidBy===i).reduce((s,e)=>s+e.amount,0));
+      const owedPerParent=cfg.parents.map((_,i)=>confirmedExpWithPension.reduce((s,e)=>{const sp=e.split??50;return s+e.amount*(i===1?sp:(100-sp))/100;},0));
       const reimSent2=cfg.parents.map((_,i)=>confirmedReims.filter(r=>r.from===i).reduce((s,r)=>s+r.amount,0));
       const reimReceived2=cfg.parents.map((_,i)=>confirmedReims.filter(r=>r.to===i).reduce((s,r)=>s+r.amount,0));
       const balances=cfg.parents.map((_,i)=>(totalsPerParent[i]||0)-(owedPerParent[i]||0)+(reimSent2[i]||0)-(reimReceived2[i]||0));
@@ -15531,7 +15558,8 @@ window.addEventListener('message',function(e){
 
       {/* ── Category filter — seulement les catégories avec des dépenses ── */}
       {(()=>{ const activeCats=new Set((ctxExpenses||[]).map(e=>e.category).filter(Boolean));
-        const visibleCats=[{k:"all",l:t.all||"Tous"},...(t.cats||[]).filter(c=>activeCats.has(c)).map(c=>({k:c,l:c}))];
+        const visibleCats=[{k:"all",l:t.all||"Tous"},...(t.cats||[]).filter(c=>activeCats.has(c)).map(c=>({k:c,l:c})),
+          ...((pensionPayments||[]).length>0?[{k:"__pension",l:t.pensionTabTitle||"Pension alimentaire"}]:[])];
         if(visibleCats.length<=1) return null;
         return(
         <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
@@ -15582,11 +15610,11 @@ window.addEventListener('message',function(e){
                     </div>
                   </div>
                   {pSt==="pending" && iAmPayer && (
-                    <button onClick={()=>pensionMethods.markPensionPaymentPaid(item.id)} style={{marginTop:10,padding:"7px 14px",background:C.vio,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                    <button onClick={()=>pensionMethods.markPensionPaymentPaid(item.id)} style={{marginTop:10,padding:"7px 14px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
                       {t.pensionMarkPaidBtn||"Marquer payé"}
                     </button>
                   )}
-                  {pSt==="marked_paid" && iAmRecipient && (
+                  {(pSt==="pending"||pSt==="marked_paid") && iAmRecipient && (
                     <button onClick={()=>pensionMethods.confirmPensionPayment(item.id)} style={{marginTop:10,padding:"10px",background:C.grn,color:"#fff",border:"none",borderRadius:10,fontWeight:800,fontSize:13,cursor:"pointer"}}>
                       ✅ {t.pensionConfirmBtn||"Confirmer la réception"}
                     </button>
