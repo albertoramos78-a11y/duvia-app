@@ -16,6 +16,9 @@ import {
   markPensionPaymentPaid as markPensionPaymentPaidApi,
   confirmPensionPayment as confirmPensionPaymentApi,
   contestPensionPayment as contestPensionPaymentApi,
+  requestDeletePensionPayment as requestDeletePensionPaymentApi,
+  confirmDeletePensionPayment as confirmDeletePensionPaymentApi,
+  cancelDeletePensionPayment as cancelDeletePensionPaymentApi,
 } from "../services/supabase/pensionService";
 
 /**
@@ -179,6 +182,21 @@ export function usePension(familyId: string | null) {
     }
   }, [refresh]);
 
+  const requestDeletePensionPayment = useCallback(async (paymentId: string) => {
+    const updated = await requestDeletePensionPaymentApi(paymentId);
+    setPayments((prev) => prev.map((p) => (p.id === paymentId ? updated : p)));
+  }, []);
+
+  const confirmDeletePensionPayment = useCallback(async (paymentId: string) => {
+    await confirmDeletePensionPaymentApi(paymentId);
+    setPayments((prev) => prev.filter((p) => p.id !== paymentId));
+  }, []);
+
+  const cancelDeletePensionPayment = useCallback(async (paymentId: string) => {
+    const updated = await cancelDeletePensionPaymentApi(paymentId);
+    setPayments((prev) => prev.map((p) => (p.id === paymentId ? updated : p)));
+  }, []);
+
   return {
     pensionConfigs: configs,
     pensionPayments: payments,
@@ -193,5 +211,8 @@ export function usePension(familyId: string | null) {
     markPensionPaymentPaid,
     confirmPensionPayment,
     contestPensionPayment,
+    requestDeletePensionPayment,
+    confirmDeletePensionPayment,
+    cancelDeletePensionPayment,
   };
 }

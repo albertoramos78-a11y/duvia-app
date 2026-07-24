@@ -3380,6 +3380,7 @@ export default function App() {
     proposePensionConfig, confirmPensionConfig, cancelPensionConfig,
     requestEndPensionConfig, confirmEndPensionConfig, cancelEndPensionConfig,
     markPensionPaymentPaid, confirmPensionPayment, contestPensionPayment,
+    requestDeletePensionPayment, confirmDeletePensionPayment, cancelDeletePensionPayment,
   } = usePension(familySync.familyId);
   const { history: historyData, addHistEntry } = useHistory(familySync.familyId);
   // Vérification admin côté serveur — résiste à la manipulation du localStorage
@@ -5150,6 +5151,7 @@ export default function App() {
       proposePensionConfig, confirmPensionConfig, cancelPensionConfig,
       requestEndPensionConfig, confirmEndPensionConfig, cancelEndPensionConfig,
       markPensionPaymentPaid, confirmPensionPayment, contestPensionPayment,
+      requestDeletePensionPayment, confirmDeletePensionPayment, cancelDeletePensionPayment,
     },
     history: historyData,
     expMethods: {
@@ -14619,6 +14621,7 @@ function ExpTab() {
   const pensionItems=(catF==="all"||catF==="__pension"?(pensionPayments||[]):[]).map(p=>{
     const pc=(pensionConfigs||[]).find(c=>c.id===p.configId);
     return {_type:"pension", id:p.id, amount:p.amount, date:p.dueDate, status:p.status,
+      pendingDelete:p.pendingDelete, deleteRequestedBy:p.deleteRequestedBy,
       fromParent:pc?.fromParent, toParent:pc?.toParent, fromUserId:pc?.fromUserId, toUserId:pc?.toUserId};
   });
   // Unified list: expenses + reimbursements + pension sorted by date desc
@@ -15604,20 +15607,55 @@ window.addEventListener('message',function(e){
                         <span style={{color:toP?.color||C.txt}}>{toLabel}</span>
                       </div>
                       <div style={{fontSize:11,color:C.mut,marginTop:2}}>{(item.date||"").split("-").reverse().join("/")} · {t.pensionTabTitle||"Pension alimentaire"}</div>
-                      <div style={{marginTop:5,display:"inline-flex",alignItems:"center",gap:4,padding:"2px 8px",background:`${pStatusColor}15`,border:`1px solid ${pStatusColor}44`,borderRadius:20}}>
-                        <span style={{fontSize:11,fontWeight:700,color:pStatusColor}}>{pStatusLabel}</span>
+                      <div style={{marginTop:5,display:"flex",gap:6,flexWrap:"wrap"}}>
+                        <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"2px 8px",background:`${pStatusColor}15`,border:`1px solid ${pStatusColor}44`,borderRadius:20}}>
+                          <span style={{fontSize:11,fontWeight:700,color:pStatusColor}}>{pStatusLabel}</span>
+                        </span>
+                        {item.pendingDelete && (
+                          <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"2px 8px",background:`${C.red}15`,border:`1px solid ${C.red}44`,borderRadius:20}}>
+                            <span style={{fontSize:11,fontWeight:700,color:C.red}}>🗑️ {t.pensionDeletePendingLabel||"Suppression demandée"}</span>
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
-                  {pSt==="pending" && iAmPayer && (
+                  {!item.pendingDelete && pSt==="pending" && iAmPayer && (
                     <button onClick={()=>pensionMethods.markPensionPaymentPaid(item.id)} style={{marginTop:10,padding:"7px 14px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
                       {t.pensionMarkPaidBtn||"Marquer payé"}
                     </button>
                   )}
-                  {(pSt==="pending"||pSt==="marked_paid") && iAmRecipient && (
+                  {!item.pendingDelete && (pSt==="pending"||pSt==="marked_paid") && iAmRecipient && (
                     <button onClick={()=>pensionMethods.confirmPensionPayment(item.id)} style={{marginTop:10,padding:"10px",background:C.grn,color:"#fff",border:"none",borderRadius:10,fontWeight:800,fontSize:13,cursor:"pointer"}}>
                       ✅ {t.pensionConfirmBtn||"Confirmer la réception"}
                     </button>
+                  )}
+                  {/* 🔧 Demande de suppression de la ligne (correction d'erreur) — même
+                  principe que la suppression de dépense/remboursement confirmé : l'une
+                  ou l'autre partie peut demander, l'AUTRE doit confirmer. */}
+                  {!item.pendingDelete && (iAmPayer||iAmRecipient) && (
+                    <button onClick={()=>pensionMethods.requestDeletePensionPayment(item.id)} title={t.pensionRequestDeleteBtn||"Demander la suppression de cette ligne"} style={{marginTop:10,marginLeft:8,padding:"7px 9px",background:"transparent",color:C.red,border:`1px solid ${C.red}`,borderRadius:8,fontSize:12,cursor:"pointer"}}>
+                      ✕
+                    </button>
+                  )}
+                  {item.pendingDelete && item.deleteRequestedBy===myUid && (
+                    <button onClick={()=>pensionMethods.cancelDeletePensionPayment(item.id)} title={t.pensionCancelDeleteBtn||"Annuler la demande de suppression"} style={{marginTop:10,padding:"7px 14px",background:"transparent",color:C.yel,border:`1px solid ${C.yel}`,borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                      ⏳ {t.pensionCancelDeleteBtn||"Annuler la demande"}
+                    </button>
+                  )}
+                  {item.pendingDelete && item.deleteRequestedBy!==myUid && (iAmPayer||iAmRecipient) && (
+                    <div style={{marginTop:10,padding:"10px 12px",background:`${C.red}0d`,border:`1px solid ${C.red}44`,borderRadius:10}}>
+                      <div style={{fontSize:12,color:C.txt,marginBottom:8}}>
+                        🗑️ {t.pensionDeleteRequestedNotice||"L'autre parent souhaite supprimer cette ligne de pension."}
+                      </div>
+                      <div style={{display:"flex",gap:8}}>
+                        <button onClick={()=>pensionMethods.confirmDeletePensionPayment(item.id)} style={{flex:1,height:36,background:C.red,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                          {t.pensionConfirmDeleteBtn||"Confirmer la suppression"}
+                        </button>
+                        <button onClick={()=>pensionMethods.cancelDeletePensionPayment(item.id)} style={{flex:1,height:36,background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                          {t.pensionRefuseBtn||"Refuser"}
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
               );

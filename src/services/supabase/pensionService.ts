@@ -34,6 +34,8 @@ export interface PensionPayment {
   confirmedAt: string | null;
   note: string;
   createdAt: string;
+  pendingDelete: boolean;
+  deleteRequestedBy: string | null;
 }
 
 export function dbToPensionConfig(row: Record<string, any>): PensionConfig {
@@ -73,6 +75,8 @@ export function dbToPensionPayment(row: Record<string, any>): PensionPayment {
     confirmedAt: row.confirmed_at ?? null,
     note: row.note ?? "",
     createdAt: row.created_at,
+    pendingDelete: row.pending_delete ?? false,
+    deleteRequestedBy: row.delete_requested_by ?? null,
   };
 }
 
@@ -166,6 +170,26 @@ export async function confirmPensionPayment(paymentId: string): Promise<PensionP
 
 export async function contestPensionPayment(paymentId: string, note: string): Promise<PensionPayment> {
   const { data, error } = await supabase.rpc("contest_pension_payment", { p_payment_id: paymentId, p_note: note });
+  if (error) throw error;
+  return dbToPensionPayment(data);
+}
+
+/** Demande la suppression d'une ligne de versement (erreur, doublon...) — nécessite l'accord de l'autre partie. */
+export async function requestDeletePensionPayment(paymentId: string): Promise<PensionPayment> {
+  const { data, error } = await supabase.rpc("request_delete_pension_payment", { p_payment_id: paymentId });
+  if (error) throw error;
+  return dbToPensionPayment(data);
+}
+
+/** Confirme la suppression (par l'AUTRE partie que le demandeur) — supprime réellement la ligne. */
+export async function confirmDeletePensionPayment(paymentId: string): Promise<void> {
+  const { error } = await supabase.rpc("confirm_delete_pension_payment", { p_payment_id: paymentId });
+  if (error) throw error;
+}
+
+/** Annule/refuse une demande de suppression (le demandeur qui se rétracte, ou l'autre partie qui refuse). */
+export async function cancelDeletePensionPayment(paymentId: string): Promise<PensionPayment> {
+  const { data, error } = await supabase.rpc("cancel_delete_pension_payment", { p_payment_id: paymentId });
   if (error) throw error;
   return dbToPensionPayment(data);
 }
