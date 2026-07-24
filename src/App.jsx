@@ -13811,9 +13811,9 @@ function PensionSection() {
   const statusColor = { pending: C.mut, marked_paid: C.yel, confirmed: C.grn, contested: C.red };
 
   return (
-    <div className="card" style={{padding:14,marginBottom:14,border:`1.5px solid ${C.vio}33`}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:10}}>
-        <div style={{fontSize:13,fontWeight:900,color:C.vio}}>💶 {t.pensionTabTitle || "Pension alimentaire"}</div>
+    <div className="card" style={{padding:"10px 14px",marginBottom:14,background:`${C.yel}0d`,border:`1.5px solid ${C.yel}44`}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:6}}>
+        <div style={{fontSize:13,fontWeight:900,color:C.yel}}>💶 {t.pensionTabTitle || "Pension alimentaire"}</div>
         {proposedConfig && iAmProposer && (
           <button onClick={handleCancelConfig} disabled={busy} style={{padding:"5px 10px",height:"auto",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontWeight:700,fontSize:11,cursor:"pointer",flexShrink:0}}>
             {t.pensionCancelBtn || "Annuler"}
@@ -13909,7 +13909,7 @@ function PensionSection() {
       {activeConfig && (
         <>
           <div style={{fontSize:11,color:C.mut,marginBottom:4,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-            <span>{(cfg.parents[activeConfig.fromParent]?.name || "P1")} → {(cfg.parents[activeConfig.toParent]?.name || "P2")} · {activeConfig.amount}{currency}/mois · {t.pensionDayOfMonthShort || "le"} {activeConfig.dayOfMonth}</span>
+            <span>{(cfg.parents[activeConfig.fromParent]?.name || "P1")} {t.pensionVerseA || "verse à"} {(cfg.parents[activeConfig.toParent]?.name || "P2")} · {activeConfig.amount}{currency}/mois · {t.pensionDayOfMonthShort || "le"} {activeConfig.dayOfMonth} {t.pensionOfMonth || "du mois"}</span>
             {!proposedConfig && !showForm && (
               <div style={{display:"flex",gap:5,flexShrink:0,marginLeft:"auto"}}>
                 <button
@@ -13946,7 +13946,7 @@ function PensionSection() {
           {/* 🔧 Badges de statut alignés à gauche, sous la ligne d'infos — même
           traitement que la bulle "En attente" du proposant ci-dessus : sur leur
           propre ligne, jamais collés inline au texte. */}
-          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>
             {/* 🔧 Même badge de statut PERSISTANT que les dépenses (expStatusLabel,
             toujours affiché, pas seulement pendant la transition) : une pension
             "active" = validée par l'autre parent, donc badge vert en permanence,
@@ -14043,7 +14043,7 @@ function PensionSection() {
 
 // ─── EXPENSES ─────────────────────────────────────────────────────────────────
 function ExpTab() {
-  const {C,t,cfg,setCfg,addHist,pushNotif,user,prem,perms,st,onUpgrade,isAdm,setActivity,sub,simDate,setExpSubmittedPopup,addRefAction,currency="€",expenses:ctxExpenses,reimbursements:ctxReimbursements,expensesLoading,expMethods,history:ctxHistory,familySync,removedUserIds,myUid} = useApp();
+  const {C,t,cfg,setCfg,addHist,pushNotif,user,prem,perms,st,onUpgrade,isAdm,setActivity,sub,simDate,setExpSubmittedPopup,addRefAction,currency="€",expenses:ctxExpenses,reimbursements:ctxReimbursements,expensesLoading,expMethods,history:ctxHistory,familySync,removedUserIds,myUid,pensionConfigs,pensionPayments,pensionMethods} = useApp();
   // 🔧 st vient du statut effectif partagé par la famille (effectiveSub), pas
   // du sub individuel — voir CalTab pour la même correction.
   const premFull = st==="premium"; // PDF réservé full premium uniquement
@@ -14595,10 +14595,21 @@ function ExpTab() {
   }
 
   const filtered=catF==="all"?expenses:expenses.filter(e=>e.category===catF);
-  // Unified list: expenses + reimbursements sorted by date desc
+  // 🔧 Pension alimentaire fondue visuellement dans la liste (100% à charge du
+  // parent payeur, comme une dépense) — SANS dupliquer les données : toujours
+  // pension_payments/pension_configs en interne (usePension), juste reformaté
+  // ici pour l'affichage. Voir PensionSection pour le suivi complet (dont la
+  // contestation, volontairement pas dupliquée dans cette vue condensée).
+  const pensionItems=(catF==="all"?(pensionPayments||[]):[]).map(p=>{
+    const pc=(pensionConfigs||[]).find(c=>c.id===p.configId);
+    return {_type:"pension", id:p.id, amount:p.amount, date:p.dueDate, status:p.status,
+      fromParent:pc?.fromParent, toParent:pc?.toParent, fromUserId:pc?.fromUserId, toUserId:pc?.toUserId};
+  });
+  // Unified list: expenses + reimbursements + pension sorted by date desc
   const allItems=[
     ...filtered.map(e=>({...e,_type:"expense"})),
-    ...(catF==="all"?reimbursements.map(r=>({...r,_type:"reim"})):[])
+    ...(catF==="all"?reimbursements.map(r=>({...r,_type:"reim"})):[]),
+    ...pensionItems,
   ].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
 
   // ── PDF Export ───────────────────────────────────────────────────────────
@@ -15540,6 +15551,49 @@ window.addEventListener('message',function(e){
         : allItems.length===0
         ? <div style={{textAlign:"center",padding:40,color:C.mut}}><div style={{fontSize:40,marginBottom:12}}>💰</div>{t.noExpenses}</div>
         : allItems.map(item=>{
+            if(item._type==="pension"){
+              const fromP=cfg.parents[item.fromParent]; const toP=cfg.parents[item.toParent];
+              const fromLabel=formatActorName(fromP?.name||`P${(item.fromParent??0)+1}`, item.fromUserId, removedUserIds);
+              const toLabel=formatActorName(toP?.name||`P${(item.toParent??0)+1}`, item.toUserId, removedUserIds);
+              const pSt=item.status;
+              const iAmPayer=myUid===item.fromUserId;
+              const iAmRecipient=myUid===item.toUserId;
+              const pBorderCol=pSt==="confirmed"?`${C.grn}66`:pSt==="contested"?`${C.red}66`:`${C.yel}66`;
+              const pStatusLabel=pSt==="confirmed"?(t.pensionStatusConfirmed||"✅ Confirmé"):pSt==="contested"?(t.pensionStatusContested||"⚠️ Contesté"):pSt==="marked_paid"?(t.pensionStatusMarkedPaid||"⏳ Marqué payé"):(t.pensionStatusPending||"⏳ En attente");
+              const pStatusColor=pSt==="confirmed"?C.grn:pSt==="contested"?C.red:C.yel;
+              return (
+                <div key={`pension-${item.id}`} className="card" style={{marginBottom:10,borderColor:pBorderCol}}>
+                  <div style={{display:"flex",alignItems:"center",gap:11}}>
+                    <div style={{background:`${C.yel}18`,borderRadius:10,padding:"7px 9px",textAlign:"center",minWidth:58,flexShrink:0}}>
+                      <div style={{fontFamily:"JetBrains Mono",fontSize:14,fontWeight:700,color:C.yel}}>{item.amount.toFixed(2)}</div>
+                      <div style={{fontSize:9,color:C.mut}}>{currency}</div>
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:700,fontSize:14,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                        <span style={{fontSize:16}}>💶</span>
+                        <span style={{color:fromP?.color||C.yel}}>{fromLabel}</span>
+                        <span style={{color:C.mut,fontWeight:400}}>→</span>
+                        <span style={{color:toP?.color||C.txt}}>{toLabel}</span>
+                      </div>
+                      <div style={{fontSize:11,color:C.mut,marginTop:2}}>{(item.date||"").split("-").reverse().join("/")} · {t.pensionTabTitle||"Pension alimentaire"}</div>
+                      <div style={{marginTop:5,display:"inline-flex",alignItems:"center",gap:4,padding:"2px 8px",background:`${pStatusColor}15`,border:`1px solid ${pStatusColor}44`,borderRadius:20}}>
+                        <span style={{fontSize:11,fontWeight:700,color:pStatusColor}}>{pStatusLabel}</span>
+                      </div>
+                    </div>
+                  </div>
+                  {pSt==="pending" && iAmPayer && (
+                    <button onClick={()=>pensionMethods.markPensionPaymentPaid(item.id)} style={{marginTop:10,padding:"7px 14px",background:C.vio,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                      {t.pensionMarkPaidBtn||"Marquer payé"}
+                    </button>
+                  )}
+                  {pSt==="marked_paid" && iAmRecipient && (
+                    <button onClick={()=>pensionMethods.confirmPensionPayment(item.id)} style={{marginTop:10,padding:"10px",background:C.grn,color:"#fff",border:"none",borderRadius:10,fontWeight:800,fontSize:13,cursor:"pointer"}}>
+                      ✅ {t.pensionConfirmBtn||"Confirmer la réception"}
+                    </button>
+                  )}
+                </div>
+              );
+            }
             if(item._type==="reim"){
               const fromP=cfg.parents[item.from]; const toP=cfg.parents[item.to];
               const fromLabel=formatActorName(item.fromName||fromP?.name||`P${item.from+1}`, item.fromUserId, removedUserIds);
