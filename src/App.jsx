@@ -4391,7 +4391,14 @@ export default function App() {
   // l'assistant (voir discussion sur le coût du prompt système par échange) :
   // un enfant ou un observateur ne doit plus voir la bulle assistant ni la
   // reformulation IA, même si la famille a Premium+IA.
-  const familyAiEnabled = user?.role === "parent" && !!(sub.aiEnabled || familyBestSub?.aiEnabled);
+  // 🔧 (2026-07-27, bug réel) !isChild && !isObs plutôt que
+  // user?.role==="parent" strictement : un compte connecté en mode admin
+  // (marqueur duvia_admin_marker, user.role==="admin") mais ACTIVEMENT parent
+  // d'une famille réelle (family_members.role="parent" en base, déjà ce que
+  // vérifie le serveur, voir ai-chatbot/index.ts) se voyait à tort exclu —
+  // "admin" n'est ni enfant ni observateur, donc pas concerné par cette
+  // restriction, qui ne visait que les enfants/observateurs.
+  const familyAiEnabled = !isChild && !isObs && !!(sub.aiEnabled || familyBestSub?.aiEnabled);
   const _myId = String(user?.id||"");
   const unreadMsgs = useMemo(() => {
     const _uid = String(myUid || _myId || "");
@@ -17537,7 +17544,7 @@ function parisMidnightISO(now = new Date()) {
 }
 
 function ChatbotBubble() {
-  const { C, t, lang, familySync, myUid, familyAiEnabled, user, onUpgrade } = useApp();
+  const { C, t, lang, familySync, myUid, familyAiEnabled, isChild, isObs, onUpgrade } = useApp();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]); // {role:"user"|"assistant", content:string}
   const [input, setInput] = useState("");
@@ -17707,17 +17714,13 @@ function ChatbotBubble() {
   // s'affiche, seulement si les questions hors-FAQ sont transmises à Claude
   // (voir send() plus bas) : Freemium/Premium ont la FAQ locale gratuite,
   // Premium+IA a en plus l'assistant conversationnel complet.
-  // 🔧🔧🔧 DIAGNOSTIC TEMPORAIRE (2026-07-27) — bug "l'assistant disparaît après
-  // un rafraîchissement" : affiche pourquoi le garde échoue au lieu de
-  // simplement disparaître, pour identifier la cause sans devoir lire la
-  // console. À RETIRER une fois la cause confirmée.
-  if (user?.role !== "parent" || !familySync?.familyId || !visible) {
-    return (
-      <div style={{position:"fixed",bottom:10,right:10,zIndex:9999,background:"#000",color:"#0f0",fontSize:10,fontFamily:"monospace",padding:"8px 10px",borderRadius:8,maxWidth:260,lineHeight:1.5}}>
-        🐛 role={JSON.stringify(user?.role)} familyId={JSON.stringify(familySync?.familyId)} visible={JSON.stringify(visible)}
-      </div>
-    );
-  }
+  // 🔧 (2026-07-27, bug réel diagnostiqué en prod) !isChild && !isObs plutôt
+  // que user?.role==="parent" — un compte connecté en mode admin
+  // (duvia_admin_marker, user.role==="admin") mais ACTIVEMENT parent d'une
+  // famille réelle (family_members.role="parent" en base) se voyait exclu à
+  // tort par ce garde alors que le serveur (ai-chatbot/index.ts) l'autorisait
+  // déjà correctement, lui, en vérifiant la vraie ligne family_members.
+  if (isChild || isObs || !familySync?.familyId || !visible) return null;
 
   // 🔧 (2026-07-27) Court-circuit local avant tout appel réseau : les
   // questions FAQ sont statiques (~40 sujets), donc si la question ressemble
