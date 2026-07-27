@@ -13108,7 +13108,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
       <div key={d.ds} data-ds={d.ds} onClick={()=>openDay(d.ds)}
         title={(d.customGuardians?.length ? guardianNamesLabel(d.customGuardians) : null)||d.ferName||d.scoName||d.specials[0]?.label||undefined}
         style={{
-          aspectRatio:"1",borderRadius:10,background:bg,padding:"6px 6px",
+          aspectRatio:"1",borderRadius:10,borderBottomLeftRadius:20,background:bg,padding:"6px 6px",
           display:"flex",flexDirection:"column",justifyContent:"space-between",
           cursor:"pointer",position:"relative",
           border:activeBorder,
