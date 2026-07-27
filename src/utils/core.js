@@ -1023,6 +1023,12 @@ function normalizeGreeting(text) {
   return stripAccents(String(text || "").toLowerCase())
     .replace(/['’]/g, "")
     .replace(/[!?.,;:]+$/g, "")
+    // 🔧 (2026-07-27, bug réel) "jour" ↔ "jours" — variation grammaticale
+    // très courante (pas juste une faute de frappe), traitée à part plutôt
+    // que par la tolérance aux fautes de matchFaqAnswer (ces matchers-ci
+    // n'en ont pas). Toutes les listes de phrases ci-dessous utilisent donc
+    // "jour" au singulier.
+    .replace(/\bjours\b/g, "jour")
     .trim()
     .replace(/\s+/g, " ");
 }
@@ -1086,9 +1092,9 @@ export function matchAgendaIntent(question) {
 // resolveGuard() sur toute la période, jamais inventée. Par défaut : le mois
 // en cours ; bascule sur l'année en cours si un mot "année/annuel" est présent.
 const STATS_DAYS_PHRASES = [
-  "combien de jours chez chaque parent", "combien de jours de garde",
-  "repartition des jours de garde", "repartition annuelle", "repartition de la garde",
-  "temps de garde", "statistiques de garde", "combien de jours chacun",
+  "combien de jour chez chaque parent", "combien de jour de garde",
+  "repartition des jour de garde", "repartition annuelle", "repartition de la garde",
+  "temps de garde", "statistiques de garde", "combien de jour chacun",
 ];
 const STATS_YEAR_WORDS = ["annee", "annuel", "annuelle"];
 

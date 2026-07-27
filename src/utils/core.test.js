@@ -1249,6 +1249,11 @@ test("matchStatsIntent : ne matche pas une question hors statistiques", () => {
   assert.equal(matchStatsIntent(""), null);
 });
 
+test("matchStatsIntent : \"jour\" au singulier (variation grammaticale courante) fonctionne comme \"jours\"", () => {
+  // Cas réel signalé (2026-07-27) : "Combien de jour chez chaque parent ce mois-ci ?" (sans "s") échouait.
+  assert.equal(matchStatsIntent("Combien de jour chez chaque parent ce mois-ci ?"), "days_month");
+});
+
 test("matchFaqAnswer : question courte au participe passé (mot manquant non-essentiel) -> correspond quand même", () => {
   // Cas réel constaté en prod (2026-07-27) : ne matchait pas avant l'ajout du score de précision.
   assert.equal(matchFaqAnswer("invité un enfant", FAQ_TEST_ITEMS)?.a, "REP_ENFANT");
