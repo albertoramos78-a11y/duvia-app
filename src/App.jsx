@@ -17565,6 +17565,15 @@ function ChatbotBubble() {
     left: window.innerWidth - CHATBOT_BTN_SIZE - 20,
   }));
   const drag = useRef({ dragging: false, moved: false, startX: 0, startY: 0, startTop: 0, startLeft: 0 });
+  // 🔧 (2026-07-27, "aimanté sur une trame" signalé en glissant le bouton) :
+  // appeler setPos() à CHAQUE pointermove faisait re-rendre le composant et
+  // recalculer le layout (top/left) sur potentiellement 60-120 évènements/s —
+  // sur cette page (tout App() dans un seul gros composant), ça ne suit pas
+  // le curseur en continu mais par à-coups, perçu comme un aimantage sur une
+  // grille. btnRef : pendant le drag, on déplace le bouton via CSS
+  // transform (composité par le GPU, ne déclenche ni React ni layout) —
+  // seul le relâchement commet la position finale dans le state React.
+  const btnRef = useRef(null);
   // Un double-tap n'importe où à l'écran masque/réaffiche la bulle (bouton +
   // fenêtre si elle était ouverte) — utile quand elle gêne un contenu sous-
   // jacent. Détection manuelle par écart de temps entre deux pointerdown
@@ -17695,18 +17704,29 @@ function ChatbotBubble() {
     const dx = e.clientX - drag.current.startX;
     const dy = e.clientY - drag.current.startY;
     if (Math.abs(dx) > 4 || Math.abs(dy) > 4) drag.current.moved = true;
+    // 🔧 Déplacement visuel via transform pendant le drag (pas de setPos ici,
+    // voir commentaire sur btnRef) — le clamp reste appliqué au relâchement,
+    // à partir des derniers dx/dy mémorisés ici.
     if (drag.current.moved) {
-      setPos(clampChatbotPos(drag.current.startTop + dy, drag.current.startLeft + dx));
+      drag.current.lastDx = dx;
+      drag.current.lastDy = dy;
+      if (btnRef.current) btnRef.current.style.transform = `translate(${dx}px, ${dy}px)`;
     }
   }
   function onPointerUp() {
     if (!drag.current.dragging) return;
     const wasMoved = drag.current.moved;
     drag.current.dragging = false;
-    if (!wasMoved) setOpen(o => !o);
+    if (btnRef.current) btnRef.current.style.transform = "";
+    if (wasMoved) {
+      setPos(clampChatbotPos(drag.current.startTop + (drag.current.lastDy||0), drag.current.startLeft + (drag.current.lastDx||0)));
+    } else {
+      setOpen(o => !o);
+    }
   }
   function onPointerCancel() {
     drag.current.dragging = false;
+    if (btnRef.current) btnRef.current.style.transform = "";
   }
 
   // 🔧 (2026-07-27) L'assistant est désormais visible pour TOUT parent, quel
@@ -17876,11 +17896,12 @@ function ChatbotBubble() {
   return (
     <>
       <button
+        ref={btnRef}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
-        style={{position:"fixed",top:pos.top,left:pos.left,width:CHATBOT_BTN_SIZE,height:CHATBOT_BTN_SIZE,background:"transparent",border:"none",cursor:"grab",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none",userSelect:"none",WebkitUserSelect:"none"}}>
+        style={{position:"fixed",top:pos.top,left:pos.left,width:CHATBOT_BTN_SIZE,height:CHATBOT_BTN_SIZE,background:"transparent",border:"none",cursor:"grab",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none",userSelect:"none",WebkitUserSelect:"none",willChange:"transform"}}>
         <img src="/mascot/body-laptop.png" alt="" style={{width:CHATBOT_HEART_W,height:CHATBOT_HEART_H,filter:"drop-shadow(0 4px 10px rgba(0,0,0,.3))",pointerEvents:"none"}} />
       </button>
       {open && (
