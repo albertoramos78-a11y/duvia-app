@@ -1152,3 +1152,16 @@ test("matchFaqAnswer : liste FAQ vide ou absente -> aucune correspondance", () =
   assert.equal(matchFaqAnswer("comment inviter l'autre parent", []), null);
   assert.equal(matchFaqAnswer("comment inviter l'autre parent", null), null);
 });
+
+test("matchFaqAnswer : question courte au participe passé (mot manquant non-essentiel) -> correspond quand même", () => {
+  // Cas réel constaté en prod (2026-07-27) : ne matchait pas avant l'ajout du score de précision.
+  assert.equal(matchFaqAnswer("invité un enfant", FAQ_TEST_ITEMS)?.a, "REP_ENFANT");
+});
+
+test("matchFaqAnswer : mot non-stopword non couvert par la FAQ trouvée -> ne force pas une mauvaise correspondance", () => {
+  // Faux positif réel constaté en prod (2026-07-27) : recouvrait 100% des mots
+  // significatifs de "Comment inviter l'autre parent ?" (juste inviter+parent,
+  // "autre" est un stopword) alors que la question porte sur un grand-parent
+  // (donc un OBSERVATEUR) — "grand" non couvert doit bloquer la correspondance.
+  assert.equal(matchFaqAnswer("comment inviter grand-parent", FAQ_TEST_ITEMS), null);
+});

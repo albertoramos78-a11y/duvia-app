@@ -945,20 +945,32 @@ function faqSignificantWords(text) {
 // dont les mots significatifs recouvrent le plus la question posée — sert de
 // court-circuit gratuit avant d'appeler l'assistant IA (voir ChatbotBubble
 // dans App.jsx) : une correspondance jugée assez forte répond instantanément
-// depuis la FAQ, sans consommer de tokens. Volontairement CONSERVATEUR (score
-// et nombre de mots minimum élevés) : une fausse correspondance (mauvaise
-// réponse affichée avec confiance) est pire qu'un simple appel à l'IA en
-// plus — en cas de doute, ne rien retourner plutôt que deviner.
-export function matchFaqAnswer(question, faqItems, { minScore = 0.75, minWords = 2 } = {}) {
+// depuis la FAQ, sans consommer de tokens. Volontairement CONSERVATEUR : une
+// fausse correspondance (mauvaise réponse affichée avec confiance) est pire
+// qu'un simple appel à l'IA en plus — en cas de doute, ne rien retourner
+// plutôt que deviner.
+// 🔧 (2026-07-27, bug réel constaté en prod) Le score de RECALL seul
+// (mots FAQ retrouvés / total mots FAQ) ne suffit pas : "comment inviter
+// grand-parent" recouvrait 100% des mots significatifs de la question
+// "Comment inviter l'autre parent ?" (juste "inviter"+"parent", "autre" est
+// un stopword) alors que ce n'est PAS la bonne réponse (question visée :
+// inviter un OBSERVATEUR). D'où l'ajout d'un score de PRECISION (mots FAQ
+// retrouvés / total mots de LA QUESTION posée) : si l'utilisateur a tapé un
+// mot significatif ("grand") qu'aucun mot de la FAQ ne recouvre, c'est un
+// signal qu'il parle d'autre chose — recall ET precision doivent être hauts.
+export function matchFaqAnswer(question, faqItems, { minRecall = 0.65, minPrecision = 0.85, minWords = 2 } = {}) {
   const qWords = faqSignificantWords(question);
   if (qWords.length === 0) return null;
-  let best = null, bestScore = 0;
+  let best = null, bestRecall = 0;
   for (const item of (faqItems || [])) {
     const faqWords = faqSignificantWords(item?.q);
     if (faqWords.length < minWords) continue;
     const matchedCount = faqWords.filter(fw => qWords.some(qw => fuzzyIncludes(qw, fw))).length;
-    const score = matchedCount / faqWords.length;
-    if (matchedCount >= minWords && score > bestScore) { bestScore = score; best = item; }
+    const recall = matchedCount / faqWords.length;
+    const precision = matchedCount / qWords.length;
+    if (matchedCount >= minWords && recall >= minRecall && precision >= minPrecision && recall > bestRecall) {
+      bestRecall = recall; best = item;
+    }
   }
-  return bestScore >= minScore ? best : null;
+  return best;
 }
