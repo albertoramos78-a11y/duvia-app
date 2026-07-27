@@ -17652,12 +17652,31 @@ function ChatbotBubble() {
   // 🔧 pos est en pixels absolus (top/left), pas en bottom/right relatif au
   // viewport comme avant le drag — sans ce recalage, une rotation d'écran ou
   // un redimensionnement pourrait laisser le bouton hors champ, inatteignable.
+  // 🔧 (2026-07-27, bug réel signalé "l'assistant disparaît après un
+  // rafraîchissement") : sur mobile, juste après un rechargement complet de
+  // page (ex: clic sur "Rafraîchir" suite à "Nouvelle version disponible"),
+  // window.innerHeight au moment du montage peut être mesuré AVANT que la
+  // barre d'adresse du navigateur ait fini de se réduire/agrandir — la
+  // position initiale (calculée depuis cette valeur transitoire) place alors
+  // le bouton hors de l'écran RÉEL une fois la mise en page stabilisée, sans
+  // qu'aucun évènement "resize" classique ne se déclenche ensuite pour le
+  // corriger (rien d'autre ne change de taille). D'où : (1) visualViewport,
+  // plus fiable que window pour les changements de barre d'adresse mobile,
+  // en plus de resize classique ; (2) un recalage différé une fois après le
+  // montage pour rattraper ce cas précis — clamp la position EXISTANTE
+  // (jamais une réinitialisation), donc n'efface pas un déplacement manuel.
   useEffect(() => {
     function onResize() {
       setPos(p => clampChatbotPos(p.top, p.left));
     }
     window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    window.visualViewport?.addEventListener("resize", onResize);
+    const settleTimer = setTimeout(onResize, 300);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.visualViewport?.removeEventListener("resize", onResize);
+      clearTimeout(settleTimer);
+    };
   }, []);
 
   function onPointerDown(e) {
