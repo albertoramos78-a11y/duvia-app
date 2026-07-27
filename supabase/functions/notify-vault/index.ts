@@ -25,11 +25,16 @@ serve(async (req) => {
     const docName    = record.name || "un document"
     const uploaderId = record.uploaded_by || record.user_id || record.created_by || null
 
-    // Membres actifs de la famille
+    // 🔒 (2026-07-27, fuite réelle signalée) Coffre-fort = fonctionnalité
+    // RÉSERVÉE AUX PARENTS (ni enfants ni observateurs n'y ont accès dans
+    // l'app, voir la FAQ) — donc seuls les parents actifs doivent être
+    // notifiés, pas déjà filtré ici avant ce fix (un observateur recevait un
+    // email sur un document qu'il ne peut même pas voir dans l'app).
     const { data: members } = await supabase
       .from("family_members")
       .select("user_id")
       .eq("family_id", familyId)
+      .eq("role", "parent")
       .eq("status", "active")
 
     if (!members?.length) return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json" } })

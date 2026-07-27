@@ -45,11 +45,18 @@ Deno.serve(async (req: Request) => {
 
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-  // Récupère les membres de la famille
+  // 🔒 (2026-07-27, fuite réelle signalée) Dépenses = fonctionnalité RÉSERVÉE
+  // AUX PARENTS (ni enfants ni observateurs n'y ont accès dans l'app, voir la
+  // FAQ) — donc seuls les parents ACTIFS doivent être notifiés. Avant ce fix,
+  // aucun filtre de rôle ni de statut n'existait : un observateur (ou même un
+  // membre pending/removed) recevait un email sur une dépense qu'il ne peut
+  // même pas voir dans l'app. Même filtre déjà correct dans notify-join-request.
   const { data: members, error: membErr } = await supabase
     .from("family_members")
     .select("user_id")
-    .eq("family_id", expense.family_id);
+    .eq("family_id", expense.family_id)
+    .eq("role", "parent")
+    .eq("status", "active");
 
   if (membErr || !members?.length) {
     console.error("family_members error:", membErr);
