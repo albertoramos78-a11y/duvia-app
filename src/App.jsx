@@ -13117,7 +13117,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
           minWidth:0,boxSizing:"border-box",overflow:"hidden",
         }}>
         <span style={{display:"flex",alignItems:"center",gap:3,marginTop:-3,marginLeft:-3}}>
-          <span style={{fontSize:13,fontWeight:numWeight,color:numColor}}>{d.day}</span>
+          <span className="calDayNumber" style={{fontWeight:numWeight,color:numColor}}>{d.day}</span>
           {d.isBirthday && <span style={{fontSize:11,lineHeight:1}}>🎂</span>}
         </span>
         {(cellTime || cellLocation) && (
@@ -13179,6 +13179,8 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
       <style>{`
         .calDayAvatarBadge { width:18px; height:18px; font-size:9px; }
         @media (min-width:900px) { .calDayAvatarBadge { width:40px; height:40px; font-size:16px; } }
+        .calDayNumber { font-size:13px; }
+        @media (min-width:900px) { .calDayNumber { font-size:19px; } }
       `}</style>
       {children}
       <div style={{display:"grid",gridTemplateColumns:`${WEEKNUM_COL}px repeat(7,1fr)`,gap:5,marginBottom:6,width:"100%",boxSizing:"border-box"}}>
@@ -13336,12 +13338,19 @@ function InlinePicker({ds,guard,onClose,onFull,dayInfo,readOnly=false}) {
         </div>
       ) : (
       <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
+        {/* 🔧 (2026-07-27) Les thèmes saisonniers (Été, RG, WC, Filleul, Video)
+            imposent `button{border-radius:...!important}` globalement (voir
+            css(C)) — ça écrasait le borderRadius:"50%" en ligne sur ces
+            boutons-avatar (rond devenait carré arrondi/ovale). Une classe est
+            plus spécifique qu'un simple sélecteur d'élément, donc gagne même
+            face à un autre !important. */}
+        <style>{`.avatarPickerCircleBtn { border-radius:50% !important; }`}</style>
         {cfg.parents.map((p,pi)=>{
           const photo=(typeof p?.avatar==="string" && p.avatar.startsWith("http")) ? p.avatar : null;
           const active=guard?.parentIdx===pi&&!guard?.obsId;
           return (
           <button key={pi} onClick={()=>{updateCal(ds,{parentIdx:pi,obsId:undefined,timeType:"full",startTime:"",endTime:"",location:"",note:""});onClose();}}
-            title={p.name||`P${pi+1}`}
+            title={p.name||`P${pi+1}`} className={photo?"avatarPickerCircleBtn":undefined}
             style={{display:"flex",alignItems:"center",gap:6,padding:photo?"5px":"5px 12px 5px 5px",background:active?p.color:`${p.color}22`,color:active?"#fff":p.color,border:`2px solid ${p.color}`,borderRadius:photo?"50%":20,fontSize:13,fontWeight:700}}>
             <span style={{width:40,height:40,borderRadius:"50%",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:active?"rgba(255,255,255,.3)":`${p.color}33`,fontSize:17}}>
               {photo ? <img src={photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} /> : (p.avatar||getInitials(p?.name)||"P")}
@@ -13355,7 +13364,7 @@ function InlinePicker({ds,guard,onClose,onFull,dayInfo,readOnly=false}) {
           const active=guard?.obsId===o.id;
           return (
           <button key={o.id} onClick={()=>{updateCal(ds,{parentIdx:undefined,obsId:o.id,obsName:o.name,timeType:"full",startTime:"",endTime:"",location:"",note:""});onClose();}}
-            title={obsLabel(o)}
+            title={obsLabel(o)} className={photo?"avatarPickerCircleBtn":undefined}
             style={{display:"flex",alignItems:"center",gap:6,padding:photo?"5px":"5px 12px 5px 5px",background:active?"#f59e0b":"#f59e0b18",color:active?"#fff":"#f59e0b",border:"2px solid #f59e0b",borderRadius:photo?"50%":20,fontSize:13,fontWeight:700}}>
             <span style={{width:40,height:40,borderRadius:"50%",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:active?"rgba(255,255,255,.3)":"#f59e0b33",fontSize:17}}>
               {photo ? <img src={photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} /> : (o.avatar||getInitials(o?.name)||"🏠")}
