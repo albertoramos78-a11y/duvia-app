@@ -152,6 +152,7 @@ const fr = {
     premFeatExportSchedule:"Export PDF planning d'activité enfant",
     premFeatAiRephrase:"Assistant IA — reformulation de message",
     premAiActiveLabel:"Premium+IA Actif 🤖",
+    premAiInheritedLabel:"Premium+IA hérité 🤖",
     chatbotTitle:"Assistant Duvia",
     chatbotEmptyState:"Pose-moi une question sur ta famille ou sur l'utilisation de Duvia.",
     chatbotPlaceholder:"Écris ta question…",

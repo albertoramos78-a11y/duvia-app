@@ -121,6 +121,7 @@ const pt = {
     perFamily:"por família",simNote:"Simulação — Sem pagamento real.",
     cancelSub:"Cancelar subscrição",confirmCancel:"Confirmar cancelamento",
     premActive:"Subscrição Premium ativa",premSince:"Ativo desde",
+    premAiInheritedLabel:"Premium+IA herdado 🤖",
     lockParents:"🔒 Adicionar pai/mãe — Premium",lockChildren:"🔒 Adicionar filho/a — Premium",
     lockSection:"Funcionalidade Premium",lockDesc:"Disponível com a subscrição Premium.",
     seeOffers:"Ver planos",

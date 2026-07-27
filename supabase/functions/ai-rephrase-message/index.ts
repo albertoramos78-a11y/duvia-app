@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL      = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_ROLE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 
@@ -47,12 +48,20 @@ serve(async (req) => {
   if (!text) return jsonResponse({ error: "missing_text" }, 400);
   if (text.length > MAX_TEXT_LEN) return jsonResponse({ error: "text_too_long" }, 400);
 
-  // 🔒 ai_enabled est un interrupteur admin-only — jamais fait confiance à
-  // un état client, revérifié ici à chaque appel.
-  const { data: subRow, error: subErr } = await admin
-    .from("subscriptions").select("ai_enabled").eq("user_id", userId).maybeSingle();
-  if (subErr) return jsonResponse({ error: subErr.message }, 500);
-  if (!subRow?.ai_enabled) return jsonResponse({ error: "forbidden" }, 403);
+  // 🔒 ai_enabled est un statut FAMILIAL (2026-07-27) : hérité du MEILLEUR
+  // statut parmi les deux parents actifs de la famille, pas seulement mon
+  // propre compte — même règle "toujours le plus haut" que le plan Premium
+  // de base (voir bestParentSub() côté client, ai-chatbot/index.ts). Revérifié
+  // ici via la même RPC que le client (get_family_billing_context), en
+  // JWT-scopé pour résoudre auth.uid() côté serveur — jamais fait confiance à
+  // un état client.
+  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: billingRows, error: billingErr } = await userClient.rpc("get_family_billing_context");
+  if (billingErr) return jsonResponse({ error: billingErr.message }, 500);
+  const aiEnabled = (billingRows || []).some((r: any) => r.parent_ai_enabled);
+  if (!aiEnabled) return jsonResponse({ error: "forbidden" }, 403);
 
   // ── Anti-abus : plafond quotidien simple (non-atomique, voir migration
   // 0044 pour la justification — fonctionnalité réservée aux comptes admin) ──

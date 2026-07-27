@@ -415,14 +415,24 @@ function bestParentSub(parentRows) {
     accountCreatedAt: r.parent_account_created_at,
     betaEnd: r.parent_beta_end,
     parentUserId: r.parent_user_id || null,
+    aiEnabled: !!r.parent_ai_enabled,
   } : {
     plan: "trial_premium",
     accountCreatedAt: new Date().toISOString(),
     trialStart: new Date().toISOString(),
     trialExtension: 0,
     parentUserId: null,
+    aiEnabled: false,
   });
-  return subs.reduce((acc, s) => planRankFor(s) > planRankFor(acc) ? s : acc, subs[0]);
+  const best = subs.reduce((acc, s) => planRankFor(s) > planRankFor(acc) ? s : acc, subs[0]);
+  // 🔧 (2026-07-27) L'IA est un add-on indépendant du rang de plan (voir le
+  // commentaire sur isPremiumAi plus bas dans ce fichier) : si N'IMPORTE LEQUEL
+  // des deux parents l'a, toute la famille en bénéficie — même règle "toujours
+  // le plus haut" que pour le plan de base, mais évaluée séparément (peut être
+  // vraie même quand le plan "gagnant" ci-dessus n'est pas celui du parent qui
+  // a l'IA). Bug corrigé : un co-parent héritant du plan Premium d'un parent
+  // Premium+IA restait bloqué sans accès IA car ce flag n'était jamais propagé.
+  return { ...best, aiEnabled: subs.some(s => s.aiEnabled) };
 }
 function familyMaxObservers(parentRows) {
   const best = bestParentSub(parentRows);
@@ -4368,6 +4378,12 @@ export default function App() {
     familyBestSub && familyBestSub.parentUserId && familyBestSub.parentUserId !== myUid &&
     planRankFor(familyBestSub) > planRankFor(sub)
   );
+  // familyAiEnabled : IA active si MON compte l'a, OU si le meilleur statut
+  // familial (co-parent inclus, voir bestParentSub) l'a — évalué séparément de
+  // familyPremiumFromCoParent car l'IA peut être héritée même quand mon propre
+  // rang de plan égale déjà le meilleur de la famille (ex : je paie Premium
+  // simple, mon co-parent paie Premium+IA).
+  const familyAiEnabled = !!(sub.aiEnabled || familyBestSub?.aiEnabled);
   // isAdm = vrai seulement si Supabase confirme (app_admins) — résiste au localStorage falsifié
   const isAdm = user?.role === "admin" && adminVerified;
   const isObs = user?.role==="observer";
@@ -5113,7 +5129,7 @@ export default function App() {
     currency, setCurrency, weekStart, setWeekStart,
     cfg, setCfg, sub, setSub, user, users, setUsers,
     prem, perms, st, days, isAdm, isObs, isChild, unread, adminVerified,
-    familyBestSub, familyPremiumFromCoParent,
+    familyBestSub, familyPremiumFromCoParent, familyAiEnabled,
     addHist, pushNotif, updateCal, onUpgrade, handleObsJoin,
     apiData, apiLoading,
     setMenuTab, setShowMenu,
@@ -5655,11 +5671,12 @@ export default function App() {
       {!isObs && !isChild && st==="premium" && (
         <div style={{padding:"0 14px 8px",display:"flex",justifyContent:"flex-end"}}>
           {/* Premium+IA n'est plus un statut à part (voir subStatus()) : c'est
-              un compte Premium normal avec sub.aiEnabled=true en plus — donc
-              simple variante d'affichage de CETTE MÊME pastille, pas une
-              branche séparée. */}
-          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`linear-gradient(${sub.aiEnabled?C.blu:C.grn}18, ${sub.aiEnabled?C.blu:C.grn}18)${pillScrim}`,border:`1.5px solid ${sub.aiEnabled?C.blu:C.grn}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:sub.aiEnabled?C.blu:C.grn,fontWeight:800,display:"inline-flex",alignItems:"center",gap:6,cursor:"pointer"}}>
-            {sub.aiEnabled ? (t.premAiActiveLabel||"Premium+IA Actif 🤖") : <>⭐ {familyPremiumFromCoParent ? (t.premHeaderInherited||"Premium hérité") : (t.premHeaderPremium||"Premium")}</>}
+              un compte Premium normal avec familyAiEnabled=true en plus (mon
+              propre sub.aiEnabled OU celui hérité du co-parent, voir
+              bestParentSub) — donc simple variante d'affichage de CETTE MÊME
+              pastille, pas une branche séparée. */}
+          <div onClick={()=>{setMenuTab("premium");setShowMenu(false);}} style={{background:`linear-gradient(${familyAiEnabled?C.blu:C.grn}18, ${familyAiEnabled?C.blu:C.grn}18)${pillScrim}`,border:`1.5px solid ${familyAiEnabled?C.blu:C.grn}66`,borderRadius:20,padding:"4px 12px",fontSize:11,color:familyAiEnabled?C.blu:C.grn,fontWeight:800,display:"inline-flex",alignItems:"center",gap:6,cursor:"pointer"}}>
+            {sub.aiEnabled ? (t.premAiActiveLabel||"Premium+IA Actif 🤖") : familyAiEnabled ? (t.premAiInheritedLabel||"Premium+IA hérité 🤖") : <>⭐ {familyPremiumFromCoParent ? (t.premHeaderInherited||"Premium hérité") : (t.premHeaderPremium||"Premium")}</>}
           </div>
         </div>
       )}
@@ -17516,7 +17533,7 @@ function parisMidnightISO(now = new Date()) {
 }
 
 function ChatbotBubble() {
-  const { C, t, sub, familySync, myUid } = useApp();
+  const { C, t, familySync, myUid, familyAiEnabled } = useApp();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]); // {role:"user"|"assistant", content:string}
   const [input, setInput] = useState("");
@@ -17661,7 +17678,7 @@ function ChatbotBubble() {
     drag.current.dragging = false;
   }
 
-  if (!sub?.aiEnabled || !familySync?.familyId || !visible) return null;
+  if (!familyAiEnabled || !familySync?.familyId || !visible) return null;
 
   async function send() {
     const question = input.trim();
@@ -17818,7 +17835,7 @@ function ChatbotBubble() {
 }
 
 function PremiumTab() {
-  const {C,t,sub,setSub,st,days,perms,setMenuTab,setShowMenu,users,user,familyPremiumFromCoParent,familyBestSub} = useApp();
+  const {C,t,sub,setSub,st,days,perms,setMenuTab,setShowMenu,users,user,familyPremiumFromCoParent,familyBestSub,familyAiEnabled} = useApp();
   const TIERS = [
     {key:"free",       label:"Freemium",      emoji:"🆓", color:C.grn},
     {key:"trial",      label:"Trial Premium", emoji:"⭐", color:C.vio},
@@ -17828,9 +17845,11 @@ function PremiumTab() {
   const [tierPreview, setTierPreview] = useState("free");
   const [confirmCancelSub,setConfirmCancelSub] = useState(false);
   const isPremium=st==="premium"||sub._admin;
-  // Premium+IA = Premium + sub.aiEnabled — pas un statut subStatus() à part
-  // (revu 2026-07-20), donc implique toujours isPremium.
-  const isPremiumAi=isPremium&&!!sub.aiEnabled;
+  // Premium+IA = Premium + familyAiEnabled — pas un statut subStatus() à part
+  // (revu 2026-07-20), donc implique toujours isPremium. familyAiEnabled (pas
+  // sub.aiEnabled seul, corrigé 2026-07-27) car l'IA peut être héritée du
+  // co-parent tout comme le plan Premium de base.
+  const isPremiumAi=isPremium&&!!familyAiEnabled;
   // Résout l'email du co-parent payeur uniquement quand le statut affiché
   // vient effectivement de lui (jamais un appel réseau pour rien).
   const [coparentEmail, setCoparentEmail] = useState("");
@@ -18302,7 +18321,7 @@ function formatFileSize(bytes){
 
 // ─── MESSAGING TAB ────────────────────────────────────────────────────────────
 function MessagingTab(){
-  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,reactToCloudMessage,deleteCloudMessage,myUid,uidToLocal,localToUid,emailToUid,familySync,isChild,isObs,hiddenConvs,hideConversation,prem,onUpgrade,sub}=useApp();
+  const {C,t,cfg,user,users,addRefAction,msgs,sendCloudMessage,markCloudMessageRead,reactToCloudMessage,deleteCloudMessage,myUid,uidToLocal,localToUid,emailToUid,familySync,isChild,isObs,hiddenConvs,hideConversation,prem,onUpgrade,familyAiEnabled}=useApp();
   const [view,setView]=useState("list");
   const [convId,setConvId]=useState(null);
   const [draft,setDraft]=useState("");
@@ -18989,7 +19008,7 @@ function MessagingTab(){
             <button onClick={clearPendingFile} disabled={uploadingFile} style={{width:26,height:26,borderRadius:"50%",border:"none",background:`${C.red}18`,color:C.red,fontSize:13,fontWeight:900,flexShrink:0,cursor:"pointer"}}>✕</button>
           </div>
         )}
-        {sub?.aiEnabled && (
+        {familyAiEnabled && (
           <div style={{marginBottom:8,flexShrink:0}}>
             {rephraseSuggestion ? (
               <div style={{padding:"10px 12px",background:`${C.vio}08`,border:`1.5px solid ${C.vio}33`,borderRadius:14,marginBottom:8}}>

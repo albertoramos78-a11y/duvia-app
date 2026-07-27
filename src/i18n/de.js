@@ -121,6 +121,7 @@ const de = {
     perFamily:"pro Familie",simNote:"Simulation — Keine echte Zahlung.",
     cancelSub:"Abonnement kündigen",confirmCancel:"Kündigung bestätigen",
     premActive:"Premium-Abonnement aktiv",premSince:"Aktiv seit",
+    premAiInheritedLabel:"Geerbtes Premium+KI 🤖",
     lockParents:"🔒 Elternteil hinzufügen — Premium",lockChildren:"🔒 Kind hinzufügen — Premium",
     lockSection:"Premium-Funktion",lockDesc:"Verfügbar mit dem Premium-Abonnement.",
     seeOffers:"Angebote ansehen",

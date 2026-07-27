@@ -153,6 +153,7 @@ const en = {
     premFeatExportSchedule:"Child activity schedule PDF export",
     premFeatAiRephrase:"AI assistant — message rephrasing",
     premAiActiveLabel:"Premium+AI Active 🤖",
+    premAiInheritedLabel:"Inherited Premium+AI 🤖",
     chatbotTitle:"Duvia Assistant",
     chatbotEmptyState:"Ask me a question about your family or about using Duvia.",
     chatbotPlaceholder:"Type your question…",

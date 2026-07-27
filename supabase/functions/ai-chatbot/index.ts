@@ -862,12 +862,24 @@ serve(async (req) => {
 
   const clientHistory: Array<{ role: string; content: string }> = Array.isArray(payload?.history) ? payload.history : [];
 
-  // 🔒 ai_enabled revérifié côté serveur à chaque appel, jamais fait confiance
-  // à un état client (même pattern que ai-rephrase-message).
-  const { data: subRow, error: subErr } = await admin
-    .from("subscriptions").select("ai_enabled").eq("user_id", userId).maybeSingle();
-  if (subErr) return jsonResponse({ error: subErr.message }, 500);
-  if (!subRow?.ai_enabled) return jsonResponse({ error: "forbidden" }, 403);
+  // 🔒 Client JWT-scopé — les mêmes règles RLS déjà en vigueur pour ce
+  // compte/rôle s'appliquent automatiquement (voir spec). Créé ici (avant
+  // les outils, qui le réutilisent plus bas) car nécessaire dès la
+  // vérification ai_enabled ci-dessous.
+  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  // 🔒 ai_enabled est un statut FAMILIAL (2026-07-27) : hérité du MEILLEUR
+  // statut parmi les deux parents actifs de la famille, pas seulement mon
+  // propre compte — même règle "toujours le plus haut" que le plan Premium
+  // de base (voir bestParentSub() côté client). Revérifié ici via la même
+  // RPC que le client (get_family_billing_context), jamais fait confiance à
+  // un état client.
+  const { data: billingRows, error: billingErr } = await userClient.rpc("get_family_billing_context");
+  if (billingErr) return jsonResponse({ error: billingErr.message }, 500);
+  const aiEnabled = (billingRows || []).some((r: any) => r.parent_ai_enabled);
+  if (!aiEnabled) return jsonResponse({ error: "forbidden" }, 403);
 
   // ── Anti-abus : seul le plafond de TOKENS limite (2026-07-22 — le plafond
   // de 20 questions/jour a été retiré, un plafond en nombre de questions
@@ -895,12 +907,6 @@ serve(async (req) => {
   // coût réel plutôt que le nombre brut de tokens.
   const tokensUsedSoFar = (usageRows || []).reduce((s, r) => s + weightedTokens(r), 0);
   if (tokensUsedSoFar >= DAILY_TOKEN_LIMIT) return jsonResponse({ error: "daily_token_limit_reached" }, 429);
-
-  // 🔒 Client JWT-scopé pour les outils — les mêmes règles RLS déjà en
-  // vigueur pour ce compte/rôle s'appliquent automatiquement (voir spec).
-  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-  });
 
   // `messages` est l'état de travail INTERNE à cette requête (peut contenir
   // des blocs tool_use/tool_result) — jamais renvoyé tel quel au client, voir
