@@ -13716,7 +13716,6 @@ function PensionSection() {
   const {
     proposePensionConfig, confirmPensionConfig, cancelPensionConfig,
     requestEndPensionConfig, confirmEndPensionConfig, cancelEndPensionConfig,
-    markPensionPaymentPaid, confirmPensionPayment, contestPensionPayment,
   } = pensionMethods;
 
   const myIdx = user?.role === "parent" && user?.parentIdx !== undefined ? user.parentIdx : 0;
@@ -13725,8 +13724,6 @@ function PensionSection() {
   const [form, setForm] = useState({ payerIdx: myIdx, amount: "", dayOfMonth: "5", startDate: toStr(new Date()) });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [contestingId, setContestingId] = useState(null);
-  const [contestNote, setContestNote] = useState("");
 
   if (cfg.parents.length < 2) return null;
 
@@ -13735,7 +13732,6 @@ function PensionSection() {
   const iAmProposer = proposedConfig && myUid === proposedConfig.createdByUserId;
   const isPartyToProposal = proposedConfig && (myUid === proposedConfig.fromUserId || myUid === proposedConfig.toUserId);
   const currentPeriod = new Date().toISOString().slice(0, 7);
-  const currentPayment = activeConfig ? pensionPayments.find((p) => p.configId === activeConfig.id && p.period === currentPeriod) : null;
   const pastPayments = activeConfig ? pensionPayments.filter((p) => p.configId === activeConfig.id && p.period !== currentPeriod) : [];
 
   async function submitProposal() {
@@ -13831,33 +13827,6 @@ function PensionSection() {
     setBusy(true); setErr("");
     try {
       await cancelEndPensionConfig(activeConfig.id);
-    } catch (e) {
-      setErr(t.pensionErrGeneric || "Une erreur est survenue.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleMarkPaid(paymentId) {
-    setBusy(true);
-    try { await markPensionPaymentPaid(paymentId); }
-    catch (e) { setErr(t.pensionErrGeneric || "Une erreur est survenue."); }
-    finally { setBusy(false); }
-  }
-
-  async function handleConfirmPayment(paymentId) {
-    setBusy(true);
-    try { await confirmPensionPayment(paymentId); }
-    catch (e) { setErr(t.pensionErrGeneric || "Une erreur est survenue."); }
-    finally { setBusy(false); }
-  }
-
-  async function handleContestSubmit() {
-    setBusy(true);
-    try {
-      await contestPensionPayment(contestingId, contestNote);
-      setContestingId(null);
-      setContestNote("");
     } catch (e) {
       setErr(t.pensionErrGeneric || "Une erreur est survenue.");
     } finally {
@@ -14041,44 +14010,6 @@ function PensionSection() {
                   {t.pensionRefuseBtn || "Refuser"}
                 </button>
               </div>
-            </div>
-          )}
-
-          {currentPayment && (
-            <div style={{padding:"10px 12px",background:C.sur,borderRadius:10,marginBottom:8}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div>
-                  <div style={{fontSize:13,fontWeight:800,color:C.txt}}>{t.pensionCurrentDue || "Échéance du mois"} — {currentPayment.dueDate}</div>
-                  <div style={{fontSize:11,fontWeight:700,color:statusColor[currentPayment.status]}}>{statusLabel[currentPayment.status]}</div>
-                </div>
-                <div style={{fontSize:16,fontWeight:900,color:C.vio}}>{currentPayment.amount}{currency}</div>
-              </div>
-              {currentPayment.status === "pending" && myUid === activeConfig.fromUserId && (
-                <button onClick={() => handleMarkPaid(currentPayment.id)} disabled={busy} style={{marginTop:8,padding:"7px 14px",background:C.vio,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
-                  {t.pensionMarkPaidBtn || "Marquer payé"}
-                </button>
-              )}
-              {currentPayment.status === "marked_paid" && myUid === activeConfig.toUserId && contestingId !== currentPayment.id && (
-                <div style={{display:"flex",gap:8,marginTop:8}}>
-                  <button onClick={() => handleConfirmPayment(currentPayment.id)} disabled={busy} style={{flex:1,height:36,background:C.grn,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
-                    {t.pensionConfirmPaymentBtn || "Confirmer"}
-                  </button>
-                  <button onClick={() => setContestingId(currentPayment.id)} disabled={busy} style={{flex:1,height:36,background:C.sur,color:C.red,border:`1px solid ${C.red}44`,borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
-                    {t.pensionContestBtn || "Contester"}
-                  </button>
-                </div>
-              )}
-              {contestingId === currentPayment.id && (
-                <div style={{marginTop:8}}>
-                  <textarea value={contestNote} onChange={(e) => setContestNote(e.target.value)} placeholder={t.pensionContestNotePlaceholder || "Pourquoi contestes-tu ce versement ?"} style={{width:"100%",minHeight:60,borderRadius:8,border:`1px solid ${C.bor}`,padding:8,fontSize:12}} />
-                  <button onClick={handleContestSubmit} disabled={busy} style={{marginTop:6,padding:"7px 14px",background:C.red,color:"#fff",border:"none",borderRadius:8,fontWeight:700,fontSize:12,cursor:"pointer"}}>
-                    {t.pensionContestSubmitBtn || "Envoyer la contestation"}
-                  </button>
-                </div>
-              )}
-              {currentPayment.status === "contested" && currentPayment.note && (
-                <div style={{marginTop:8,fontSize:11,color:C.red,fontStyle:"italic"}}>{currentPayment.note}</div>
-              )}
             </div>
           )}
 

@@ -980,9 +980,32 @@ export function matchFaqAnswer(question, faqItems, { minRecall = 0.65, minPrecis
 // ça, une politesse toute simple tombait dans le message "cette question
 // dépasse la FAQ" au lieu d'une réponse adaptée. Liste EXACTE volontairement
 // restreinte (correspondance exacte après normalisation, pas de flou) : un
-// faux positif ferait ignorer une vraie question à tort.
-const GREETING_PHRASES = new Set(["bonjour", "salut", "coucou", "bonsoir", "hello", "hey", "bonjour a tous"]);
-const FAREWELL_PHRASES = new Set(["au revoir", "a bientot", "a plus", "bye", "adieu", "bonne journee", "bonne soiree"]);
+// faux positif ferait ignorer une vraie question à tort. Couvre les 5 langues
+// de l'app (FR/EN/ES/DE/PT), pas seulement le français — demande explicite.
+const GREETING_PHRASES = new Set([
+  // FR
+  "bonjour", "salut", "coucou", "bonsoir", "bonjour a tous",
+  // EN
+  "hello", "hi", "hey", "good morning", "good afternoon", "good evening",
+  // ES
+  "hola", "buenos dias", "buenas tardes", "buenas noches",
+  // DE
+  "hallo", "guten tag", "guten morgen", "guten abend", "servus", "moin",
+  // PT
+  "ola", "bom dia", "boa tarde", "boa noite",
+]);
+const FAREWELL_PHRASES = new Set([
+  // FR
+  "au revoir", "a bientot", "a plus", "adieu", "bonne journee", "bonne soiree",
+  // EN
+  "bye", "goodbye", "see you", "see you soon", "take care", "have a good day",
+  // ES
+  "adios", "hasta luego", "hasta pronto", "chao", "nos vemos",
+  // DE
+  "tschuss", "auf wiedersehen", "bis bald", "bis spater", "ciao",
+  // PT
+  "adeus", "tchau", "ate logo", "ate breve", "ate a proxima",
+]);
 
 function normalizeGreeting(text) {
   return stripAccents(String(text || "").toLowerCase())

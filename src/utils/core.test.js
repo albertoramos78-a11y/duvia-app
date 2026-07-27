@@ -1172,6 +1172,17 @@ test("matchGreeting : ne matche pas une vraie question, même commençant par un
   assert.equal(matchGreeting("combien je dois à mon ex ce mois-ci"), null);
 });
 
+test("matchGreeting : couvre les 5 langues de l'app, pas seulement le français", () => {
+  assert.equal(matchGreeting("Hello"), "hello");
+  assert.equal(matchGreeting("Hola"), "hello");
+  assert.equal(matchGreeting("Guten Tag"), "hello");
+  assert.equal(matchGreeting("Olá"), "hello");
+  assert.equal(matchGreeting("Goodbye"), "bye");
+  assert.equal(matchGreeting("Adiós"), "bye");
+  assert.equal(matchGreeting("Auf Wiedersehen"), "bye");
+  assert.equal(matchGreeting("Tchau"), "bye");
+});
+
 test("matchFaqAnswer : question courte au participe passé (mot manquant non-essentiel) -> correspond quand même", () => {
   // Cas réel constaté en prod (2026-07-27) : ne matchait pas avant l'ajout du score de précision.
   assert.equal(matchFaqAnswer("invité un enfant", FAQ_TEST_ITEMS)?.a, "REP_ENFANT");
