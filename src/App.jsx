@@ -13146,11 +13146,11 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
           }} />
         )}
         {guardAv && (
-          <span style={{
-            position:"absolute",bottom:5,left:5,width:16,height:16,borderRadius:"50%",
+          <span className="calDayAvatarBadge" style={{
+            position:"absolute",bottom:5,left:5,borderRadius:"50%",
             background:guardAv.photo?undefined:guardAv.color,
-            border:`1px solid ${C.card}`,display:"flex",alignItems:"center",justifyContent:"center",
-            overflow:"hidden",fontSize:8,fontWeight:900,color:"#fff",lineHeight:1,
+            border:`1.5px solid ${C.card}`,display:"flex",alignItems:"center",justifyContent:"center",
+            overflow:"hidden",fontWeight:900,color:"#fff",lineHeight:1,
           }}>
             {guardAv.photo ? <img src={guardAv.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} /> : guardAv.initials}
           </span>
@@ -13172,6 +13172,14 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
 
   return (
     <div className="card" style={{padding:10,overflow:"hidden",width:"100%",boxSizing:"border-box"}}>
+      {/* 🔧 (2026-07-27) Badge avatar/initiales du coin de chaque case : taille
+          mobile de base, agrandie uniquement sur les grands écrans (PC Chrome
+          et PWA PC) où les cases sont bien plus grandes et le petit badge
+          d'origine restait disproportionné — demande explicite de l'utilisateur. */}
+      <style>{`
+        .calDayAvatarBadge { width:24px; height:24px; font-size:11px; }
+        @media (min-width:900px) { .calDayAvatarBadge { width:34px; height:34px; font-size:14px; } }
+      `}</style>
       {children}
       <div style={{display:"grid",gridTemplateColumns:`${WEEKNUM_COL}px repeat(7,1fr)`,gap:5,marginBottom:6,width:"100%",boxSizing:"border-box"}}>
         <div />
