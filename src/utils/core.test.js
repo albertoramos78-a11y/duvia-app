@@ -28,6 +28,7 @@ import {
   levenshteinDistance,
   fuzzyIncludes,
   matchFaqAnswer,
+  matchGreeting,
 } from "./core.js";
 
 // ── B1 — validatePassword (majuscule + caractère spécial désormais requis) ────
@@ -1151,6 +1152,24 @@ test("matchFaqAnswer : question vide -> aucune correspondance", () => {
 test("matchFaqAnswer : liste FAQ vide ou absente -> aucune correspondance", () => {
   assert.equal(matchFaqAnswer("comment inviter l'autre parent", []), null);
   assert.equal(matchFaqAnswer("comment inviter l'autre parent", null), null);
+});
+
+// ── matchGreeting — bonjour/au revoir dans l'assistant FAQ-only (2026-07-27) ──
+test("matchGreeting : reconnaît un bonjour simple, avec ou sans ponctuation/accents", () => {
+  assert.equal(matchGreeting("bonjour"), "hello");
+  assert.equal(matchGreeting("Bonjour !"), "hello");
+  assert.equal(matchGreeting("Salut"), "hello");
+});
+
+test("matchGreeting : reconnaît un au revoir simple", () => {
+  assert.equal(matchGreeting("à bientôt"), "bye");
+  assert.equal(matchGreeting("Au revoir !"), "bye");
+  assert.equal(matchGreeting("bye"), "bye");
+});
+
+test("matchGreeting : ne matche pas une vraie question, même commençant par une politesse", () => {
+  assert.equal(matchGreeting("bonjour comment inviter un parent"), null);
+  assert.equal(matchGreeting("combien je dois à mon ex ce mois-ci"), null);
 });
 
 test("matchFaqAnswer : question courte au participe passé (mot manquant non-essentiel) -> correspond quand même", () => {

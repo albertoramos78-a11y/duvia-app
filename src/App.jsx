@@ -24,7 +24,7 @@ import { usePush } from "./hooks/usePush";
 import { getMyLocation, setMyLocation } from "./services/supabase/locationService";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION, APP_VERSION } from './config.js';
-import { nextPensionDueDate, computeOverrideUpdate, mergeHistoryPreservingTokens, fuzzyIncludes, matchFaqAnswer } from './utils/core.js';
+import { nextPensionDueDate, computeOverrideUpdate, mergeHistoryPreservingTokens, fuzzyIncludes, matchFaqAnswer, matchGreeting } from './utils/core.js';
 import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact, weatherIconFor, getInitials, aggregateHourlyPeriods } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, LICORNE, FILLEUL, BRAND, BRAND_GRADIENT, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
@@ -17796,8 +17796,24 @@ function ChatbotBubble() {
     // 🔧 (2026-07-27) Freemium/Premium (sans IA) : pas de correspondance FAQ
     // locale trouvée → pas d'appel à Claude (réservé Premium+IA, de toute
     // façon refusé par le serveur, voir ai-chatbot/index.ts). On l'explique
-    // avec un CTA plutôt que de laisser planer une erreur générique.
+    // avec un CTA plutôt que de laisser planer une erreur générique. Une
+    // simple politesse (bonjour/au revoir) répond directement au lieu de
+    // tomber dans ce message — UNIQUEMENT en mode sans IA (demande explicite :
+    // le mode Premium+IA garde exactement son comportement actuel, Claude
+    // gère déjà nativement ce genre d'échange).
     if (!familyAiEnabled) {
+      const greeting = matchGreeting(question);
+      if (greeting) {
+        // Pas de badge "réponse FAQ" ici (et donc pas de bouton "Pas la bonne
+        // réponse ? Passer à Premium+IA" sous un simple bonjour, ça n'aurait
+        // pas de sens) — juste une réponse locale directe, gratuite.
+        setMessages(prev => [...prev,
+          { role: "user", content: question },
+          { role: "assistant", content: greeting==="hello" ? (t.chatbotGreetingHello||"Bonjour ! 👋 Pose-moi une question sur l'utilisation de Duvia.") : (t.chatbotGreetingBye||"À bientôt ! 👋") },
+        ]);
+        setInput("");
+        return;
+      }
       setMessages(prev => [...prev,
         { role: "user", content: question },
         { role: "assistant", content: t.chatbotAiUpsell || "Cette question dépasse la FAQ — l'assistant conversationnel complet est réservé à Premium+IA.", isUpsell: true, question },
@@ -18039,9 +18055,11 @@ function ChatbotBubble() {
             <button onClick={()=>send()} disabled={sending||!input.trim()}
               style={{width:38,height:38,background:C.vio,color:"#fff",border:"none",borderRadius:8,cursor:"pointer",opacity:(sending||!input.trim())?.5:1}}>➤</button>
           </div>
-          <div style={{padding:"0 12px 10px",fontSize:10,color:C.mut,textAlign:"center"}}>
-            {t.chatbotDisclaimer||"L'IA peut générer des erreurs. Vérifie les informations importantes."}
-          </div>
+          {familyAiEnabled && (
+            <div style={{padding:"0 12px 10px",fontSize:10,color:C.mut,textAlign:"center"}}>
+              {t.chatbotDisclaimer||"L'IA peut générer des erreurs. Vérifie les informations importantes."}
+            </div>
+          )}
         </div>
       )}
     </>
@@ -19617,7 +19635,7 @@ function ScheduleTab({prem: premProp, childReadOnly}) {
                 <div style={{display:"flex",gap:6,flexShrink:0}}>
                   {(!childReadOnly || childIdx===ownChildIdx) && (
                     <>
-                      <button onClick={()=>startEdit(slot)} style={{padding:"5px 9px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:11}}>{t.scheduleEdit||"✎"}</button>
+                      <button onClick={()=>startEdit(slot)} title={t.scheduleEditTitle||"Modifier"} style={{padding:"5px 9px",background:C.sur,color:C.mut,border:`1.5px solid ${C.bor}`,fontSize:13}}>✎</button>
                       <button onClick={()=>deleteSlot(slot.id)} style={{padding:"5px 9px",background:`${C.red}18`,color:C.red,border:`1.5px solid ${C.red}44`,fontSize:11}}>✕</button>
                     </>
                   )}

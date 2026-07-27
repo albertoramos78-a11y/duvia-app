@@ -974,3 +974,26 @@ export function matchFaqAnswer(question, faqItems, { minRecall = 0.65, minPrecis
   }
   return best;
 }
+
+// matchGreeting : reconnaît un simple bonjour/au revoir tapé dans l'assistant
+// FAQ-only (Freemium/Premium sans IA, voir ChatbotBubble dans App.jsx) — sans
+// ça, une politesse toute simple tombait dans le message "cette question
+// dépasse la FAQ" au lieu d'une réponse adaptée. Liste EXACTE volontairement
+// restreinte (correspondance exacte après normalisation, pas de flou) : un
+// faux positif ferait ignorer une vraie question à tort.
+const GREETING_PHRASES = new Set(["bonjour", "salut", "coucou", "bonsoir", "hello", "hey", "bonjour a tous"]);
+const FAREWELL_PHRASES = new Set(["au revoir", "a bientot", "a plus", "bye", "adieu", "bonne journee", "bonne soiree"]);
+
+function normalizeGreeting(text) {
+  return stripAccents(String(text || "").toLowerCase())
+    .replace(/[!?.,;:]+$/g, "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+export function matchGreeting(question) {
+  const norm = normalizeGreeting(question);
+  if (GREETING_PHRASES.has(norm)) return "hello";
+  if (FAREWELL_PHRASES.has(norm)) return "bye";
+  return null;
+}
