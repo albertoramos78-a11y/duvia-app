@@ -275,6 +275,12 @@ R: Calendrier → menu « … » → **Réinit.** → confirme. Les modification
 Q: Puis-je avoir un planning de garde différent pour chaque enfant ?
 R: Oui, en Premium : onglet **Dates spéciales**, désactive **Même garde pour tous les enfants**, puis configure le modèle enfant par enfant dans **Modèle garde** (sélecteur d'enfant en haut).
 
+Q: Comment exporter le calendrier vers Google Calendar ou Apple Calendar ?
+R: Calendrier → menu **⋯** → **iCal**. Le fichier `.ics` téléchargé s'importe dans Google Calendar, Apple Calendar ou tout agenda compatible.
+
+Q: Comment exporter le planning de garde en PDF ?
+R: Calendrier → menu **⋯** → **Export PDF** (Premium) : récapitulatif imprimable du planning annuel.
+
 ## ✉️ Inviter un membre de la famille
 Q: Comment inviter l'autre parent ?
 R: Menu ☰ → **Configuration famille** → **Famille** → **Parents** → **+ Ajouter un parent**. Renseigne email et/ou téléphone, **🔗 Générer le lien d'invitation**, puis envoie-le (lien valable 24h).
@@ -335,12 +341,21 @@ R: 🔒 **Intégrité vérifiée** = non modifié depuis l'envoi ; ⚠️ **Mess
 Q: Si je supprime une conversation, est-elle supprimée pour l'autre personne aussi ?
 R: Non — retirée seulement de ta propre liste, reste visible pour les autres participants.
 
+Q: Comment démarrer une nouvelle conversation ?
+R: Onglet **Messages** → **✏️ Nouveau** en haut de la liste → sélectionne un ou plusieurs contacts → envoie le premier message.
+
+Q: Comment savoir si j'ai des messages non lus ?
+R: Badge numéroté sur l'icône **Messages** du menu, et sur chaque conversation avec des messages non lus dans la liste.
+
 ## 🔔 Notifications
 Q: Où voir mes notifications ?
 R: Menu ☰ → **🔔 Notifications**, ou l'icône cloche en haut de l'écran.
 
 Q: Comment choisir par quel canal être notifié (email, notification push) ?
 R: Menu ☰ → **⚙️ Préférences** → **Notifications** : interrupteurs 📧 (email) et 🔔 (push) par type d'événement (message, dépense, document, demande d'adhésion).
+
+Q: Comment supprimer une notification ou marquer tout comme lu ?
+R: **🗑** sur une notification pour la supprimer (ou **🗑 Tout supprimer** en haut) ; toucher une notification la marque lue et ouvre l'onglet concerné ; **Tout lu** marque tout d'un coup.
 
 ## 🎁 Premium et parrainage
 Q: Comment passer à Premium ?
@@ -419,6 +434,9 @@ R: Menu ☰ → **Configuration famille** → **Famille**, section Enfants → f
 ## 🛟 Aide, avis et installation
 Q: Comment signaler un bug ?
 R: Menu ☰ → **🐛 Signaler un problème** → décris le souci, coche pour joindre une capture d'écran (prise automatiquement), puis envoie.
+
+Q: Comment contacter le support Duvia ?
+R: **Signaler un problème** (menu ☰ → **🐛 Signaler un problème**) sert aussi pour toute question qui n'est pas un bug technique — c'est le canal qui arrive directement à l'équipe Duvia.
 
 Q: Comment donner mon avis sur l'application ?
 R: Menu ☰ → **⭐ Donner mon avis** → note de 1 à 5 étoiles + commentaire optionnel. Modifiable plus tard, un seul avis par compte.

@@ -45,6 +45,14 @@ export const FAQ_SECTIONS = {
           q: "Puis-je avoir un planning de garde différent pour chaque enfant ?",
           a: "Oui, en Premium : dans l'onglet **Dates spéciales**, désactive **Même garde pour tous les enfants**, puis configure le modèle enfant par enfant dans l'onglet **Modèle garde** (un sélecteur d'enfant apparaît en haut de cet onglet).",
         },
+        {
+          q: "Comment exporter mon calendrier sur Google (ou Apple) ?",
+          a: "Dans le calendrier, ouvre le menu **⋯** (en haut) → **iCal**. Le fichier `.ics` téléchargé s'importe dans Google Calendar, Apple Calendar ou tout autre agenda compatible.",
+        },
+        {
+          q: "Comment exporter le planning en PDF ?",
+          a: "Dans le calendrier, menu **⋯** → **Export PDF** (réservé Premium) : génère un récapitulatif imprimable du planning de garde sur l'année.",
+        },
       ],
     },
     {
@@ -159,6 +167,14 @@ export const FAQ_SECTIONS = {
           q: "Si je supprime une conversation, est-elle supprimée pour l'autre personne aussi ?",
           a: "Non — la suppression ne retire la conversation que de ta propre liste ; elle reste visible pour les autres participants.",
         },
+        {
+          q: "Comment démarrer une nouvelle conversation ?",
+          a: "Onglet **Messages** → bouton **✏️ Nouveau** en haut de la liste → sélectionne un ou plusieurs contacts → envoie ton premier message pour créer la conversation.",
+        },
+        {
+          q: "Comment savoir si j'ai des messages non lus ?",
+          a: "Un badge numéroté apparaît sur l'icône **Messages** du menu, et sur chaque conversation contenant des messages non lus dans la liste.",
+        },
       ],
     },
     {
@@ -173,6 +189,14 @@ export const FAQ_SECTIONS = {
         {
           q: "Comment choisir par quel canal être notifié (email, notification push) ?",
           a: "Menu ☰ → **⚙️ Préférences** → section **Notifications** : un interrupteur 📧 (email) et 🔔 (push) pour chaque type d'événement (nouveau message, nouvelle dépense, nouveau document, demande à rejoindre la famille).",
+        },
+        {
+          q: "Comment supprimer une notification ?",
+          a: "Menu ☰ → **🔔 Notifications** → bouton **🗑** sur la notification concernée, ou **🗑 Tout supprimer** en haut de la liste pour toutes les effacer d'un coup.",
+        },
+        {
+          q: "Comment marquer mes notifications comme lues ?",
+          a: "Toucher une notification l'ouvre, la marque lue et t'emmène directement vers l'onglet concerné. Le bouton **Tout lu** en haut de la liste marque tout comme lu en un tap.",
         },
       ],
     },
@@ -319,6 +343,10 @@ export const FAQ_SECTIONS = {
         {
           q: "Comment signaler un bug ?",
           a: "Menu ☰ → **🐛 Signaler un problème** → décris le souci dans le champ de texte, coche la case pour joindre une capture d'écran de l'app si elle peut aider (elle est prise automatiquement avant l'ouverture de la fenêtre), puis envoie.",
+        },
+        {
+          q: "Comment contacter le support Duvia ?",
+          a: "Utilise **Signaler un problème** (menu ☰ → **🐛 Signaler un problème**), même pour une question qui n'est pas un bug technique — c'est le canal qui arrive directement à l'équipe Duvia.",
         },
         {
           q: "Comment donner mon avis sur l'application ?",
