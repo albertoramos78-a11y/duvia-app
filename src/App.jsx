@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback, createContext, useContext, Fragment } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, createContext, useContext, Fragment } from "react";
 import twemoji from "twemoji";
 import iconFamily        from "./assets/tab_family.png";
 import iconObservers     from "./assets/tab_observers.png";
@@ -17574,6 +17574,14 @@ function ChatbotBubble() {
   // transform (composité par le GPU, ne déclenche ni React ni layout) —
   // seul le relâchement commet la position finale dans le state React.
   const btnRef = useRef(null);
+  // 🔧 Efface le transform de drag EXACTEMENT au moment où le nouveau
+  // top/left (issu de setPos() dans onPointerUp) est appliqué au DOM —
+  // useLayoutEffect s'exécute avant que le navigateur peigne, donc les deux
+  // changements sont invisibles séparément, jamais un saut vers l'ancienne
+  // position suivi d'un re-saut vers la bonne.
+  useLayoutEffect(() => {
+    if (btnRef.current) btnRef.current.style.transform = "";
+  }, [pos]);
   // Un double-tap n'importe où à l'écran masque/réaffiche la bulle (bouton +
   // fenêtre si elle était ouverte) — utile quand elle gêne un contenu sous-
   // jacent. Détection manuelle par écart de temps entre deux pointerdown
@@ -17717,10 +17725,16 @@ function ChatbotBubble() {
     if (!drag.current.dragging) return;
     const wasMoved = drag.current.moved;
     drag.current.dragging = false;
-    if (btnRef.current) btnRef.current.style.transform = "";
     if (wasMoved) {
+      // 🔧 Ne PAS effacer le transform ici : setPos() est async, donc le
+      // top/left ne changerait qu'au rendu suivant — entre les deux, le
+      // bouton sauterait un instant à son ANCIENNE position (transform déjà
+      // effacé, top/left pas encore mis à jour). Le useLayoutEffect ci-dessous
+      // efface le transform SYNCHRONISÉ avec le nouveau top/left, dans le
+      // même passage, pour un relâchement sans saut visible.
       setPos(clampChatbotPos(drag.current.startTop + (drag.current.lastDy||0), drag.current.startLeft + (drag.current.lastDx||0)));
     } else {
+      if (btnRef.current) btnRef.current.style.transform = "";
       setOpen(o => !o);
     }
   }
