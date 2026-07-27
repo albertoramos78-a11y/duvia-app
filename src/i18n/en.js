@@ -171,6 +171,7 @@ const en = {
     chatbotAiUpsellBtn:"Discover Premium+AI",
     chatbotGreetingHello:"Hello! 👋 Ask me a question about using Duvia.",
     chatbotGreetingBye:"See you soon! 👋",
+    chatbotGreetingThanks:"You're welcome! 😊",
     chatbotSendToSupportBtn:"Send my question to support",
     chatbotSupportSending:"Sending…",
     chatbotSupportSent:"Thank you! Your question was sent to the team — it helps us improve Duvia.",

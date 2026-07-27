@@ -836,6 +836,7 @@ const pt = {
     chatbotAiUpsellBtn:"Descobrir Premium+IA",
     chatbotGreetingHello:"Olá! 👋 Faz-me uma pergunta sobre a utilização do Duvia.",
     chatbotGreetingBye:"Até breve! 👋",
+    chatbotGreetingThanks:"De nada! 😊",
     chatbotSendToSupportBtn:"Enviar a minha pergunta à assistência",
     chatbotSupportSending:"A enviar…",
     chatbotSupportSent:"Obrigado! A tua pergunta foi enviada à equipa — ajuda-nos a melhorar o Duvia.",

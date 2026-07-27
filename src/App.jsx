@@ -17738,9 +17738,12 @@ function ChatbotBubble() {
         // Pas de badge "réponse FAQ" ici (et donc pas de bouton "Pas la bonne
         // réponse ? Passer à Premium+IA" sous un simple bonjour, ça n'aurait
         // pas de sens) — juste une réponse locale directe, gratuite.
+        const greetingReply = greeting==="hello" ? (t.chatbotGreetingHello||"Bonjour ! 👋 Pose-moi une question sur l'utilisation de Duvia.")
+          : greeting==="thanks" ? (t.chatbotGreetingThanks||"Avec plaisir ! 😊")
+          : (t.chatbotGreetingBye||"À bientôt ! 👋");
         setMessages(prev => [...prev,
           { role: "user", content: question },
-          { role: "assistant", content: greeting==="hello" ? (t.chatbotGreetingHello||"Bonjour ! 👋 Pose-moi une question sur l'utilisation de Duvia.") : (t.chatbotGreetingBye||"À bientôt ! 👋") },
+          { role: "assistant", content: greetingReply },
         ]);
         setInput("");
         return;

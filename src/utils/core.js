@@ -1006,6 +1006,18 @@ const FAREWELL_PHRASES = new Set([
   // PT
   "adeus", "tchau", "ate logo", "ate breve", "ate a proxima",
 ]);
+const THANKS_PHRASES = new Set([
+  // FR
+  "merci", "merci beaucoup", "merci bcp", "merci infiniment",
+  // EN
+  "thanks", "thank you", "thanks a lot", "many thanks", "ty",
+  // ES
+  "gracias", "muchas gracias",
+  // DE
+  "danke", "danke schon", "vielen dank",
+  // PT
+  "obrigado", "obrigada", "muito obrigado", "muito obrigada",
+]);
 
 function normalizeGreeting(text) {
   return stripAccents(String(text || "").toLowerCase())
@@ -1018,5 +1030,6 @@ export function matchGreeting(question) {
   const norm = normalizeGreeting(question);
   if (GREETING_PHRASES.has(norm)) return "hello";
   if (FAREWELL_PHRASES.has(norm)) return "bye";
+  if (THANKS_PHRASES.has(norm)) return "thanks";
   return null;
 }

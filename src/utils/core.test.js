@@ -1183,6 +1183,15 @@ test("matchGreeting : couvre les 5 langues de l'app, pas seulement le français"
   assert.equal(matchGreeting("Tchau"), "bye");
 });
 
+test("matchGreeting : reconnaît un remerciement, dans les 5 langues", () => {
+  assert.equal(matchGreeting("merci"), "thanks");
+  assert.equal(matchGreeting("Merci beaucoup !"), "thanks");
+  assert.equal(matchGreeting("thank you"), "thanks");
+  assert.equal(matchGreeting("Gracias"), "thanks");
+  assert.equal(matchGreeting("Danke"), "thanks");
+  assert.equal(matchGreeting("Obrigada"), "thanks");
+});
+
 test("matchFaqAnswer : question courte au participe passé (mot manquant non-essentiel) -> correspond quand même", () => {
   // Cas réel constaté en prod (2026-07-27) : ne matchait pas avant l'ajout du score de précision.
   assert.equal(matchFaqAnswer("invité un enfant", FAQ_TEST_ITEMS)?.a, "REP_ENFANT");
