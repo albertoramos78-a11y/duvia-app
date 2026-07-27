@@ -821,6 +821,7 @@ const es = {
     weatherDetailUnavailable:"Detalle no disponible para este día.",
     chatbotTitle:"Asistente Duvia",
     chatbotEmptyState:"Hazme una pregunta sobre tu familia o sobre el uso de Duvia.",
+    chatbotEmptyStateFaqOnly:"Hazme una pregunta sobre el uso de Duvia (FAQ). El asistente completo, que conoce los datos de tu familia, es una función Premium+IA.",
     chatbotPlaceholder:"Escribe tu pregunta…",
     chatbotThinking:"Pensando…",
     chatbotDisclaimer:"La IA puede cometer errores. Comprueba la información importante.",
@@ -830,6 +831,9 @@ const es = {
     chatbotTokensExchange:"tokens",
     chatbotFaqInstantLabel:"Respuesta instantánea (FAQ)",
     chatbotFaqNotHelpfulBtn:"¿No es la respuesta correcta?",
+    chatbotFaqUpgradeBtn:"¿No es la respuesta correcta? Pasa a Premium+IA",
+    chatbotAiUpsell:"Esta pregunta va más allá de la FAQ — el asistente conversacional completo es una función Premium+IA.",
+    chatbotAiUpsellBtn:"Descubrir Premium+IA",
     chatbotDoubleTapHint:"Toca dos veces en cualquier parte de la pantalla para ocultar/mostrar el asistente.",
   };
 export default es;

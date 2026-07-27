@@ -17537,7 +17537,7 @@ function parisMidnightISO(now = new Date()) {
 }
 
 function ChatbotBubble() {
-  const { C, t, lang, familySync, myUid, familyAiEnabled } = useApp();
+  const { C, t, lang, familySync, myUid, familyAiEnabled, user, onUpgrade } = useApp();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]); // {role:"user"|"assistant", content:string}
   const [input, setInput] = useState("");
@@ -17682,7 +17682,12 @@ function ChatbotBubble() {
     drag.current.dragging = false;
   }
 
-  if (!familyAiEnabled || !familySync?.familyId || !visible) return null;
+  // 🔧 (2026-07-27) L'assistant est désormais visible pour TOUT parent, quel
+  // que soit son palier — familyAiEnabled ne détermine plus si la bulle
+  // s'affiche, seulement si les questions hors-FAQ sont transmises à Claude
+  // (voir send() plus bas) : Freemium/Premium ont la FAQ locale gratuite,
+  // Premium+IA a en plus l'assistant conversationnel complet.
+  if (user?.role !== "parent" || !familySync?.familyId || !visible) return null;
 
   // 🔧 (2026-07-27) Court-circuit local avant tout appel réseau : les
   // questions FAQ sont statiques (~40 sujets), donc si la question ressemble
@@ -17700,6 +17705,18 @@ function ChatbotBubble() {
       setMessages(prev => [...prev,
         { role: "user", content: question },
         { role: "assistant", content: faqMatch.a, fromFaq: true, faqQuestion: question },
+      ]);
+      setInput("");
+      return;
+    }
+    // 🔧 (2026-07-27) Freemium/Premium (sans IA) : pas de correspondance FAQ
+    // locale trouvée → pas d'appel à Claude (réservé Premium+IA, de toute
+    // façon refusé par le serveur, voir ai-chatbot/index.ts). On l'explique
+    // avec un CTA plutôt que de laisser planer une erreur générique.
+    if (!familyAiEnabled) {
+      setMessages(prev => [...prev,
+        { role: "user", content: question },
+        { role: "assistant", content: t.chatbotAiUpsell || "Cette question dépasse la FAQ — l'assistant conversationnel complet est réservé à Premium+IA.", isUpsell: true },
       ]);
       setInput("");
       return;
@@ -17789,7 +17806,7 @@ function ChatbotBubble() {
   // bouton (au-dessus par défaut, en-dessous s'il est trop haut à l'écran),
   // alignée sur son bord droit — pour rester visible où que le bouton ait
   // été déplacé, plutôt que figée dans le coin bas-droit d'origine.
-  const winW = 340, winH = 460, winGap = 10;
+  const winW = 340, winH = 600, winGap = 10;
   const openBelow = pos.top < window.innerHeight / 2;
   const winTop = Math.min(
     Math.max(openBelow ? pos.top + CHATBOT_BTN_SIZE + winGap : pos.top - winH - winGap, CHATBOT_MARGIN),
@@ -17812,7 +17829,7 @@ function ChatbotBubble() {
       </button>
       {open && (
         // 🔧 Fond bloquant (2026-07-22) : sans lui, la fenêtre de l'assistant
-        // (340×460, jamais plein écran) laisse le reste de l'app cliquable
+        // (340×600, jamais plein écran) laisse le reste de l'app cliquable
         // tout autour — un utilisateur pouvait par ex. supprimer une dépense
         // en arrière-plan pendant qu'il discute avec l'assistant. Un simple
         // div plein écran (sans pointerEvents:"none") suffit à intercepter
@@ -17826,10 +17843,12 @@ function ChatbotBubble() {
       {open && (
         <div style={{position:"fixed",top:winTop,left:winLeft,width:winW,maxWidth:"calc(100vw - 20px)",height:winH,maxHeight:"calc(100vh - 20px)",background:C.card,borderRadius:16,boxShadow:"0 8px 32px rgba(0,0,0,.3)",display:"flex",flexDirection:"column",zIndex:900,overflow:"hidden"}}>
           <div style={{padding:"12px 14px",background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontWeight:800,fontSize:14,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-            <span>🤖 {t.chatbotTitle||"Assistant Duvia"}</span>
+            <span>{familyAiEnabled?"🤖":"📚"} {t.chatbotTitle||"Assistant Duvia"}</span>
             <button onClick={()=>setOpen(false)} style={{background:"rgba(255,255,255,.2)",border:"none",color:"#fff",width:24,height:24,borderRadius:"50%",fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
           </div>
-          <div style={{padding:"6px 12px 0"}}>
+          {/* Barre de progression tokens : sans objet pour Freemium/Premium
+              (sans IA), qui n'appellent jamais l'API — voir send(). */}
+          {familyAiEnabled && <div style={{padding:"6px 12px 0"}}>
             {(() => {
               // 🔧 Barre de progression tokens : verte jusqu'à 50%, puis dégradé
               // vert→jaune→rouge de 50% à 100% (teinte HSL décroissante de 120°
@@ -17847,7 +17866,7 @@ function ChatbotBubble() {
             <div style={{fontSize:9,color:C.mut,marginTop:2,textAlign:"right"}}>
               {tokensUsedToday.toLocaleString()} / {tokensLimit.toLocaleString()} {t.chatbotTokensToday||"tokens aujourd'hui"}
             </div>
-          </div>
+          </div>}
           <div className="chatbot-doubletap-hint" style={{fontSize:10,color:C.mut,textAlign:"center",padding:"4px 12px 0"}}>
             💡 {t.chatbotDoubleTapHint||"Double-tape n'importe où sur l'écran pour masquer/réafficher l'assistant."}
           </div>
@@ -17856,7 +17875,9 @@ function ChatbotBubble() {
             {messages.length===0 && (
               <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,marginTop:4}}>
                 <MascotStage scale={0.34} />
-                <div style={{fontSize:12,color:C.mut,textAlign:"center",padding:"0 8px"}}>{t.chatbotEmptyState||"Pose-moi une question sur ta famille ou sur l'utilisation de Duvia."}</div>
+                <div style={{fontSize:12,color:C.mut,textAlign:"center",padding:"0 8px"}}>
+                  {familyAiEnabled ? (t.chatbotEmptyState||"Pose-moi une question sur ta famille ou sur l'utilisation de Duvia.") : (t.chatbotEmptyStateFaqOnly||"Pose-moi une question sur l'utilisation de Duvia (FAQ). L'assistant complet, qui connaît les données de ta famille, est réservé à Premium+IA.")}
+                </div>
               </div>
             )}
             {messages.map((m,i)=>(
@@ -17867,11 +17888,23 @@ function ChatbotBubble() {
                 {m.role==="assistant" && m.fromFaq && (
                   <div style={{display:"flex",alignItems:"center",gap:6,padding:"0 4px"}}>
                     <span style={{fontSize:9,color:C.mut}}>📚 {t.chatbotFaqInstantLabel||"Réponse instantanée (FAQ)"}</span>
-                    <button onClick={()=>retryViaApi(i)} disabled={sending}
-                      style={{fontSize:9,color:C.vio,background:"none",border:"none",padding:0,cursor:"pointer",textDecoration:"underline",opacity:sending?.5:1}}>
-                      {t.chatbotFaqNotHelpfulBtn||"Pas la bonne réponse ?"}
-                    </button>
+                    {familyAiEnabled ? (
+                      <button onClick={()=>retryViaApi(i)} disabled={sending}
+                        style={{fontSize:9,color:C.vio,background:"none",border:"none",padding:0,cursor:"pointer",textDecoration:"underline",opacity:sending?.5:1}}>
+                        {t.chatbotFaqNotHelpfulBtn||"Pas la bonne réponse ?"}
+                      </button>
+                    ) : (
+                      <button onClick={onUpgrade}
+                        style={{fontSize:9,color:C.vio,background:"none",border:"none",padding:0,cursor:"pointer",textDecoration:"underline"}}>
+                        {t.chatbotFaqUpgradeBtn||"Pas la bonne réponse ? Passer à Premium+IA"}
+                      </button>
+                    )}
                   </div>
+                )}
+                {m.role==="assistant" && m.isUpsell && (
+                  <button onClick={onUpgrade} style={{alignSelf:"flex-start",fontSize:10,color:"#fff",background:C.vio,border:"none",borderRadius:8,padding:"5px 10px",marginTop:2,cursor:"pointer",fontWeight:700}}>
+                    ✨ {t.chatbotAiUpsellBtn||"Découvrir Premium+IA"}
+                  </button>
                 )}
                 {m.role==="assistant" && !m.fromFaq && typeof m.tokens==="number" && (
                   <div style={{fontSize:9,color:C.mut,padding:"0 4px"}}>{m.tokens.toLocaleString()} {t.chatbotTokensExchange||"tokens"}</div>
