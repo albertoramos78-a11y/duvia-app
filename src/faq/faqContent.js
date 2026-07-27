@@ -274,6 +274,41 @@ export const FAQ_SECTIONS = {
           q: "Comment changer le pays ou la zone scolaire ?",
           a: "Menu ☰ → **Configuration famille** → onglet **Dates spéciales** → menus **Pays** et **Zone** (cette zone sert à calculer les bonnes dates de vacances scolaires).",
         },
+        {
+          q: "Comment configurer la Fête des Mères et la Fête des Pères ?",
+          a: "Onglet **Dates spéciales** (Configuration famille) → active **🌸 Fête des Mères** et/ou **🎩 Fête des Pères** : la garde est automatiquement forcée sur ce parent ce jour-là.",
+        },
+        {
+          q: "Anniversaire des parents : comment ça marche ?",
+          a: "Onglet **Dates spéciales** (Configuration famille) → **🎂 Anniversaires des parents** : la garde est automatiquement forcée sur le parent dont c'est l'anniversaire.",
+        },
+        {
+          q: "Anniversaire de mon enfant : comment ça marche ?",
+          a: "Onglet **Dates spéciales** (Configuration famille) → **🎁 Anniversaires des enfants** : choisis quel parent a la garde selon que l'année est paire ou impaire.",
+        },
+        {
+          q: "Comment changer mon mot de passe ?",
+          a: "Menu ☰ → **⚙️ Préférences** → **🔒 Changer mon mot de passe** → mot de passe actuel, puis nouveau (8 caractères minimum, une majuscule, un caractère spécial) et confirmation. Si tu t'es connecté(e) avec Google, ça se gère directement sur myaccount.google.com, pas dans Duvia.",
+        },
+        {
+          q: "Comment changer mon adresse email ?",
+          a: "Menu ☰ → **⚙️ Préférences** → **✉️ Changer mon adresse email** → saisis la nouvelle adresse → **Envoyer la confirmation**. Un email de validation part sur la nouvelle adresse ; l'ancienne reste active tant que tu n'as pas confirmé.",
+        },
+        {
+          q: "Comment changer ma photo de profil ?",
+          a: "Menu ☰ → **Configuration famille** → onglet **Famille** → touche ta propre bulle d'avatar (parent) → icône **🖼️** (galerie) ou **📷** (appareil photo) dans le sélecteur qui s'ouvre. Fonctionne aussi pour l'avatar de chaque enfant ou observateur, depuis leur propre carte.",
+        },
+      ],
+    },
+    {
+      id: "enfant",
+      icon: "🧒",
+      title: "Infos enfant",
+      items: [
+        {
+          q: "Comment renseigner les allergies de mon enfant ?",
+          a: "Menu ☰ → **Configuration famille** → onglet **Famille**, section **Enfants** → ouvre la fiche de l'enfant concerné → champ **Allergies**. La même fiche a aussi **Groupe sanguin**, **École**, **Médecin** et **Contacts d'urgence**. Un enfant ou un observateur sans accès à Configuration famille peut consulter ces infos (lecture seule) via l'onglet **🧒 Infos enfant**.",
+        },
       ],
     },
     {

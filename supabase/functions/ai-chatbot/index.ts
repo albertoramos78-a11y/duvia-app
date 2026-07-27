@@ -400,6 +400,22 @@ R: Bouton palette en haut de l'écran, à côté du logo — fait défiler 🎨 
 Q: Comment changer le pays ou la zone scolaire ?
 R: Menu ☰ → **Configuration famille** → **Dates spéciales** → menus **Pays** et **Zone** (calcule les bonnes dates de vacances scolaires).
 
+Q: Comment configurer les fêtes des parents et les anniversaires ?
+R: Onglet **Dates spéciales** → **🌸 Fête des Mères**/**🎩 Fête des Pères** (garde forcée ce jour-là), **🎂 Anniversaires des parents** (garde forcée sur le parent concerné), **🎁 Anniversaires des enfants** (garde selon année paire/impaire).
+
+Q: Comment changer mon mot de passe ?
+R: Menu ☰ → **⚙️ Préférences** → **🔒 Changer mon mot de passe** → ancien mot de passe, nouveau (8 car., majuscule, caractère spécial), confirmation. Compte Google : à gérer sur myaccount.google.com.
+
+Q: Comment changer mon adresse email ?
+R: Menu ☰ → **⚙️ Préférences** → **✉️ Changer mon adresse email** → nouvelle adresse → **Envoyer la confirmation**. L'ancienne reste active jusqu'à validation de la nouvelle.
+
+Q: Comment changer ma photo de profil ?
+R: Configuration famille → **Famille** → touche ta bulle d'avatar → icône **🖼️** (galerie) ou **📷** (appareil photo). Pareil pour l'avatar d'un enfant ou observateur, depuis sa propre carte.
+
+## 🧒 Infos enfant
+Q: Comment renseigner allergies, groupe sanguin, école, médecin ou contacts d'urgence d'un enfant ?
+R: Menu ☰ → **Configuration famille** → **Famille**, section Enfants → fiche de l'enfant → champs **Allergies**, **Groupe sanguin**, **École**, **Médecin**, **Contacts d'urgence**. Consultable en lecture seule via l'onglet **🧒 Infos enfant** pour qui n'a pas accès à Configuration famille.
+
 ## 🛟 Aide, avis et installation
 Q: Comment signaler un bug ?
 R: Menu ☰ → **🐛 Signaler un problème** → décris le souci, coche pour joindre une capture d'écran (prise automatiquement), puis envoie.
