@@ -24,7 +24,7 @@ import { usePush } from "./hooks/usePush";
 import { getMyLocation, setMyLocation } from "./services/supabase/locationService";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION, APP_VERSION } from './config.js';
-import { nextPensionDueDate, computeOverrideUpdate, mergeHistoryPreservingTokens, fuzzyIncludes } from './utils/core.js';
+import { nextPensionDueDate, computeOverrideUpdate, mergeHistoryPreservingTokens, fuzzyIncludes, matchFaqAnswer } from './utils/core.js';
 import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact, weatherIconFor, getInitials, aggregateHourlyPeriods } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, LICORNE, FILLEUL, BRAND, BRAND_GRADIENT, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
@@ -17537,7 +17537,7 @@ function parisMidnightISO(now = new Date()) {
 }
 
 function ChatbotBubble() {
-  const { C, t, familySync, myUid, familyAiEnabled } = useApp();
+  const { C, t, lang, familySync, myUid, familyAiEnabled } = useApp();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]); // {role:"user"|"assistant", content:string}
   const [input, setInput] = useState("");
@@ -17684,10 +17684,27 @@ function ChatbotBubble() {
 
   if (!familyAiEnabled || !familySync?.familyId || !visible) return null;
 
+  // 🔧 (2026-07-27) Court-circuit local avant tout appel réseau : les
+  // questions FAQ sont statiques (~40 sujets), donc si la question ressemble
+  // FORTEMENT à l'une d'elles (voir matchFaqAnswer, volontairement
+  // conservateur — jamais de faux positif plutôt qu'une correspondance
+  // hasardeuse), on répond instantanément sans consommer un seul token.
+  // Sinon, comportement inchangé : appel à l'assistant IA comme avant.
   async function send() {
     const question = input.trim();
     if (!question || sending) return;
-    setSending(true); setErr("");
+    setErr("");
+    const flatFaqItems = (FAQ_SECTIONS[lang] || FAQ_SECTIONS.fr).flatMap(s => s.items);
+    const faqMatch = matchFaqAnswer(question, flatFaqItems);
+    if (faqMatch) {
+      setMessages(prev => [...prev,
+        { role: "user", content: question },
+        { role: "assistant", content: faqMatch.a, fromFaq: true, faqQuestion: question },
+      ]);
+      setInput("");
+      return;
+    }
+    setSending(true);
     const nextMessages = [...messages, { role: "user", content: question }];
     setMessages(nextMessages);
     setInput("");
@@ -17723,6 +17740,39 @@ function ChatbotBubble() {
       } else {
         setMessages([...nextMessages, { role: "assistant", content: data?.answer || "", tokens: data?.tokens_this_exchange }]);
       }
+      if (typeof data?.tokens_used_today === "number") setTokensUsedToday(data.tokens_used_today);
+      if (typeof data?.tokens_limit === "number") setTokensLimit(data.tokens_limit);
+    } catch (e) {
+      setErr(
+        e.message === "daily_tokens" ? (t.chatbotTokenLimitError || "⚠️ Limite quotidienne de tokens atteinte. Réessaie demain.")
+        : (t.chatbotError || "⚠️ Une erreur est survenue. Réessaie.")
+      );
+    } finally {
+      setSending(false);
+    }
+  }
+
+  // Échappatoire (2026-07-27) si la réponse FAQ locale ne convenait pas :
+  // repose EXACTEMENT la même question à l'assistant IA, cette fois sans
+  // passer par matchFaqAnswer. msgIndex pointe vers le message assistant
+  // fromFaq lui-même ; le message juste avant (msgIndex-1) est la question
+  // utilisateur correspondante — l'historique envoyé est tout ce qui précède.
+  async function retryViaApi(msgIndex) {
+    const question = messages[msgIndex]?.faqQuestion;
+    if (!question || sending) return;
+    setSending(true); setErr("");
+    try {
+      const history = messages.slice(0, msgIndex - 1).map(m => ({ role: m.role, content: m.content }));
+      const { data, error } = await supabase.functions.invoke("ai-chatbot", {
+        body: { question, family_id: familySync.familyId, history },
+      });
+      if (error) {
+        let code = null;
+        try { code = (await error.context.json())?.error; } catch { /* réponse non-JSON ou déjà consommée */ }
+        throw new Error(code === "daily_token_limit_reached" ? "daily_tokens" : "generic");
+      }
+      if (data?.error) throw new Error("generic");
+      setMessages(prev => [...prev, { role: "assistant", content: data?.answer || "", tokens: data?.tokens_this_exchange }]);
       if (typeof data?.tokens_used_today === "number") setTokensUsedToday(data.tokens_used_today);
       if (typeof data?.tokens_limit === "number") setTokensLimit(data.tokens_limit);
     } catch (e) {
@@ -17814,7 +17864,16 @@ function ChatbotBubble() {
                 <div style={{padding:"8px 12px",borderRadius:12,fontSize:13,lineHeight:1.4,whiteSpace:"pre-wrap",background:m.role==="user"?C.vio:C.sur,color:m.role==="user"?"#fff":C.txt}}>
                   {renderChatbotMarkdown(m.content)}
                 </div>
-                {m.role==="assistant" && typeof m.tokens==="number" && (
+                {m.role==="assistant" && m.fromFaq && (
+                  <div style={{display:"flex",alignItems:"center",gap:6,padding:"0 4px"}}>
+                    <span style={{fontSize:9,color:C.mut}}>📚 {t.chatbotFaqInstantLabel||"Réponse instantanée (FAQ)"}</span>
+                    <button onClick={()=>retryViaApi(i)} disabled={sending}
+                      style={{fontSize:9,color:C.vio,background:"none",border:"none",padding:0,cursor:"pointer",textDecoration:"underline",opacity:sending?.5:1}}>
+                      {t.chatbotFaqNotHelpfulBtn||"Pas la bonne réponse ?"}
+                    </button>
+                  </div>
+                )}
+                {m.role==="assistant" && !m.fromFaq && typeof m.tokens==="number" && (
                   <div style={{fontSize:9,color:C.mut,padding:"0 4px"}}>{m.tokens.toLocaleString()} {t.chatbotTokensExchange||"tokens"}</div>
                 )}
               </div>
@@ -17826,7 +17885,7 @@ function ChatbotBubble() {
             <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")send();}}
               placeholder={t.chatbotPlaceholder||"Écris ta question…"} disabled={sending}
               style={{flex:1,height:38,padding:"0 12px",border:`1px solid ${C.bor}`,borderRadius:8,fontSize:13}} />
-            <button onClick={send} disabled={sending||!input.trim()}
+            <button onClick={()=>send()} disabled={sending||!input.trim()}
               style={{width:38,height:38,background:C.vio,color:"#fff",border:"none",borderRadius:8,cursor:"pointer",opacity:(sending||!input.trim())?.5:1}}>➤</button>
           </div>
           <div style={{padding:"0 12px 10px",fontSize:10,color:C.mut,textAlign:"center"}}>

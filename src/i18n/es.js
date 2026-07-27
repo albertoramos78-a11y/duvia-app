@@ -828,6 +828,8 @@ const es = {
     chatbotTokenLimitError:"⚠️ Límite diario de tokens alcanzado. Vuelve a intentarlo mañana.",
     chatbotTokensToday:"tokens hoy",
     chatbotTokensExchange:"tokens",
+    chatbotFaqInstantLabel:"Respuesta instantánea (FAQ)",
+    chatbotFaqNotHelpfulBtn:"¿No es la respuesta correcta?",
     chatbotDoubleTapHint:"Toca dos veces en cualquier parte de la pantalla para ocultar/mostrar el asistente.",
   };
 export default es;

@@ -162,6 +162,8 @@ const fr = {
     chatbotTokenLimitError:"⚠️ Limite quotidienne de tokens atteinte. Réessaie demain.",
     chatbotTokensToday:"tokens aujourd'hui",
     chatbotTokensExchange:"tokens",
+    chatbotFaqInstantLabel:"Réponse instantanée (FAQ)",
+    chatbotFaqNotHelpfulBtn:"Pas la bonne réponse ?",
     chatbotDoubleTapHint:"Double-tape n'importe où sur l'écran pour masquer/réafficher l'assistant.",
     premHeaderPremium:"Premium",premHeaderInherited:"Premium hérité",
     lockParents:"🔒 Ajouter un parent — Premium",lockChildren:"🔒 Ajouter un enfant — Premium",

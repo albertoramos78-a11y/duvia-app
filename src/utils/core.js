@@ -918,3 +918,47 @@ export function fuzzyIncludes(haystack, needle) {
   const words = h.split(/[^a-z0-9]+/).filter(Boolean);
   return words.some(w => Math.abs(w.length - n.length) <= maxDist && levenshteinDistance(w, n) <= maxDist);
 }
+
+// Mots trop génériques pour compter comme "significatifs" dans une question
+// FAQ — sans ce filtre, "Comment configurer X ?" matcherait n'importe quelle
+// autre question commençant par "Comment".
+const FAQ_STOPWORDS = new Set([
+  "comment","est-ce","quel","quels","quelle","quelles","dont","aussi","donc",
+  "ainsi","alors","meme","autre","autres","cette","cet","ces","leur","leurs",
+  "tout","tous","toute","toutes","sans","avec","dans","pour","voir","fait",
+  "faire","etre","avoir","peut","puis","que","qui","quoi","une","des","les",
+  "mon","mes","son","ses","sur","par","aux",
+]);
+
+function faqSignificantWords(text) {
+  return stripAccents(String(text || "").toLowerCase())
+    // Les parenthèses des questions FAQ ne sont que des exemples illustratifs
+    // ("...un observateur (grand-parent, proche...)") — les compter comme
+    // "significatifs" gonflerait artificiellement le nombre de mots à
+    // retrouver et ferait échouer des correspondances par ailleurs évidentes.
+    .replace(/\([^)]*\)/g, " ")
+    .split(/[^a-z0-9]+/)
+    .filter(w => w.length >= 4 && !FAQ_STOPWORDS.has(w));
+}
+
+// matchFaqAnswer : cherche, PARMI UNE LISTE STATIQUE DE QUESTIONS FAQ, celle
+// dont les mots significatifs recouvrent le plus la question posée — sert de
+// court-circuit gratuit avant d'appeler l'assistant IA (voir ChatbotBubble
+// dans App.jsx) : une correspondance jugée assez forte répond instantanément
+// depuis la FAQ, sans consommer de tokens. Volontairement CONSERVATEUR (score
+// et nombre de mots minimum élevés) : une fausse correspondance (mauvaise
+// réponse affichée avec confiance) est pire qu'un simple appel à l'IA en
+// plus — en cas de doute, ne rien retourner plutôt que deviner.
+export function matchFaqAnswer(question, faqItems, { minScore = 0.75, minWords = 2 } = {}) {
+  const qWords = faqSignificantWords(question);
+  if (qWords.length === 0) return null;
+  let best = null, bestScore = 0;
+  for (const item of (faqItems || [])) {
+    const faqWords = faqSignificantWords(item?.q);
+    if (faqWords.length < minWords) continue;
+    const matchedCount = faqWords.filter(fw => qWords.some(qw => fuzzyIncludes(qw, fw))).length;
+    const score = matchedCount / faqWords.length;
+    if (matchedCount >= minWords && score > bestScore) { bestScore = score; best = item; }
+  }
+  return bestScore >= minScore ? best : null;
+}

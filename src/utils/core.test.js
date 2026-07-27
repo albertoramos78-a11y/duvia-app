@@ -27,6 +27,7 @@ import {
   mergeHistoryPreservingTokens,
   levenshteinDistance,
   fuzzyIncludes,
+  matchFaqAnswer,
 } from "./core.js";
 
 // ── B1 — validatePassword (majuscule + caractère spécial désormais requis) ────
@@ -1113,4 +1114,41 @@ test("fuzzyIncludes : requête courte sans faute de frappe tolérée (évite les
 
 test("fuzzyIncludes : aucune correspondance sur un mot sans rapport", () => {
   assert.equal(fuzzyIncludes("Comment inviter un observateur ?", "dépense"), false);
+});
+
+// ── matchFaqAnswer — court-circuit local avant appel à l'assistant IA (2026-07-27) ──
+const FAQ_TEST_ITEMS = [
+  { q: "Comment inviter l'autre parent ?", a: "REP_PARENT" },
+  { q: "Comment inviter un enfant à rejoindre l'app ?", a: "REP_ENFANT" },
+  { q: "Comment inviter un observateur (grand-parent, proche...) ?", a: "REP_OBSERVATEUR" },
+  { q: "Comment ajouter une dépense ?", a: "REP_DEPENSE" },
+  { q: "Où voir mes notifications ?", a: "REP_NOTIF" },
+];
+
+test("matchFaqAnswer : question quasi identique à la FAQ -> correspondance forte", () => {
+  assert.equal(matchFaqAnswer("comment inviter l'autre parent", FAQ_TEST_ITEMS)?.a, "REP_PARENT");
+});
+
+test("matchFaqAnswer : distingue des questions FAQ voisines (parent vs enfant vs observateur)", () => {
+  assert.equal(matchFaqAnswer("comment inviter un enfant à rejoindre l'app", FAQ_TEST_ITEMS)?.a, "REP_ENFANT");
+  assert.equal(matchFaqAnswer("comment inviter un observateur", FAQ_TEST_ITEMS)?.a, "REP_OBSERVATEUR");
+});
+
+test("matchFaqAnswer : question sans rapport -> aucune correspondance (repli sur l'IA)", () => {
+  assert.equal(matchFaqAnswer("quel temps fera-t-il ce week-end chez son père", FAQ_TEST_ITEMS), null);
+});
+
+test("matchFaqAnswer : question reformulée/vague -> pas de correspondance forcée", () => {
+  // Volontairement conservateur : mieux vaut appeler l'IA qu'un mauvais résultat local.
+  assert.equal(matchFaqAnswer("je veux ajouter mon ex à l'appli", FAQ_TEST_ITEMS), null);
+});
+
+test("matchFaqAnswer : question vide -> aucune correspondance", () => {
+  assert.equal(matchFaqAnswer("", FAQ_TEST_ITEMS), null);
+  assert.equal(matchFaqAnswer("   ", FAQ_TEST_ITEMS), null);
+});
+
+test("matchFaqAnswer : liste FAQ vide ou absente -> aucune correspondance", () => {
+  assert.equal(matchFaqAnswer("comment inviter l'autre parent", []), null);
+  assert.equal(matchFaqAnswer("comment inviter l'autre parent", null), null);
 });
