@@ -24,7 +24,7 @@ import { usePush } from "./hooks/usePush";
 import { getMyLocation, setMyLocation } from "./services/supabase/locationService";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION, APP_VERSION } from './config.js';
-import { nextPensionDueDate, computeOverrideUpdate, mergeHistoryPreservingTokens, fuzzyIncludes, matchFaqAnswer, matchGreeting, matchAgendaIntent } from './utils/core.js';
+import { nextPensionDueDate, computeOverrideUpdate, mergeHistoryPreservingTokens, fuzzyIncludes, matchFaqAnswer, matchGreeting, matchAgendaIntent, matchStatsIntent } from './utils/core.js';
 import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact, weatherIconFor, getInitials, aggregateHourlyPeriods } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, LICORNE, FILLEUL, BRAND, BRAND_GRADIENT, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
@@ -17578,6 +17578,51 @@ function buildAgendaAnswer(intent, cfg) {
   return null;
 }
 
+// ── Réponses "Statistiques" de l'assistant sans IA (2026-07-27) ────────────
+// Même principe que buildAgendaAnswer : décompte réel via resolveGuard() sur
+// toute la période demandée (mois en cours par défaut, année en cours si
+// "days_year"), jamais une estimation. Les jours "Ensemble"/chez un
+// observateur sont comptés à part, pas répartis arbitrairement entre les
+// parents.
+function countCustodyDays(cfg, childId, fromStr, untilStr) {
+  const counts = cfg.parents.map(() => 0);
+  let together = 0, withObserver = 0, undef = 0;
+  const end = new Date(untilStr + "T12:00:00");
+  for (let d = new Date(fromStr + "T12:00:00"); d <= end; d.setDate(d.getDate() + 1)) {
+    const g = resolveGuard(toStr(d), cfg, childId);
+    if (!g) undef++;
+    else if (g.allParents) together++;
+    else if (g.obsId) withObserver++;
+    else if (g.parentIdx !== undefined && g.parentIdx >= 0) counts[g.parentIdx]++;
+    else undef++;
+  }
+  return { counts, together, withObserver, undef };
+}
+function formatCustodyStats(stats, cfg) {
+  const parts = cfg.parents.map((p, i) => `${p?.name || `Parent ${i + 1}`} : ${stats.counts[i]} j`);
+  if (stats.together) parts.push(`Ensemble : ${stats.together} j`);
+  if (stats.withObserver) parts.push(`Chez un tiers : ${stats.withObserver} j`);
+  return parts.join(" · ");
+}
+function buildStatsAnswer(intent, cfg) {
+  const now = new Date();
+  let fromStr, periodLabel;
+  if (intent === "days_year") {
+    fromStr = `${now.getFullYear()}-01-01`;
+    periodLabel = `en ${now.getFullYear()} (jusqu'à aujourd'hui)`;
+  } else {
+    fromStr = toStr(new Date(now.getFullYear(), now.getMonth(), 1));
+    periodLabel = "ce mois-ci";
+  }
+  const untilStr = toStr(now);
+  const perChild = cfg.sameGuardAll === false && (cfg.children || []).length > 1;
+  if (perChild) {
+    const lines = cfg.children.map(ch => `${ch.name || "Enfant"} — ${formatCustodyStats(countCustodyDays(cfg, ch.id, fromStr, untilStr), cfg)}`);
+    return `Jours de garde ${periodLabel} :\n${lines.join("\n")}`;
+  }
+  return `Jours de garde ${periodLabel} — ${formatCustodyStats(countCustodyDays(cfg, null, fromStr, untilStr), cfg)}`;
+}
+
 function ChatbotBubble() {
   const { C, t, lang, cfg, familySync, myUid, familyAiEnabled, isChild, isObs, onUpgrade } = useApp();
   const [open, setOpen] = useState(false);
@@ -17845,6 +17890,19 @@ function ChatbotBubble() {
         setMessages(prev => [...prev,
           { role: "user", content: question },
           { role: "assistant", content: buildAgendaAnswer(agendaIntent, cfg) },
+        ]);
+        setInput("");
+        return;
+      }
+      // 🔧 (2026-07-27) Questions de statistiques ("combien de jours chez
+      // chaque parent ?", "répartition annuelle ?") — même principe que
+      // l'agenda : décompte réel via resolveGuard() sur la période, jamais
+      // estimé. Voir matchStatsIntent (core.js).
+      const statsIntent = matchStatsIntent(question);
+      if (statsIntent) {
+        setMessages(prev => [...prev,
+          { role: "user", content: question },
+          { role: "assistant", content: buildStatsAnswer(statsIntent, cfg) },
         ]);
         setInput("");
         return;

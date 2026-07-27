@@ -30,6 +30,7 @@ import {
   matchFaqAnswer,
   matchGreeting,
   matchAgendaIntent,
+  matchStatsIntent,
 } from "./core.js";
 
 // ── B1 — validatePassword (majuscule + caractère spécial désormais requis) ────
@@ -1230,6 +1231,22 @@ test("matchAgendaIntent : reconnaît le planning de la semaine", () => {
 test("matchAgendaIntent : ne matche pas une question hors agenda", () => {
   assert.equal(matchAgendaIntent("comment inviter l'autre parent"), null);
   assert.equal(matchAgendaIntent(""), null);
+});
+
+// ── matchStatsIntent — répartition des jours de garde (2026-07-27) ──────────
+test("matchStatsIntent : reconnaît une question de répartition, mois par défaut", () => {
+  assert.equal(matchStatsIntent("combien de jours chez chaque parent ?"), "days_month");
+  assert.equal(matchStatsIntent("temps de garde"), "days_month");
+});
+
+test("matchStatsIntent : bascule sur l'année si le mot est présent", () => {
+  assert.equal(matchStatsIntent("répartition annuelle"), "days_year");
+  assert.equal(matchStatsIntent("combien de jours de garde cette année ?"), "days_year");
+});
+
+test("matchStatsIntent : ne matche pas une question hors statistiques", () => {
+  assert.equal(matchStatsIntent("chez qui est l'enfant aujourd'hui"), null);
+  assert.equal(matchStatsIntent(""), null);
 });
 
 test("matchFaqAnswer : question courte au participe passé (mot manquant non-essentiel) -> correspond quand même", () => {

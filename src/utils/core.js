@@ -1079,3 +1079,22 @@ export function matchAgendaIntent(question) {
   }
   return null;
 }
+
+// matchStatsIntent : reconnaît une question sur la RÉPARTITION des jours de
+// garde (pas juste "aujourd'hui/demain", un décompte sur une période) —
+// même principe que matchAgendaIntent, réponse calculée localement via
+// resolveGuard() sur toute la période, jamais inventée. Par défaut : le mois
+// en cours ; bascule sur l'année en cours si un mot "année/annuel" est présent.
+const STATS_DAYS_PHRASES = [
+  "combien de jours chez chaque parent", "combien de jours de garde",
+  "repartition des jours de garde", "repartition annuelle", "repartition de la garde",
+  "temps de garde", "statistiques de garde", "combien de jours chacun",
+];
+const STATS_YEAR_WORDS = ["annee", "annuel", "annuelle"];
+
+export function matchStatsIntent(question) {
+  const norm = normalizeGreeting(question);
+  if (!norm) return null;
+  if (!STATS_DAYS_PHRASES.some(p => norm.includes(p))) return null;
+  return STATS_YEAR_WORDS.some(w => norm.includes(w)) ? "days_year" : "days_month";
+}
