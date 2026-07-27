@@ -13178,7 +13178,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
           d'origine restait disproportionné — demande explicite de l'utilisateur. */}
       <style>{`
         .calDayAvatarBadge { width:18px; height:18px; font-size:9px; }
-        @media (min-width:900px) { .calDayAvatarBadge { width:34px; height:34px; font-size:14px; } }
+        @media (min-width:900px) { .calDayAvatarBadge { width:40px; height:40px; font-size:16px; } }
       `}</style>
       {children}
       <div style={{display:"grid",gridTemplateColumns:`${WEEKNUM_COL}px repeat(7,1fr)`,gap:5,marginBottom:6,width:"100%",boxSizing:"border-box"}}>
@@ -13343,7 +13343,7 @@ function InlinePicker({ds,guard,onClose,onFull,dayInfo,readOnly=false}) {
           <button key={pi} onClick={()=>{updateCal(ds,{parentIdx:pi,obsId:undefined,timeType:"full",startTime:"",endTime:"",location:"",note:""});onClose();}}
             title={p.name||`P${pi+1}`}
             style={{display:"flex",alignItems:"center",gap:6,padding:photo?"5px":"5px 12px 5px 5px",background:active?p.color:`${p.color}22`,color:active?"#fff":p.color,border:`2px solid ${p.color}`,borderRadius:20,fontSize:13,fontWeight:700}}>
-            <span style={{width:30,height:30,borderRadius:"50%",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:active?"rgba(255,255,255,.3)":`${p.color}33`,fontSize:14}}>
+            <span style={{width:40,height:40,borderRadius:"50%",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:active?"rgba(255,255,255,.3)":`${p.color}33`,fontSize:17}}>
               {photo ? <img src={photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} /> : (p.avatar||getInitials(p?.name)||"P")}
             </span>
             {!photo && (p.name||`P${pi+1}`)}
@@ -13357,7 +13357,7 @@ function InlinePicker({ds,guard,onClose,onFull,dayInfo,readOnly=false}) {
           <button key={o.id} onClick={()=>{updateCal(ds,{parentIdx:undefined,obsId:o.id,obsName:o.name,timeType:"full",startTime:"",endTime:"",location:"",note:""});onClose();}}
             title={obsLabel(o)}
             style={{display:"flex",alignItems:"center",gap:6,padding:photo?"5px":"5px 12px 5px 5px",background:active?"#f59e0b":"#f59e0b18",color:active?"#fff":"#f59e0b",border:"2px solid #f59e0b",borderRadius:20,fontSize:13,fontWeight:700}}>
-            <span style={{width:30,height:30,borderRadius:"50%",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:active?"rgba(255,255,255,.3)":"#f59e0b33",fontSize:14}}>
+            <span style={{width:40,height:40,borderRadius:"50%",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:active?"rgba(255,255,255,.3)":"#f59e0b33",fontSize:17}}>
               {photo ? <img src={photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} /> : (o.avatar||getInitials(o?.name)||"🏠")}
             </span>
             {!photo && obsLabel(o)}
