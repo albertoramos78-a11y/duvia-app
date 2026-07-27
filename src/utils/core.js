@@ -1019,18 +1019,56 @@ const THANKS_PHRASES = new Set([
   "obrigado", "obrigada", "muito obrigado", "muito obrigada",
 ]);
 
+// Abréviations SMS/argot COURANTES et SANS AMBIGUÏTÉ (2026-07-27, "élargir
+// la compréhension") — volontairement une petite liste sûre plutôt qu'un
+// dictionnaire exhaustif : une abréviation ambiguë (ex: "c" pour "c'est",
+// "la" pour "là") ferait plus de faux positifs qu'elle n'aiderait, vu que ces
+// matchers n'ont aucune tolérance aux fautes par ailleurs. Remplacement mot
+// par mot (jamais une sous-chaîne), donc "kilo" ne devient jamais "quilo".
+const SMS_ABBREVIATIONS = {
+  ki: "qui", dmn: "demain", auj: "aujourdhui", ajdhui: "aujourdhui",
+  qd: "quand", slt: "salut", bjr: "bonjour", bsr: "bonsoir", cc: "coucou",
+};
+
 function normalizeGreeting(text) {
-  return stripAccents(String(text || "").toLowerCase())
+  const base = stripAccents(String(text || "").toLowerCase())
     .replace(/['’]/g, "")
     .replace(/[!?.,;:]+$/g, "")
     // 🔧 (2026-07-27, bug réel) "jour" ↔ "jours" — variation grammaticale
     // très courante (pas juste une faute de frappe), traitée à part plutôt
     // que par la tolérance aux fautes de matchFaqAnswer (ces matchers-ci
-    // n'en ont pas). Toutes les listes de phrases ci-dessous utilisent donc
+    // n'en ont pas). Toutes les listes de mots-clés ci-dessous utilisent donc
     // "jour" au singulier.
     .replace(/\bjours\b/g, "jour")
     .trim()
     .replace(/\s+/g, " ");
+  return base.split(" ").map(w => SMS_ABBREVIATIONS[w] || w).join(" ");
+}
+
+// hasWholeWord : contrairement à fuzzyIncludes (sous-chaîne DANS un mot —
+// voulu pour matchFaqAnswer, ex. "themes" contient "theme"), ici il faut un
+// mot ENTIER de la phrase qui corresponde (exactement ou à faute de frappe
+// près) — sinon "jour" matcherait à tort dans "aujourd'hui" (au-JOUR-dhui),
+// et "soir" dans "bonsoir" (bon-SOIR). Bug réel constaté en testant le
+// "élargissement de la compréhension" (2026-07-27).
+function hasWholeWord(norm, word) {
+  const tokens = norm.split(" ");
+  if (tokens.includes(word)) return true;
+  if (word.length < 4) return false;
+  const maxDist = word.length <= 6 ? 1 : 2;
+  return tokens.some(t => Math.abs(t.length - word.length) <= maxDist && levenshteinDistance(t, word) <= maxDist);
+}
+
+// hasWordGroup : un "groupe" = liste de mots-clés TOUS requis (ordre libre —
+// "je récupère Léa quand ?" doit matcher tout autant que "quand je
+// récupère ?"), chaque mot-clé comparé en mot entier (hasWholeWord). Un
+// mot-clé peut lui-même être un tableau de variantes acceptées en OU (ex:
+// "weekend"/"week-end").
+function hasWordGroup(norm, group) {
+  return group.every(req => {
+    const alts = Array.isArray(req) ? req : [req];
+    return alts.some(w => hasWholeWord(norm, w));
+  });
 }
 
 export function matchGreeting(question) {
@@ -1048,40 +1086,41 @@ export function matchGreeting(question) {
 // statique), ces questions portent sur des DONNÉES RÉELLES — la réponse est
 // calculée à la volée côté client avec resolveGuard(), la même fonction que
 // le calendrier utilise pour s'afficher, donc toujours cohérente avec ce que
-// l'utilisateur voit dans l'app. Correspondance par mots-clés simples
-// (pas de tolérance aux fautes/argot ici, contrairement à matchFaqAnswer) —
-// périmètre volontairement limité à une première version.
+// l'utilisateur voit dans l'app.
+// 🔧 (2026-07-27, "élargir la compréhension") Groupes de mots-clés (ordre
+// libre, tolérance aux fautes via hasWordGroup) plutôt que des phrases figées
+// dans un ordre exact — corrige un vrai cas signalé ("je récupère Léa
+// quand ?", ordre inversé par rapport à "quand je récupère").
 // Phrases assez spécifiques pour supposer "aujourd'hui" par défaut MÊME sans
-// mot de temps explicite (2026-07-27, bug réel : "il est chez qui ?" ne
-// matchait pas car il ne contient ni "garde" ni "aujourd'hui" — dans l'usage
-// courant, une question sur la garde sans précision de date porte sur
-// MAINTENANT). "garde" seul reste volontairement exclu de cette liste
-// forte : trop générique seul (ex: "je garde le reçu") pour en déduire
-// l'intention sans un mot de temps explicite à côté.
-const CUSTODY_STRONG_PHRASES = ["chez qui", "qui a la garde", "qui garde", "dort ou", "dort chez", "va dormir", "qui recupere", "qui va recuperer"];
+// mot de temps explicite (bug réel : "il est chez qui ?" ne matchait pas car
+// il ne contient ni "garde" ni "aujourd'hui" — dans l'usage courant, une
+// question sur la garde sans précision de date porte sur MAINTENANT).
+// "garde" seul reste volontairement exclu de cette liste forte : trop
+// générique seul (ex: "je garde le reçu") pour en déduire l'intention sans
+// un mot de temps explicite à côté.
+const CUSTODY_STRONG_GROUPS = [["chez", "qui"], ["qui", "garde"], ["dort"], ["va", "dormir"], ["qui", "recupere"]];
 const CUSTODY_WEAK_WORD = "garde";
-const TODAY_WORDS = ["aujourdhui", "ce soir"];
+const TODAY_WORDS = ["aujourdhui", "soir"];
 const TOMORROW_WORDS = ["demain"];
-const NEXT_CHANGE_PHRASES = [
-  "prochain changement de garde", "prochaine garde", "quand change la garde",
-  "prochain weekend", "prochain week-end", "prochain week end",
-  "quand recupere", "quand je recupere", "prochain changement",
+const NEXT_CHANGE_GROUPS = [
+  ["prochain", "changement"], ["prochaine", "garde"], ["quand", "change"],
+  ["prochain", ["weekend", "week-end", "week"]],
+  ["quand", "recupere"],
 ];
-const WEEK_PHRASES = [
-  "planning de la semaine", "planning semaine", "programme de la semaine",
-  "planning cette semaine", "cette semaine", "semaine prochaine",
+const WEEK_GROUPS = [
+  ["planning", "semaine"], ["programme", "semaine"], ["cette", "semaine"], ["semaine", "prochaine"],
 ];
 
 export function matchAgendaIntent(question) {
   const norm = normalizeGreeting(question);
   if (!norm) return null;
-  if (NEXT_CHANGE_PHRASES.some(p => norm.includes(p))) return "next_change";
-  if (WEEK_PHRASES.some(p => norm.includes(p))) return "week";
-  const hasTomorrow = TOMORROW_WORDS.some(w => norm.includes(w));
-  if (CUSTODY_STRONG_PHRASES.some(p => norm.includes(p))) return hasTomorrow ? "tomorrow" : "today";
-  if (norm.includes(CUSTODY_WEAK_WORD)) {
+  if (NEXT_CHANGE_GROUPS.some(g => hasWordGroup(norm, g))) return "next_change";
+  if (WEEK_GROUPS.some(g => hasWordGroup(norm, g))) return "week";
+  const hasTomorrow = TOMORROW_WORDS.some(w => hasWholeWord(norm, w));
+  if (CUSTODY_STRONG_GROUPS.some(g => hasWordGroup(norm, g))) return hasTomorrow ? "tomorrow" : "today";
+  if (hasWholeWord(norm, CUSTODY_WEAK_WORD)) {
     if (hasTomorrow) return "tomorrow";
-    if (TODAY_WORDS.some(w => norm.includes(w))) return "today";
+    if (TODAY_WORDS.some(w => hasWholeWord(norm, w))) return "today";
   }
   return null;
 }
@@ -1091,16 +1130,16 @@ export function matchAgendaIntent(question) {
 // même principe que matchAgendaIntent, réponse calculée localement via
 // resolveGuard() sur toute la période, jamais inventée. Par défaut : le mois
 // en cours ; bascule sur l'année en cours si un mot "année/annuel" est présent.
-const STATS_DAYS_PHRASES = [
-  "combien de jour chez chaque parent", "combien de jour de garde",
-  "repartition des jour de garde", "repartition annuelle", "repartition de la garde",
-  "temps de garde", "statistiques de garde", "combien de jour chacun",
+const STATS_DAYS_GROUPS = [
+  ["jour", "chaque", "parent"], ["jour", "garde"], ["repartition", "jour"],
+  ["repartition", "annuelle"], ["repartition", "garde"], ["temps", "garde"],
+  ["statistique", "garde"], ["jour", "chacun"],
 ];
 const STATS_YEAR_WORDS = ["annee", "annuel", "annuelle"];
 
 export function matchStatsIntent(question) {
   const norm = normalizeGreeting(question);
   if (!norm) return null;
-  if (!STATS_DAYS_PHRASES.some(p => norm.includes(p))) return null;
-  return STATS_YEAR_WORDS.some(w => norm.includes(w)) ? "days_year" : "days_month";
+  if (!STATS_DAYS_GROUPS.some(g => hasWordGroup(norm, g))) return null;
+  return STATS_YEAR_WORDS.some(w => hasWholeWord(norm, w)) ? "days_year" : "days_month";
 }

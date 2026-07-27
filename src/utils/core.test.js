@@ -1254,6 +1254,41 @@ test("matchStatsIntent : \"jour\" au singulier (variation grammaticale courante)
   assert.equal(matchStatsIntent("Combien de jour chez chaque parent ce mois-ci ?"), "days_month");
 });
 
+// ── "Élargir la compréhension" (2026-07-27) : ordre libre, argot SMS, tolérance aux fautes ──
+test("matchAgendaIntent : ordre des mots libre, pas figé", () => {
+  // Cas d'origine du cahier des charges : "je récupère Léa quand ?" (ordre inversé
+  // par rapport à "quand je récupère ?") ne matchait pas avant ce chantier.
+  assert.equal(matchAgendaIntent("je récupère Léa quand ?"), "next_change");
+  assert.equal(matchAgendaIntent("quand je récupère ?"), "next_change");
+});
+
+test("matchAgendaIntent : reconnaît quelques abréviations SMS courantes", () => {
+  assert.equal(matchAgendaIntent("dmn il dort où ?"), "tomorrow");
+  assert.equal(matchAgendaIntent("ki a la garde auj ?"), "today");
+});
+
+test("matchGreeting : reconnaît quelques abréviations SMS courantes", () => {
+  assert.equal(matchGreeting("slt"), "hello");
+  assert.equal(matchGreeting("bjr"), "hello");
+  assert.equal(matchGreeting("cc"), "hello");
+});
+
+test("matchAgendaIntent/matchStatsIntent : un mot-clé court ne matche plus à tort DANS un autre mot", () => {
+  // Faux positif réel constaté en testant ce chantier : "jour" est une sous-chaîne
+  // de "aujourd'hui" (au-JOUR-d'hui), donc une simple question du jour déclenchait
+  // à tort aussi une réponse "statistiques". Idem "soir" dans "bonsoir".
+  assert.equal(matchStatsIntent("ki a la garde auj ?"), null);
+  assert.equal(matchAgendaIntent("bonsoir tout le monde"), null);
+});
+
+test("matchAgendaIntent : limite connue — l'argot SMS très dense reste hors périmètre", () => {
+  // Exemple du cahier des charges d'origine : abréviations trop ambiguës pour être
+  // résolues sans risque de faux positif ailleurs (ex: "c" pour "c'est", "la" pour
+  // "là" sont des mots français beaucoup trop courants pour être remplacés sans
+  // conséquence) — repli attendu et volontaire sur le message Premium+IA.
+  assert.equal(matchAgendaIntent("c ki ki la aujourd'hui"), null);
+});
+
 test("matchFaqAnswer : question courte au participe passé (mot manquant non-essentiel) -> correspond quand même", () => {
   // Cas réel constaté en prod (2026-07-27) : ne matchait pas avant l'ajout du score de précision.
   assert.equal(matchFaqAnswer("invité un enfant", FAQ_TEST_ITEMS)?.a, "REP_ENFANT");
