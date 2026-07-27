@@ -4378,16 +4378,20 @@ export default function App() {
     familyBestSub && familyBestSub.parentUserId && familyBestSub.parentUserId !== myUid &&
     planRankFor(familyBestSub) > planRankFor(sub)
   );
-  // familyAiEnabled : IA active si MON compte l'a, OU si le meilleur statut
-  // familial (co-parent inclus, voir bestParentSub) l'a — évalué séparément de
-  // familyPremiumFromCoParent car l'IA peut être héritée même quand mon propre
-  // rang de plan égale déjà le meilleur de la famille (ex : je paie Premium
-  // simple, mon co-parent paie Premium+IA).
-  const familyAiEnabled = !!(sub.aiEnabled || familyBestSub?.aiEnabled);
   // isAdm = vrai seulement si Supabase confirme (app_admins) — résiste au localStorage falsifié
   const isAdm = user?.role === "admin" && adminVerified;
   const isObs = user?.role==="observer";
   const isChild = user?.role==="child";
+  // familyAiEnabled : IA active si MON compte l'a, OU si le meilleur statut
+  // familial (co-parent inclus, voir bestParentSub) l'a — évalué séparément de
+  // familyPremiumFromCoParent car l'IA peut être héritée même quand mon propre
+  // rang de plan égale déjà le meilleur de la famille (ex : je paie Premium
+  // simple, mon co-parent paie Premium+IA). 🔒 (2026-07-27) Réservé aux parents
+  // — instruction explicite de l'utilisateur pour limiter le coût réel de
+  // l'assistant (voir discussion sur le coût du prompt système par échange) :
+  // un enfant ou un observateur ne doit plus voir la bulle assistant ni la
+  // reformulation IA, même si la famille a Premium+IA.
+  const familyAiEnabled = user?.role === "parent" && !!(sub.aiEnabled || familyBestSub?.aiEnabled);
   const _myId = String(user?.id||"");
   const unreadMsgs = useMemo(() => {
     const _uid = String(myUid || _myId || "");

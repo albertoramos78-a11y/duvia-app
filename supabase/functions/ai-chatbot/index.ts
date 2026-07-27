@@ -870,6 +870,16 @@ serve(async (req) => {
     global: { headers: { Authorization: authHeader } },
   });
 
+  // 🔒 Réservé aux parents (2026-07-27, instruction explicite — coût réel de
+  // l'assistant, voir la taille du prompt système ci-dessous) : un enfant ou
+  // un observateur ne peut pas appeler cette fonction, même en contournant
+  // l'UI (qui masque déjà la bulle assistant côté client, mais un appel
+  // direct à l'Edge Function doit être bloqué ici aussi).
+  const { data: myMemberships, error: memErr } = await admin
+    .from("family_members").select("role").eq("user_id", userId).eq("status", "active");
+  if (memErr) return jsonResponse({ error: memErr.message }, 500);
+  if (!(myMemberships || []).some((r) => r.role === "parent")) return jsonResponse({ error: "forbidden" }, 403);
+
   // 🔒 ai_enabled est un statut FAMILIAL (2026-07-27) : hérité du MEILLEUR
   // statut parmi les deux parents actifs de la famille, pas seulement mon
   // propre compte — même règle "toujours le plus haut" que le plan Premium
