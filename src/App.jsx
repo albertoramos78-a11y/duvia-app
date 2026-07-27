@@ -13116,7 +13116,7 @@ function MonthGridCalendar({y,m,dc,cfg,t,C,apiData,multiChild,activeChildId,read
           animation:d.isToday?"todayPulse 2.2s ease-in-out infinite":undefined,
           minWidth:0,boxSizing:"border-box",overflow:"hidden",
         }}>
-        <span style={{display:"flex",alignItems:"center",gap:3}}>
+        <span style={{display:"flex",alignItems:"center",gap:3,marginTop:-3,marginLeft:-3}}>
           <span style={{fontSize:13,fontWeight:numWeight,color:numColor}}>{d.day}</span>
           {d.isBirthday && <span style={{fontSize:11,lineHeight:1}}>🎂</span>}
         </span>
