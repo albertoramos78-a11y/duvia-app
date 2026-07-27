@@ -221,6 +221,10 @@ export const FAQ_SECTIONS = {
           a: "Des thèmes visuels de l'application : **🎮 Jeu vidéo**, **🦄 Licorne** (permanents), et les thèmes saisonniers **🌴 Été**, **🎾 Tennis** (Roland-Garros) et **⚽ Coupe du monde** (uniquement pendant leur période de l'année). Pour le parent qui paie réellement Premium (pas pour un parent couvert par le Premium de son co-parent, ni pour un observateur), la roue peut aussi faire gagner **1 mois** ou **1 an** d'abonnement offert.",
         },
         {
+          q: "Comment utiliser les thèmes ?",
+          a: "Une fois débloqué (roue, cadeau reçu ou parrainage validé), un bouton **🏆** apparaît en haut de l'écran, à côté du bouton palette. Touche-le pour voir la liste de tes thèmes disponibles, puis **Appliquer** sur celui que tu veux — un seul thème actif à la fois. Pour revenir au mode normal, retouche-le (il affiche alors **Actif ✓**) ou utilise le bouton palette 🎨.",
+        },
+        {
           q: "Comment gagner des tours de roue supplémentaires ?",
           a: "Chaque filleul parrainé qui valide son compte (menu ☰ → **🎁 Parrainage**, accessible aux parents comme aux observateurs) t'offre un tour de roue en plus. Ce tour reste utilisable même si tu es par ailleurs verrouillé (famille freemium) — il permet de gagner un thème, mais jamais un abonnement gratuit.",
         },

@@ -368,6 +368,9 @@ R: Onglet **Jeu** (🎡, parents et observateurs — pas les enfants) → tourne
 Q: Quels lots peut-on gagner à la roue ?
 R: Thèmes visuels : **🎮 Jeu vidéo**, **🦄 Licorne** (permanents), et saisonniers **🌴 Été**, **🎾 Tennis** (Roland-Garros), **⚽ Coupe du monde** (période dédiée uniquement). Pour le parent qui paie réellement Premium (pas héritage, pas observateur), la roue peut aussi faire gagner **1 mois** ou **1 an** d'abonnement.
 
+Q: Comment utiliser les thèmes ?
+R: Une fois débloqué, un bouton **🏆** apparaît en haut de l'écran, à côté du bouton palette. Touche-le, choisis le thème dans la liste, puis **Appliquer** — un seul actif à la fois. Retouche-le (affiche **Actif ✓**) ou utilise le bouton palette 🎨 pour revenir au mode normal.
+
 Q: Comment gagner des tours de roue supplémentaires ?
 R: Chaque filleul qui valide son compte (menu ☰ → **🎁 Parrainage**, parents et observateurs) offre un tour en plus, utilisable même verrouillé (freemium) — fait gagner un thème, jamais un abonnement gratuit.
 
