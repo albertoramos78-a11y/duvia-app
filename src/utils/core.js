@@ -1045,7 +1045,15 @@ export function matchGreeting(question) {
 // l'utilisateur voit dans l'app. Correspondance par mots-clés simples
 // (pas de tolérance aux fautes/argot ici, contrairement à matchFaqAnswer) —
 // périmètre volontairement limité à une première version.
-const CUSTODY_WORDS = ["garde", "chez qui", "qui a", "qui recupere", "qui va recuperer", "dort", "va dormir"];
+// Phrases assez spécifiques pour supposer "aujourd'hui" par défaut MÊME sans
+// mot de temps explicite (2026-07-27, bug réel : "il est chez qui ?" ne
+// matchait pas car il ne contient ni "garde" ni "aujourd'hui" — dans l'usage
+// courant, une question sur la garde sans précision de date porte sur
+// MAINTENANT). "garde" seul reste volontairement exclu de cette liste
+// forte : trop générique seul (ex: "je garde le reçu") pour en déduire
+// l'intention sans un mot de temps explicite à côté.
+const CUSTODY_STRONG_PHRASES = ["chez qui", "qui a la garde", "qui garde", "dort ou", "dort chez", "va dormir", "qui recupere", "qui va recuperer"];
+const CUSTODY_WEAK_WORD = "garde";
 const TODAY_WORDS = ["aujourdhui", "ce soir"];
 const TOMORROW_WORDS = ["demain"];
 const NEXT_CHANGE_PHRASES = [
@@ -1063,8 +1071,11 @@ export function matchAgendaIntent(question) {
   if (!norm) return null;
   if (NEXT_CHANGE_PHRASES.some(p => norm.includes(p))) return "next_change";
   if (WEEK_PHRASES.some(p => norm.includes(p))) return "week";
-  const hasCustodyWord = CUSTODY_WORDS.some(w => norm.includes(w));
-  if (hasCustodyWord && TODAY_WORDS.some(w => norm.includes(w))) return "today";
-  if (hasCustodyWord && TOMORROW_WORDS.some(w => norm.includes(w))) return "tomorrow";
+  const hasTomorrow = TOMORROW_WORDS.some(w => norm.includes(w));
+  if (CUSTODY_STRONG_PHRASES.some(p => norm.includes(p))) return hasTomorrow ? "tomorrow" : "today";
+  if (norm.includes(CUSTODY_WEAK_WORD)) {
+    if (hasTomorrow) return "tomorrow";
+    if (TODAY_WORDS.some(w => norm.includes(w))) return "today";
+  }
   return null;
 }

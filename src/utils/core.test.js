@@ -1200,6 +1200,18 @@ test("matchAgendaIntent : reconnaît une question sur la garde aujourd'hui", () 
   assert.equal(matchAgendaIntent("il dort où ce soir"), "today");
 });
 
+test("matchAgendaIntent : suppose \"aujourd'hui\" par défaut sans mot de temps explicite", () => {
+  // Cas réel signalé (2026-07-27) : "il est chez qui ?" ne matchait pas car
+  // sans "aujourd'hui"/"garde" — dans l'usage courant, ça veut dire "maintenant".
+  assert.equal(matchAgendaIntent("il est chez qui ?"), "today");
+  assert.equal(matchAgendaIntent("elle est chez qui"), "today");
+  assert.equal(matchAgendaIntent("qui garde les enfants ?"), "today");
+});
+
+test("matchAgendaIntent : \"garde\" seul, sans mot de temps, ne matche pas (trop générique)", () => {
+  assert.equal(matchAgendaIntent("je garde le reçu de la dépense"), null);
+});
+
 test("matchAgendaIntent : reconnaît une question sur la garde demain", () => {
   assert.equal(matchAgendaIntent("demain il dort où ?"), "tomorrow");
   assert.equal(matchAgendaIntent("qui a la garde demain"), "tomorrow");
