@@ -21443,10 +21443,12 @@ function VaultTab() {
     return matchCat && matchSearch;
   });
 
-  const pinned = filtered.filter(d => d.pinned)
-    .sort((a,b) => new Date(b.created_at||0) - new Date(a.created_at||0));
-  const others = filtered.filter(d => !d.pinned)
-    .sort((a,b) => new Date(b.created_at||0) - new Date(a.created_at||0));
+  // Tri par date DU DOCUMENT (doc_date, affichée sur chaque carte) et non par
+  // date d'ajout (created_at) — sinon l'ordre affiché ne correspond pas aux
+  // dates visibles à l'écran.
+  const byDocDate = (a,b) => new Date(b.doc_date||b.created_at||0) - new Date(a.doc_date||a.created_at||0);
+  const pinned = filtered.filter(d => d.pinned).sort(byDocDate);
+  const others = filtered.filter(d => !d.pinned).sort(byDocDate);
 
   // ── Enregistrer l'heure de départ du coffre (pour la prochaine visite) ────
   const lastVisitKey = `duvia_vault_last_visit_${user?.id||"x"}`;
