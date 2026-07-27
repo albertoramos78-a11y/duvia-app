@@ -17707,7 +17707,17 @@ function ChatbotBubble() {
   // s'affiche, seulement si les questions hors-FAQ sont transmises à Claude
   // (voir send() plus bas) : Freemium/Premium ont la FAQ locale gratuite,
   // Premium+IA a en plus l'assistant conversationnel complet.
-  if (user?.role !== "parent" || !familySync?.familyId || !visible) return null;
+  // 🔧🔧🔧 DIAGNOSTIC TEMPORAIRE (2026-07-27) — bug "l'assistant disparaît après
+  // un rafraîchissement" : affiche pourquoi le garde échoue au lieu de
+  // simplement disparaître, pour identifier la cause sans devoir lire la
+  // console. À RETIRER une fois la cause confirmée.
+  if (user?.role !== "parent" || !familySync?.familyId || !visible) {
+    return (
+      <div style={{position:"fixed",bottom:10,right:10,zIndex:9999,background:"#000",color:"#0f0",fontSize:10,fontFamily:"monospace",padding:"8px 10px",borderRadius:8,maxWidth:260,lineHeight:1.5}}>
+        🐛 role={JSON.stringify(user?.role)} familyId={JSON.stringify(familySync?.familyId)} visible={JSON.stringify(visible)}
+      </div>
+    );
+  }
 
   // 🔧 (2026-07-27) Court-circuit local avant tout appel réseau : les
   // questions FAQ sont statiques (~40 sujets), donc si la question ressemble
