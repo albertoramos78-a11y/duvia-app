@@ -355,6 +355,9 @@ R: Écran **Premium** → **Annuler mon abonnement** — reste actif jusqu'à la
 Q: Qui obtient le statut Premium par héritage dans une famille ?
 R: Chaque membre voit le **meilleur des deux abonnements des parents**. Si un seul parent souscrit, toute la famille en profite — l'autre voit « **Premium hérité** » avec un bandeau « 👨‍👩‍👧 Premium via votre famille ». Seul un tour de roue gagné compte comme « payeur réel », jamais l'héritage.
 
+Q: Comment créer une deuxième famille (ex. famille recomposée, enfants de plusieurs unions) ?
+R: Menu ☰ → **Configuration famille** → onglet **Famille**, section **👪 Mes familles** → **+ Créer Famille**. Confirme, puis un sélecteur de famille apparaît en haut de l'app pour basculer entre tes familles. Réservé aux parents — chaque famille a sa propre configuration, son calendrier et son abonnement indépendants.
+
 Q: Comment fonctionne l'abonnement si j'appartiens à plusieurs familles (ex. des enfants avec deux ex-conjoints différents) ?
 R: Le statut Premium est calculé **indépendamment pour chaque famille**, à partir de ses deux parents. Un abonnement personnel s'applique à toutes tes familles où tu es parent actif (payé une seule fois), mais pas aux familles où tu n'es qu'observateur — là, seul l'abonnement des parents de CETTE famille compte.
 

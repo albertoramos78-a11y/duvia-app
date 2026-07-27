@@ -17542,6 +17542,7 @@ function ChatbotBubble() {
   const [messages, setMessages] = useState([]); // {role:"user"|"assistant", content:string}
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [sendingToSupport, setSendingToSupport] = useState(null); // index du message dont l'envoi à l'assistance est en cours
   const [err, setErr] = useState("");
   const [tokensUsedToday, setTokensUsedToday] = useState(0);
   // 🔧 (2026-07-23) Plafond abaissé 100 000→30 000/jour (instruction explicite
@@ -17716,7 +17717,7 @@ function ChatbotBubble() {
     if (!familyAiEnabled) {
       setMessages(prev => [...prev,
         { role: "user", content: question },
-        { role: "assistant", content: t.chatbotAiUpsell || "Cette question dépasse la FAQ — l'assistant conversationnel complet est réservé à Premium+IA.", isUpsell: true },
+        { role: "assistant", content: t.chatbotAiUpsell || "Cette question dépasse la FAQ — l'assistant conversationnel complet est réservé à Premium+IA.", isUpsell: true, question },
       ]);
       setInput("");
       return;
@@ -17799,6 +17800,29 @@ function ChatbotBubble() {
       );
     } finally {
       setSending(false);
+    }
+  }
+
+  // Freemium/Premium (sans IA) : quand aucune correspondance FAQ locale n'est
+  // trouvée (voir send(), branche isUpsell), permet d'envoyer la question à
+  // l'assistance humaine plutôt que de laisser l'utilisateur bloqué — réutilise
+  // le pipeline bug_reports existant (Signaler un problème), aucune nouvelle
+  // Edge Function/table nécessaire.
+  async function sendUpsellToSupport(msgIndex) {
+    const msg = messages[msgIndex];
+    if (!msg || msg.sentToSupport || sendingToSupport !== null) return;
+    setSendingToSupport(msgIndex);
+    try {
+      await submitBugReport({
+        comment: `[Assistant Duvia — question sans réponse FAQ, compte sans IA]\n${msg.question || ""}`,
+        screenshot: null,
+        context: { userId: myUid || null, familyId: familySync?.familyId || null, screen: "chatbot_faq_fallback" },
+      });
+      setMessages(prev => prev.map((m, i) => i === msgIndex ? { ...m, sentToSupport: true } : m));
+    } catch {
+      setErr(t.chatbotSupportSendError || "⚠️ Échec de l'envoi à l'assistance. Réessaie.");
+    } finally {
+      setSendingToSupport(null);
     }
   }
 
@@ -17902,9 +17926,19 @@ function ChatbotBubble() {
                   </div>
                 )}
                 {m.role==="assistant" && m.isUpsell && (
-                  <button onClick={onUpgrade} style={{alignSelf:"flex-start",fontSize:10,color:"#fff",background:C.vio,border:"none",borderRadius:8,padding:"5px 10px",marginTop:2,cursor:"pointer",fontWeight:700}}>
-                    ✨ {t.chatbotAiUpsellBtn||"Découvrir Premium+IA"}
-                  </button>
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"flex-start",gap:6,marginTop:2}}>
+                    <button onClick={onUpgrade} style={{fontSize:10,color:"#fff",background:C.vio,border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",fontWeight:700}}>
+                      ✨ {t.chatbotAiUpsellBtn||"Découvrir Premium+IA"}
+                    </button>
+                    {m.sentToSupport ? (
+                      <span style={{fontSize:9,color:C.grn,fontWeight:700,padding:"0 4px",lineHeight:1.4}}>🙏 {t.chatbotSupportSent||"Merci ! Ta question a été transmise à l'équipe — elle nous aide à améliorer Duvia."}</span>
+                    ) : (
+                      <button onClick={()=>sendUpsellToSupport(i)} disabled={sendingToSupport===i}
+                        style={{fontSize:9,color:C.mut,background:"none",border:"none",padding:"0 4px",cursor:"pointer",textDecoration:"underline",opacity:sendingToSupport===i?.5:1}}>
+                        📩 {sendingToSupport===i ? (t.chatbotSupportSending||"Envoi…") : (t.chatbotSendToSupportBtn||"Envoyer ma question à l'assistance")}
+                      </button>
+                    )}
+                  </div>
                 )}
                 {m.role==="assistant" && !m.fromFaq && typeof m.tokens==="number" && (
                   <div style={{fontSize:9,color:C.mut,padding:"0 4px"}}>{m.tokens.toLocaleString()} {t.chatbotTokensExchange||"tokens"}</div>

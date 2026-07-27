@@ -834,6 +834,10 @@ const es = {
     chatbotFaqUpgradeBtn:"¿No es la respuesta correcta? Pasa a Premium+IA",
     chatbotAiUpsell:"Esta pregunta va más allá de la FAQ — el asistente conversacional completo es una función Premium+IA.",
     chatbotAiUpsellBtn:"Descubrir Premium+IA",
+    chatbotSendToSupportBtn:"Enviar mi pregunta al equipo de soporte",
+    chatbotSupportSending:"Enviando…",
+    chatbotSupportSent:"¡Gracias! Tu pregunta se envió al equipo — nos ayuda a mejorar Duvia.",
+    chatbotSupportSendError:"⚠️ Error al enviar al soporte. Inténtalo de nuevo.",
     chatbotDoubleTapHint:"Toca dos veces en cualquier parte de la pantalla para ocultar/mostrar el asistente.",
   };
 export default es;

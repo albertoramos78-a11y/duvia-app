@@ -834,6 +834,10 @@ const de = {
     chatbotFaqUpgradeBtn:"Nicht die richtige Antwort? Zu Premium+KI wechseln",
     chatbotAiUpsell:"Diese Frage geht über die FAQ hinaus — der vollständige Chat-Assistent ist eine Premium+KI-Funktion.",
     chatbotAiUpsellBtn:"Premium+KI entdecken",
+    chatbotSendToSupportBtn:"Meine Frage an den Support senden",
+    chatbotSupportSending:"Wird gesendet…",
+    chatbotSupportSent:"Danke! Deine Frage wurde an das Team gesendet — sie hilft uns, Duvia zu verbessern.",
+    chatbotSupportSendError:"⚠️ Senden an den Support fehlgeschlagen. Versuch es erneut.",
     chatbotDoubleTapHint:"Doppeltippe irgendwo auf den Bildschirm, um den Assistenten auszublenden/anzuzeigen.",
   };
 export default de;

@@ -198,6 +198,10 @@ export const FAQ_SECTIONS = {
           a: "Le statut affiché à chaque membre (parent, enfant, observateur) correspond au **meilleur des deux abonnements des parents** de la famille. Si un seul des deux parents souscrit à Premium, toute la famille en profite — l'autre parent voit alors « **Premium hérité** » plutôt que « Premium », avec un bandeau « 👨‍👩‍👧 Premium via votre famille » précisant qui a souscrit. Seul un tour de roue gagné compte comme « payeur réel » : gagner du Premium à la roue reste réservé à qui a effectivement souscrit, pas à qui en bénéficie par héritage.",
         },
         {
+          q: "Comment créer une deuxième famille (ex. famille recomposée, enfants de plusieurs unions) ?",
+          a: "Menu ☰ → **Configuration famille** → onglet **Famille**, section **👪 Mes familles** → **+ Créer Famille**. Confirme, puis un sélecteur de famille apparaît en haut de l'app pour basculer entre tes familles. Réservé aux parents — chaque famille a sa propre configuration, son calendrier et son abonnement indépendants.",
+        },
+        {
           q: "Comment fonctionne l'abonnement si j'appartiens à plusieurs familles (ex. des enfants avec deux ex-conjoints différents) ?",
           a: "Le statut Premium est calculé **indépendamment pour chaque famille**, à partir des DEUX parents de cette famille précise. Si tu as toi-même un abonnement Premium personnel et que tu es parent actif dans plusieurs familles, il s'applique à chacune d'elles — tu ne payes qu'une fois. En revanche, être Premium dans une famille ne rend pas Premium une autre famille où tu ne serais qu'observateur : dans ce cas, c'est l'abonnement des parents de CETTE famille-là qui compte, pas le tien.",
         },
