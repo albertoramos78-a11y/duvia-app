@@ -24,7 +24,7 @@ import { usePush } from "./hooks/usePush";
 import { getMyLocation, setMyLocation } from "./services/supabase/locationService";
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION, APP_VERSION } from './config.js';
-import { nextPensionDueDate, computeOverrideUpdate, mergeHistoryPreservingTokens, fuzzyIncludes, matchFaqAnswer, matchGreeting } from './utils/core.js';
+import { nextPensionDueDate, computeOverrideUpdate, mergeHistoryPreservingTokens, fuzzyIncludes, matchFaqAnswer, matchGreeting, matchAgendaIntent } from './utils/core.js';
 import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact, weatherIconFor, getInitials, aggregateHourlyPeriods } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, LICORNE, FILLEUL, BRAND, BRAND_GRADIENT, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
@@ -17491,8 +17491,95 @@ function parisMidnightISO(now = new Date()) {
   return new Date(Date.UTC(y, m - 1, d, 0, 0, 0) - offsetHours * 3600 * 1000).toISOString();
 }
 
+// ── Réponses "Agenda" de l'assistant sans IA (2026-07-27) ──────────────────
+// Calculées à partir des vraies données de la famille (cfg) via resolveGuard()
+// — LA MÊME fonction que le calendrier utilise pour s'afficher — donc
+// toujours cohérentes avec ce que l'utilisateur voit dans l'app, sans jamais
+// rien inventer. Aucun appel réseau, aucun coût. Comme matchAgendaIntent()
+// (core.js) qui les déclenche, ce bloc est volontairement français uniquement
+// pour l'instant — même périmètre que le reste de la FAQ locale.
+function describeGuardian(guard, cfg) {
+  if (!guard) return null;
+  if (guard.allParents) return cfg.parents.map(p => p?.name).filter(Boolean).join(" & ") || null;
+  if (guard.obsId) {
+    const o = (cfg.observers || []).find(o => String(o.id) === String(guard.obsId));
+    return o?.name || null;
+  }
+  if (guard.parentIdx !== undefined && guard.parentIdx >= 0) {
+    return cfg.parents[guard.parentIdx]?.name || null;
+  }
+  return null;
+}
+function agendaGuardKey(guard) {
+  if (!guard) return "none";
+  if (guard.allParents) return "all";
+  if (guard.obsId) return `obs:${guard.obsId}`;
+  if (guard.parentIdx !== undefined) return `p:${guard.parentIdx}`;
+  return "none";
+}
+function addDaysStr(dateStr, n) {
+  const d = new Date(dateStr + "T12:00:00");
+  d.setDate(d.getDate() + n);
+  return toStr(d);
+}
+function formatFrDate(dateStr) {
+  return new Date(dateStr + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+}
+function buildAgendaAnswer(intent, cfg) {
+  const todayStr = toStr(new Date());
+  // 🔧 Garde différenciée par enfant : pas de dialogue multi-tour possible
+  // ici (pas de "pour quel enfant ?" suivi d'attente de réponse, contrairement
+  // à l'outil get_custody_days de l'assistant Premium+IA) — pour "aujourd'hui"/
+  // "demain" on répond pour CHAQUE enfant sur sa propre ligne (reste court et
+  // complet) ; pour "prochain changement"/"semaine" (potentiellement long et
+  // différent par enfant), on renvoie vers le calendrier plutôt que d'inonder
+  // le chat.
+  const perChild = cfg.sameGuardAll === false && (cfg.children || []).length > 1;
+
+  function oneDayLine(ds, childId, childLabel) {
+    const who = describeGuardian(resolveGuard(ds, cfg, childId), cfg);
+    if (!who) return childLabel ? `${childLabel} : non défini` : "Non défini pour cette date (mode de garde pas encore configuré ou confirmé).";
+    return childLabel ? `${childLabel} : ${who}` : who;
+  }
+
+  if (intent === "today" || intent === "tomorrow") {
+    const ds = intent === "today" ? todayStr : addDaysStr(todayStr, 1);
+    const label = intent === "today" ? "Aujourd'hui" : "Demain";
+    if (perChild) {
+      return `${label} —\n${cfg.children.map(ch => oneDayLine(ds, ch.id, ch.name || "Enfant")).join("\n")}`;
+    }
+    return `${label} : ${oneDayLine(ds, null, null)}`;
+  }
+
+  if (intent === "next_change") {
+    if (perChild) return "Chaque enfant a un planning différent — consulte l'onglet Calendrier pour voir le prochain changement de chacun.";
+    const baseKey = agendaGuardKey(resolveGuard(todayStr, cfg, null));
+    for (let i = 1; i <= 60; i++) {
+      const ds = addDaysStr(todayStr, i);
+      const g = resolveGuard(ds, cfg, null);
+      if (agendaGuardKey(g) !== baseKey) {
+        const who = describeGuardian(g, cfg);
+        return who ? `Prochain changement : ${formatFrDate(ds)}, chez ${who}.` : `Prochain changement : ${formatFrDate(ds)}.`;
+      }
+    }
+    return "Pas de changement de garde prévu dans les 60 prochains jours.";
+  }
+
+  if (intent === "week") {
+    if (perChild) return "Chaque enfant a un planning différent — consulte l'onglet Calendrier pour voir le planning complet de la semaine.";
+    const lines = [];
+    for (let i = 0; i < 7; i++) {
+      const ds = addDaysStr(todayStr, i);
+      lines.push(`${formatFrDate(ds)} : ${describeGuardian(resolveGuard(ds, cfg, null), cfg) || "non défini"}`);
+    }
+    return lines.join("\n");
+  }
+
+  return null;
+}
+
 function ChatbotBubble() {
-  const { C, t, lang, familySync, myUid, familyAiEnabled, isChild, isObs, onUpgrade } = useApp();
+  const { C, t, lang, cfg, familySync, myUid, familyAiEnabled, isChild, isObs, onUpgrade } = useApp();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]); // {role:"user"|"assistant", content:string}
   const [input, setInput] = useState("");
@@ -17744,6 +17831,20 @@ function ChatbotBubble() {
         setMessages(prev => [...prev,
           { role: "user", content: question },
           { role: "assistant", content: greetingReply },
+        ]);
+        setInput("");
+        return;
+      }
+      // 🔧 (2026-07-27) Questions d'agenda ("chez qui est l'enfant aujourd'hui/
+      // demain ?", "prochain changement de garde ?", "planning de la semaine ?")
+      // — portent sur des DONNÉES RÉELLES, pas du contenu statique, mais
+      // calculables localement (resolveGuard, la même fonction que le
+      // calendrier) sans jamais appeler Claude. Voir matchAgendaIntent (core.js).
+      const agendaIntent = matchAgendaIntent(question);
+      if (agendaIntent) {
+        setMessages(prev => [...prev,
+          { role: "user", content: question },
+          { role: "assistant", content: buildAgendaAnswer(agendaIntent, cfg) },
         ]);
         setInput("");
         return;

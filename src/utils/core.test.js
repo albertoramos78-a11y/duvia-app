@@ -29,6 +29,7 @@ import {
   fuzzyIncludes,
   matchFaqAnswer,
   matchGreeting,
+  matchAgendaIntent,
 } from "./core.js";
 
 // ── B1 — validatePassword (majuscule + caractère spécial désormais requis) ────
@@ -1190,6 +1191,33 @@ test("matchGreeting : reconnaît un remerciement, dans les 5 langues", () => {
   assert.equal(matchGreeting("Gracias"), "thanks");
   assert.equal(matchGreeting("Danke"), "thanks");
   assert.equal(matchGreeting("Obrigada"), "thanks");
+});
+
+// ── matchAgendaIntent — questions d'agenda sur des données réelles (2026-07-27) ──
+test("matchAgendaIntent : reconnaît une question sur la garde aujourd'hui", () => {
+  assert.equal(matchAgendaIntent("chez qui est l'enfant aujourd'hui ?"), "today");
+  assert.equal(matchAgendaIntent("qui a la garde aujourd'hui"), "today");
+  assert.equal(matchAgendaIntent("il dort où ce soir"), "today");
+});
+
+test("matchAgendaIntent : reconnaît une question sur la garde demain", () => {
+  assert.equal(matchAgendaIntent("demain il dort où ?"), "tomorrow");
+  assert.equal(matchAgendaIntent("qui a la garde demain"), "tomorrow");
+});
+
+test("matchAgendaIntent : reconnaît le prochain changement de garde", () => {
+  assert.equal(matchAgendaIntent("quel est le prochain changement de garde ?"), "next_change");
+  assert.equal(matchAgendaIntent("c'est quand mon prochain week-end ?"), "next_change");
+});
+
+test("matchAgendaIntent : reconnaît le planning de la semaine", () => {
+  assert.equal(matchAgendaIntent("quel est le planning de la semaine ?"), "week");
+  assert.equal(matchAgendaIntent("planning semaine"), "week");
+});
+
+test("matchAgendaIntent : ne matche pas une question hors agenda", () => {
+  assert.equal(matchAgendaIntent("comment inviter l'autre parent"), null);
+  assert.equal(matchAgendaIntent(""), null);
 });
 
 test("matchFaqAnswer : question courte au participe passé (mot manquant non-essentiel) -> correspond quand même", () => {

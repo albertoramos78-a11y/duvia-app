@@ -240,16 +240,16 @@ export const FAQ_SECTIONS = {
       title: "Assistant IA",
       items: [
         {
-          q: "Qu'est-ce que l'assistant IA et où le trouver ?",
-          a: "Un bouton flottant 🤖 (visible en bas de l'écran) ouvre une fenêtre de discussion. Réservé aux abonnements **Premium+IA** — les autres formules ne voient pas ce bouton.",
+          q: "Qu'est-ce que l'assistant et où le trouver ?",
+          a: "Un bouton flottant (🤖 ou 📚 selon ton abonnement) en bas de l'écran ouvre une fenêtre de discussion, visible pour **tous les parents**. En Freemium/Premium, il répond gratuitement et instantanément aux questions sur l'utilisation de l'app et sur l'agenda de garde, sans IA. En **Premium+IA**, il devient un assistant conversationnel complet.",
         },
         {
-          q: "Que peut lui demander l'assistant IA ?",
-          a: "Deux types de questions : des questions générales sur l'utilisation de l'app (\"comment inviter un observateur ?\"), et des questions sur les données de TA propre famille (nombre de jours de garde sur une période, solde des dépenses, météo, résumé de messages) — il va chercher les vraies données avant de répondre, il n'invente rien. Il peut aussi reformuler un message tendu avant l'envoi, ou traduire un texte.",
+          q: "Que peut-on lui demander ?",
+          a: "En Freemium/Premium : questions sur l'utilisation de l'app (\"comment inviter un observateur ?\") et sur l'agenda (\"chez qui est l'enfant aujourd'hui ?\", \"prochain changement de garde ?\", \"planning de la semaine ?\"). En **Premium+IA** en plus : dépenses, météo, résumé de messages, reformulation de message, traduction — il va chercher les vraies données avant de répondre, il n'invente rien.",
         },
         {
-          q: "Y a-t-il une limite d'utilisation de l'assistant IA ?",
-          a: "Oui, un quota quotidien de tokens (unité de calcul de l'IA), affiché sous forme de barre de progression en haut de la fenêtre de l'assistant — elle se réinitialise chaque jour à minuit (heure de Paris). Au-delà, l'assistant indique que la limite du jour est atteinte et invite à réessayer le lendemain.",
+          q: "Y a-t-il une limite d'utilisation de l'assistant ?",
+          a: "Uniquement pour les questions traitées par l'IA (**Premium+IA**) : un quota quotidien de tokens, affiché en barre de progression en haut de la fenêtre — se réinitialise chaque jour à minuit (heure de Paris). Les réponses FAQ/agenda (Freemium/Premium, sans IA) sont illimitées et gratuites, elles ne consomment pas ce quota.",
         },
         {
           q: "Comment masquer rapidement l'assistant IA s'il gêne ce qu'il y a derrière ?",

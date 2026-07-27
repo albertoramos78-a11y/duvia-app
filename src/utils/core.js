@@ -1021,6 +1021,7 @@ const THANKS_PHRASES = new Set([
 
 function normalizeGreeting(text) {
   return stripAccents(String(text || "").toLowerCase())
+    .replace(/['’]/g, "")
     .replace(/[!?.,;:]+$/g, "")
     .trim()
     .replace(/\s+/g, " ");
@@ -1031,5 +1032,39 @@ export function matchGreeting(question) {
   if (GREETING_PHRASES.has(norm)) return "hello";
   if (FAREWELL_PHRASES.has(norm)) return "bye";
   if (THANKS_PHRASES.has(norm)) return "thanks";
+  return null;
+}
+
+// matchAgendaIntent : reconnaît une question d'agenda ("chez qui est l'enfant
+// aujourd'hui/demain ?", "prochain changement de garde ?", "planning de la
+// semaine ?") tapée dans l'assistant FAQ-only (Freemium/Premium sans IA, voir
+// ChatbotBubble dans App.jsx). Contrairement à matchFaqAnswer (réponse
+// statique), ces questions portent sur des DONNÉES RÉELLES — la réponse est
+// calculée à la volée côté client avec resolveGuard(), la même fonction que
+// le calendrier utilise pour s'afficher, donc toujours cohérente avec ce que
+// l'utilisateur voit dans l'app. Correspondance par mots-clés simples
+// (pas de tolérance aux fautes/argot ici, contrairement à matchFaqAnswer) —
+// périmètre volontairement limité à une première version.
+const CUSTODY_WORDS = ["garde", "chez qui", "qui a", "qui recupere", "qui va recuperer", "dort", "va dormir"];
+const TODAY_WORDS = ["aujourdhui", "ce soir"];
+const TOMORROW_WORDS = ["demain"];
+const NEXT_CHANGE_PHRASES = [
+  "prochain changement de garde", "prochaine garde", "quand change la garde",
+  "prochain weekend", "prochain week-end", "prochain week end",
+  "quand recupere", "quand je recupere", "prochain changement",
+];
+const WEEK_PHRASES = [
+  "planning de la semaine", "planning semaine", "programme de la semaine",
+  "planning cette semaine", "cette semaine", "semaine prochaine",
+];
+
+export function matchAgendaIntent(question) {
+  const norm = normalizeGreeting(question);
+  if (!norm) return null;
+  if (NEXT_CHANGE_PHRASES.some(p => norm.includes(p))) return "next_change";
+  if (WEEK_PHRASES.some(p => norm.includes(p))) return "week";
+  const hasCustodyWord = CUSTODY_WORDS.some(w => norm.includes(w));
+  if (hasCustodyWord && TODAY_WORDS.some(w => norm.includes(w))) return "today";
+  if (hasCustodyWord && TOMORROW_WORDS.some(w => norm.includes(w))) return "tomorrow";
   return null;
 }

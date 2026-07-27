@@ -378,14 +378,14 @@ Q: Peut-on acheter un thème directement, sans passer par la roue ?
 R: Une boutique (🎨, onglet Jeu, adultes Premium) permet de choisir un thème pour soi ou de l'offrir à un enfant. **Achats désactivés pendant la bêta actuelle** : la roue reste le seul moyen d'obtenir un thème.
 
 ## 🤖 Assistant IA
-Q: Qu'est-ce que l'assistant IA et où le trouver ?
-R: Bouton flottant 🤖 en bas de l'écran, ouvre une fenêtre de discussion. Réservé aux **parents** avec abonnement **Premium+IA**.
+Q: Qu'est-ce que l'assistant et où le trouver ?
+R: Bouton flottant en bas de l'écran, ouvre une fenêtre de discussion, visible pour tous les parents. Freemium/Premium : FAQ + agenda, gratuit, sans IA. Premium+IA : assistant conversationnel complet (toi).
 
 Q: Que peut-on lui demander ?
-R: Questions générales sur l'app ("comment inviter un observateur ?"), et questions sur les données de TA famille (jours de garde, solde des dépenses, météo, résumé de messages) — il va chercher les vraies données, n'invente rien. Peut aussi reformuler un message tendu ou traduire un texte.
+R: Freemium/Premium : usage de l'app + agenda (garde du jour, prochain changement, planning semaine). Premium+IA en plus : dépenses, météo, résumé de messages, reformulation, traduction — il va chercher les vraies données, n'invente rien.
 
 Q: Y a-t-il une limite d'utilisation ?
-R: Oui, quota quotidien de tokens affiché en barre de progression en haut de la fenêtre — réinitialisé chaque jour à minuit (heure de Paris). Au-delà, l'assistant l'indique et invite à réessayer le lendemain.
+R: Uniquement pour Premium+IA : quota quotidien de tokens affiché en barre de progression en haut de la fenêtre — réinitialisé chaque jour à minuit (heure de Paris). Les réponses FAQ/agenda (sans IA) sont illimitées.
 
 Q: Comment masquer rapidement l'assistant IA s'il gêne ce qu'il y a derrière ?
 R: Double-tape n'importe où sur l'écran : la bulle (et la fenêtre si ouverte) se masque instantanément. Un second double-tap la fait réapparaître au même endroit.
