@@ -276,7 +276,7 @@ Q: Puis-je avoir un planning de garde différent pour chaque enfant ?
 R: Oui, en Premium : onglet **Dates spéciales**, désactive **Même garde pour tous les enfants**, puis configure le modèle enfant par enfant dans **Modèle garde** (sélecteur d'enfant en haut).
 
 Q: Comment exporter le calendrier vers Google Calendar ou Apple Calendar ?
-R: Calendrier → menu **⋯** → **iCal**. Le fichier `.ics` téléchargé s'importe dans Google Calendar, Apple Calendar ou tout agenda compatible.
+R: Calendrier → menu **⋯** → **iCal**. Le fichier \`.ics\` téléchargé s'importe dans Google Calendar, Apple Calendar ou tout agenda compatible.
 
 Q: Comment exporter le planning de garde en PDF ?
 R: Calendrier → menu **⋯** → **Export PDF** (Premium) : récapitulatif imprimable du planning annuel.
