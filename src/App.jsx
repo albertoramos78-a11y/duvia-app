@@ -3843,12 +3843,16 @@ export default function App() {
   // 🔧 Distingue "vient d'être coché dans cette session" (déclenche l'email
   // de confirmation) de "déjà accepté lors d'une session précédente" (simple
   // rattrapage silencieux serveur, voir l'effet de synchronisation plus bas).
-  // Volontairement PAS persisté : un rechargement de page doit repartir à
-  // false, c'est exactement le comportement voulu.
-  const [justAcceptedRgpd, setJustAcceptedRgpd] = useState(false);
+  // sessionStorage plutôt qu'un useState : une inscription Google passe par
+  // une redirection pleine page (signInWithOAuth) qui détruirait un simple
+  // état React, ce qui faisait qu'aucun email de confirmation ne partait
+  // jamais pour les inscriptions Google (bug constaté 2026-07-29, revue
+  // finale de la feature). sessionStorage survit à cette redirection (même
+  // onglet) mais reste vide dans un nouvel onglet/une nouvelle session —
+  // exactement le comportement voulu, sans persister au-delà.
   function acceptRgpd(){
     try { window.localStorage.setItem(RGPD_STORAGE_KEY, JSON.stringify(makeRgpdConsentRecord(RGPD_NOTICE_VERSION))); } catch {}
-    setJustAcceptedRgpd(true);
+    try { window.sessionStorage.setItem("duvia_rgpd_just_accepted", "1"); } catch {}
     setRgpdOk(true);
   }
   // Affichage in-app des CGU/CGV (évite de dépendre d'une URL externe pas encore prête)
@@ -4159,9 +4163,13 @@ export default function App() {
   // NOTHING) : rejouer cet appel à chaque connexion est sans risque, et
   // rattrape silencieusement les comptes déjà existants qui n'avaient que
   // l'ancien consentement localStorage. L'email de confirmation ne part
-  // que si la case vient d'être cochée DANS CETTE SESSION
-  // (justAcceptedRgpd) — jamais lors de ce rattrapage silencieux, qui ne
-  // correspond à aucune action visible de l'utilisateur.
+  // que si la case vient d'être cochée DANS CETTE SESSION (sessionStorage
+  // "duvia_rgpd_just_accepted") — jamais lors de ce rattrapage silencieux,
+  // qui ne correspond à aucune action visible de l'utilisateur. On attend
+  // le succès du RPC avant d'envoyer l'email et de consommer le flag : si
+  // l'écriture échoue (coupure réseau), pas d'email "consentement
+  // enregistré" mensonger, et le flag reste posé pour qu'un prochain
+  // rechargement retente l'envoi une fois l'écriture réussie.
   // Ref keyed par user.id (pas juste un booléen) : sur un appareil partagé,
   // si le parent A se déconnecte et le parent B se connecte SANS recharger
   // la page, B doit aussi déclencher sa propre synchronisation.
@@ -4169,13 +4177,18 @@ export default function App() {
   useEffect(() => {
     if (!user?.id || !rgpdOk || legalConsentSyncedForUserRef.current === user.id) return;
     legalConsentSyncedForUserRef.current = user.id;
-    const shouldNotify = justAcceptedRgpd;
-    recordLegalConsent(RGPD_NOTICE_VERSION).catch(() => {});
-    if (shouldNotify) {
-      supabase.functions.invoke("notify-legal-consent", { body: { notice_version: RGPD_NOTICE_VERSION } }).catch(() => {});
-      setJustAcceptedRgpd(false);
-    }
-  }, [user?.id, rgpdOk, justAcceptedRgpd]);
+    (async () => {
+      try {
+        await recordLegalConsent(RGPD_NOTICE_VERSION);
+        let justAccepted = false;
+        try { justAccepted = window.sessionStorage.getItem("duvia_rgpd_just_accepted") === "1"; } catch {}
+        if (justAccepted) {
+          supabase.functions.invoke("notify-legal-consent", { body: { notice_version: RGPD_NOTICE_VERSION } }).catch(() => {});
+          try { window.sessionStorage.removeItem("duvia_rgpd_just_accepted"); } catch {}
+        }
+      } catch {}
+    })();
+  }, [user?.id, rgpdOk]);
 
   // ── Sync automatique des infos du parent connecté → cfg.parents ──────────
   // Découplé de handleSetUser : doit aussi s'exécuter après un rechargement
