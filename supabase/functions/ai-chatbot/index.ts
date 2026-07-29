@@ -473,6 +473,17 @@ function faqFingerprint(text: string): string {
 }
 const FAQ_FINGERPRINT = faqFingerprint(FAQ_KNOWLEDGE);
 const FAQ_CACHE_SIMILARITY_THRESHOLD = 0.7;
+// 🔧 (revue finale 2026-07-29, Finding 1) : garde-fou de forme de question —
+// le cache ne doit contenir que des réponses FAQ génériques, jamais du
+// contenu personnel collé par l'utilisateur. SYSTEM_PROMPT annonce deux
+// capacités sans outil autres que la FAQ : reformuler un message collé
+// ("Reformule : ...") et traduire du texte à la demande — un premier message
+// de ce type serait sinon écrit tel quel dans ai_faq_cache (partagé entre
+// familles). La longueur maximale est la défense principale (une vraie
+// question FAQ est courte) ; la regex d'intention est une ceinture-et-
+// bretelles, pas exhaustive — FR/EN/DE/ES/PT.
+const CACHEABLE_QUESTION_MAX_LEN = 200;
+const NON_CACHEABLE_INTENT = /\b(reformul|réécri|reecri|traduis|traduir|traduz|translate|rewrite|rephrase|übersetz|umformulier|traduc|reescrib)/i;
 
 const SYSTEM_PROMPT = `Tu es l'assistant IA de Duvia, une application de coparentalité partagée entre deux foyers ("Deux maisons. Une famille."). Tu réponds aux questions des parents utilisant l'application (l'accès est réservé aux parents).
 
@@ -1034,7 +1045,7 @@ serve(async (req) => {
   // pour qu'un utilisateur ayant déjà atteint son quota du jour puisse quand
   // même recevoir une réponse FAQ déjà connue. Voir docs/superpowers/specs/
   // 2026-07-29-ai-faq-cache-design.md.
-  if (isFirstQuestion) {
+  if (isFirstQuestion && question.length <= CACHEABLE_QUESTION_MAX_LEN && !NON_CACHEABLE_INTENT.test(question)) {
     const cacheHit = await lookupFaqCache(admin, question);
     if (cacheHit) {
       const cleanHistory = [{ role: "user", content: question }, { role: "assistant", content: cacheHit.answer_text }];
@@ -1158,12 +1169,17 @@ serve(async (req) => {
       // information indicative — pas nécessaire au fonctionnement du cache
       // (la correspondance pg_trgm sépare déjà naturellement les langues,
       // voir le design doc).
-      if (isFirstQuestion && !toolWasUsed && !isNoAnswer) {
+      if (isFirstQuestion && !toolWasUsed && !isNoAnswer
+          && question.length <= CACHEABLE_QUESTION_MAX_LEN && !NON_CACHEABLE_INTENT.test(question)) {
         try {
-          await admin.from("ai_faq_cache").insert({
+          const { error: cacheErr } = await admin.from("ai_faq_cache").insert({
             question_text: question, answer_text: answer, faq_fingerprint: FAQ_FINGERPRINT,
           });
-          await notifyNewFaqCacheEntry({ question, answer });
+          if (cacheErr) {
+            console.error("ai-chatbot: ai_faq_cache insert failed", cacheErr);
+          } else {
+            await notifyNewFaqCacheEntry({ question, answer });
+          }
         } catch (e) {
           console.error("ai-chatbot: ai_faq_cache write failed", e);
         }
