@@ -15583,10 +15583,12 @@ window.addEventListener('message',function(e){
           ...((pensionPayments||[]).length>0?[{k:"__pension",l:t.pensionTabTitle||"Pension alimentaire"}]:[])];
         if(visibleCats.length<=1) return null;
         return(
-        <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
-          {visibleCats.map(({k,l})=>(
-            <button key={k} onClick={()=>setCatF(k)} style={{padding:"4px 10px",background:catF===k?C.vio:C.sur,color:catF===k?"#fff":C.mut,border:`1.5px solid ${catF===k?C.vio:C.bor}`,borderRadius:20,fontSize:11,fontWeight:700}}>{l}</button>
-          ))}
+        <div style={{marginBottom:12}}>
+          <select value={catF} onChange={e=>setCatF(e.target.value)} style={{height:34,borderRadius:8,border:`1px solid ${C.bor}`,padding:"0 10px",fontSize:12,fontWeight:700,color:C.txt,background:C.card}}>
+            {visibleCats.map(({k,l})=>(
+              <option key={k} value={k}>{l}</option>
+            ))}
+          </select>
         </div>
       );})()}
 
