@@ -43,6 +43,20 @@ Deno.serve(async (req: Request) => {
     return new Response("No family_id", { status: 400 });
   }
 
+  // 🔁 Dépense récurrente : createExpenses() (src/services/supabase/
+  // expenseService.ts) insère toutes les occurrences en un seul INSERT, mais
+  // ce webhook Postgres se déclenche PAR LIGNE insérée (comportement standard
+  // des Database Webhooks Supabase) — sans ce garde-fou, une récurrence de
+  // N occurrences envoyait N emails/push séparés. On ne notifie que sur la
+  // toute première occurrence (celle dont la date == recurring_start), avec
+  // un texte qui couvre toute la série plutôt qu'une seule date.
+  if (expense.recurring_id && expense.date !== expense.recurring_start) {
+    console.log("Skip non-first occurrence of recurring series:", expense.recurring_id, expense.date);
+    return new Response(JSON.stringify({ ok: true, skipped: "non_first_occurrence" }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
   // 🔒 (2026-07-27, fuite réelle signalée) Dépenses = fonctionnalité RÉSERVÉE
@@ -87,7 +101,9 @@ Deno.serve(async (req: Request) => {
     if (meta.push_expenses !== false) {
       await sendPushToUser(supabase, member.user_id, {
         title: "Duvia",
-        body: `💰 Nouvelle dépense : ${expense.label || "Dépense"}`,
+        body: expense.recurring_id
+          ? `🔄 Nouvelle dépense récurrente : ${expense.label || "Dépense"}`
+          : `💰 Nouvelle dépense : ${expense.label || "Dépense"}`,
         tag: "expense",
         url: "/",
       });
@@ -112,22 +128,38 @@ Deno.serve(async (req: Request) => {
       ? new Date(expense.date).toLocaleDateString("fr-FR")
       : new Date().toLocaleDateString("fr-FR");
 
+    const FREQ_LABELS: Record<string, string> = {
+      weekly: "hebdomadaire",
+      monthly: "mensuelle",
+      yearly: "annuelle",
+    };
+    const isRecurring = !!expense.recurring_id;
+    const recurringStart = expense.recurring_start
+      ? new Date(expense.recurring_start).toLocaleDateString("fr-FR")
+      : date;
+    const recurringEnd = expense.recurring_end
+      ? new Date(expense.recurring_end).toLocaleDateString("fr-FR")
+      : "";
+    const recurringFreqLabel = FREQ_LABELS[expense.recurring_freq] || "";
+
     const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,sans-serif">
   <div style="max-width:480px;margin:32px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)">
     <div style="background:linear-gradient(135deg,#7BA8F5,#9D8FF0);padding:28px 24px;text-align:center">
-      <div style="font-size:36px;margin-bottom:8px">💰</div>
-      <div style="color:#fff;font-size:18px;font-weight:800">Nouvelle dépense à valider</div>
+      <div style="font-size:36px;margin-bottom:8px">${isRecurring ? "🔄" : "💰"}</div>
+      <div style="color:#fff;font-size:18px;font-weight:800">${isRecurring ? "Nouvelle dépense récurrente à valider" : "Nouvelle dépense à valider"}</div>
     </div>
     <div style="padding:28px 24px">
       <p style="color:#666;margin:0 0 20px">Bonjour ${name},</p>
-      <p style="color:#333;margin:0 0 20px">Une dépense a été ajoutée et attend votre validation.</p>
+      <p style="color:#333;margin:0 0 20px">${isRecurring
+        ? `Une dépense récurrente${recurringFreqLabel ? ` (${recurringFreqLabel})` : ""} a été ajoutée${recurringEnd ? ` du ${recurringStart} au ${recurringEnd}` : ""} et attend votre validation.`
+        : "Une dépense a été ajoutée et attend votre validation."}</p>
       <div style="background:#f8f8fb;border-radius:12px;padding:18px 20px;margin:0 0 24px">
         <div style="font-size:24px;font-weight:900;color:#7BA8F5;margin-bottom:8px">${amount}</div>
         <div style="font-size:15px;font-weight:700;color:#333;margin-bottom:4px">${label}</div>
         ${category ? `<div style="font-size:13px;color:#999">🏷️ ${category}</div>` : ""}
-        <div style="font-size:13px;color:#999">📅 ${date}</div>
+        <div style="font-size:13px;color:#999">📅 ${isRecurring && recurringEnd ? `${recurringStart} → ${recurringEnd}` : date}</div>
       </div>
       <a href="${APP_URL}" style="display:block;background:linear-gradient(135deg,#7BA8F5,#9D8FF0);color:#fff;text-decoration:none;text-align:center;padding:14px;border-radius:12px;font-size:15px;font-weight:700">
         ✅ Valider ou refuser sur Duvia
@@ -148,7 +180,9 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         from: `Duvia <${FROM_EMAIL}>`,
         to: [email],
-        subject: `💰 Nouvelle dépense : ${label} — ${amount}`,
+        subject: isRecurring
+          ? `🔄 Nouvelle dépense récurrente : ${label} — ${amount} (du ${recurringStart} au ${recurringEnd})`
+          : `💰 Nouvelle dépense : ${label} — ${amount}`,
         html,
       }),
     });
