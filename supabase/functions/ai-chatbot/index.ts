@@ -483,7 +483,12 @@ const FAQ_CACHE_SIMILARITY_THRESHOLD = 0.7;
 // question FAQ est courte) ; la regex d'intention est une ceinture-et-
 // bretelles, pas exhaustive — FR/EN/DE/ES/PT.
 const CACHEABLE_QUESTION_MAX_LEN = 200;
-const NON_CACHEABLE_INTENT = /\b(reformul|réécri|reecri|traduis|traduir|traduz|translate|rewrite|rephrase|übersetz|umformulier|traduc|reescrib)/i;
+// 🔧 (correctif suite relecture 2026-07-29) : "übersetz" sorti du groupe \b(...)
+// — \b en JS ne reconnaît une frontière de mot qu'autour de [A-Za-z0-9_], donc
+// jamais juste avant un "ü" (ex. "Übersetze das" ne matchait pas). Comparé en
+// alternative séparée, sans \b, puisque "übersetz" est une sous-chaîne assez
+// distinctive pour ne pas avoir besoin de frontière de mot.
+const NON_CACHEABLE_INTENT = /\b(reformul|réécri|reecri|traduis|traduir|traduz|translate|rewrite|rephrase|umformulier|traduc|reescrib)|übersetz/i;
 
 const SYSTEM_PROMPT = `Tu es l'assistant IA de Duvia, une application de coparentalité partagée entre deux foyers ("Deux maisons. Une famille."). Tu réponds aux questions des parents utilisant l'application (l'accès est réservé aux parents).
 
