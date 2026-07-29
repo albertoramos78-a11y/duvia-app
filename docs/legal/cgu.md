@@ -8,7 +8,7 @@
 > publication ou opposabilité aux utilisateurs. Les champs entre crochets
 > `[...]` sont des informations manquantes à compléter.
 >
-> Dernière mise à jour du brouillon : 2026-07-08.
+> Dernière mise à jour du brouillon : 2026-07-22.
 
 ---
 

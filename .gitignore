@@ -4,3 +4,7 @@ dist
 .DS_Store
 *.local
 .superpowers/
+.impeccable/
+.claude/settings.json
+.claude/settings.local.json
+.claude/skills/ui-ux-pro-max/
