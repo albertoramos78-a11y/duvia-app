@@ -18,6 +18,7 @@ import { useMessages } from "./hooks/useMessages";
 import { useCustody } from "./hooks/useCustody";
 import { useIdLinks } from "./hooks/useIdLinks";
 import { useExpenses } from "./hooks/useExpenses";
+import { recordLegalConsent } from './services/supabase/legalConsentService';
 import { usePension } from "./hooks/usePension";
 import { useHistory } from "./hooks/useHistory";
 import { usePush } from "./hooks/usePush";
@@ -3839,8 +3840,15 @@ export default function App() {
     try { return isRgpdConsentValid(window.localStorage.getItem(RGPD_STORAGE_KEY), RGPD_NOTICE_VERSION); }
     catch { return false; }
   });
+  // 🔧 Distingue "vient d'être coché dans cette session" (déclenche l'email
+  // de confirmation) de "déjà accepté lors d'une session précédente" (simple
+  // rattrapage silencieux serveur, voir l'effet de synchronisation plus bas).
+  // Volontairement PAS persisté : un rechargement de page doit repartir à
+  // false, c'est exactement le comportement voulu.
+  const [justAcceptedRgpd, setJustAcceptedRgpd] = useState(false);
   function acceptRgpd(){
     try { window.localStorage.setItem(RGPD_STORAGE_KEY, JSON.stringify(makeRgpdConsentRecord(RGPD_NOTICE_VERSION))); } catch {}
+    setJustAcceptedRgpd(true);
     setRgpdOk(true);
   }
   // Affichage in-app des CGU/CGV (évite de dépendre d'une URL externe pas encore prête)
@@ -4142,6 +4150,31 @@ export default function App() {
       } catch (e) { console.warn("[Duvia] invite join (session active):", e); }
     })();
   }, [user, familySync]);
+
+  // ── Synchronisation serveur du consentement RGPD (CGU/CGV/confidentialité) ──
+  // La case (RgpdConsentScreen) est acceptée AVANT toute connexion — aucune
+  // session authentifiée n'existe à cet instant précis (voir design doc).
+  // On écrit donc la preuve serveur ici, dès qu'une session réelle apparaît.
+  // record_legal_consent() fait un upsert idempotent (ON CONFLICT DO
+  // NOTHING) : rejouer cet appel à chaque connexion est sans risque, et
+  // rattrape silencieusement les comptes déjà existants qui n'avaient que
+  // l'ancien consentement localStorage. L'email de confirmation ne part
+  // que si la case vient d'être cochée DANS CETTE SESSION
+  // (justAcceptedRgpd) — jamais lors de ce rattrapage silencieux, qui ne
+  // correspond à aucune action visible de l'utilisateur.
+  // Ref keyed par user.id (pas juste un booléen) : sur un appareil partagé,
+  // si le parent A se déconnecte et le parent B se connecte SANS recharger
+  // la page, B doit aussi déclencher sa propre synchronisation.
+  const legalConsentSyncedForUserRef = useRef(null);
+  useEffect(() => {
+    if (!user?.id || legalConsentSyncedForUserRef.current === user.id) return;
+    legalConsentSyncedForUserRef.current = user.id;
+    const shouldNotify = justAcceptedRgpd;
+    recordLegalConsent(RGPD_NOTICE_VERSION).catch(() => {});
+    if (shouldNotify) {
+      supabase.functions.invoke("notify-legal-consent", { body: { notice_version: RGPD_NOTICE_VERSION } }).catch(() => {});
+    }
+  }, [user?.id, justAcceptedRgpd]);
 
   // ── Sync automatique des infos du parent connecté → cfg.parents ──────────
   // Découplé de handleSetUser : doit aussi s'exécuter après un rechargement
