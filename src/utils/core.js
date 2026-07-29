@@ -1143,3 +1143,21 @@ export function matchStatsIntent(question) {
   if (!STATS_DAYS_GROUPS.some(g => hasWordGroup(norm, g))) return null;
   return STATS_YEAR_WORDS.some(w => hasWholeWord(norm, w)) ? "days_year" : "days_month";
 }
+
+// ── Notification de dépense récurrente : une seule notif pour toute la série ─
+// supabase/functions/notify-expense/index.ts est un Database Webhook Postgres
+// qui se déclenche PAR LIGNE insérée (comportement standard des Database
+// Webhooks Supabase) — createExpenses() insère toutes les occurrences d'une
+// récurrence en un seul INSERT, donc sans ce filtre chaque occurrence
+// déclencherait sa propre notification (email + push). Seule la toute
+// première occurrence (date === recurringStart) doit notifier ; les
+// occurrences suivantes de la même série sont silencieuses.
+// 🔧 Ce fichier ne peut pas être importé par l'Edge Function (runtime Deno
+// séparé, voir la duplication APP_VERSION/sw.js dans CLAUDE.md) — cette
+// fonction documente et teste le contrat exact que la copie de la condition
+// dans notify-expense/index.ts doit respecter ; garder les deux en phase si
+// l'une des deux change.
+export function isFirstOccurrenceOfRecurringExpense(expense) {
+  if (!expense?.recurring_id) return true; // pas une récurrence : toujours notifier
+  return expense.date === expense.recurring_start;
+}

@@ -1301,3 +1301,23 @@ test("matchFaqAnswer : mot non-stopword non couvert par la FAQ trouvée -> ne fo
   // (donc un OBSERVATEUR) — "grand" non couvert doit bloquer la correspondance.
   assert.equal(matchFaqAnswer("comment inviter grand-parent", FAQ_TEST_ITEMS), null);
 });
+
+import { isFirstOccurrenceOfRecurringExpense } from "./core.js";
+
+test("isFirstOccurrenceOfRecurringExpense : dépense non récurrente -> toujours notifier", () => {
+  assert.equal(isFirstOccurrenceOfRecurringExpense({ recurring_id: null, date: "2026-08-01", recurring_start: null }), true);
+  assert.equal(isFirstOccurrenceOfRecurringExpense({ date: "2026-08-01" }), true);
+});
+
+test("isFirstOccurrenceOfRecurringExpense : première occurrence d'une série -> notifier", () => {
+  assert.equal(isFirstOccurrenceOfRecurringExpense({ recurring_id: "123", date: "2026-08-01", recurring_start: "2026-08-01" }), true);
+});
+
+test("isFirstOccurrenceOfRecurringExpense : occurrence suivante de la même série -> ne pas notifier", () => {
+  // Bug réel constaté en prod (2026-07-29) : createExpenses() insère toutes
+  // les occurrences en un seul INSERT, mais le Database Webhook notify-expense
+  // se déclenche par ligne — sans ce filtre, chaque occurrence envoyait sa
+  // propre notification.
+  assert.equal(isFirstOccurrenceOfRecurringExpense({ recurring_id: "123", date: "2026-08-08", recurring_start: "2026-08-01" }), false);
+  assert.equal(isFirstOccurrenceOfRecurringExpense({ recurring_id: "123", date: "2026-09-01", recurring_start: "2026-08-01" }), false);
+});
