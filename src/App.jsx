@@ -4167,7 +4167,7 @@ export default function App() {
   // la page, B doit aussi déclencher sa propre synchronisation.
   const legalConsentSyncedForUserRef = useRef(null);
   useEffect(() => {
-    if (!user?.id || legalConsentSyncedForUserRef.current === user.id) return;
+    if (!user?.id || !rgpdOk || legalConsentSyncedForUserRef.current === user.id) return;
     legalConsentSyncedForUserRef.current = user.id;
     const shouldNotify = justAcceptedRgpd;
     recordLegalConsent(RGPD_NOTICE_VERSION).catch(() => {});
@@ -4175,7 +4175,7 @@ export default function App() {
       supabase.functions.invoke("notify-legal-consent", { body: { notice_version: RGPD_NOTICE_VERSION } }).catch(() => {});
       setJustAcceptedRgpd(false);
     }
-  }, [user?.id, justAcceptedRgpd]);
+  }, [user?.id, rgpdOk, justAcceptedRgpd]);
 
   // ── Sync automatique des infos du parent connecté → cfg.parents ──────────
   // Découplé de handleSetUser : doit aussi s'exécuter après un rechargement
