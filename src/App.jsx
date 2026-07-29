@@ -4173,6 +4173,7 @@ export default function App() {
     recordLegalConsent(RGPD_NOTICE_VERSION).catch(() => {});
     if (shouldNotify) {
       supabase.functions.invoke("notify-legal-consent", { body: { notice_version: RGPD_NOTICE_VERSION } }).catch(() => {});
+      setJustAcceptedRgpd(false);
     }
   }, [user?.id, justAcceptedRgpd]);
 
