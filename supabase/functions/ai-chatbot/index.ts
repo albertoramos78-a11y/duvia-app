@@ -460,6 +460,20 @@ R: Sans risque : efface uniquement une copie de secours locale (navigateur, pour
 Q: Que se passe-t-il si je supprime mon compte ?
 R: Définitif et immédiat : compte supprimé, retiré des contacts, tes messages restent visibles mais marqués « compte supprimé ». Dernier parent de la famille : documents, pièces jointes et messages de la famille aussi supprimés définitivement. Le Premium en cours est annulé côté Duvia — pense à résilier aussi depuis ton gestionnaire de paiement (App Store/Google Play). La modale propose **💾 Télécharger mes données avant** (un observateur/enfant ne peut télécharger que sa propre fiche).`;
 
+// 🔧 Fingerprint de FAQ_KNOWLEDGE (2026-07-29) : simple hash de changement
+// (pas cryptographique — pas besoin), utilisé pour invalider automatiquement
+// ai_faq_cache quand ce texte est édité à la main. Voir
+// docs/superpowers/specs/2026-07-29-ai-faq-cache-design.md.
+function faqFingerprint(text: string): string {
+  let hash = 5381;
+  for (let i = 0; i < text.length; i++) {
+    hash = ((hash << 5) + hash + text.charCodeAt(i)) | 0;
+  }
+  return String(hash >>> 0);
+}
+const FAQ_FINGERPRINT = faqFingerprint(FAQ_KNOWLEDGE);
+const FAQ_CACHE_SIMILARITY_THRESHOLD = 0.7;
+
 const SYSTEM_PROMPT = `Tu es l'assistant IA de Duvia, une application de coparentalité partagée entre deux foyers ("Deux maisons. Une famille."). Tu réponds aux questions des parents utilisant l'application (l'accès est réservé aux parents).
 
 Tu peux :
@@ -859,6 +873,46 @@ async function notifyNoAnswer(info: { question: string; answer: string; userEmai
   console.log("ai-chatbot: notifyNoAnswer Resend response:", JSON.stringify(resBody));
 }
 
+// 🔧 (2026-07-29) Notifie l'admin par email à chaque nouvelle entrée ajoutée
+// à ai_faq_cache — permet de repérer une réponse à corriger/supprimer sans
+// éplucher les logs. Best-effort : les erreurs sont catchées par l'appelant,
+// un échec d'envoi ne doit jamais faire échouer la réponse du chatbot.
+async function notifyNewFaqCacheEntry(info: { question: string; answer: string }) {
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,sans-serif">
+  <div style="max-width:520px;margin:32px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)">
+    <div style="background:linear-gradient(135deg,#7BA8F5,#9D8FF0);padding:28px 24px;text-align:center">
+      <div style="font-size:36px;margin-bottom:8px">🗂️</div>
+      <div style="color:#fff;font-size:18px;font-weight:800">Nouvelle entrée dans le cache FAQ</div>
+    </div>
+    <div style="padding:28px 24px">
+      <div style="font-size:11px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px">Question</div>
+      <p style="color:#333;margin:0 0 16px;white-space:pre-wrap;background:#f7f7fb;border-radius:10px;padding:12px">${escapeHtmlChatbot(info.question)}</p>
+      <div style="font-size:11px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px">Réponse mise en cache</div>
+      <p style="color:#333;margin:0 0 16px;white-space:pre-wrap;background:#f7f7fb;border-radius:10px;padding:12px">${escapeHtmlChatbot(info.answer)}</p>
+      <p style="color:#999;margin:16px 0 0;font-size:12px">Cette réponse sera désormais réutilisée pour toute question très proche de celle-ci, pour n'importe quelle famille. Si elle est incorrecte ou à retirer : DELETE FROM ai_faq_cache WHERE question_text = '...' (voir ai_faq_cache dans Supabase).</p>
+    </div>
+    <div style="padding:16px 24px;text-align:center;color:#bbb;font-size:11px;border-top:1px solid #f0f0f0">
+      Duvia · Assistant IA
+    </div>
+  </div>
+</body></html>`;
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: `Duvia <${NOTIFY_FROM_EMAIL}>`,
+      to: [NOTIFY_ADMIN_EMAIL],
+      subject: "🗂️ Nouvelle entrée dans le cache FAQ",
+      html,
+    }),
+  });
+  const resBody = await res.json();
+  console.log("ai-chatbot: notifyNewFaqCacheEntry Resend response:", JSON.stringify(resBody));
+}
+
 async function executeTool(
   name: string,
   args: any,
@@ -872,6 +926,24 @@ async function executeTool(
     case "get_custody_days": return toolGetCustodyDays(ctx.userClient, ctx.familyId, args);
     default: return { error: "unknown_tool" };
   }
+}
+
+// 🔧 (2026-07-29) Consulte ai_faq_cache avant d'appeler Claude — voir Task 2
+// du plan d'implémentation. Erreurs non fatales : un souci de lookup ne doit
+// jamais bloquer la question de l'utilisateur, juste faire tomber sur le
+// chemin normal (appel Claude).
+async function lookupFaqCache(admin: ReturnType<typeof createClient>, question: string): Promise<{ answer_text: string } | null> {
+  const { data, error } = await admin.rpc("match_and_touch_faq_cache", {
+    p_question: question,
+    p_fingerprint: FAQ_FINGERPRINT,
+    p_threshold: FAQ_CACHE_SIMILARITY_THRESHOLD,
+  });
+  if (error) {
+    console.error("ai-chatbot: lookupFaqCache failed", error);
+    return null;
+  }
+  const row = (data || [])[0];
+  return row ? { answer_text: row.answer_text } : null;
 }
 
 serve(async (req) => {
@@ -901,6 +973,7 @@ serve(async (req) => {
   if (!familyId) return jsonResponse({ error: "missing_family_id" }, 400);
 
   const clientHistory: Array<{ role: string; content: string }> = Array.isArray(payload?.history) ? payload.history : [];
+  const isFirstQuestion = clientHistory.length === 0;
 
   // 🔒 Client JWT-scopé — les mêmes règles RLS déjà en vigueur pour ce
   // compte/rôle s'appliquent automatiquement (voir spec). Créé ici (avant
@@ -956,6 +1029,22 @@ serve(async (req) => {
   // journalier — constaté en prod le 2026-07-23. weightedTokens() reflète le
   // coût réel plutôt que le nombre brut de tokens.
   const tokensUsedSoFar = (usageRows || []).reduce((s, r) => s + weightedTokens(r), 0);
+
+  // 🔧 (2026-07-29) Un hit de cache ne coûte rien : consulté AVANT le plafond
+  // pour qu'un utilisateur ayant déjà atteint son quota du jour puisse quand
+  // même recevoir une réponse FAQ déjà connue. Voir docs/superpowers/specs/
+  // 2026-07-29-ai-faq-cache-design.md.
+  if (isFirstQuestion) {
+    const cacheHit = await lookupFaqCache(admin, question);
+    if (cacheHit) {
+      const cleanHistory = [{ role: "user", content: question }, { role: "assistant", content: cacheHit.answer_text }];
+      return jsonResponse({
+        answer: cacheHit.answer_text, history: cleanHistory,
+        tokens_used_today: tokensUsedSoFar, tokens_limit: DAILY_TOKEN_LIMIT, tokens_this_exchange: 0,
+      });
+    }
+  }
+
   if (tokensUsedSoFar >= DAILY_TOKEN_LIMIT) return jsonResponse({ error: "daily_token_limit_reached" }, 429);
 
   // `messages` est l'état de travail INTERNE à cette requête (peut contenir
@@ -988,6 +1077,7 @@ serve(async (req) => {
   let totalOutputTokens = 0;
   let totalCacheCreationTokens = 0;
   let totalCacheReadTokens = 0;
+  let toolWasUsed = false;
 
   try {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -1021,6 +1111,7 @@ serve(async (req) => {
 
       if (data?.stop_reason === "tool_use") {
         messages.push({ role: "assistant", content });
+        toolWasUsed = true;
         const toolResults = [];
         for (const block of content) {
           if (block.type !== "tool_use") continue;
@@ -1053,6 +1144,28 @@ serve(async (req) => {
           await notifyNoAnswer({ question, answer, userEmail: callerData.user.email || "", familyId, userId });
         } catch (e) {
           console.error("ai-chatbot: notifyNoAnswer failed", e);
+        }
+      }
+
+      // 🔧 (2026-07-29) N'écrit dans ai_faq_cache que si la réponse est
+      // générique (aucun outil utilisé, jamais spécifique à une famille) et
+      // que Claude n'a pas répondu [NO_ANSWER] — voir docs/superpowers/specs/
+      // 2026-07-29-ai-faq-cache-design.md. Best-effort, jamais fatal. `lang`
+      // (colonne indicative/analytique, voir migration) reste volontairement
+      // non renseignée dans cette itération : le client n'envoie aujourd'hui
+      // aucun champ de langue à ai-chatbot (voir App.jsx, supabase.functions.
+      // invoke("ai-chatbot", ...)), et l'ajouter n'apporterait qu'une
+      // information indicative — pas nécessaire au fonctionnement du cache
+      // (la correspondance pg_trgm sépare déjà naturellement les langues,
+      // voir le design doc).
+      if (isFirstQuestion && !toolWasUsed && !isNoAnswer) {
+        try {
+          await admin.from("ai_faq_cache").insert({
+            question_text: question, answer_text: answer, faq_fingerprint: FAQ_FINGERPRINT,
+          });
+          await notifyNewFaqCacheEntry({ question, answer });
+        } catch (e) {
+          console.error("ai-chatbot: ai_faq_cache write failed", e);
         }
       }
 
