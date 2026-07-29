@@ -418,7 +418,7 @@ R: Menu ☰ → **Configuration famille** → **Dates spéciales** → menus **P
 Q: Comment configurer les fêtes des parents et les anniversaires ?
 R: Onglet **Dates spéciales** → **🌸 Fête des Mères**/**🎩 Fête des Pères** (garde forcée ce jour-là), **🎂 Anniversaires des parents** (garde forcée sur le parent concerné), **🎁 Anniversaires des enfants** (garde selon année paire/impaire).
 
-Q: Comment changer mon mot de passe ?
+Q: Comment changer mon mot de passe (MDP) ?
 R: Menu ☰ → **⚙️ Préférences** → **🔒 Changer mon mot de passe** → ancien mot de passe, nouveau (8 car., majuscule, caractère spécial), confirmation. Compte Google : à gérer sur myaccount.google.com.
 
 Q: Comment changer mon adresse email ?

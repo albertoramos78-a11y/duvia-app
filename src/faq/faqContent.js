@@ -311,7 +311,7 @@ export const FAQ_SECTIONS = {
           a: "Onglet **Dates spéciales** (Configuration famille) → **🎁 Anniversaires des enfants** : choisis quel parent a la garde selon que l'année est paire ou impaire.",
         },
         {
-          q: "Comment changer mon mot de passe ?",
+          q: "Comment changer mon mot de passe (MDP) ?",
           a: "Menu ☰ → **⚙️ Préférences** → **🔒 Changer mon mot de passe** → mot de passe actuel, puis nouveau (8 caractères minimum, une majuscule, un caractère spécial) et confirmation. Si tu t'es connecté(e) avec Google, ça se gère directement sur myaccount.google.com, pas dans Duvia.",
         },
         {
