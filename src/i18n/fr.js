@@ -768,6 +768,7 @@ const fr = {
     emailOrPhoneHint:"💡 Pas d'email ? Utilisez un numéro de téléphone.",
     or:"ou",
     continueWithGoogle:"Continuer avec Google",
+    registerWithGoogle:"Créer avec un compte Google",
     reviews:"avis",
     sameSchedHint:"Planning identique pour tous les enfants",
     assignAllTo:"Tout → {name}",

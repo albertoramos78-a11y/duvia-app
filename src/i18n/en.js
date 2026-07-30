@@ -714,6 +714,7 @@ const en = {
     emailOrPhoneHint:"💡 No email? Use a phone number.",
     or:"or",
     continueWithGoogle:"Continue with Google",
+    registerWithGoogle:"Sign up with Google",
     reviews:"reviews",
     sameSchedHint:"Same schedule for all children",
     assignAllTo:"All → {name}",

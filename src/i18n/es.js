@@ -657,6 +657,7 @@ const es = {
     emailOrPhoneHint:"💡 ¿Sin email? Usa un número de teléfono.",
     or:"o",
     continueWithGoogle:"Continuar con Google",
+    registerWithGoogle:"Crear cuenta con Google",
     reviews:"opiniones",
     sameSchedHint:"Mismo horario para todos los hijos",
     assignAllTo:"Todo → {name}",

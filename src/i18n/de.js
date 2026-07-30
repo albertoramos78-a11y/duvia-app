@@ -657,6 +657,7 @@ const de = {
     emailOrPhoneHint:"💡 Keine E-Mail? Verwenden Sie eine Telefonnummer.",
     or:"oder",
     continueWithGoogle:"Mit Google fortfahren",
+    registerWithGoogle:"Mit Google registrieren",
     reviews:"Bewertungen",
     sameSchedHint:"Gleicher Plan für alle Kinder",
     assignAllTo:"Alles → {name}",

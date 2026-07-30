@@ -5095,7 +5095,7 @@ export default function App() {
           }}
           onDecline={()=>setPendingUser(null)} />
       ) : (
-        <LoginScreen C={BRAND} t={t} lang={lang} setLang={setLang} themeMode={themeMode} cycleTheme={cycleTheme} users={users} setUsers={setUsers} onLogin={handleLogin} onObsJoin={handleObsJoin} familySync={familySync} cfg={cfg} setCfg={setCfg} ensureMfaSatisfied={ensureMfaSatisfied} />
+        <LoginScreen C={BRAND} t={t} lang={lang} setLang={setLang} themeMode={themeMode} cycleTheme={cycleTheme} users={users} setUsers={setUsers} onLogin={handleLogin} onObsJoin={handleObsJoin} familySync={familySync} cfg={cfg} setCfg={setCfg} ensureMfaSatisfied={ensureMfaSatisfied} acceptRgpd={acceptRgpd} onOpenLegal={setLegalDocOpen} />
       )}
       {legalDocOpen && <LegalDocModal C={C} t={t} doc={legalDocOpen} lang={lang} onClose={()=>setLegalDocOpen(null)} />}
       {mfaChallenge && (
@@ -6222,7 +6222,7 @@ function FaqModal({ C, t, lang, onClose }) {
 // par appareil (redemandé si RGPD_NOTICE_VERSION change). Informe sur les
 // données + renvoie à la politique de confidentialité / CGU, et enregistre
 // l'acceptation (version + date) via onAccept.
-function RgpdConsentScreen({C,t,lang,setLang,onAccept,onOpenLegal}) {
+function RgpdConsentScreen({C,t,lang,setLang,onAccept,onOpenLegal,onDecline}) {
   const [checked,setChecked] = useState(false);
   const [showLangMenu,setShowLangMenu] = useState(false);
   useEffect(()=>{ if(!showLangMenu) return; const onKey=e=>{if(e.key==="Escape")setShowLangMenu(false);}; window.addEventListener("keydown",onKey); return ()=>window.removeEventListener("keydown",onKey); },[showLangMenu]);
@@ -6286,6 +6286,11 @@ function RgpdConsentScreen({C,t,lang,setLang,onAccept,onOpenLegal}) {
             cursor:checked?"pointer":"not-allowed",opacity:checked?1:.7,transition:"all .2s",boxShadow:checked?`0 4px 14px ${C.vio}33`:"none"}}>
             {t.rgpdAcceptBtn||"✓ Continuer"}
           </button>
+          {onDecline && (
+            <button type="button" onClick={onDecline} style={{width:"100%",padding:"9px",marginTop:8,background:"transparent",color:C.mut,fontSize:12,textDecoration:"underline"}}>
+              {t.rgpdDecline||"← Retour"}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -6491,8 +6496,24 @@ function PasswordResetScreen({ onDone }) {
   );
 }
 
-function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLogin,onObsJoin,familySync,cfg,setCfg,ensureMfaSatisfied}) {
+function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLogin,onObsJoin,familySync,cfg,setCfg,ensureMfaSatisfied,acceptRgpd,onOpenLegal}) {
   const [mode,setMode]=useState("login");
+  // 🔧 Bug réel signalé par l'utilisateur (2026-07-29) : sur un appareil déjà
+  // "consenti" par un compte précédent, rgpdOk est déjà true — l'écran RGPD
+  // de premier accès (device-level) n'apparaît donc plus jamais, y compris
+  // pour la création d'un TOUT NOUVEAU compte. Résultat : sessionStorage
+  // "duvia_rgpd_just_accepted" n'était jamais posé pour ce nouveau compte,
+  // donc aucun email de confirmation de consentement ne partait à
+  // l'inscription. Fix : toute création de compte (email ou Google) exige
+  // désormais une reconfirmation explicite AVANT que le compte soit
+  // effectivement créé — sauf si le consentement vient déjà d'être donné
+  // DANS CETTE MÊME SESSION (ex: premier passage sur l'appareil, écran
+  // device-level déjà vu il y a quelques secondes) pour éviter de demander
+  // deux fois de suite la même chose.
+  const [regConsentPending,setRegConsentPending]=useState(null); // null | "email" | "google"
+  function alreadyConsentedThisSession(){
+    try { return window.sessionStorage.getItem("duvia_rgpd_just_accepted")==="1"; } catch { return false; }
+  }
   const [avgRating,setAvgRating]=useState(null);
   const [publicReviews,setPublicReviews]=useState([]);
   const [reviewsOpen,setReviewsOpen]=useState(false); // accordéon avis publics — replié par défaut
@@ -6744,6 +6765,23 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
   const [parentPhone, setParentPhone]     = useState("");
   const [pwConfirm, setPwConfirm]         = useState("");
 
+  // Reconfirmation du consentement CGU/CGV/confidentialité juste avant une
+  // création de compte (voir le commentaire sur regConsentPending plus haut).
+  // accepte → on appelle réellement doReg()/doGoogleAuth() (le compte n'a
+  // pas encore été créé à ce stade) ; refuse → on revient simplement au
+  // formulaire, rien n'a été créé.
+  if(regConsentPending) return (
+    <RgpdConsentScreen C={C} t={t} lang={lang} setLang={setLang}
+      onOpenLegal={onOpenLegal}
+      onDecline={()=>setRegConsentPending(null)}
+      onAccept={async()=>{
+        const action = regConsentPending;
+        acceptRgpd();
+        setRegConsentPending(null);
+        if(action==="google") await doGoogleAuth(); else await doReg();
+      }} />
+  );
+
   // En attente d'approbation : on n'affiche QUE le message d'attente (pas le
   // formulaire ni le bouton « Envoyer le lien », qui n'ont rien à faire ici).
   // ⚠️ Placé APRÈS tous les hooks (sinon « Rendered fewer hooks » / React #300).
@@ -6957,6 +6995,22 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
       console.warn("[Duvia] resetPasswordForEmail:", e);
     }
     setOk(t.resetSent); setErr("");
+  }
+
+  async function doGoogleAuth(){
+    const invSearch = window.location.search;
+    let loginHint = "";
+    try {
+      const invToken = new URLSearchParams(invSearch).get("inv");
+      if(invToken){ const d=JSON.parse(atob(invToken)); loginHint=d.email||""; }
+    } catch{}
+    await supabase.auth.signInWithOAuth({
+      provider:"google",
+      options:{
+        redirectTo: `https://app.duvia.fr${invSearch||""}`,
+        ...(loginHint ? {queryParams:{login_hint:loginHint}} : {})
+      }
+    });
   }
 
   async function doLoginAndJoin(){
@@ -7314,7 +7368,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
               {t.rememberMe||"Rester connecté 7 jours sur cet appareil"}
             </label>
           )}
-          <button onClick={mode==="login"?doLogin:mode==="register"?doReg:doForgot} style={{width:"100%",height:48,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:15,fontWeight:800,marginBottom:10,borderRadius:12,boxShadow:`0 4px 14px ${C.vio}44`}}>
+          <button onClick={mode==="login"?doLogin:mode==="register"?(()=>{ if(alreadyConsentedThisSession()) doReg(); else setRegConsentPending("email"); }):doForgot} style={{width:"100%",height:48,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:15,fontWeight:800,marginBottom:10,borderRadius:12,boxShadow:`0 4px 14px ${C.vio}44`}}>
             {mode==="login"?t.connect:mode==="register"?t.createAcc:t.sendLink}
           </button>
           {(mode==="login"||mode==="register")&&(
@@ -7325,22 +7379,11 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
                 <div style={{flex:1,height:1,background:C.bor}} />
               </div>
               <button onClick={async()=>{
-                const invSearch = window.location.search;
-                let loginHint = "";
-                try {
-                  const invToken = new URLSearchParams(invSearch).get("inv");
-                  if(invToken){ const d=JSON.parse(atob(invToken)); loginHint=d.email||""; }
-                } catch{}
-                await supabase.auth.signInWithOAuth({
-                  provider:"google",
-                  options:{
-                    redirectTo: `https://app.duvia.fr${invSearch||""}`,
-                    ...(loginHint ? {queryParams:{login_hint:loginHint}} : {})
-                  }
-                });
+                if(mode==="register" && !alreadyConsentedThisSession()){ setRegConsentPending("google"); return; }
+                await doGoogleAuth();
               }} style={{width:"100%",height:44,background:"#fff",border:"1.5px solid #dadce0",borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",gap:10,fontSize:14,fontWeight:700,color:"#3c4043",cursor:"pointer",marginBottom:4,boxShadow:"0 1px 4px rgba(0,0,0,.08)"}}>
                 <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.8 2.5 30.2 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.9 6.1C12.4 13 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.5-4.1 7-10.2 7-17.1z"/><path fill="#FBBC05" d="M10.5 28.6A14.8 14.8 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6l-7.9-6.1A23.8 23.8 0 0 0 0 24c0 3.9.9 7.5 2.6 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.6-5.9c-2 1.4-4.7 2.2-7.6 2.2-6.3 0-11.6-3.5-13.5-9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>
-                {t.continueWithGoogle||"Continuer avec Google"}
+                {mode==="register" ? (t.registerWithGoogle||"Créer avec un compte Google") : (t.continueWithGoogle||"Continuer avec Google")}
               </button>
             </>
           )}
