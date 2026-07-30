@@ -580,6 +580,7 @@ const en = {
     rgpdCgu:"Terms of Use",
     rgpdAcceptLabel:"I have read and accept Duvia's privacy policy and terms of use.",
     rgpdAcceptBtn:"✓ Continue",
+    rgpdDeclineLogout:"Log out",
     inviteOtherParent:"Invite the other parent",
     inviteFillField:"Fill in at least one field.",
     inviteLink24h:"The link will be valid for 24h.",

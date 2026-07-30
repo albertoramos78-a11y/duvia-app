@@ -5106,6 +5106,25 @@ export default function App() {
     </div>
   );
 
+  // 🔧 RGPD_NOTICE_VERSION bumpée (nouvelles CGU validées) pendant qu'un
+  // utilisateur reste connecté en continu — un simple logout/login aurait
+  // normalement re-déclenché !rgpdOk côté écran de connexion, mais quelqu'un
+  // qui ne se déconnecte jamais ne repasse plus jamais par ce chemin. Sans ce
+  // garde-fou, ces utilisateurs gardent indéfiniment un consentement
+  // obsolète, sans jamais voir les nouvelles conditions. Même pattern que la
+  // charte d'engagement (ConsentScreen) : écran bloquant après connexion,
+  // avec déconnexion en guise de refus plutôt qu'un blocage sans issue.
+  if(user && !rgpdOk) return (
+    <div>
+      <RgpdConsentScreen C={C} t={t} lang={lang} setLang={setLang}
+        onAccept={acceptRgpd}
+        onOpenLegal={setLegalDocOpen}
+        onDecline={async()=>{ await supabase.auth.signOut().catch(()=>{}); handleSetUser(null); }}
+        declineLabel={t.rgpdDeclineLogout||"Se déconnecter"} />
+      {legalDocOpen && <LegalDocModal C={C} t={t} doc={legalDocOpen} lang={lang} onClose={()=>setLegalDocOpen(null)} />}
+    </div>
+  );
+
   // Page "no access" pour observateur retiré de la famille
   if(familySync.removedObserver) return (
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C.bg}}>
@@ -6222,7 +6241,7 @@ function FaqModal({ C, t, lang, onClose }) {
 // par appareil (redemandé si RGPD_NOTICE_VERSION change). Informe sur les
 // données + renvoie à la politique de confidentialité / CGU, et enregistre
 // l'acceptation (version + date) via onAccept.
-function RgpdConsentScreen({C,t,lang,setLang,onAccept,onOpenLegal,onDecline}) {
+function RgpdConsentScreen({C,t,lang,setLang,onAccept,onOpenLegal,onDecline,declineLabel}) {
   const [checked,setChecked] = useState(false);
   const [showLangMenu,setShowLangMenu] = useState(false);
   useEffect(()=>{ if(!showLangMenu) return; const onKey=e=>{if(e.key==="Escape")setShowLangMenu(false);}; window.addEventListener("keydown",onKey); return ()=>window.removeEventListener("keydown",onKey); },[showLangMenu]);
@@ -6288,7 +6307,7 @@ function RgpdConsentScreen({C,t,lang,setLang,onAccept,onOpenLegal,onDecline}) {
           </button>
           {onDecline && (
             <button type="button" onClick={onDecline} style={{width:"100%",padding:"9px",marginTop:8,background:"transparent",color:C.mut,fontSize:12,textDecoration:"underline"}}>
-              {t.rgpdDecline||"← Retour"}
+              {declineLabel||t.rgpdDecline||"← Retour"}
             </button>
           )}
         </div>

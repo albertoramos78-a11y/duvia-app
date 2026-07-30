@@ -523,6 +523,7 @@ const es = {
     rgpdCgu:"Condiciones de uso",
     rgpdAcceptLabel:"He leído y acepto la política de privacidad y las condiciones de uso de Duvia.",
     rgpdAcceptBtn:"✓ Continuar",
+    rgpdDeclineLogout:"Cerrar sesión",
     inviteOtherParent:"Invitar al otro progenitor",
     inviteFillField:"Rellena al menos un campo.",
     inviteLink24h:"El enlace será válido 24 h.",

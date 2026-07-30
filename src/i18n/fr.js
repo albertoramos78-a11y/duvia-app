@@ -631,6 +631,7 @@ const fr = {
     rgpdCgu:"Conditions d'utilisation",
     rgpdAcceptLabel:"J'ai lu et j'accepte la politique de confidentialité et les conditions d'utilisation de Duvia.",
     rgpdAcceptBtn:"✓ Continuer",
+    rgpdDeclineLogout:"Se déconnecter",
     inviteOtherParent:"Inviter l'autre parent",
     inviteFillField:"Remplis au moins un champ.",
     inviteLink24h:"Le lien sera valable 24h.",
