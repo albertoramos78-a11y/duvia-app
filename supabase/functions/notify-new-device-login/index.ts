@@ -56,6 +56,43 @@ Deno.serve(async (req: Request) => {
 
   const now = new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris" });
 
+  // 🌍 Ville/pays approximatifs de la connexion (2026-07-30, demandé par
+  // l'utilisateur) — géolocalisation par IP, forcément approximative
+  // (niveau ville, peut être fausse avec un VPN/réseau mobile) : un signal
+  // "est-ce que ça te ressemble ?", pas une localisation précise. L'IP vient
+  // de cf-connecting-ip (Supabase Edge Functions tourne derrière Cloudflare,
+  // en-tête fiable/non falsifiable par le client) avec repli sur
+  // x-forwarded-for pour rester robuste si jamais absent.
+  //
+  // ip-api.com plutôt qu'ipapi.co : testé en direct sur prod, ipapi.co
+  // renvoie un 429 (limite de débit gratuite) dès la 2e requête en quelques
+  // minutes — bien trop fragile. ip-api.com tient 45 req/min en gratuit,
+  // confirmé par les en-têtes X-Rl/X-Ttl de sa réponse. Contrepartie : pas
+  // de HTTPS sur le tier gratuit d'ip-api.com — l'IP transite en clair sur
+  // ce trajet serveur-à-serveur (jamais exposé au navigateur de
+  // l'utilisateur), compromis accepté sciemment.
+  //
+  // `if (geoRes.ok)` fait toute la robustesse : un 429 (quota dépassé), un
+  // timeout ou une IP locale (dev) laissent simplement locationLabel vide —
+  // jamais bloquant pour l'envoi de l'email lui-même.
+  const clientIp = req.headers.get("cf-connecting-ip")
+    || (req.headers.get("x-forwarded-for") || "").split(",")[0].trim()
+    || "";
+  let locationLabel = "";
+  if (clientIp) {
+    try {
+      const geoRes = await fetch(`http://ip-api.com/json/${clientIp}?fields=status,city,country`, { signal: AbortSignal.timeout(2500) });
+      if (geoRes.ok) {
+        const geo = await geoRes.json();
+        if (geo?.status === "success" && geo.city && geo.country) {
+          locationLabel = `${geo.city}, ${geo.country}`;
+        }
+      }
+    } catch (e) {
+      console.warn("notify-new-device-login: geoloc lookup failed", e);
+    }
+  }
+
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,sans-serif">
@@ -66,7 +103,8 @@ Deno.serve(async (req: Request) => {
     </div>
     <div style="padding:28px 24px">
       <p style="color:#333;margin:0 0 12px">Une connexion à ton compte Duvia a été détectée depuis un nouvel appareil :</p>
-      <p style="color:#333;margin:0 0 20px;font-weight:700">${deviceInfo} — ${now}</p>
+      <p style="color:#333;margin:0 0 4px;font-weight:700">${deviceInfo} — ${now}</p>
+      ${locationLabel ? `<p style="color:#666;margin:0 0 20px;font-size:13px">📍 Localisation approximative : ${locationLabel}</p>` : `<div style="margin-bottom:20px"></div>`}
       <p style="color:#333;margin:0 0 20px">Si c'était toi, tu peux ignorer cet email.</p>
       <p style="color:#c0392b;margin:0;font-weight:700">Si ce n'était pas toi, change ton mot de passe immédiatement dans les Préférences de l'application.</p>
     </div>
