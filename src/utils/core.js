@@ -1161,3 +1161,26 @@ export function isFirstOccurrenceOfRecurringExpense(expense) {
   if (!expense?.recurring_id) return true; // pas une récurrence : toujours notifier
   return expense.date === expense.recurring_start;
 }
+
+// ── Messages de réponse aux notes (RatingTab) ────────────────────────────────
+// Renvoie des CLÉS i18n, jamais du texte résolu — ce fichier n'a aucune
+// dépendance à `t` nulle part ailleurs, App.jsx fait la résolution
+// `t.clé || "repli"` comme pour tout le reste de l'app.
+const RATING_HINT_KEYS = ["ratingHint1", "ratingHint2", "ratingHint3", "ratingHint4", "ratingHint5"];
+
+export function ratingLiveHintFor(stars) {
+  if (!Number.isInteger(stars) || stars < 1 || stars > 5) return "";
+  return RATING_HINT_KEYS[stars - 1];
+}
+
+const RATING_THANKYOU_BY_STARS = {
+  1: { textKey: "ratingThanks1", ctaAction: "contact" },
+  2: { textKey: "ratingThanks2", ctaAction: "contact" },
+  3: { textKey: "ratingThanks3", ctaAction: null },
+  4: { textKey: "ratingThanks4", ctaAction: null },
+  5: { textKey: "ratingThanks5", ctaAction: "share" },
+};
+
+export function ratingThankYouFor(stars) {
+  return RATING_THANKYOU_BY_STARS[stars] || { textKey: "ratingThanks", ctaAction: null };
+}

@@ -1321,3 +1321,38 @@ test("isFirstOccurrenceOfRecurringExpense : occurrence suivante de la même sér
   assert.equal(isFirstOccurrenceOfRecurringExpense({ recurring_id: "123", date: "2026-08-08", recurring_start: "2026-08-01" }), false);
   assert.equal(isFirstOccurrenceOfRecurringExpense({ recurring_id: "123", date: "2026-09-01", recurring_start: "2026-08-01" }), false);
 });
+
+import { ratingLiveHintFor, ratingThankYouFor } from "./core.js";
+
+test("ratingLiveHintFor : renvoie la bonne clé pour chaque note 1 à 5", () => {
+  assert.equal(ratingLiveHintFor(1), "ratingHint1");
+  assert.equal(ratingLiveHintFor(2), "ratingHint2");
+  assert.equal(ratingLiveHintFor(3), "ratingHint3");
+  assert.equal(ratingLiveHintFor(4), "ratingHint4");
+  assert.equal(ratingLiveHintFor(5), "ratingHint5");
+});
+
+test("ratingLiveHintFor : valeur hors plage ou nulle -> chaîne vide (aucun aperçu avant sélection)", () => {
+  assert.equal(ratingLiveHintFor(0), "");
+  assert.equal(ratingLiveHintFor(6), "");
+  assert.equal(ratingLiveHintFor(undefined), "");
+});
+
+test("ratingThankYouFor : notes basses (1-2) -> CTA contact", () => {
+  assert.deepEqual(ratingThankYouFor(1), { textKey: "ratingThanks1", ctaAction: "contact" });
+  assert.deepEqual(ratingThankYouFor(2), { textKey: "ratingThanks2", ctaAction: "contact" });
+});
+
+test("ratingThankYouFor : notes moyennes (3-4) -> pas de CTA", () => {
+  assert.deepEqual(ratingThankYouFor(3), { textKey: "ratingThanks3", ctaAction: null });
+  assert.deepEqual(ratingThankYouFor(4), { textKey: "ratingThanks4", ctaAction: null });
+});
+
+test("ratingThankYouFor : note maximale (5) -> CTA partage", () => {
+  assert.deepEqual(ratingThankYouFor(5), { textKey: "ratingThanks5", ctaAction: "share" });
+});
+
+test("ratingThankYouFor : valeur hors plage -> repli sur la clé générique existante", () => {
+  assert.deepEqual(ratingThankYouFor(0), { textKey: "ratingThanks", ctaAction: null });
+  assert.deepEqual(ratingThankYouFor(99), { textKey: "ratingThanks", ctaAction: null });
+});
