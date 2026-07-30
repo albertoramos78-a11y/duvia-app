@@ -19796,10 +19796,10 @@ function ScheduleTab({prem: premProp, childReadOnly}) {
 <title>Emploi du temps — Duvia</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-@page{size:A4 portrait;margin:0}
+@page{size:A4 landscape;margin:0}
 html,body{background:#999}
 body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;display:flex;justify-content:center;padding:8mm 0}
-.page{width:210mm;min-height:297mm;padding:12mm 10mm;background:#fff;box-shadow:0 0 6px rgba(0,0,0,.35);display:flex;flex-direction:column}
+.page{width:297mm;min-height:210mm;padding:10mm 12mm;background:#fff;box-shadow:0 0 6px rgba(0,0,0,.35);display:flex;flex-direction:column}
 @media print{ html,body{background:#fff;padding:0} .page{box-shadow:none;width:auto;min-height:auto} }
 .doc-header{display:flex;align-items:center;justify-content:space-between;padding-bottom:9px;border-bottom:2px solid #7B7CF5;margin-bottom:12px}
 .doc-title{font-size:16px;font-weight:900;color:#17103A}
