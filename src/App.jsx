@@ -7520,18 +7520,19 @@ function NotifTab({prem: premProp}) {
   }
   function markAll(){setCfg(c=>({...c,notifs:c.notifs.map(n=>({...n,read:true}))}));}
 
-  // Map notif type → tab index (parent layout: 0=Cal, 1=Schedule, 2=Exp, 3=Contacts, 4=Vault, 5=Msg)
+  // Map notif type → tab index (parent layout: 0=Cal, 1=Schedule, 2=Exp, 3=Contacts, 4=Vault, 5=Msg).
+  // pushNotif is only ever called with "cal"/"exp"/"vault"/"info"/"obs" (see call sites) — "schedule"
+  // is never actually created, kept below only because it matches an existing parent tab.
   function getTabIndex(type) {
     if(isObs||isChild) {
-      // Observer: 0=Cal, 1=Contacts, 2=Msg / Child: 0=Cal, 1=Schedule, 2=Contacts, 3=Msg
+      // Observer/Child layouts have no Exp or Vault tab — those notif types have nowhere to go.
       if(type==="cal") return 0;
-      if(type==="schedule") return isChild ? 1 : null;
-      if(type==="msg") return isChild ? 3 : 2;
       return null;
     }
     if(type==="cal") return 0;
     if(type==="schedule") return 1;
     if(type==="exp") return 2;
+    if(type==="vault") return 4;
     if(type==="msg") return 5;
     return null;
   }
@@ -7539,9 +7540,11 @@ function NotifTab({prem: premProp}) {
   function handleNotifClick(n) {
     // mark as read
     setCfg(c=>({...c,notifs:c.notifs.map(x=>x.id===n.id?{...x,read:true}:x)}));
+    // Always close the notif panel, even when there's no matching tab to jump to —
+    // otherwise tapping a notif with no destination looked like nothing happened at all.
+    setMenuTab(null);
     const idx = getTabIndex(n.type);
     if(idx !== null) {
-      setMenuTab(null);
       setTab(idx);
     }
   }
