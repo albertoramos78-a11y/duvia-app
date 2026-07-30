@@ -5924,6 +5924,10 @@ export default function App() {
                 </div>
                 <ObserverPrefsTab />
               </div>
+            ) : menuTab==="notifs" ? (
+              <div>
+                <NotifTab />
+              </div>
             ) : (
               <>
                 {tab===0 && <CalTab readOnly updateCal={()=>{}} />}
