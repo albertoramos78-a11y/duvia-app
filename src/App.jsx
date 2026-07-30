@@ -26,7 +26,7 @@ import { getMyLocation, setMyLocation } from "./services/supabase/locationServic
 import { TR } from './i18n/index.js';
 import { APP_URL, LIMITS, RGPD_NOTICE_VERSION, APP_VERSION } from './config.js';
 import { nextPensionDueDate, computeOverrideUpdate, mergeHistoryPreservingTokens, fuzzyIncludes, matchFaqAnswer, matchGreeting, matchAgendaIntent, matchStatsIntent } from './utils/core.js';
-import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact, weatherIconFor, getInitials, aggregateHourlyPeriods } from './utils/core.js';
+import { insertValidatedParent, reconcileOwnParentSlot, isRgpdConsentValid, makeRgpdConsentRecord, RGPD_STORAGE_KEY, isParentEmailLocked, markDepartedParents, effectiveCreatorIdx, formatActorName, toggleMessageReaction, isMemberIdentityLocked, toggleGuardId, resolveCustomDateGuardians, guardianStripeBackground, guardianNamesLabel, makeSchoolHolIdentity, isConversationHidden, isConsentCharterValid, formatChildBirthdate, hasMatchingParentEmail, mergeBackupArrayPreservingContact, weatherIconFor, getInitials, aggregateHourlyPeriods, ratingLiveHintFor, ratingThankYouFor } from './utils/core.js';
 import { DARK, LIGHT, SUMMER, RG, RG_START, RG_END, WC, WC_START, WC_END, SUMMER_START, SUMMER_END, VIDEO, LICORNE, FILLEUL, BRAND, BRAND_GRADIENT, PCOLS, isRGPeriod, isWCPeriod, isSummerPeriod } from './theme.js';
 import { LEGAL_DOCS, LEGAL_TITLES, LEGAL_WARNING } from './legal/legalDocs.js';
 import { FAQ_SECTIONS } from './faq/faqContent.js';
@@ -13595,7 +13595,15 @@ function RatingTab() {
   const EMOJIS  = ['', '😔', '😐', '🙂', '😊', '😍'];
   const PLACEHOLDERS = t.ratingPlaceholders || ['', 'Qu\'est-ce qui vous a déçu ?', 'Qu\'est-ce qui pourrait être amélioré ?', 'Qu\'avez-vous apprécié ?', 'Qu\'est-ce que vous aimez le plus ?', 'Qu\'est-ce que vous aimez le plus ?'];
   const emoji   = selected ? EMOJIS[selected] : '🌟';
-  const message = selected >= 4 ? (t.ratingMsgHigh||'Merci beaucoup ! 😍') : (t.ratingMsgLow||'Merci 🙏 Dites-nous comment améliorer');
+  const ratingHintKey = ratingLiveHintFor(selected);
+  const RATING_HINT_FALLBACKS = {
+    ratingHint1: "Merci, on est vraiment désolés 😔",
+    ratingHint2: "Merci pour votre franchise 😐",
+    ratingHint3: "Merci, dites-nous comment on peut mieux faire 🙂",
+    ratingHint4: "Merci beaucoup ! 😊",
+    ratingHint5: "Merci infiniment ! 😍",
+  };
+  const message = ratingHintKey ? (t[ratingHintKey] || RATING_HINT_FALLBACKS[ratingHintKey]) : "";
   const canSend = selected > 0 && !sending;
 
   async function handleSubmit() {
@@ -13630,13 +13638,43 @@ function RatingTab() {
     setSending(false);
   }
 
-  if (submitted) return (
+  if (submitted) {
+    const { textKey: ratingThanksKey, ctaAction } = ratingThankYouFor(selected);
+    const RATING_THANKYOU_FALLBACKS = {
+      ratingThanks: "Merci pour votre retour !",
+      ratingThanks1: "Nous sommes désolés que votre expérience n'ait pas été à la hauteur. Dites-nous ce qui ne va pas, on est là pour arranger ça.",
+      ratingThanks2: "Merci pour ce retour honnête. On aimerait comprendre ce qui vous a gêné pour l'améliorer.",
+      ratingThanks3: "Merci ! Un petit mot dans le commentaire sur ce qui pourrait être encore mieux nous aiderait beaucoup.",
+      ratingThanks4: "Merci beaucoup ! Qu'est-ce qui manquerait pour un 5ème ⭐ ?",
+      ratingThanks5: "Merci infiniment, ça nous touche énormément ! Si Duvia vous aide, partagez-le à d'autres parents séparés 💙",
+    };
+    const ratingThanksText = t[ratingThanksKey] || RATING_THANKYOU_FALLBACKS[ratingThanksKey];
+    const code = sub?.refCode || user?.refCode || "";
+    const inviteLink = `${APP_URL}?ref=${code}`;
+    function handleShareClick() {
+      const subj = encodeURIComponent(t.refShareEmailSubject || "Rejoins-moi sur Duvia 🏡");
+      const body = encodeURIComponent((t.refShareEmailBody || "Salut !\n\nJe t'invite sur Duvia, l'app qui simplifie la coparentalité.\n\nTélécharge l'app et crée ton compte via ce lien : {link}\n\nÀ bientôt sur Duvia !").replace("{link}", inviteLink));
+      window.open(`mailto:?subject=${subj}&body=${body}`);
+    }
+    return (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 20px",gap:14,animation:"ratingAppear .45s cubic-bezier(.16,1,.3,1) both"}}>
       <style>{`@keyframes ratingAppear{from{opacity:0;transform:scale(.88) translateY(12px)}to{opacity:1;transform:none}}`}</style>
       <span style={{fontSize:54}}>🎉</span>
-      <div style={{fontSize:18,fontWeight:800,color:C.txt}}>{t.ratingThanks||"Merci pour votre retour !"}</div>
+      <div style={{fontSize:18,fontWeight:800,color:C.txt,textAlign:"center",maxWidth:320,lineHeight:1.4}}>{ratingThanksText}</div>
       <div style={{fontSize:13,color:C.mut}}>{"★".repeat(selected)}{"☆".repeat(5-selected)} ({selected}/5)</div>
       {comment && <div style={{marginTop:8,fontSize:13,color:C.mut,fontStyle:"italic",textAlign:"center",maxWidth:260,lineHeight:1.5}}>"{comment}"</div>}
+      {ctaAction === "contact" && (
+        <a href={`mailto:duvia.services@gmail.com?subject=${encodeURIComponent("Retour sur mon expérience Duvia")}`}
+           style={{marginTop:6,height:40,padding:"0 20px",display:"flex",alignItems:"center",justifyContent:"center",background:C.vio,color:"#fff",fontSize:13,fontWeight:700,borderRadius:10,textDecoration:"none"}}>
+          {t.ratingCtaContact||"📩 Nous contacter"}
+        </a>
+      )}
+      {ctaAction === "share" && (
+        <button onClick={handleShareClick}
+           style={{marginTop:6,height:40,padding:"0 20px",background:C.vio,color:"#fff",fontSize:13,fontWeight:700,borderRadius:10}}>
+          {t.ratingCtaShare||"💙 Partager Duvia"}
+        </button>
+      )}
       {avgStats?.total_count>0 && <div style={{marginTop:12,fontSize:12,color:C.mut}}>⭐ {avgStats.avg_stars}/5 · {avgStats.total_count} avis au total</div>}
       {publicReviews.length>0 && (
         <div style={{marginTop:20,width:"100%",textAlign:"left"}}>
@@ -13653,7 +13691,8 @@ function RatingTab() {
         </div>
       )}
     </div>
-  );
+    );
+  }
 
   return (
     <div style={{padding:"8px 0"}}>
