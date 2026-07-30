@@ -6611,7 +6611,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     const profile = existing
       ? { ...existing }
       : {
-          id: Date.now(), email: cleanEmail,
+          id: data.user.id, email: cleanEmail,
           name: meta.name || cleanEmail.split("@")[0],
           role: meta.role || "parent",
           parentIdx: meta.parentIdx ?? 0,
@@ -7050,7 +7050,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     const meta = data.user?.user_metadata || {};
     const existing = users.find(u2 => u2.email===cleanEmail);
     const u = existing || {
-      id: Date.now(), email: cleanEmail,
+      id: data.user.id, email: cleanEmail,
       name: meta.name || cleanEmail.split("@")[0],
       role: meta.role || "parent",
       parentIdx: meta.parentIdx ?? (isParentInvite ? 1 : 0),
