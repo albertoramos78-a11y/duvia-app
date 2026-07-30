@@ -18420,7 +18420,7 @@ function PremiumTab() {
     {icon:"📱", label:t.premFeatPWA||"Installable sur mobile (PWA)",                 badge:"free"},
     {icon:"📄", label:t.premFeatExportExpenses||"Export PDF des dépenses",           badge:"premium"},
     {icon:"📄", label:t.premFeatExportCalendar||"Export PDF calendrier annuel",     badge:"premium"},
-    {icon:"📄", label:t.premFeatExportSchedule||"Export PDF planning d'activité enfant", badge:"premium", soon:true},
+    {icon:"📄", label:t.premFeatExportSchedule||"Export PDF planning d'activité enfant", badge:"premium"},
     {icon:"🤖", label:t.premFeatAiRephrase||"Assistant IA — reformulation de message", badge:"premium_ai"},
   ];
   return (
@@ -19707,6 +19707,8 @@ function ScheduleTab({prem: premProp, childReadOnly}) {
   const [editId,setEditId] = useState(null);
   const [form,setForm] = useState({subject:"",room:"",building:"",from:"08:00",to:"09:00"});
   const [err,setErr] = useState("");
+  const [scheduleExportHtml,setScheduleExportHtml] = useState(null);
+  const scheduleIframeRef = useRef(null);
 
   const dayNames = t.dayNames ? t.dayNames.slice(0,7) : ["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
   const dayShort = t.dayShort ? t.dayShort.slice(0,7) : ["L","M","M","J","V","S","D"];
@@ -19743,6 +19745,96 @@ function ScheduleTab({prem: premProp, childReadOnly}) {
     setShowForm(false);setEditId(null);setForm({subject:"",room:"",building:"",from:"08:00",to:"09:00"});setErr("");
   }
 
+  // ── Export PDF planning de classe ─────────────────────────────────────────
+  function generateSchedulePDF() {
+    if(!prem){ onUpgrade(); return; }
+    const activeChild = cfg.children[childIdx];
+    const weekByDay = dayNames.map((_,di) => {
+      const k = `schedule_child${activeChild?.id||0}_day${di}`;
+      return ((cfg.schedules||{})[k]||[]).slice().sort((a,b)=>a.from.localeCompare(b.from));
+    });
+    const allSlots = weekByDay.flat();
+
+    const todayLabel = new Date().toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"});
+    let bodyHtml;
+    if(allSlots.length===0){
+      bodyHtml = `<div class="empty">Aucun cours renseigné pour le moment.</div>`;
+    } else {
+      let minMin=24*60, maxMin=0;
+      allSlots.forEach(s=>{
+        const [fh,fm]=s.from.split(":").map(Number), [th,tm]=s.to.split(":").map(Number);
+        minMin=Math.min(minMin,fh*60+fm); maxMin=Math.max(maxMin,th*60+tm);
+      });
+      const startHour=Math.floor(minMin/60), endHour=Math.ceil(maxMin/60);
+      const totalMin=(endHour-startHour)*60;
+      const timeToPct = hm => { const [h,m]=hm.split(":").map(Number); return ((h*60+m-startHour*60)/totalMin)*100; };
+
+      let hourLines="";
+      for(let h=startHour; h<=endHour; h++){
+        const pct=((h-startHour)*60/totalMin)*100;
+        hourLines += `<div class="hourline" style="top:${pct}%"><span class="hourlabel">${h}h</span></div>`;
+      }
+      const dayColumns = dayNames.map((dn,di) => {
+        const blocks = weekByDay[di].map(s => {
+          const top=timeToPct(s.from), bottom=timeToPct(s.to);
+          const color=subjColor(s.subject);
+          return `<div class="block" style="top:${top}%;height:${Math.max(bottom-top,4)}%;background:${color}22;border-color:${color}66">
+            <div class="block-subj" style="color:${color}">${s.subject}</div>
+            <div class="block-time">${s.from}–${s.to}</div>
+            ${s.room ? `<div class="block-room">${s.room}${s.building?` · ${s.building}`:""}</div>` : ""}
+          </div>`;
+        }).join("");
+        return `<div class="daycol"><div class="dayhdr">${dn}</div><div class="daybody">${blocks}</div></div>`;
+      }).join("");
+      const subjectsUsed = [...new Set(allSlots.map(s=>s.subject))];
+      const legendHtml = subjectsUsed.map(s=>`<span class="li"><i class="dot" style="background:${subjColor(s)}"></i>${s}</span>`).join("");
+      bodyHtml = `<div class="timetable"><div class="timeaxis">${hourLines}</div><div class="gridwrap">${dayColumns}</div></div>
+        <div class="legend">${legendHtml}</div>`;
+    }
+
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Emploi du temps — Duvia</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+@page{size:A4 portrait;margin:0}
+html,body{background:#999}
+body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;display:flex;justify-content:center;padding:8mm 0}
+.page{width:210mm;min-height:297mm;padding:12mm 10mm;background:#fff;box-shadow:0 0 6px rgba(0,0,0,.35);display:flex;flex-direction:column}
+@media print{ html,body{background:#fff;padding:0} .page{box-shadow:none;width:auto;min-height:auto} }
+.doc-header{display:flex;align-items:center;justify-content:space-between;padding-bottom:9px;border-bottom:2px solid #7B7CF5;margin-bottom:12px}
+.doc-title{font-size:16px;font-weight:900;color:#17103A}
+.doc-sub{font-size:9px;color:#9ca3af;margin-top:2px}
+.doc-header-right{font-size:8px;color:#9ca3af;text-align:right}
+.timetable{flex:1;display:flex;position:relative}
+.timeaxis{width:24px;position:relative;flex-shrink:0}
+.hourline{position:absolute;left:0;right:0;border-top:1px solid #eee}
+.hourlabel{position:absolute;top:-5px;left:0;font-size:7px;color:#9ca3af;font-weight:700}
+.gridwrap{flex:1;display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.daycol{position:relative;display:flex;flex-direction:column}
+.dayhdr{flex:none;font-weight:800;font-size:9px;text-align:center;padding:5px 2px;background:#17103A;color:#fff;text-transform:uppercase;letter-spacing:.3px;border-radius:3px;margin-bottom:2px}
+.daybody{flex:1;position:relative;background:#fafafa;border-radius:3px}
+.block{position:absolute;left:1px;right:1px;border-radius:3px;border:1px solid;padding:3px 4px;overflow:hidden}
+.block-subj{font-size:6.5px;font-weight:800;line-height:1.15}
+.block-time{font-size:5.5px;color:#555;font-weight:600;margin-top:1px}
+.block-room{font-size:5.5px;color:#777;margin-top:1px}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb}
+.legend .li{display:flex;align-items:center;gap:4px;font-size:8px;font-weight:700;color:#374151}
+.legend .dot{width:7px;height:7px;border-radius:2px;display:inline-block}
+.empty{flex:1;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:13px}
+</style></head><body>
+<div class="page">
+  <div class="doc-header">
+    <div><div class="doc-title">📚 Emploi du temps — ${activeChild?.name||"Enfant"}</div><div class="doc-sub">Semaine type</div></div>
+    <div class="doc-header-right">Généré par Duvia<br/>le ${todayLabel}</div>
+  </div>
+  ${bodyHtml}
+</div>
+<script>window.addEventListener('message',e=>{if(e.data==='DUVIA_PRINT')window.print();});</script>
+</body></html>`;
+
+    setScheduleExportHtml(html);
+  }
+
   if(!cfg.children||cfg.children.length===0||!cfg.children[0]?.name) {
     return (
       <div>
@@ -19769,6 +19861,28 @@ function ScheduleTab({prem: premProp, childReadOnly}) {
 
   return (
     <div className="fi">
+      {/* ── Prévisualisation PDF planning de classe ── */}
+      {scheduleExportHtml && (
+        <div style={{position:"fixed",inset:0,zIndex:700,display:"flex",flexDirection:"column",background:"#111"}}>
+          <div style={{display:"flex",gap:8,padding:"10px 14px",background:"#1a1a2e",alignItems:"center",flexShrink:0}}>
+            <div style={{flex:1,fontSize:13,fontWeight:700,color:"#ede9fe"}}>🎒 Emploi du temps — Duvia</div>
+            <button
+              onClick={()=>scheduleIframeRef.current?.contentWindow?.postMessage("DUVIA_PRINT","*")}
+              style={{padding:"7px 16px",background:"#7B7CF5",color:"#fff",border:"none",borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              🖨️ Imprimer → PDF
+            </button>
+            <button
+              onClick={()=>setScheduleExportHtml(null)}
+              style={{padding:"7px 12px",background:"rgba(255,255,255,.15)",color:"#fff",border:"none",borderRadius:8,fontSize:13,cursor:"pointer",fontWeight:700}}>
+              ✕
+            </button>
+          </div>
+          <iframe ref={scheduleIframeRef} srcDoc={scheduleExportHtml}
+            style={{flex:1,border:"none",background:"white"}}
+            title="Emploi du temps PDF Duvia"
+            sandbox="allow-same-origin allow-scripts allow-modals allow-popups" />
+        </div>
+      )}
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
         <div>
@@ -19776,6 +19890,12 @@ function ScheduleTab({prem: premProp, childReadOnly}) {
           <div style={{fontSize:11,color:C.mut}}>{t.scheduleWeeklySubtitle||"Planning hebdomadaire par enfant"}</div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          {!childReadOnly && (
+            <button onClick={generateSchedulePDF} title={prem ? (t.scheduleExportPDFTitle||"Exporter l'emploi du temps en PDF") : (t.premiumSubscribersOnly||"Réservé aux membres Premium abonnés")}
+              style={{display:"flex",alignItems:"center",justifyContent:"center",width:28,height:28,background:"transparent",border:`1px solid ${C.bor}`,borderRadius:8,cursor:"pointer",fontSize:13}}>
+              {prem ? "📄" : "🔒"}
+            </button>
+          )}
           <InfoBubble C={C} tipKey={`duvia_scheduletip_${user?.id||"x"}`} title={t.scheduleTitle||"Emploi du temps"}>
             {t.scheduleTipBody||"Renseignez ici l'emploi du temps de chaque enfant : matières, salles, horaires. Il sera visible par tous les membres de la famille, sauf les observateurs."}
           </InfoBubble>
