@@ -7,18 +7,38 @@ const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 const APP_URL    = "https://app.duvia.fr"
 const FROM       = "Duvia <notifications@duvia.fr>"
 
+// 🔧 Bug réel signalé par l'utilisateur (2026-07-30) : un enfant ayant rejoint
+// une famille par invitation n'a jamais reçu l'email de confirmation, alors
+// que la ligne legal_consents était bien créée. Root cause confirmée en
+// reproduisant le parcours réel : cette fonction n'avait AUCUNE gestion CORS
+// (ni OPTIONS, ni Access-Control-Allow-Origin), contrairement à ses
+// fonctions sœurs (notify-expense, notify-new-device-login) — le navigateur
+// bloque silencieusement l'appel dès le preflight, avant même que le code
+// ci-dessous ne s'exécute. `supabase.functions.invoke(...)` dans App.jsx
+// envoie un header Authorization + Content-Type: application/json, qui
+// déclenche systématiquement un preflight OPTIONS.
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+}
+
 serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: CORS })
+  }
+
   // Vérifie que l'utilisateur est bien connecté via son JWT
   const token = (req.headers.get("Authorization") || "").replace("Bearer ", "")
   const supabase = createClient(SB_URL, SB_SERVICE, {
     auth: { autoRefreshToken: false, persistSession: false }
   })
   const { data: { user }, error } = await supabase.auth.getUser(token)
-  if (error || !user) return new Response("Unauthorized", { status: 401 })
+  if (error || !user) return new Response("Unauthorized", { status: 401, headers: CORS })
 
   const email = user.email
   if (!email || email.includes("@phone.duvia.app")) {
-    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json" } })
+    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json", ...CORS } })
   }
 
   let noticeVersion = "?"
@@ -63,5 +83,5 @@ serve(async (req) => {
     }),
   })
 
-  return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json" } })
+  return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json", ...CORS } })
 })
