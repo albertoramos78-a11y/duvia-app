@@ -12318,7 +12318,7 @@ function getSpecialEvents(date, cfg) {
 // CALENDAR TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
-  const {C,t,cfg,setCfg,updateCal: ctxUpdateCal,apiData,setMenuTab,setConfigStep,prem,perms,st,onUpgrade,isObs,isChild,user,sub,addHist,pushNotif,custodyShadow,familySync,lang} = useApp();
+  const {C,t,cfg,setCfg,updateCal: ctxUpdateCal,apiData,setMenuTab,setConfigStep,prem,perms,st,onUpgrade,isObs,isChild,user,sub,addHist,pushNotif,custodyShadow,familySync,lang,weekStart} = useApp();
   // 🔧 st vient du statut effectif partagé par la famille (effectiveSub), pas
   // du sub individuel — un parent couvert par le Premium de son co-parent doit
   // aussi avoir accès à l'export PDF, pas seulement le payeur réel.
@@ -12456,8 +12456,8 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
     if(!premFull){ onUpgrade(); return; }
     const p0 = cfg.parents[0]||{}, p1 = cfg.parents[1]||{};
     const col0 = p0.color||"#f97316", col1 = p1.color||"#06b6d4";
-    const cols = [col0, col1];
-    const DAY_LTR = ["D","L","M","M","J","V","S"];
+    const sunFirst = weekStart === "dimanche";
+    const DAY_LTR = sunFirst ? ["D","L","M","M","J","V","S"] : ["L","M","M","J","V","S","D"];
     const MONTHS  = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
     const pubHols = new Set((apiData?.publicHols||[]).map(h=>h.date));
     // Zone scolaire active (même logique que l'affichage du calendrier)
@@ -12469,115 +12469,116 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
     const today = new Date();
     const startDate = new Date(today.getFullYear(), today.getMonth(), 1);
 
+    // Rond de garde d'un jour : couleur de fond + initiale (identité lisible même sans couleur à l'impression)
+    function guardVisual(guard){
+      if(!guard) return {bg:"#d1d5db", label:"?"};
+      if(guard.allParents) return {bg:"#a855f7", label:"★"};
+      if(guard.obsId){
+        const o=(cfg.observers||[]).find(o=>String(o.id)===String(guard.obsId));
+        return {bg:"#f59e0b", label:(o?.name||"O").trim().charAt(0).toUpperCase()||"O"};
+      }
+      if(guard.parentIdx===0||guard.parentIdx===1){
+        const p=cfg.parents[guard.parentIdx];
+        const bg=p?.color||(guard.parentIdx===0?col0:col1);
+        const label=(p?.name||"").trim().charAt(0).toUpperCase()||String.fromCharCode(65+guard.parentIdx);
+        return {bg, label};
+      }
+      return {bg:"#d1d5db", label:"?"};
+    }
+    function timeToPercent(hm){
+      if(!hm) return 50;
+      const [h,mi]=hm.split(":").map(Number);
+      if(Number.isNaN(h)) return 50;
+      return Math.max(0,Math.min(100,((h*60+(mi||0))/1440)*100));
+    }
+
     function buildMonth(mi){
       const md = new Date(startDate.getFullYear(), startDate.getMonth()+mi, 1);
       const yr = md.getFullYear(), mo = md.getMonth();
       const nDays = dInMonth(yr,mo);
-      let rows="", lastWk=-1;
+      const jsFirstDow = new Date(yr,mo,1).getDay(); // Dim=0..Sam=6
+      const firstDow = sunFirst ? jsFirstDow : dow(yr,mo,1); // Lun=0..Dim=6
+      let cellsHtml = "";
+      for(let i=0;i<firstDow;i++) cellsHtml += '<div class="day pad"></div>';
 
       for(let d=1;d<=nDays;d++){
         const date = new Date(yr,mo,d);
-        const ds   = toStr(date); // 🔧 Fix : toISOString() décale d'1 jour pour les fuseaux UTC+1/+2 (France) — toStr() garde la date locale.
-        const dow  = date.getDay();
-        const wk   = wkNum(date);
-        const isWE = dow===0||dow===6;
+        const ds   = toStr(date); // 🔧 toISOString() décale d'1 jour pour les fuseaux UTC+1/+2 (France) — toStr() garde la date locale.
+        const jsDow = date.getDay();
+        const isWE = jsDow===0||jsDow===6;
         const isFH = pubHols.has(ds);
         const isSH = schoolHolPeriods.some(h=>ds>=h.s&&ds<=h.e);
-        const guard= resolveGuard(ds,cfg,activeChildId);
-        const pIdx = guard?.parentIdx;
-        const isFullDay = !guard?.timeType || guard?.timeType === "full";
+        const guard = resolveGuard(ds,cfg,activeChildId);
+        const isFullDay = !guard?.timeType || guard.timeType==="full";
 
-        // Couleur de garde
-        let custBg;
-        if(isFH)       custBg = "#ef444488";
-        else if(pIdx===0) custBg = col0+"99";
-        else if(pIdx===1) custBg = col1+"99";
-        else            custBg = "#f0f0f0";
-
-        // Couleur vacances scolaires (vert)
-        const vacBg = isSH ? "#22c55ecc" : "transparent";
-
-        // Jour férié → 1ère et 2ème colonnes (lettre + numéro du jour) en rouge
-        const dlClass = `dl${isFH?" fer":""}`;
-        const dnClass = `dn${isFH?" fer":""}`;
-
-        const wkCell = wk!==lastWk
-          ? `<td class="wk">${wk}</td>`
-          : `<td class="wk"></td>`;
-        lastWk=wk;
-
-        if(isFullDay || !guard){
-          // Journée entière → 1 seule ligne
-          rows+=`<tr class="${isWE?"we":""}">
-            ${wkCell}
-            <td class="${dlClass}">${DAY_LTR[dow]}</td>
-            <td class="${dnClass}">${d}</td>
-            <td class="vac" style="background:${vacBg}"></td>
-            <td class="cu" colspan="2" style="background:${custBg}"></td>
-          </tr>`;
+        let avatarStyle, label;
+        if(isFullDay){
+          const v = guardVisual(guard);
+          avatarStyle = `background:${v.bg}`;
+          label = v.label;
         } else {
-          // Journée partagée → couleur variable selon le parent qui prend/rend la garde
-          const refIdx = (pIdx===0||pIdx===1) ? pIdx : 0;
+          // Journée partagée à heure précise : dégradé + initiale du parent qui récupère l'enfant en fin de journée
+          const refIdx = (guard.parentIdx===0||guard.parentIdx===1) ? guard.parentIdx : 0;
           const otherIdx = refIdx===0 ? 1 : 0;
-          let changeTime, firstColor, secondColor;
+          const refV = guardVisual({...guard,parentIdx:refIdx});
+          const otherV = guardVisual({...guard,parentIdx:otherIdx});
+          let changeTime, firstV, secondV;
           if(guard.timeType==="end"){
-            // ce parent garde l'enfant jusqu'à l'heure indiquée, puis passage à l'autre
-            changeTime  = guard.endTime || "12:00";
-            firstColor  = cols[refIdx];
-            secondColor = cols[otherIdx];
+            changeTime = guard.endTime || "12:00";
+            firstV = refV; secondV = otherV;
           } else {
-            // "start" ou "split" : prise de garde par ce parent à l'heure indiquée
-            changeTime  = guard.startTime || guard.endTime || "12:00";
-            firstColor  = cols[otherIdx];
-            secondColor = cols[refIdx];
+            changeTime = guard.startTime || guard.endTime || "12:00";
+            firstV = otherV; secondV = refV;
           }
-          rows+=`<tr class="${isWE?"we":""}">
-            ${wkCell}
-            <td class="${dlClass}">${DAY_LTR[dow]}</td>
-            <td class="${dnClass}">${d}</td>
-            <td class="vac" style="background:${vacBg}"></td>
-            <td class="cu" style="background:${firstColor+"99"}">→${changeTime}</td>
-            <td class="cu" style="background:${secondColor+"99"}"></td>
-          </tr>`;
+          const pct = timeToPercent(changeTime);
+          avatarStyle = `background:linear-gradient(180deg, ${firstV.bg} 0%, ${firstV.bg} calc(${pct}% - 1px), ${secondV.bg} calc(${pct}% + 1px), ${secondV.bg} 100%)`;
+          label = secondV.label;
         }
+        const numClass = isFH ? "fer" : isWE ? "we" : "";
+        cellsHtml += `<div class="day">
+          <span class="avatar" style="${avatarStyle}">${label}</span>
+          <span class="dnum ${numClass}">${d}</span>
+          ${isSH ? '<span class="fold"></span>' : ''}
+        </div>`;
       }
+      const totalCells = firstDow + nDays;
+      const trailingPad = (7 - (totalCells % 7)) % 7;
+      for(let i=0;i<trailingPad;i++) cellsHtml += '<div class="day pad"></div>';
 
       return `<div class="mo">
-        <div class="mhdr">${MONTHS[mo].toUpperCase()} ${yr}</div>
-        <table><tbody>${rows}</tbody></table>
+        <div class="mhdr">${MONTHS[mo]} ${yr}</div>
+        <div class="dowrow">${DAY_LTR.map(l=>`<div class="dl">${l}</div>`).join("")}</div>
+        <div class="grid">${cellsHtml}</div>
       </div>`;
     }
 
-    let page1Months="", page2Months="";
-    for(let mi=0;mi<6;mi++)  page1Months += buildMonth(mi);
-    for(let mi=6;mi<12;mi++) page2Months += buildMonth(mi);
+    let yearMonths = "";
+    for(let mi=0;mi<12;mi++) yearMonths += buildMonth(mi);
 
-    // Bornes des deux périodes (pour les sous-titres et le certificat)
-    const m1Start = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-    const m1End   = new Date(startDate.getFullYear(), startDate.getMonth()+5, 1);
-    const m2Start = new Date(startDate.getFullYear(), startDate.getMonth()+6, 1);
-    const m2End   = new Date(startDate.getFullYear(), startDate.getMonth()+11, 1);
-    const periodLabel = (a,b) => `${MONTHS[a.getMonth()]} ${a.getFullYear()} – ${MONTHS[b.getMonth()]} ${b.getFullYear()}`;
+    const periodStart = startDate;
+    const periodEnd = new Date(startDate.getFullYear(), startDate.getMonth()+11, 1);
+    const periodLabel = `${MONTHS[periodStart.getMonth()]} ${periodStart.getFullYear()} – ${MONTHS[periodEnd.getMonth()]} ${periodEnd.getFullYear()}`;
 
-    const legendHTML = `<div class="leg">
-      <span><i class="lc" style="background:${col0}aa"></i>${p0.name||"Parent 1"}</span>
-      <span><i class="lc" style="background:${col1}aa"></i>${p1.name||"Parent 2"}</span>
-      <span><i class="lc fer-lc"></i>Jour férié</span>
-      <span><i class="lc" style="background:#22c55ecc"></i>Vacances scolaires</span>
+    const legendHTML = `<div class="legend">
+      <span class="li"><i class="dot" style="background:${col0}"></i>${p0.name||"Parent 1"}</span>
+      <span class="li"><i class="dot" style="background:${col1}"></i>${p1.name||"Parent 2"}</span>
+      <span class="li"><i class="dot" style="background:#dc2626"></i>Jour férié</span>
+      <span class="li"><i class="dot" style="background:#0C9A73"></i>Vacances scolaires</span>
     </div>`;
 
     const childrenNames = (cfg.children||[]).map(c=>c.name).filter(Boolean).join(", ") || "—";
     const todayLabel = new Date().toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"});
+    const exportId = Date.now().toString(36).toUpperCase()+"-DUVIA";
 
     const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
 <title>Planning de garde — Duvia</title>
 <style>
+*{box-sizing:border-box;margin:0;padding:0}
 @page{size:A4 landscape;margin:0}
 @page certpage{size:A4 portrait;margin:0}
-*{box-sizing:border-box;margin:0;padding:0}
 html,body{background:#999}
-body{font-family:Arial,sans-serif;font-size:8px;-webkit-print-color-adjust:exact;print-color-adjust:exact;display:flex;flex-direction:column;align-items:center;gap:8mm;padding:8mm 0}
-.page{width:297mm;height:210mm;padding:5mm;background:#fff;box-shadow:0 0 6px rgba(0,0,0,.35);page-break-after:always;overflow:hidden;display:flex;flex-direction:column}
+body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;display:flex;flex-direction:column;align-items:center;gap:8mm;padding:8mm 0}
+.page{width:297mm;height:210mm;padding:10mm 12mm;background:#fff;box-shadow:0 0 6px rgba(0,0,0,.35);page-break-after:always;overflow:hidden;display:flex;flex-direction:column}
 .page:last-child{page-break-after:auto}
 .page.cert{width:210mm;height:297mm;page:certpage}
 @media print{
@@ -12585,58 +12586,58 @@ body{font-family:Arial,sans-serif;font-size:8px;-webkit-print-color-adjust:exact
   .page{box-shadow:none;width:auto;height:auto}
   .page.cert{width:auto;height:auto}
 }
-h1{text-align:center;font-size:12px;font-weight:900;margin-bottom:2px}
-.sub{text-align:center;font-size:7.5px;color:#666;margin-bottom:3px}
-.leg{display:flex;gap:14px;justify-content:center;margin-bottom:4px;flex-wrap:wrap}
-.leg span{display:flex;align-items:center;gap:4px;font-size:7.5px;font-weight:700}
-.lc{width:13px;height:8px;border-radius:2px;display:inline-block;border:1px solid rgba(0,0,0,.15)}
-.fer-lc{background:#ef444488}
-.cal{flex:1;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:4px;min-height:0}
-.mo{border:1px solid #e0e0e0;border-radius:3px;overflow:hidden;display:flex;flex-direction:column}
-.mhdr{flex:none;font-weight:900;font-size:8px;text-align:center;padding:2px 2px;background:#fef3c7;color:#92400e;border-bottom:1px solid #e0e0e0;letter-spacing:.02em}
-table{flex:1;width:100%;border-collapse:collapse;table-layout:fixed}
-tr{height:10px}
-td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:nowrap;border-bottom:1px solid rgba(0,0,0,.04)}
-.wk{font-size:5px;color:#bbb;background:#fafafa;width:10px;text-align:center;border-right:1px solid #eee;font-weight:600}
-.dl{width:9px;text-align:center;font-weight:800;color:#333;font-size:7px}
-.dn{width:13px;text-align:right;padding-right:1px;font-weight:600;font-size:6.5px}
-.dl.fer,.dn.fer{background:#ef444433;color:#7f1d1d}
-.vac{width:6px;border-right:1px solid rgba(0,0,0,.07)}
-.cu{font-size:6px;color:#222;padding:0 2px}
-.we .dl{color:#888;font-style:italic}
-.we .dn{color:#888}
-.we{background:rgba(0,0,0,.018)}
+.doc-header{display:flex;align-items:center;justify-content:space-between;padding-bottom:9px;border-bottom:2px solid #7B7CF5;margin-bottom:10px}
+.doc-title{font-size:16px;font-weight:900;color:#17103A}
+.doc-sub{font-size:9px;color:#9ca3af;margin-top:2px}
+.doc-header-right{font-size:8px;color:#9ca3af;text-align:right}
+.legend{display:flex;gap:16px;margin-bottom:10px;flex-wrap:wrap}
+.legend .li{display:flex;align-items:center;gap:5px;font-size:9px;font-weight:700;color:#374151}
+.legend .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.year-grid{flex:1;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(3,1fr);gap:6px;min-height:0}
+.mo{border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;display:flex;flex-direction:column;background:#fff;padding:3px 4px 4px}
+.mhdr{flex:none;font-weight:800;font-size:8px;text-align:center;padding:3px;background:#17103A;color:#fff;letter-spacing:.3px;text-transform:uppercase;border-radius:3px;margin-bottom:2px}
+.dowrow{display:grid;grid-template-columns:repeat(7,1fr);gap:1.5px;margin-bottom:1.5px}
+.dl{text-align:center;font-size:5px;font-weight:800;color:#9ca3af}
+.grid{flex:1;display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:1fr;gap:1.5px}
+.day{position:relative;border-radius:2px;display:flex;align-items:center;justify-content:center;min-height:0;background:#fafafa}
+.day.pad{background:transparent}
+.avatar{width:78%;height:78%;max-width:13px;max-height:13px;border-radius:50%;color:#fff;font-size:7.5px;font-weight:900;display:flex;align-items:center;justify-content:center;line-height:1}
+.dnum{position:absolute;top:0.5px;left:1.5px;font-size:4px;font-weight:700;color:#00000055;z-index:1}
+.dnum.fer{color:#dc2626;font-weight:900}
+.dnum.we{color:#00000077}
+.fold{position:absolute;bottom:0;right:0;width:0;height:0;border-style:solid;border-width:0 0 6px 6px;border-color:transparent transparent #0C9A73 transparent;z-index:2}
 .cert{display:flex;align-items:center;justify-content:center;height:100%;min-height:185mm}
-.certbox{width:100%;max-width:680px;border:2px solid #c2745a;border-radius:10px;padding:34px 46px;text-align:center}
-.certbox h1{font-size:22px;margin-bottom:6px}
-.cert-sub{font-size:11px;color:#666;margin-bottom:24px}
+.cert-seal{width:72px;height:72px;border-radius:50%;border:3px solid #7B7CF5;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 18px;background:#F2EDFF}
+.certbox{width:100%;max-width:680px;text-align:center}
+.cert-title{font-size:22px;font-weight:900;color:#17103A;margin-bottom:6px}
+.cert-sub{font-size:11px;color:#7269A8;margin-bottom:24px}
 .cert-body{font-size:12.5px;line-height:1.8;text-align:left;color:#333}
 .cert-parents{display:flex;justify-content:center;gap:36px;margin:16px 0;font-weight:800;font-size:13px}
 .cert-parents .dot{width:12px;height:12px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:middle}
 .cert-note{font-size:10px;color:#666;font-style:italic;margin-top:14px}
-.cert-sign{display:flex;justify-content:space-around;margin-top:46px}
+.cert-sign{display:flex;justify-content:space-around;margin-top:40px}
 .cert-sign-block{width:42%;font-size:11px;text-align:center}
 .cert-sign-line{border-bottom:1px solid #999;height:54px;margin-bottom:6px}
-.cert-footer{margin-top:34px;font-size:9px;color:#999}
+.cert-hash{font-family:monospace;font-size:8px;color:#c4b5fd;background:#17103A;padding:5px 12px;border-radius:6px;margin-top:20px;letter-spacing:1px;display:inline-block}
+.cert-footer{margin-top:16px;font-size:9px;color:#999}
 </style></head><body>
 
 <div class="page">
-  <h1>&#128197; Planning de garde &mdash; ${p0.name||"Parent 1"} &amp; ${p1.name||"Parent 2"}</h1>
-  <div class="sub">Page 1/2 &middot; ${periodLabel(m1Start,m1End)} &middot; Généré par Duvia le ${todayLabel}</div>
+  <div class="doc-header">
+    <div>
+      <div class="doc-title">📅 Planning de garde — ${p0.name||"Parent 1"} &amp; ${p1.name||"Parent 2"}</div>
+      <div class="doc-sub">${periodLabel}</div>
+    </div>
+    <div class="doc-header-right">Généré par Duvia<br/>le ${todayLabel}</div>
+  </div>
   ${legendHTML}
-  <div class="cal">${page1Months}</div>
-</div>
-
-<div class="page">
-  <h1>&#128197; Planning de garde &mdash; ${p0.name||"Parent 1"} &amp; ${p1.name||"Parent 2"}</h1>
-  <div class="sub">Page 2/2 &middot; ${periodLabel(m2Start,m2End)} &middot; Généré par Duvia le ${todayLabel}</div>
-  ${legendHTML}
-  <div class="cal">${page2Months}</div>
+  <div class="year-grid">${yearMonths}</div>
 </div>
 
 <div class="page cert">
   <div class="certbox">
-    <h1>&#128196; Certificat de planning de garde</h1>
+    <div class="cert-seal">📅</div>
+    <div class="cert-title">Certificat de planning de garde</div>
     <div class="cert-sub">Document généré automatiquement par l'application Duvia</div>
     <div class="cert-body">
       <p>Le présent document atteste du planning de garde alternée établi entre :</p>
@@ -12645,13 +12646,14 @@ td{padding:0 1px;font-size:6.5px;line-height:10px;overflow:hidden;white-space:no
         <div><span class="dot" style="background:${col1}"></span>${p1.name||"Parent 2"}</div>
       </div>
       <p>Pour l'enfant / les enfants : <strong>${childrenNames}</strong></p>
-      <p>Période couverte par ce document : <strong>${periodLabel(m1Start,m2End)}</strong></p>
+      <p>Période couverte par ce document : <strong>${periodLabel}</strong></p>
       <p class="cert-note">Ce planning reflète l'organisation de la garde convenue entre les parents au moment de son édition. Toute modification ultérieure doit faire l'objet d'un accord mutuel entre les deux parents.</p>
     </div>
     <div class="cert-sign">
       <div class="cert-sign-block"><div class="cert-sign-line"></div><div>${p0.name||"Parent 1"}<br/>Date et signature</div></div>
       <div class="cert-sign-block"><div class="cert-sign-line"></div><div>${p1.name||"Parent 2"}<br/>Date et signature</div></div>
     </div>
+    <div class="cert-hash">${exportId}</div>
     <div class="cert-footer">Document généré le ${todayLabel} via Duvia</div>
   </div>
 </div>
