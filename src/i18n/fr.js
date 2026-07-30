@@ -522,7 +522,7 @@ const fr = {
     ratingThanks1:"Nous sommes désolés que votre expérience n'ait pas été à la hauteur. Dites-nous ce qui ne va pas, on est là pour arranger ça.",
     ratingThanks2:"Merci pour ce retour honnête. On aimerait comprendre ce qui vous a gêné pour l'améliorer.",
     ratingThanks3:"Merci ! Un petit mot dans le commentaire sur ce qui pourrait être encore mieux nous aiderait beaucoup.",
-    ratingThanks4:"Merci beaucoup ! Qu'est-ce qui manquerait pour un 5ème ⭐ ?",
+    ratingThanks4:"Merci beaucoup ! Qu'est-ce qui manquerait pour une 5e ⭐ ?",
     ratingThanks5:"Merci infiniment, ça nous touche énormément ! Si Duvia vous aide, partagez-le à d'autres parents séparés 💙",
     ratingCtaContact:"📩 Nous contacter",
     ratingCtaShare:"💙 Partager Duvia",

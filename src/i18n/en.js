@@ -463,7 +463,7 @@ const en = {
     ratingHint2:"Thanks for your honesty 😐",
     ratingHint3:"Thanks, tell us how we can do better 🙂",
     ratingHint4:"Thank you so much! 😊",
-    ratingHint5:"Thank you so much! 😍",
+    ratingHint5:"Thank you, that means the world to us! 😍",
     ratingCommentLabel:"Your comment",
     ratingOptional:"(optional)",
     ratingSubmit:"Send my feedback",
