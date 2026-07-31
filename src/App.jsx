@@ -12592,7 +12592,20 @@ html,body{background:#999}
 body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;display:flex;flex-direction:column;align-items:center;gap:8mm;padding:8mm 0}
 .page{width:297mm;height:210mm;padding:10mm 12mm;background:#fff;box-shadow:0 0 6px rgba(0,0,0,.35);page-break-after:always;overflow:hidden;display:flex;flex-direction:column}
 .page:last-child{page-break-after:auto}
-.page.cert{width:210mm;height:297mm;page:certpage}
+/* 🔧 align-self:flex-start (pas le align-items:center hérité de body, qui
+   centre normalement chaque .page dans la colonne flex vu que .page fait
+   297mm en paysage mais 210mm ici en portrait) : à l'impression réelle,
+   Chromium centre cette page nommée comme si elle faisait toujours 297mm de
+   large (la largeur de la page précédente), décalant tout son contenu
+   d'environ 43mm vers la droite — invisible à l'écran, où l'alignement se
+   recalcule correctement pour la largeur réelle de 210mm. flex-start
+   neutralise ce mauvais centrage hérité ; le vrai centrage horizontal du
+   contenu se fait ensuite via .certbox (margin:auto), qui lui n'a pas ce
+   problème une fois cette page correctement positionnée. Bug confirmé du
+   moteur d'impression Chromium sur les pages nommées (session 2026-07-31,
+   signalé en conditions réelles par un décalage visible "le texte sort de
+   la page"). */
+.page.cert{width:210mm;height:297mm;page:certpage;align-self:flex-start}
 /* 🔧 PAS de logo/marque ajoutée en haut de cette page nommée (page:certpage) :
    testé de façon exhaustive (session 2026-07-31) et confirmé impossible à
    l'impression réelle (jamais visible à l'écran, donc invisible aux tests
@@ -12641,22 +12654,25 @@ body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-print-color
 .dnum.we{color:#00000077}
 .fold{position:absolute;bottom:0;right:0;width:0;height:0;border-style:solid;border-width:0 0 6px 6px;border-color:transparent transparent #0C9A73 transparent;z-index:2}
 .cert-seal{width:72px;height:72px;border-radius:50%;border:3px solid #7B7CF5;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 18px;background:#F2EDFF}
-/* 🔧 margin-top fixe (pas de centrage flex/%) : sur cette page nommée via
-   page:certpage qui suit une page A4 paysage, Chromium calcule la hauteur
-   disponible pour le flux de CETTE page comme si elle faisait ~245mm au lieu
-   des 297mm réels au moment du print — un centrage flex/height:100% se
-   retrouve donc décalé dans le PDF réel, invisible à l'écran (aperçu iframe)
-   où cette page fait sa vraie taille. ⚠️ L'aperçu d'impression du navigateur
-   (avant de cliquer Enregistrer) peut lui aussi mentir sur cette page
-   précise — seul le fichier PDF réellement généré fait foi. Valeur (94mm)
-   calibrée avec deux points de mesure via extraction directe des opérateurs
-   Tm/Td du flux de contenu PDF (position réelle du texte sur la page,
+/* 🔧 largeur fixe en mm (pas width:100%;max-width:680px) + margin-top fixe
+   (pas de centrage flex/%) : sur cette page nommée (page:certpage),
+   Chromium calcule à l'impression réelle la hauteur ET la largeur
+   disponibles pour le flux de CETTE page de façon erronée (sous-évaluées),
+   ce qui décalait le centrage vertical et faisait carrément déborder le
+   texte hors de la page avec une largeur en % — invisible à l'écran (aperçu
+   iframe), où cette page a ses vraies dimensions. ⚠️ L'aperçu d'impression
+   du navigateur (avant de cliquer Enregistrer) peut lui aussi mentir sur
+   cette page précise — seul le fichier PDF réellement généré fait foi.
+   Valeurs (160mm / 63mm) calibrées avec plusieurs points de mesure via
+   extraction directe des opérateurs Tm/Td/re du flux de contenu PDF
+   (position réelle du texte et des lignes de signature sur la page,
    indépendante de tout moteur de rendu — Chrome, Adobe ou autre), pas par
    inspection visuelle d'un rendu à l'écran (session du 2026-07-31, revue le
    même jour après un signalement en conditions réelles/Adobe Acrobat) ;
    à revalider si le contenu du certificat change significativement de
-   hauteur. */
-.certbox{width:100%;max-width:680px;text-align:center;margin-top:94mm}
+   taille. Voir aussi le commentaire sur .page.cert (align-self) juste
+   au-dessus pour le décalage horizontal, un bug distinct. */
+.certbox{width:160mm;text-align:center;margin:63mm auto 0}
 .cert-title{font-size:22px;font-weight:900;color:#17103A;margin-bottom:6px}
 .cert-sub{font-size:11px;color:#7269A8;margin-bottom:24px}
 .cert-body{font-size:12.5px;line-height:1.8;text-align:left;color:#333}
