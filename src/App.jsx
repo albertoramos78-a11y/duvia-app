@@ -6608,8 +6608,13 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     // Connexion Supabase OK → profil local depuis métadonnées Supabase
     const meta = data.user?.user_metadata || {};
     const existing = users.find(u => u.email===cleanEmail);
+    // 🔧 existing.id peut être une valeur corrompue mise en cache par une session
+    // antérieure à ce fix (id: Date.now() au lieu du vrai UID Supabase, tant que
+    // l'appareil ne s'était jamais déconnecté explicitement depuis) — on réaligne
+    // systématiquement sur data.user.id, seule source de vérité, pour auto-réparer
+    // les profils déjà affectés sans attendre un cycle déconnexion/reconnexion.
     const profile = existing
-      ? { ...existing }
+      ? { ...existing, id: data.user.id }
       : {
           id: data.user.id, email: cleanEmail,
           name: meta.name || cleanEmail.split("@")[0],
@@ -7049,7 +7054,8 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     notifyIfNewDevice(data.user.id, cleanEmail);
     const meta = data.user?.user_metadata || {};
     const existing = users.find(u2 => u2.email===cleanEmail);
-    const u = existing || {
+    // 🔧 Même auto-réparation que doLogin — voir son commentaire.
+    const u = existing ? { ...existing, id: data.user.id } : {
       id: data.user.id, email: cleanEmail,
       name: meta.name || cleanEmail.split("@")[0],
       role: meta.role || "parent",
