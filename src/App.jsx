@@ -12565,9 +12565,15 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
     const periodEnd = new Date(startDate.getFullYear(), startDate.getMonth()+11, 1);
     const periodLabel = `${MONTHS[periodStart.getMonth()]} ${periodStart.getFullYear()} – ${MONTHS[periodEnd.getMonth()]} ${periodEnd.getFullYear()}`;
 
+    const eligibleObservers = (cfg.observers||[]).filter(o=>o.status==="active"&&o.canGuard);
+    const observerLegendHTML = eligibleObservers.map(o=>
+      `<span class="li"><i class="dot" style="background:#f59e0b"></i>${o.name||"Observateur"}</span>`
+    ).join("");
+
     const legendHTML = `<div class="legend">
       <span class="li"><i class="dot" style="background:${col0}"></i>${p0.name||"Parent 1"}</span>
       <span class="li"><i class="dot" style="background:${col1}"></i>${p1.name||"Parent 2"}</span>
+      ${observerLegendHTML}
       <span class="li"><i class="dot" style="background:#dc2626"></i>Jour férié</span>
       <span class="li"><i class="dot" style="background:#0C9A73"></i>Vacances scolaires</span>
     </div>`;
@@ -12594,7 +12600,8 @@ body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-print-color
 .doc-header{display:flex;align-items:center;justify-content:space-between;padding-bottom:9px;border-bottom:2px solid #7B7CF5;margin-bottom:10px}
 .doc-title{font-size:16px;font-weight:900;color:#17103A}
 .doc-sub{font-size:9px;color:#9ca3af;margin-top:2px}
-.doc-header-right{font-size:8px;color:#9ca3af;text-align:right}
+.doc-logo{height:28px;object-fit:contain}
+.doc-footer{flex:none;text-align:right;font-size:8px;color:#9ca3af;margin-top:6px}
 .legend{display:flex;gap:16px;margin-bottom:10px;flex-wrap:wrap}
 .legend .li{display:flex;align-items:center;gap:5px;font-size:9px;font-weight:700;color:#374151}
 .legend .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
@@ -12607,13 +12614,21 @@ body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-print-color
 .day{position:relative;border-radius:2px;display:flex;align-items:center;justify-content:center;min-height:0;background:#fafafa}
 .day.pad{background:transparent}
 .avatar{width:78%;height:78%;max-width:13px;max-height:13px;border-radius:50%;color:#fff;font-size:7.5px;font-weight:900;display:flex;align-items:center;justify-content:center;line-height:1}
-.dnum{position:absolute;top:0.5px;left:1.5px;font-size:4px;font-weight:700;color:#00000055;z-index:1}
+.dnum{position:absolute;top:0.5px;left:1.5px;font-size:6px;font-weight:700;color:#00000055;z-index:1}
 .dnum.fer{color:#dc2626;font-weight:900}
 .dnum.we{color:#00000077}
 .fold{position:absolute;bottom:0;right:0;width:0;height:0;border-style:solid;border-width:0 0 6px 6px;border-color:transparent transparent #0C9A73 transparent;z-index:2}
-.cert{display:flex;align-items:center;justify-content:center;height:100%;min-height:185mm}
 .cert-seal{width:72px;height:72px;border-radius:50%;border:3px solid #7B7CF5;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 18px;background:#F2EDFF}
-.certbox{width:100%;max-width:680px;text-align:center}
+/* 🔧 margin-top fixe (pas de centrage flex/%) : sur cette page nommée via
+   page:certpage qui suit une page A4 paysage, Chromium calcule la hauteur
+   disponible pour le flux de CETTE page comme si elle faisait ~245mm au lieu
+   des 297mm réels au moment du print — un centrage flex/height:100% se
+   retrouve donc décalé vers le haut d'environ 25mm dans le PDF réel, invisible
+   à l'écran (aperçu iframe) où cette page fait sa vraie taille. Valeur
+   calibrée empiriquement contre de vrais exports PDF (session du 2026-07-31)
+   pour ce contenu précis ; à revalider si le contenu du certificat change
+   significativement de hauteur. */
+.certbox{width:100%;max-width:680px;text-align:center;margin-top:102mm}
 .cert-title{font-size:22px;font-weight:900;color:#17103A;margin-bottom:6px}
 .cert-sub{font-size:11px;color:#7269A8;margin-bottom:24px}
 .cert-body{font-size:12.5px;line-height:1.8;text-align:left;color:#333}
@@ -12633,10 +12648,11 @@ body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-print-color
       <div class="doc-title">📅 Planning de garde — ${p0.name||"Parent 1"} &amp; ${p1.name||"Parent 2"}</div>
       <div class="doc-sub">${periodLabel}</div>
     </div>
-    <div class="doc-header-right">Généré par Duvia<br/>le ${todayLabel}</div>
+    <img src="/logo.png" alt="Duvia" class="doc-logo" />
   </div>
   ${legendHTML}
   <div class="year-grid">${yearMonths}</div>
+  <div class="doc-footer">Généré par Duvia le ${todayLabel}</div>
 </div>
 
 <div class="page cert">
