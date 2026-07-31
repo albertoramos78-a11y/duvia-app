@@ -12645,12 +12645,18 @@ body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-print-color
    page:certpage qui suit une page A4 paysage, Chromium calcule la hauteur
    disponible pour le flux de CETTE page comme si elle faisait ~245mm au lieu
    des 297mm réels au moment du print — un centrage flex/height:100% se
-   retrouve donc décalé vers le haut d'environ 25mm dans le PDF réel, invisible
-   à l'écran (aperçu iframe) où cette page fait sa vraie taille. Valeur
-   calibrée empiriquement contre de vrais exports PDF (session du 2026-07-31)
-   pour ce contenu précis ; à revalider si le contenu du certificat change
-   significativement de hauteur. */
-.certbox{width:100%;max-width:680px;text-align:center;margin-top:102mm}
+   retrouve donc décalé dans le PDF réel, invisible à l'écran (aperçu iframe)
+   où cette page fait sa vraie taille. ⚠️ L'aperçu d'impression du navigateur
+   (avant de cliquer Enregistrer) peut lui aussi mentir sur cette page
+   précise — seul le fichier PDF réellement généré fait foi. Valeur (94mm)
+   calibrée avec deux points de mesure via extraction directe des opérateurs
+   Tm/Td du flux de contenu PDF (position réelle du texte sur la page,
+   indépendante de tout moteur de rendu — Chrome, Adobe ou autre), pas par
+   inspection visuelle d'un rendu à l'écran (session du 2026-07-31, revue le
+   même jour après un signalement en conditions réelles/Adobe Acrobat) ;
+   à revalider si le contenu du certificat change significativement de
+   hauteur. */
+.certbox{width:100%;max-width:680px;text-align:center;margin-top:94mm}
 .cert-title{font-size:22px;font-weight:900;color:#17103A;margin-bottom:6px}
 .cert-sub{font-size:11px;color:#7269A8;margin-bottom:24px}
 .cert-body{font-size:12.5px;line-height:1.8;text-align:left;color:#333}
