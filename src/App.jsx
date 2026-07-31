@@ -14879,7 +14879,10 @@ function ExpTab() {
       const from=exportFrom; const to=exportTo;
       const filteredExpenses=(ctxExpenses||[]).filter(e=>{const d=e.date||"";return(!from||d>=from)&&(!to||d<=to);});
       const filteredReims=(ctxReimbursements||[]).filter(r=>{const d=r.date||"";return(!from||d>=from)&&(!to||d<=to);});
-      const filteredHistory=(ctxHistory||[]).filter(h=>{const d=(h.createdAt||h.date||"").slice(0,10);return(!from||d>=from)&&(!to||d<=to);});
+      // 🔧 type==="exp" : l'historique famille contient aussi les entrées
+      // calendrier/famille/coffre-fort ("cal"/"family"/"vault") — le rapport
+      // de dépenses ne doit montrer que l'audit trail des dépenses/remboursements.
+      const filteredHistory=(ctxHistory||[]).filter(h=>h.type==="exp").filter(h=>{const d=(h.createdAt||h.date||"").slice(0,10);return(!from||d>=from)&&(!to||d<=to);});
       const now2=new Date();
       const fmtDate=d=>d?new Date(d+"T12:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}):"—";
       const fmtDateTime=d=>d?new Date(d).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}):"—";
