@@ -19699,7 +19699,7 @@ const SUBJECT_COLORS = {
 function subjColor(subj) { return SUBJECT_COLORS[subj]||"#7c6fcd"; }
 
 function ScheduleTab({prem: premProp, childReadOnly}) {
-  const {C,t,cfg,setCfg,prem: ctxPrem,onUpgrade,user,setMenuTab,setConfigStep} = useApp();
+  const {C,t,cfg,setCfg,prem: ctxPrem,onUpgrade,user,setMenuTab,setConfigStep,confirmAsync} = useApp();
   const prem = premProp !== undefined ? premProp : ctxPrem;
   const children = cfg.parents ? cfg.children : [];
   // childReadOnly: find the child's own index by name matching user.name
@@ -19737,7 +19737,8 @@ function ScheduleTab({prem: premProp, childReadOnly}) {
     setCfg(c=>({...c,schedules:{...all,[scheduleKey]:updated}}));
     setShowForm(false);setEditId(null);setForm({subject:"",room:"",building:"",from:"08:00",to:"09:00"});setErr("");
   }
-  function deleteSlot(id) {
+  async function deleteSlot(id) {
+    if(!(await confirmAsync(t.scheduleDeleteSlotConfirm||"Supprimer ce cours ?", {icon:"🗑️"}))) return;
     const all = cfg.schedules||{};
     const updated = (all[scheduleKey]||[]).filter(s=>s.id!==id);
     setCfg(c=>({...c,schedules:{...all,[scheduleKey]:updated}}));
@@ -19784,9 +19785,12 @@ function ScheduleTab({prem: premProp, childReadOnly}) {
           const top=timeToPct(s.from), bottom=timeToPct(s.to);
           const color=subjColor(s.subject);
           return `<div class="block" style="top:${top}%;height:${Math.max(bottom-top,4)}%;background:${color}22;border-color:${color}66">
-            <div class="block-subj" style="color:${color}">${s.subject}</div>
-            <div class="block-time">${s.from}–${s.to}</div>
+            <div class="block-hdr">
+              <span class="block-subj" style="color:${color}">${s.subject}</span>
+              <span class="block-time">${s.from}–${s.to}</span>
+            </div>
             ${s.room ? `<div class="block-room">${s.room}${s.building?` · ${s.building}`:""}</div>` : ""}
+            ${s.teacher ? `<div class="block-teacher">${s.teacher}</div>` : ""}
           </div>`;
         }).join("");
         return `<div class="daycol"><div class="dayhdr">${dn}</div><div class="daybody">${blocks}</div></div>`;
@@ -19825,9 +19829,11 @@ body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-print-color
 .dayhdr{flex:none;font-weight:800;font-size:9px;text-align:center;padding:5px 2px;background:#17103A;color:#fff;text-transform:uppercase;letter-spacing:.3px;border-radius:3px;margin-bottom:2px}
 .daybody{flex:1;position:relative;background:#fafafa;border-radius:3px}
 .block{position:absolute;left:1px;right:1px;border-radius:3px;border:1px solid;padding:3px 4px;overflow:hidden}
-.block-subj{font-size:6.5px;font-weight:800;line-height:1.15}
-.block-time{font-size:5.5px;color:#555;font-weight:600;margin-top:1px}
+.block-hdr{display:flex;justify-content:space-between;align-items:baseline;gap:4px}
+.block-subj{font-size:6.5px;font-weight:800;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.block-time{font-size:5px;color:#555;font-weight:700;white-space:nowrap;flex-shrink:0}
 .block-room{font-size:5.5px;color:#777;margin-top:1px}
+.block-teacher{font-size:5.5px;color:#777;margin-top:1px}
 .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb}
 .legend .li{display:flex;align-items:center;gap:4px;font-size:8px;font-weight:700;color:#374151}
 .legend .dot{width:7px;height:7px;border-radius:2px;display:inline-block}

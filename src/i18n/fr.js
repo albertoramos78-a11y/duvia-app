@@ -199,6 +199,7 @@ const fr = {
     scheduleCancel:"Annuler",
     scheduleAddTitle:"Nouveau cours",
     scheduleEditTitle:"Modifier le cours",
+    scheduleDeleteSlotConfirm:"Supprimer ce cours ?",
     scheduleErrSubject:"Matière requise",scheduleErrTime:"Horaires requis",
     scheduleNoChildren:"Configurez d'abord les enfants dans Configuration.",
     scheduleWeekView:"Vue semaine",
