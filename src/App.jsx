@@ -12548,10 +12548,9 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
           label = secondV.label;
         }
         const numClass = isFH ? "fer" : isWE ? "we" : "";
-        cellsHtml += `<div class="day">
+        cellsHtml += `<div class="day${isSH ? " sh" : ""}">
           <span class="avatar" style="${avatarStyle}">${label}</span>
           <span class="dnum ${numClass}">${d}</span>
-          ${isSH ? '<span class="fold"></span>' : ''}
         </div>`;
       }
       const totalCells = firstDow + nDays;
@@ -12655,11 +12654,11 @@ body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-print-color
 .grid{flex:1;display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:1fr;gap:1.5px}
 .day{position:relative;border-radius:2px;display:flex;align-items:center;justify-content:center;min-height:0;background:#fafafa}
 .day.pad{background:transparent}
+.day.sh{background:#dcfce7}
 .avatar{width:78%;height:78%;max-width:16px;max-height:16px;border-radius:50%;color:#fff;font-size:9px;font-weight:900;display:flex;align-items:center;justify-content:center;line-height:1}
 .dnum{position:absolute;top:0.5px;left:1.5px;font-size:7px;font-weight:700;color:#00000055;z-index:1}
 .dnum.fer{color:#dc2626;font-weight:900}
 .dnum.we{color:#00000077}
-.fold{position:absolute;bottom:0;right:0;width:0;height:0;border-style:solid;border-width:0 0 6px 6px;border-color:transparent transparent #0C9A73 transparent;z-index:2}
 .cert-seal{width:72px;height:72px;border-radius:50%;border:3px solid #7B7CF5;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 18px;background:#F2EDFF}
 /* 🔧 largeur fixe en mm (pas width:100%;max-width:680px) + margin-top fixe
    (pas de centrage flex/%) : sur cette page nommée (page:certpage),
