@@ -19791,8 +19791,6 @@ function ScheduleTab({prem: premProp, childReadOnly}) {
         }).join("");
         return `<div class="daycol"><div class="dayhdr">${dn}</div><div class="daybody">${blocks}</div></div>`;
       }).join("");
-      const subjectsUsed = [...new Set(allSlots.map(s=>s.subject))];
-      const legendHtml = subjectsUsed.map(s=>`<span class="li"><i class="dot" style="background:${subjColor(s)}"></i>${s}</span>`).join("");
       // 🔧 Le repère d'heures doit ignorer la même hauteur d'en-tête (dayhdr) que
       // les colonnes de jours avant de démarrer son propre décompte de %, sinon
       // les blocs de cours (positionnés relativement à .daybody, SOUS l'en-tête)
@@ -19800,8 +19798,7 @@ function ScheduleTab({prem: premProp, childReadOnly}) {
       // toute la hauteur de .timeaxis, en-tête inclus) au fil de la journée —
       // .timeaxis-hdr est un clone invisible de .dayhdr, même boîte, pour que
       // .timeaxis-body démarre exactement au même niveau que .daybody.
-      bodyHtml = `<div class="timetable"><div class="timeaxis"><div class="timeaxis-hdr">&nbsp;</div><div class="timeaxis-body">${hourLines}</div></div><div class="gridwrap">${dayColumns}</div></div>
-        <div class="legend">${legendHtml}</div>`;
+      bodyHtml = `<div class="timetable"><div class="timeaxis"><div class="timeaxis-hdr">&nbsp;</div><div class="timeaxis-body">${hourLines}</div></div><div class="gridwrap">${dayColumns}</div></div>`;
     }
 
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
@@ -19815,8 +19812,8 @@ body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-print-color
 @media print{ html,body{background:#fff;padding:0} .page{box-shadow:none} }
 .doc-header{display:flex;align-items:center;justify-content:space-between;padding-bottom:9px;border-bottom:2px solid #7B7CF5;margin-bottom:12px}
 .doc-title{font-size:16px;font-weight:900;color:#17103A}
-.doc-sub{font-size:9px;color:#9ca3af;margin-top:2px}
-.doc-header-right{font-size:8px;color:#9ca3af;text-align:right}
+.doc-logo{height:28px;object-fit:contain}
+.doc-footer{flex:none;text-align:right;font-size:8px;color:#9ca3af;margin-top:8px}
 .timetable{flex:1;display:flex;position:relative}
 .timeaxis{width:24px;flex-shrink:0;display:flex;flex-direction:column}
 .timeaxis-hdr{flex:none;font-size:9px;padding:5px 2px;margin-bottom:2px;visibility:hidden}
@@ -19838,10 +19835,11 @@ body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-print-color
 </style></head><body>
 <div class="page">
   <div class="doc-header">
-    <div><div class="doc-title">📚 Emploi du temps — ${activeChild?.name||"Enfant"}</div><div class="doc-sub">Semaine type</div></div>
-    <div class="doc-header-right">Généré par Duvia<br/>le ${todayLabel}</div>
+    <div class="doc-title">📚 Emploi du temps — ${activeChild?.name||"Enfant"}</div>
+    <img src="/logo.png" alt="Duvia" class="doc-logo" />
   </div>
   ${bodyHtml}
+  <div class="doc-footer">Généré par Duvia le ${todayLabel}</div>
 </div>
 <script>window.addEventListener('message',e=>{if(e.data==='DUVIA_PRINT')window.print();});</script>
 </body></html>`;
