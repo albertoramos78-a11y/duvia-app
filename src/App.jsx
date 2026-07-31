@@ -12605,16 +12605,23 @@ body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-print-color
 .legend{display:flex;gap:16px;margin-bottom:10px;flex-wrap:wrap}
 .legend .li{display:flex;align-items:center;gap:5px;font-size:9px;font-weight:700;color:#374151}
 .legend .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
-.year-grid{flex:1;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(3,1fr);gap:6px;min-height:0}
+/* 🔧 flex:0 0 171mm (pas flex:1) : en impression réelle, flex-grow ne suffit
+   pas à occuper tout l'espace restant de .page (Chromium sous-évalue la
+   hauteur disponible, comme pour .certbox plus bas) — pire, un flex-shrink
+   implicite écrasait même une hauteur explicite fixe si on se contentait de
+   height:171mm seul. flex-shrink:0 (via le raccourci flex) est nécessaire
+   pour empêcher ce rétrécissement. 171mm = hauteur naturelle à l'écran
+   (aperçu), restaurée telle quelle à l'impression. */
+.year-grid{flex:0 0 171mm;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(3,1fr);gap:6px;min-height:0}
 .mo{border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;display:flex;flex-direction:column;background:#fff;padding:3px 4px 4px}
-.mhdr{flex:none;font-weight:800;font-size:8px;text-align:center;padding:3px;background:#17103A;color:#fff;letter-spacing:.3px;text-transform:uppercase;border-radius:3px;margin-bottom:2px}
+.mhdr{flex:none;font-weight:800;font-size:9px;text-align:center;padding:3px;background:#17103A;color:#fff;letter-spacing:.3px;text-transform:uppercase;border-radius:3px;margin-bottom:2px}
 .dowrow{display:grid;grid-template-columns:repeat(7,1fr);gap:1.5px;margin-bottom:1.5px}
-.dl{text-align:center;font-size:5px;font-weight:800;color:#9ca3af}
+.dl{text-align:center;font-size:6px;font-weight:800;color:#9ca3af}
 .grid{flex:1;display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:1fr;gap:1.5px}
 .day{position:relative;border-radius:2px;display:flex;align-items:center;justify-content:center;min-height:0;background:#fafafa}
 .day.pad{background:transparent}
-.avatar{width:78%;height:78%;max-width:13px;max-height:13px;border-radius:50%;color:#fff;font-size:7.5px;font-weight:900;display:flex;align-items:center;justify-content:center;line-height:1}
-.dnum{position:absolute;top:0.5px;left:1.5px;font-size:6px;font-weight:700;color:#00000055;z-index:1}
+.avatar{width:78%;height:78%;max-width:16px;max-height:16px;border-radius:50%;color:#fff;font-size:9px;font-weight:900;display:flex;align-items:center;justify-content:center;line-height:1}
+.dnum{position:absolute;top:0.5px;left:1.5px;font-size:7px;font-weight:700;color:#00000055;z-index:1}
 .dnum.fer{color:#dc2626;font-weight:900}
 .dnum.we{color:#00000077}
 .fold{position:absolute;bottom:0;right:0;width:0;height:0;border-style:solid;border-width:0 0 6px 6px;border-color:transparent transparent #0C9A73 transparent;z-index:2}
