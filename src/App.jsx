@@ -12589,8 +12589,7 @@ body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-print-color
 .page.cert{width:210mm;height:297mm;page:certpage}
 @media print{
   html,body{background:#fff;padding:0;gap:0}
-  .page{box-shadow:none;width:auto;height:auto}
-  .page.cert{width:auto;height:auto}
+  .page{box-shadow:none}
 }
 .doc-header{display:flex;align-items:center;justify-content:space-between;padding-bottom:9px;border-bottom:2px solid #7B7CF5;margin-bottom:10px}
 .doc-title{font-size:16px;font-weight:900;color:#17103A}
@@ -19806,7 +19805,7 @@ function ScheduleTab({prem: premProp, childReadOnly}) {
 html,body{background:#999}
 body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;display:flex;justify-content:center;padding:8mm 0}
 .page{width:297mm;min-height:210mm;padding:10mm 12mm;background:#fff;box-shadow:0 0 6px rgba(0,0,0,.35);display:flex;flex-direction:column}
-@media print{ html,body{background:#fff;padding:0} .page{box-shadow:none;width:auto;min-height:auto} }
+@media print{ html,body{background:#fff;padding:0} .page{box-shadow:none} }
 .doc-header{display:flex;align-items:center;justify-content:space-between;padding-bottom:9px;border-bottom:2px solid #7B7CF5;margin-bottom:12px}
 .doc-title{font-size:16px;font-weight:900;color:#17103A}
 .doc-sub{font-size:9px;color:#9ca3af;margin-top:2px}
