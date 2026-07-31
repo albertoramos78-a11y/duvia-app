@@ -12457,6 +12457,8 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
   // ── Export calendrier PDF ─────────────────────────────────────────────────
   const [calExportHtml, setCalExportHtml] = useState(null);
   const calIframeRef = useRef(null);
+  const [showCalPdfDateModal, setShowCalPdfDateModal] = useState(false);
+  const [calPdfStartMonth, setCalPdfStartMonth] = useState("");
 
   function generateCalendarPDF() {
     if(!premFull){ onUpgrade(); return; }
@@ -12473,7 +12475,12 @@ function CalTab({readOnly=false,canEdit=true,updateCal:updateCalProp}) {
     const schoolHolPeriods = getHolsFromData(activeCountry, apiData, scoZone);
 
     const today = new Date();
-    const startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+    // 🔧 startDate est maintenant choisi par l'utilisateur (calPdfStartMonth,
+    // "YYYY-MM") via la modale ouverte avant l'appel — la fenêtre reste
+    // glissante sur 12 mois à partir de là, seul le point de départ change.
+    const startDate = calPdfStartMonth
+      ? new Date(parseInt(calPdfStartMonth.slice(0,4),10), parseInt(calPdfStartMonth.slice(5,7),10)-1, 1)
+      : new Date(today.getFullYear(), today.getMonth(), 1);
 
     // Rond de garde d'un jour : couleur de fond + initiale (identité lisible même sans couleur à l'impression)
     function guardVisual(guard){
@@ -12731,6 +12738,27 @@ body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-print-color
 
   return (
     <div>
+      {/* ── Choix de la date de départ avant l'export PDF calendrier ── */}
+      {showCalPdfDateModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:360,width:"100%",border:`1.5px solid ${C.bor}`,boxShadow:"0 20px 50px rgba(0,0,0,.35)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
+              <div>
+                <div style={{fontSize:17,fontWeight:900}}>📄 {t.calExportPdfModalTitle||"Export PDF"}</div>
+                <div style={{fontSize:11,color:C.mut,marginTop:3}}>{t.calExportPdfModalSub||"Planning sur 12 mois glissants"}</div>
+              </div>
+              <button onClick={()=>setShowCalPdfDateModal(false)} style={{padding:"6px 12px",background:C.sur,color:C.mut,border:`1px solid ${C.bor}`,borderRadius:8,fontSize:13,fontWeight:700,flexShrink:0}}>✕</button>
+            </div>
+            <div style={{fontSize:11,fontWeight:700,color:C.mut,marginBottom:8}}>{t.calExportPdfStartLabel||"À partir de quel mois ?"}</div>
+            <input type="month" value={calPdfStartMonth} onChange={e=>setCalPdfStartMonth(e.target.value)}
+              style={{width:"100%",padding:"9px 10px",border:`1px solid ${C.bor}`,borderRadius:8,background:C.inp,color:C.txt,fontSize:13,marginBottom:20}} />
+            <button onClick={()=>{ setShowCalPdfDateModal(false); generateCalendarPDF(); }}
+              style={{width:"100%",padding:"13px",background:`linear-gradient(135deg,${C.vio},${C.pin||C.red})`,color:"#fff",border:"none",borderRadius:12,fontSize:14,fontWeight:800,cursor:"pointer",boxShadow:`0 4px 16px ${C.vio}44`}}>
+              📄 {t.calExportPdfGenerate||"Générer le PDF"}
+            </button>
+          </div>
+        </div>
+      )}
       {/* ── Prévisualisation PDF calendrier ── */}
       {calExportHtml && (
         <div style={{position:"fixed",inset:0,zIndex:700,display:"flex",flexDirection:"column",background:"#111"}}>
@@ -12776,7 +12804,7 @@ body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-print-color
                       <span style={{fontSize:14,width:18,textAlign:"center"}}>📅</span>
                       <span style={{flex:1,textAlign:"left"}}>iCal</span>
                     </button>
-                    <button onClick={()=>{ setShowCalActionsMenu(false); if(!premFull){ onUpgrade(); return; } generateCalendarPDF(); }}
+                    <button onClick={()=>{ setShowCalActionsMenu(false); if(!premFull){ onUpgrade(); return; } const n=new Date(); setCalPdfStartMonth(`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`); setShowCalPdfDateModal(true); }}
                       title={premFull ? (t.calExportPDFTitle||"Export the yearly schedule to PDF") : (t.premiumSubscribersOnly||"Reserved for Premium subscribers")}
                       style={{width:"100%",padding:"9px 14px",background:"transparent",border:"none",borderBottom:`1px solid ${C.bor}`,display:"flex",alignItems:"center",gap:8,fontSize:12,fontWeight:700,color:premFull?C.vio:C.mut,cursor:"pointer",opacity:premFull?1:.7}}>
                       <span style={{fontSize:14,width:18,textAlign:"center"}}>{premFull?"📄":"🔒"}</span>
