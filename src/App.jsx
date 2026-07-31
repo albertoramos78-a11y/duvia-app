@@ -19793,7 +19793,14 @@ function ScheduleTab({prem: premProp, childReadOnly}) {
       }).join("");
       const subjectsUsed = [...new Set(allSlots.map(s=>s.subject))];
       const legendHtml = subjectsUsed.map(s=>`<span class="li"><i class="dot" style="background:${subjColor(s)}"></i>${s}</span>`).join("");
-      bodyHtml = `<div class="timetable"><div class="timeaxis">${hourLines}</div><div class="gridwrap">${dayColumns}</div></div>
+      // 🔧 Le repère d'heures doit ignorer la même hauteur d'en-tête (dayhdr) que
+      // les colonnes de jours avant de démarrer son propre décompte de %, sinon
+      // les blocs de cours (positionnés relativement à .daybody, SOUS l'en-tête)
+      // dérivent de plus en plus par rapport aux traits d'heure (positionnés sur
+      // toute la hauteur de .timeaxis, en-tête inclus) au fil de la journée —
+      // .timeaxis-hdr est un clone invisible de .dayhdr, même boîte, pour que
+      // .timeaxis-body démarre exactement au même niveau que .daybody.
+      bodyHtml = `<div class="timetable"><div class="timeaxis"><div class="timeaxis-hdr">&nbsp;</div><div class="timeaxis-body">${hourLines}</div></div><div class="gridwrap">${dayColumns}</div></div>
         <div class="legend">${legendHtml}</div>`;
     }
 
@@ -19811,7 +19818,9 @@ body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-print-color
 .doc-sub{font-size:9px;color:#9ca3af;margin-top:2px}
 .doc-header-right{font-size:8px;color:#9ca3af;text-align:right}
 .timetable{flex:1;display:flex;position:relative}
-.timeaxis{width:24px;position:relative;flex-shrink:0}
+.timeaxis{width:24px;flex-shrink:0;display:flex;flex-direction:column}
+.timeaxis-hdr{flex:none;font-size:9px;padding:5px 2px;margin-bottom:2px;visibility:hidden}
+.timeaxis-body{flex:1;position:relative}
 .hourline{position:absolute;left:0;right:0;border-top:1px solid #eee}
 .hourlabel{position:absolute;top:-5px;left:0;font-size:7px;color:#9ca3af;font-weight:700}
 .gridwrap{flex:1;display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
