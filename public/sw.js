@@ -10,7 +10,7 @@
 // mise à jour (voir main.jsx, "duvia-update-ready") — l'app peut alors
 // rester visuellement bloquée sur une ancienne version tant que
 // l'utilisateur ne ferme/rouvre pas complètement l'appli.
-const SW_VERSION = "4.10";
+const SW_VERSION = "4.11";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));

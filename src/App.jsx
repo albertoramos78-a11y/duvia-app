@@ -6521,6 +6521,10 @@ function PasswordResetScreen({ onDone }) {
 
 function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLogin,onObsJoin,familySync,cfg,setCfg,ensureMfaSatisfied,acceptRgpd,onOpenLegal}) {
   const [mode,setMode]=useState("login");
+  // 🔧 Popup bêta à l'inscription (pas l'encart déjà présent plus bas dans le
+  // formulaire, qui reste inchangé) : une seule fois par appareil, via ce flag
+  // localStorage — jamais réaffichée ensuite, même après la fin de la bêta.
+  const [showBetaSignupPopup,setShowBetaSignupPopup]=useState(false);
   // 🔧 Bug réel signalé par l'utilisateur (2026-07-29) : sur un appareil déjà
   // "consenti" par un compte précédent, rgpdOk est déjà true — l'écran RGPD
   // de premier accès (device-level) n'apparaît donc plus jamais, y compris
@@ -7196,6 +7200,19 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
   }
   return (
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:C._brand?`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),${BRAND_GRADIENT}`:`linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),radial-gradient(ellipse at 30% 20%,rgba(124,111,205,.15) 0%,transparent 60%),${C.bg}`}}>
+      {showBetaSignupPopup && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(2px)",WebkitBackdropFilter:"blur(2px)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:380,width:"100%",border:`1.5px solid ${C.bor}`,boxShadow:"0 20px 50px rgba(0,0,0,.35)",textAlign:"center"}}>
+            <div style={{fontSize:40,marginBottom:10}}>🎉</div>
+            <div style={{fontSize:17,fontWeight:900,color:C.vio,marginBottom:10}}>{t.betaSignupPopupTitle||"Bêta — Trial Premium offert"}</div>
+            <div style={{fontSize:13,color:C.txt,lineHeight:1.6,marginBottom:22}}>{t.betaSignupPopupDesc||"Duvia est actuellement en phase bêta : profite de toutes les fonctionnalités Premium gratuitement, sans carte bancaire, tant que dure la bêta."}</div>
+            <button onClick={()=>setShowBetaSignupPopup(false)}
+              style={{width:"100%",padding:"13px",background:`linear-gradient(135deg,${C.vio},${C.pin||C.red})`,color:"#fff",border:"none",borderRadius:12,fontSize:14,fontWeight:800,cursor:"pointer",boxShadow:`0 4px 16px ${C.vio}44`}}>
+              {t.betaSignupPopupBtn||"Compris"}
+            </button>
+          </div>
+        </div>
+      )}
       <div style={{width:"100%",maxWidth:400}} className="fi">
         <div style={{display:"grid",gridTemplateColumns:"auto 1fr auto auto",alignItems:"center",gap:8,marginBottom:36}}>
           <div style={{display:"flex",gap:6}}>
@@ -7267,7 +7284,17 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
           )}
           <div style={{display:"flex",gap:4,marginBottom:18,background:C.sur,borderRadius:11,padding:4}}>
             {[["login",t.login||"Connexion"],["register",t.register||"Créer un compte"]].map(([m,l])=>(
-              <button key={m} onClick={()=>{setMode(m);setErr("");setOk("");}} style={{flex:1,height:38,background:mode===m?C.card:"transparent",color:mode===m?C.vio:C.mut,borderRadius:8,fontSize:13,fontWeight:mode===m?800:700,boxShadow:mode===m?"0 1px 4px rgba(0,0,0,.1)":"none",transition:"all .15s"}}>{l}</button>
+              <button key={m} onClick={()=>{
+                setMode(m);setErr("");setOk("");
+                if(m==="register" && isBeta()){
+                  try{
+                    if(!window.localStorage.getItem("duvia_beta_signup_popup_seen")){
+                      window.localStorage.setItem("duvia_beta_signup_popup_seen","1");
+                      setShowBetaSignupPopup(true);
+                    }
+                  }catch{}
+                }
+              }} style={{flex:1,height:38,background:mode===m?C.card:"transparent",color:mode===m?C.vio:C.mut,borderRadius:8,fontSize:13,fontWeight:mode===m?800:700,boxShadow:mode===m?"0 1px 4px rgba(0,0,0,.1)":"none",transition:"all .15s"}}>{l}</button>
             ))}
           </div>
           {err&&<div style={{background:`${C.red}12`,border:`1.5px solid ${C.red}44`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:C.red,fontWeight:700}}>{err}</div>}
