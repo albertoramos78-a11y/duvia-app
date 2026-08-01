@@ -529,6 +529,7 @@ const pt = {
     invErrUsedObs:"⚠️ Este link de convite já foi utilizado. Peça um novo link aos pais.",
     invErrExpiredWait:"Este link de convite expirou (válido 24 h). Peça um novo link aos pais.",
     rememberMe:"Manter sessão iniciada 7 dias neste dispositivo",
+    registerBetaSubNote:"Durante a beta, todas as funcionalidades Premium são gratuitas, sem cartão bancário. Quando um plano pago for lançado, poderá subscrever diretamente na aplicação.",
     confirmPw:"Confirmar senha",
     confirmPwPlaceholder:"Repita a senha",
     pwMismatch:"⚠️ As senhas não coincidem.",

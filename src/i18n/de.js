@@ -529,6 +529,7 @@ const de = {
     invErrUsedObs:"⚠️ Dieser Einladungslink wurde bereits verwendet. Bitte die Eltern um einen neuen Link.",
     invErrExpiredWait:"Dieser Einladungslink ist abgelaufen (24 Std. gültig). Bitte die Eltern um einen neuen Link.",
     rememberMe:"7 Tage auf diesem Gerät angemeldet bleiben",
+    registerBetaSubNote:"Während der Beta sind alle Premium-Funktionen kostenlos, keine Kreditkarte nötig. Sobald ein kostenpflichtiger Plan eingeführt wird, kannst du direkt in der App abonnieren.",
     confirmPw:"Passwort bestätigen",
     confirmPwPlaceholder:"Passwort wiederholen",
     pwMismatch:"⚠️ Die Passwörter stimmen nicht überein.",

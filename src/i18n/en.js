@@ -124,6 +124,7 @@ const en = {
     perFamily:"per family",simNote:"Simulation — No real payment.",
     cancelSub:"Cancel subscription",confirmCancel:"Confirm cancellation",
     premActive:"Premium subscription active",premSince:"Active since",
+    registerBetaSubNote:"During the beta, all Premium features are free, no credit card needed. When a paid plan is introduced, you'll be able to subscribe directly in the app.",
     premBetaTitle:"Beta — Free Trial Premium 🎉",
     premBetaDesc:"Duvia is in a non-commercial beta phase. All Trial Premium features are free for the whole duration of the beta.",
     premBetaPdfNote:"PDF export is reserved for Premium subscribers.",

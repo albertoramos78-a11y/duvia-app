@@ -123,6 +123,7 @@ const fr = {
     perFamily:"par famille",simNote:"Simulation — Aucun paiement réel.",
     cancelSub:"Résilier l'abonnement",confirmCancel:"Confirmer la résiliation",
     premActive:"Abonnement Premium actif",premSince:"Actif depuis le",
+    registerBetaSubNote:"Pendant la bêta, toutes les fonctionnalités Premium sont offertes gratuitement, sans carte bancaire. L'abonnement (quand il sera proposé) s'achètera directement dans l'application.",
     premBetaTitle:"Bêta — Trial Premium gratuit 🎉",
     premBetaDesc:"Duvia est en phase bêta non commerciale. Toutes les fonctionnalités Trial Premium sont gratuites pendant toute la durée de la bêta.",
     premBetaPdfNote:"L'export PDF est réservé aux abonnés Premium.",

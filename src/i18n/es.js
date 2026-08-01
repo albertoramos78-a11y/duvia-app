@@ -529,6 +529,7 @@ const es = {
     invErrUsedObs:"⚠️ Este enlace de invitación ya se ha utilizado. Pide un nuevo enlace a los padres.",
     invErrExpiredWait:"Este enlace de invitación ha caducado (válido 24 h). Pide un nuevo enlace a los padres.",
     rememberMe:"Permanecer conectado 7 días en este dispositivo",
+    registerBetaSubNote:"Durante la beta, todas las funciones Premium son gratuitas, sin tarjeta bancaria. Cuando se lance un plan de pago, podrás suscribirte directamente en la aplicación.",
     confirmPw:"Confirmar contraseña",
     confirmPwPlaceholder:"Repite la contraseña",
     pwMismatch:"⚠️ Las contraseñas no coinciden.",

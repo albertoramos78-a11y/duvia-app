@@ -7402,6 +7402,12 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
               {pwConfirm && <span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",fontSize:16}}>{pwConfirm===pw?"✅":"❌"}</span>}
             </div>
           </div>}
+          {mode==="register" && isBeta() && (
+            <div style={{display:"flex",gap:8,alignItems:"flex-start",background:`${C.vio}0c`,border:`1px solid ${C.vio}33`,borderRadius:10,padding:"9px 11px",margin:"2px 0 12px",fontSize:11.5,color:C.txt,lineHeight:1.5}}>
+              <span style={{fontSize:15,flexShrink:0}}>🎉</span>
+              <span>{t.registerBetaSubNote||"Pendant la bêta, toutes les fonctionnalités Premium sont offertes gratuitement, sans carte bancaire. L'abonnement (quand il sera proposé) s'achètera directement dans l'application."}</span>
+            </div>
+          )}
           {(mode==="login"||mode==="register")&&(
             <label style={{display:"flex",alignItems:"center",gap:8,margin:"2px 0 12px",cursor:"pointer",fontSize:12.5,color:C.mut}}>
               <input type="checkbox" checked={remember}
