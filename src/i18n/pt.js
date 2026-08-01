@@ -6,6 +6,7 @@ const pt = {
     roleParent:"Pai/Mãe",roleObs:"Observador (família…)",roleChild:"Filho/a",roleLabel:"Função",
     connect:"Entrar",createAcc:"Criar conta",sendLink:"Enviar link",
     forgotPw:"Esqueceu a senha?",backLogin:"← Voltar",backToSite:"← Voltar ao site Duvia",
+    instagramLink:"Seguir a Duvia no Instagram",facebookLink:"Seguir a Duvia no Facebook",
     demoAccounts:"Contas de demonstração",
     wrongPw:"E-mail ou senha incorretos",emailUsed:"E-mail já em uso",
     allRequired:"Todos os campos são obrigatórios",

@@ -6,6 +6,7 @@ const de = {
     roleParent:"Elternteil",roleObs:"Beobachter (Familie…)",roleChild:"Kind",roleLabel:"Rolle",
     connect:"Anmelden",createAcc:"Konto erstellen",sendLink:"Link senden",
     forgotPw:"Passwort vergessen?",backLogin:"← Zurück",backToSite:"← Zurück zur Duvia-Website",
+    instagramLink:"Duvia auf Instagram folgen",facebookLink:"Duvia auf Facebook folgen",
     demoAccounts:"Demo-Konten",
     wrongPw:"Falsche E-Mail oder Passwort",emailUsed:"E-Mail bereits vergeben",
     allRequired:"Alle Felder sind erforderlich",

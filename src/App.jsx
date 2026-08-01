@@ -7201,6 +7201,19 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
           <div style={{display:"flex",gap:6}}>
             <button onClick={()=>setShowInstallModal(true)} title={t.installAppMenu} style={{width:36,height:36,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,flexShrink:0}}>📱</button>
             <a href="https://duvia.fr" title={t.backToSite||"Retour au site Duvia"} target="_blank" rel="noopener noreferrer" style={{width:36,height:36,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,textDecoration:"none",flexShrink:0}}>🌐</a>
+            <a href="https://www.instagram.com/duvia_2homes_1family" title={t.instagramLink||"Suivre Duvia sur Instagram"} aria-label={t.instagramLink||"Suivre Duvia sur Instagram"} target="_blank" rel="noopener noreferrer" style={{width:36,height:36,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",color:C.mut,textDecoration:"none",flexShrink:0}}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="2" y="2" width="20" height="20" rx="5" stroke="currentColor" strokeWidth="1.8" />
+                <circle cx="12" cy="12" r="4.2" stroke="currentColor" strokeWidth="1.8" />
+                <circle cx="17.3" cy="6.7" r="1.1" fill="currentColor" />
+              </svg>
+            </a>
+            <a href="https://www.facebook.com/share/1CiDyAcX8e/" title={t.facebookLink||"Suivre Duvia sur Facebook"} aria-label={t.facebookLink||"Suivre Duvia sur Facebook"} target="_blank" rel="noopener noreferrer" style={{width:36,height:36,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",color:C.mut,textDecoration:"none",flexShrink:0}}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="2" y="2" width="20" height="20" rx="5" stroke="currentColor" strokeWidth="1.8" />
+                <path d="M13.5 21v-7h2.3l.35-2.7h-2.65V9.6c0-.78.22-1.32 1.34-1.32h1.43V5.88c-.25-.03-1.1-.11-2.09-.11-2.07 0-3.48 1.26-3.48 3.58v2h-2.3v2.7h2.3V21h2.8z" fill="currentColor"/>
+              </svg>
+            </a>
           </div>
           <div />{/* spacer */}
           <div style={{position:"relative"}}>
