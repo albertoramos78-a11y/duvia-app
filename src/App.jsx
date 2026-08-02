@@ -7444,10 +7444,14 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
           )}
           {(() => {
             const parentGenderNeeded = (role==="parent"||isParentInvite) && !isChildInvite && !isObsInvite;
+            const finalRolePreCheck = isObsInvite ? "observer" : isChildInvite ? "child" : role;
+            const rawIdentifier = email.trim();
+            const usingPhoneId = finalRolePreCheck !== "parent" && isLikelyPhoneIdentifier(rawIdentifier);
+            const identifierOk = usingPhoneId || (!!rawIdentifier && isValidEmail(rawIdentifier));
             const regReady = !showExistingAccount
               && !!sanitize(name).trim()
               && (!parentGenderNeeded || !!parentGender)
-              && !!email.trim()
+              && identifierOk
               && !validatePassword(pw)
               && !!pwConfirm && pwConfirm===pw;
             const regDisabled = mode==="register" && !regReady;
