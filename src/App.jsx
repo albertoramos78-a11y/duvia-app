@@ -6548,6 +6548,26 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
     supabase.rpc("get_ratings_summary").then(({data})=>{ if(data?.total_count>0) setAvgRating(data); }).catch(()=>{});
     supabase.rpc("get_public_ratings",{max_count:3}).then(({data})=>{ if(data?.length) setPublicReviews(data); }).catch(()=>{});
   },[]);
+  // 🔒 Coupe le "tirer pour actualiser" du navigateur sur cet écran (connexion
+  // ET création de compte) : cet écran n'a pas de zone de défilement interne,
+  // il scrolle via le document — un geste de scroll un peu trop ample en haut
+  // du formulaire (fréquent sur le long formulaire d'inscription mobile)
+  // déclenche donc facilement un rechargement accidentel qui efface tout ce
+  // qui vient d'être saisi. Scopé au montage/démontage de CET écran (pas une
+  // règle CSS globale) pour ne pas reproduire le revert du 2026-07-20 : ôter
+  // ce filet de sécurité sur toute l'app une fois connecté avait causé plus
+  // de problèmes qu'il n'en résolvait.
+  useEffect(()=>{
+    const html = document.documentElement;
+    const prevHtml = html.style.overscrollBehaviorY;
+    const prevBody = document.body.style.overscrollBehaviorY;
+    html.style.overscrollBehaviorY = "contain";
+    document.body.style.overscrollBehaviorY = "contain";
+    return () => {
+      html.style.overscrollBehaviorY = prevHtml;
+      document.body.style.overscrollBehaviorY = prevBody;
+    };
+  },[]);
   const [email,setEmail]=useState(()=>{
     try{
       const fromReg = window.sessionStorage.getItem("duvia_prefill_email");
