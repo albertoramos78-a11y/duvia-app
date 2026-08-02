@@ -7443,13 +7443,13 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
               </div>
             )}
           </div>}
-          {mode==="register"&&<div className="field"><label className="lbl">{(t.confirmPw||"Confirmation")} *</label>
+          {mode==="register"&&<div className="field">
             <div style={{position:"relative"}}>
               <input type={showPw?"text":"password"} value={pwConfirm} onChange={e=>setPwConfirm(e.target.value)} placeholder={t.confirmPwPlaceholder} style={{width:"100%",boxSizing:"border-box",paddingRight:42,borderColor:pwConfirm&&pwConfirm!==pw?C.red:undefined}} />
               {pwConfirm && <span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",fontSize:16}}>{pwConfirm===pw?"✅":"❌"}</span>}
             </div>
           </div>}
-          {(mode==="login"||mode==="register")&&(
+          {mode==="login"&&(
             <label style={{display:"flex",alignItems:"center",gap:8,margin:"2px 0 12px",cursor:"pointer",fontSize:12.5,color:C.mut}}>
               <input type="checkbox" checked={remember}
                 onChange={e=>{ const v=e.target.checked; setRemember(v); try{ if(v){ window.localStorage.setItem("duvia_remember","1"); window.localStorage.setItem("duvia_remember_until", String(Date.now()+7*24*60*60*1000)); } else { window.localStorage.removeItem("duvia_remember"); window.localStorage.removeItem("duvia_remember_until"); } }catch{} }}
