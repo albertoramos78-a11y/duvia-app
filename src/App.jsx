@@ -7394,17 +7394,32 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
           {(() => {
             const allowPhoneId = mode!=="register" || isObsInvite || isChildInvite || (!isAnyInvite && role!=="parent");
             const lockedEmail = isParentInvite && !!obsInviteCode?.email;
+            const trimmedEmail = email.trim();
+            const emailValidNow = allowPhoneId
+              ? (isLikelyPhoneIdentifier(trimmedEmail) || isValidEmail(trimmedEmail))
+              : isValidEmail(trimmedEmail);
+            const showEmailCheck = mode==="register" && !lockedEmail && !!trimmedEmail;
             return (
               <div className="field">
                 <label className="lbl">{(allowPhoneId ? (t.emailOrPhone||"Email ou téléphone") : t.email)} *</label>
-                <input
-                  type={allowPhoneId ? "text" : "email"}
-                  value={email}
-                  onChange={e=>setEmail(e.target.value)}
-                  placeholder={allowPhoneId ? (t.emailOrPhonePlaceholder||"email@exemple.fr ou 06 12 34 56 78") : undefined}
-                  readOnly={lockedEmail}
-                  style={lockedEmail ? {background:C.sur,color:C.mut,cursor:"default"} : undefined}
-                />
+                <div style={{position:"relative"}}>
+                  <input
+                    type={allowPhoneId ? "text" : "email"}
+                    value={email}
+                    onChange={e=>setEmail(e.target.value)}
+                    placeholder={allowPhoneId ? (t.emailOrPhonePlaceholder||"email@exemple.fr ou 06 12 34 56 78") : undefined}
+                    readOnly={lockedEmail}
+                    style={{
+                      width:"100%",boxSizing:"border-box",
+                      paddingRight:showEmailCheck?42:undefined,
+                      borderColor:showEmailCheck?(emailValidNow?C.grn:C.red):undefined,
+                      background:lockedEmail?C.sur:undefined,
+                      color:lockedEmail?C.mut:undefined,
+                      cursor:lockedEmail?"default":undefined,
+                    }}
+                  />
+                  {showEmailCheck && <span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",fontSize:16}}>{emailValidNow?"✅":"❌"}</span>}
+                </div>
                 {allowPhoneId && mode==="register" && <div style={{fontSize:11,color:C.mut,marginTop:4}}>{t.emailOrPhoneHint||"💡 Pas d'email ? Utilisez un numéro de téléphone."}</div>}
               </div>
             );
