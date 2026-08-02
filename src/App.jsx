@@ -7216,16 +7216,16 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
       <div style={{width:"100%",maxWidth:400}} className="fi">
         <div style={{display:"grid",gridTemplateColumns:"auto 1fr auto auto",alignItems:"center",gap:8,marginBottom:36}}>
           <div style={{display:"flex",gap:6}}>
-            <button onClick={()=>setShowInstallModal(true)} title={t.installAppMenu} style={{width:36,height:36,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,flexShrink:0}}>📱</button>
-            <a href="https://duvia.fr" title={t.backToSite||"Retour au site Duvia"} target="_blank" rel="noopener noreferrer" style={{width:36,height:36,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,textDecoration:"none",flexShrink:0}}>🌐</a>
-            <a href="https://www.instagram.com/duvia_2homes_1family" title={t.instagramLink||"Suivre Duvia sur Instagram"} aria-label={t.instagramLink||"Suivre Duvia sur Instagram"} target="_blank" rel="noopener noreferrer" style={{width:36,height:36,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",color:C.mut,textDecoration:"none",flexShrink:0}}>
+            <button onClick={()=>setShowInstallModal(true)} title={t.installAppMenu} style={{width:36,height:36,background:"transparent",border:"none",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,flexShrink:0}}>📱</button>
+            <a href="https://duvia.fr" title={t.backToSite||"Retour au site Duvia"} target="_blank" rel="noopener noreferrer" style={{width:36,height:36,background:"transparent",border:"none",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,textDecoration:"none",flexShrink:0}}>🌐</a>
+            <a href="https://www.instagram.com/duvia_2homes_1family" title={t.instagramLink||"Suivre Duvia sur Instagram"} aria-label={t.instagramLink||"Suivre Duvia sur Instagram"} target="_blank" rel="noopener noreferrer" style={{width:36,height:36,background:"transparent",border:"none",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",color:C.mut,textDecoration:"none",flexShrink:0}}>
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect x="2" y="2" width="20" height="20" rx="5" stroke="currentColor" strokeWidth="1.8" />
                 <circle cx="12" cy="12" r="4.2" stroke="currentColor" strokeWidth="1.8" />
                 <circle cx="17.3" cy="6.7" r="1.1" fill="currentColor" />
               </svg>
             </a>
-            <a href="https://www.facebook.com/share/1CiDyAcX8e/" title={t.facebookLink||"Suivre Duvia sur Facebook"} aria-label={t.facebookLink||"Suivre Duvia sur Facebook"} target="_blank" rel="noopener noreferrer" style={{width:36,height:36,background:C.card,border:`1.5px solid ${C.bor}`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",color:C.mut,textDecoration:"none",flexShrink:0}}>
+            <a href="https://www.facebook.com/share/1CiDyAcX8e/" title={t.facebookLink||"Suivre Duvia sur Facebook"} aria-label={t.facebookLink||"Suivre Duvia sur Facebook"} target="_blank" rel="noopener noreferrer" style={{width:36,height:36,background:"transparent",border:"none",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",color:C.mut,textDecoration:"none",flexShrink:0}}>
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect x="2" y="2" width="20" height="20" rx="5" stroke="currentColor" strokeWidth="1.8" />
                 <path d="M13.5 21v-7h2.3l.35-2.7h-2.65V9.6c0-.78.22-1.32 1.34-1.32h1.43V5.88c-.25-.03-1.1-.11-2.09-.11-2.07 0-3.48 1.26-3.48 3.58v2h-2.3v2.7h2.3V21h2.8z" fill="currentColor"/>
@@ -7286,14 +7286,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
             {[["login",t.login||"Connexion"],["register",t.register||"Créer un compte"]].map(([m,l])=>(
               <button key={m} onClick={()=>{
                 setMode(m);setErr("");setOk("");
-                if(m==="register" && isBeta()){
-                  try{
-                    if(!window.localStorage.getItem("duvia_beta_signup_popup_seen")){
-                      window.localStorage.setItem("duvia_beta_signup_popup_seen","1");
-                      setShowBetaSignupPopup(true);
-                    }
-                  }catch{}
-                }
+                if(m==="register" && isBeta()) setShowBetaSignupPopup(true);
               }} style={{flex:1,height:38,background:mode===m?C.card:"transparent",color:mode===m?C.vio:C.mut,borderRadius:8,fontSize:13,fontWeight:mode===m?800:700,boxShadow:mode===m?"0 1px 4px rgba(0,0,0,.1)":"none",transition:"all .15s"}}>{l}</button>
             ))}
           </div>
@@ -7341,8 +7334,8 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
               )}
               {!showExistingAccount && isChildInvite && <div style={{background:`${C.grn}12`,border:`1.5px solid ${C.grn}44`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:C.grn,fontWeight:700,textAlign:"center"}}>{t.regChildInviteMsg||"🧒 Rejoindre la famille en tant qu'enfant"}</div>}
               {!showExistingAccount && isObsInvite && <div style={{background:`${C.blu}12`,border:`1.5px solid ${C.blu}44`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:C.blu,fontWeight:700,textAlign:"center"}}>👀 {t.obsJoinInfo||"Vous avez été invité(e) à rejoindre Duvia en tant qu'observateur."}</div>}
-              {!showExistingAccount && <><div className="field"><label className="lbl">{t.fullName}</label><input value={name} onChange={e=>setName(e.target.value)} className={shakeName?"duvia-shake":""} /></div>
-              {!isAnyInvite&&<div className="field"><label className="lbl">{t.roleLabel||"Rôle"}</label><select value={role} onChange={e=>setRole(e.target.value)}><option value="parent">{t.roleParent}</option><option value="observer">{t.roleObs}</option></select></div>}
+              {!showExistingAccount && <><div className="field"><label className="lbl">{t.fullName} *</label><input value={name} onChange={e=>setName(e.target.value)} className={shakeName?"duvia-shake":""} /></div>
+              {!isAnyInvite&&<div className="field"><label className="lbl">{(t.roleLabel||"Rôle")} *</label><select value={role} onChange={e=>setRole(e.target.value)}><option value="parent">{t.roleParent}</option><option value="observer">{t.roleObs}</option></select></div>}
 
               {/* Vous êtes — pour les observateurs invités */}
               {isObsInvite && (
@@ -7361,7 +7354,6 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
               {/* Père / Mère / Autre — pour les parents uniquement, jamais pour enfant ni observateur */}
               {(role==="parent"||isParentInvite) && !isChildInvite && !isObsInvite && (
                 <div className="field">
-                  <label className="lbl">{t.regYouAre||"Vous êtes"}</label>
                   <div style={{display:"flex",gap:8}}>
                     {[{v:"M",l:t.regGenderFather||"👨 Père"},{v:"F",l:t.regGenderMother||"👩 Mère"},{v:"O",l:t.regGenderOther||"🧑 Autre"}].map(({v,l})=>(
                       <button key={v} type="button" onClick={()=>setParentGender(v)} style={{
@@ -7404,7 +7396,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
             const lockedEmail = isParentInvite && !!obsInviteCode?.email;
             return (
               <div className="field">
-                <label className="lbl">{allowPhoneId ? (t.emailOrPhone||"Email ou téléphone") : t.email}</label>
+                <label className="lbl">{(allowPhoneId ? (t.emailOrPhone||"Email ou téléphone") : t.email)} *</label>
                 <input
                   type={allowPhoneId ? "text" : "email"}
                   value={email}
@@ -7417,24 +7409,31 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
               </div>
             );
           })()}
-          {mode!=="forgot"&&<div className="field"><label className="lbl">{t.password}</label>
+          {mode!=="forgot"&&<div className="field"><label className="lbl">{t.password}{mode==="register"?" *":""}</label>
             <div style={{position:"relative"}}>
               <input type={showPw?"text":"password"} value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&mode==="login"&&doLogin()} style={{width:"100%",boxSizing:"border-box",paddingRight:42}} />
               <button type="button" onClick={()=>setShowPw(v=>!v)} aria-label={showPw?"Masquer":"Afficher"} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",width:32,height:32,background:"transparent",border:"none",color:C.mut,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>{showPw?"🙈":"👁️"}</button>
             </div>
+            {mode==="register" && (
+              <div style={{display:"flex",flexDirection:"column",gap:3,marginTop:8}}>
+                {[
+                  [pw.length>=LIMITS.PASSWORD_MIN, (t.regPwRuleLength||`Au moins ${LIMITS.PASSWORD_MIN} caractères`)],
+                  [/[A-ZÀ-ÖØ-Þ]/.test(pw), t.regPwRuleUpper||"Une majuscule"],
+                  [/[^A-Za-z0-9]/.test(pw), t.regPwRuleSpecial||"Un caractère spécial (ex : ! ? @ #)"],
+                ].map(([ok,label],i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:6,fontSize:11.5,fontWeight:600,color:ok?C.grn:C.mut}}>
+                    <span style={{fontSize:12,flexShrink:0}}>{ok?"✅":"⬜"}</span>{label}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>}
-          {mode==="register"&&<div className="field"><label className="lbl">{t.confirmPw}</label>
+          {mode==="register"&&<div className="field"><label className="lbl">{(t.confirmPw||"Confirmation")} *</label>
             <div style={{position:"relative"}}>
               <input type={showPw?"text":"password"} value={pwConfirm} onChange={e=>setPwConfirm(e.target.value)} placeholder={t.confirmPwPlaceholder} style={{width:"100%",boxSizing:"border-box",paddingRight:42,borderColor:pwConfirm&&pwConfirm!==pw?C.red:undefined}} />
               {pwConfirm && <span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",fontSize:16}}>{pwConfirm===pw?"✅":"❌"}</span>}
             </div>
           </div>}
-          {mode==="register" && isBeta() && (
-            <div style={{display:"flex",gap:8,alignItems:"flex-start",background:`${C.vio}0c`,border:`1px solid ${C.vio}33`,borderRadius:10,padding:"9px 11px",margin:"2px 0 12px",fontSize:11.5,color:C.txt,lineHeight:1.5}}>
-              <span style={{fontSize:15,flexShrink:0}}>🎉</span>
-              <span>{t.registerBetaSubNote||"Pendant la bêta, toutes les fonctionnalités Premium sont offertes gratuitement, sans carte bancaire. L'abonnement (quand il sera proposé) s'achètera directement dans l'application."}</span>
-            </div>
-          )}
           {(mode==="login"||mode==="register")&&(
             <label style={{display:"flex",alignItems:"center",gap:8,margin:"2px 0 12px",cursor:"pointer",fontSize:12.5,color:C.mut}}>
               <input type="checkbox" checked={remember}
@@ -7443,9 +7442,29 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
               {t.rememberMe||"Rester connecté 7 jours sur cet appareil"}
             </label>
           )}
-          <button onClick={mode==="login"?doLogin:mode==="register"?(()=>{ if(alreadyConsentedThisSession()) doReg(); else setRegConsentPending("email"); }):doForgot} style={{width:"100%",height:48,background:`linear-gradient(135deg,${C.vio},${C.blu})`,color:"#fff",fontSize:15,fontWeight:800,marginBottom:10,borderRadius:12,boxShadow:`0 4px 14px ${C.vio}44`}}>
-            {mode==="login"?t.connect:mode==="register"?t.createAcc:t.sendLink}
-          </button>
+          {(() => {
+            const parentGenderNeeded = (role==="parent"||isParentInvite) && !isChildInvite && !isObsInvite;
+            const regReady = !showExistingAccount
+              && !!sanitize(name).trim()
+              && (!parentGenderNeeded || !!parentGender)
+              && !!email.trim()
+              && !validatePassword(pw)
+              && !!pwConfirm && pwConfirm===pw;
+            const regDisabled = mode==="register" && !regReady;
+            return (
+              <button disabled={regDisabled} onClick={mode==="login"?doLogin:mode==="register"?(()=>{ if(alreadyConsentedThisSession()) doReg(); else setRegConsentPending("email"); }):doForgot} style={{
+                width:"100%",height:48,
+                background:regDisabled?C.sur:`linear-gradient(135deg,${C.vio},${C.blu})`,
+                color:regDisabled?C.mut:"#fff",
+                fontSize:15,fontWeight:800,marginBottom:10,borderRadius:12,
+                border:regDisabled?`1.5px solid ${C.bor}`:"none",
+                boxShadow:regDisabled?"none":`0 4px 14px ${C.vio}44`,
+                cursor:regDisabled?"not-allowed":"pointer",
+              }}>
+                {mode==="login"?t.connect:mode==="register"?t.createAcc:t.sendLink}
+              </button>
+            );
+          })()}
           {(mode==="login"||mode==="register")&&(
             <>
               <div style={{display:"flex",alignItems:"center",gap:8,margin:"4px 0"}}>
