@@ -7357,7 +7357,7 @@ function LoginScreen({C,t,lang,setLang,themeMode,cycleTheme,users,setUsers,onLog
                   <div style={{display:"flex",gap:8}}>
                     {[{v:"M",l:t.regGenderFather||"👨 Père"},{v:"F",l:t.regGenderMother||"👩 Mère"},{v:"O",l:t.regGenderOther||"🧑 Autre"}].map(({v,l})=>(
                       <button key={v} type="button" onClick={()=>setParentGender(v)} style={{
-                        flex:1,padding:"8px 0",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",
+                        flex:1,height:44,borderRadius:14,fontSize:13,fontWeight:700,cursor:"pointer",
                         background:parentGender===v?C.vio:C.sur,
                         color:parentGender===v?"#fff":C.mut,
                         border:`1.5px solid ${parentGender===v?C.vio:C.bor}`,
