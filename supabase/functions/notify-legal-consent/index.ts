@@ -47,8 +47,21 @@ serve(async (req) => {
     if (body && typeof body.notice_version === "string") noticeVersion = body.notice_version
   } catch {}
 
+  // Relit la ligne que record_legal_consent() vient d'écrire au lieu de
+  // faire confiance aux valeurs envoyées par le client pour l'affichage —
+  // ferme un écart mineur relevé lors de la review du 2026-07-29 (l'email
+  // reprenait tel quel le notice_version/horodatage client-supplied).
+  const { data: consentRow } = await supabase
+    .from("legal_consents")
+    .select("notice_version, accepted_at")
+    .eq("user_id", user.id)
+    .eq("notice_version", noticeVersion)
+    .maybeSingle()
+
+  noticeVersion = consentRow?.notice_version || noticeVersion
+  const acceptedAt = consentRow?.accepted_at ? new Date(consentRow.accepted_at) : new Date()
   const name = user.user_metadata?.name || user.user_metadata?.full_name || email.split("@")[0]
-  const now  = new Date().toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Paris" })
+  const now  = acceptedAt.toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Paris" })
 
   await fetch("https://api.resend.com/emails", {
     method: "POST",

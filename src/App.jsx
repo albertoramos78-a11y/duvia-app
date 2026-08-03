@@ -4178,15 +4178,15 @@ export default function App() {
     if (!user?.id || !rgpdOk || legalConsentSyncedForUserRef.current === user.id) return;
     legalConsentSyncedForUserRef.current = user.id;
     (async () => {
+      let justAccepted = false;
+      try { justAccepted = window.sessionStorage.getItem("duvia_rgpd_just_accepted") === "1"; } catch {}
       try {
-        await recordLegalConsent(RGPD_NOTICE_VERSION);
-        let justAccepted = false;
-        try { justAccepted = window.sessionStorage.getItem("duvia_rgpd_just_accepted") === "1"; } catch {}
+        await recordLegalConsent(RGPD_NOTICE_VERSION, justAccepted ? "fresh" : "backfill");
         if (justAccepted) {
           supabase.functions.invoke("notify-legal-consent", { body: { notice_version: RGPD_NOTICE_VERSION } }).catch(() => {});
           try { window.sessionStorage.removeItem("duvia_rgpd_just_accepted"); } catch {}
         }
-      } catch {}
+      } catch (e) { console.warn("[Duvia] recordLegalConsent failed:", e); }
     })();
   }, [user?.id, rgpdOk]);
 
