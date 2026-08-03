@@ -37,7 +37,8 @@ if (PH_KEY) {
   posthog.init(PH_KEY, {
     api_host: "https://eu.i.posthog.com", // serveurs Europe (RGPD)
     capture_pageview: true,
-    persistence: "localStorage",
+    persistence: "localStorage+cookie",   // cookie requis pour cross_subdomain_cookie ci-dessous
+    cross_subdomain_cookie: true,         // partage l'identité anonyme avec duvia.fr (funnel site → inscription)
     autocapture: false,                   // pas de capture automatique des clics
   });
 }
